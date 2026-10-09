@@ -10,7 +10,7 @@ line, see typeset results update as you edit, and copy LaTeX snippets or export 
     lens examples/beam.lens --tex beam.tex
 
 `python -m laconic` works too. Worksheets are plain text files, conventionally `.lens`.
-The web page loads KaTeX and fonts from a CDN, so it needs a network connection.
+The web page serves KaTeX 0.16.11 and IBM Plex fonts from `laconic/static/`, so it works offline.
 The exported .tex needs siunitx v3 or newer.
 
 ## Syntax
@@ -129,6 +129,6 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
 
 ## Not built yet
 
-Symbolic math, plotting, solve blocks, dark mode, an offline bundle of KaTeX and fonts,
+Symbolic math, plotting, solve blocks, dark mode,
 long-equation line breaking inside a single stage, and globals that are usable above their
 definition.
