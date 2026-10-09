@@ -1,0 +1,62 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: pip install -e '.[dev]'
+      - run: pytest -q
+
+  binary:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: lens-windows-x64 }
+          # Oldest available runner so the binary works on more distros (glibc).
+          - { os: ubuntu-22.04, name: lens-linux-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install . pyinstaller
+      - run: pyinstaller packaging/lens.spec
+      - name: Smoke test (serves the page and the self-hosted assets)
+        shell: bash
+        run: python packaging/smoke_test.py dist/lens*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/lens*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: binary
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - run: |
+          cd artifacts
+          mv lens-windows-x64/lens.exe lens-windows-x64.exe
+          mv lens-linux-x64/lens lens-linux-x64
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/lens-windows-x64.exe
+            artifacts/lens-linux-x64
