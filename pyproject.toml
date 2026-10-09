@@ -1,0 +1,20 @@
+[project]
+name = "laconic"
+version = "0.1.0"
+description = "Laconic Engineering Notebook System (LENS): a units-aware line worksheet on Pint with live evaluation and LaTeX export"
+requires-python = ">=3.10"
+dependencies = ["pint>=0.24", "numpy", "lark>=1.1", "fastapi", "uvicorn"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+lens = "laconic.__main__:main"
+laconic = "laconic.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-data]
+laconic = ["static/*"]

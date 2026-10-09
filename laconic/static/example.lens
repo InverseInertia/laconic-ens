@@ -1,0 +1,32 @@
+## Simply supported beam
+# Inputs
+L = 4.5'm
+w = 12'kN / 'm
+E = 200'GPa
+I = 8.5e7'mm^4
+
+# Bending moment and midspan deflection
+M_max = w * L^2 / 8 -> 'kN * 'm
+delta_max = 5 * w * L^4 / (384 * E * I) -> 'mm
+
+## Two-spring system
+# Stiffness matrix and load vector
+K = [2, -1; -1, 2] * 1000'kN / 'm
+F = [10; 5] * 'kN
+u = solve(K, F) -> 'mm
+K_inv = inv(K)
+
+## Default SI display
+# Computed results reduce to simple SI. Use -> to pick a unit yourself.
+~g = 9.81'm / 's^2
+mass = 80'kg
+W = mass * ~g
+v = 12'm / 's
+KE(m, v) = 1 / 2 * m * v^2
+E_k = KE(mass, v)
+
+## Global variables and !clear
+# ~g survives !clear. Everything else above is removed.
+!clear
+mass = 12'kg
+W = mass * ~g

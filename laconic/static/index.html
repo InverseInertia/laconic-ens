@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LENS: Laconic Engineering Notebook System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<style>
+  :root {
+    --paper: #e6eedf;
+    --paper-deep: #dbe6d3;
+    --grid: #c3d2bd;
+    --ink: #17253d;
+    --ink-soft: #4b5a72;
+    --rule: #9db39a;
+    --err: #a8231b;
+    --hit: rgba(23, 37, 61, .07);
+    --row: 28px;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 15px/1.4 var(--sans);
+    display: grid;
+    grid-template-rows: auto 1fr;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-deep);
+  }
+  .brand { font: 600 15px var(--sans); letter-spacing: .12em; padding-right: 14px; border-right: 1px solid var(--rule); }
+  header input[type=text] {
+    font: 500 15px var(--sans); color: var(--ink);
+    background: transparent; border: 0; border-bottom: 1px dashed transparent;
+    padding: 4px 0; width: 14ch;
+  }
+  header input[type=text]:hover { border-bottom-color: var(--rule); }
+  header .spacer { flex: 1; }
+  button {
+    font: 500 14px var(--sans); color: var(--ink);
+    background: transparent; border: 1px solid var(--ink);
+    padding: 5px 12px; cursor: pointer;
+  }
+  button:hover { background: var(--ink); color: var(--paper); }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  main { display: grid; grid-template-columns: minmax(280px, 5fr) 7fr; min-height: 0; }
+  .grid-paper {
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: var(--row) var(--row);
+    background-position: 0 12px;
+    background-attachment: local;
+  }
+  #src {
+    font: 400 14px/var(--row) var(--mono);
+    color: var(--ink);
+    background-color: transparent;
+    border: 0; resize: none; margin: 0;
+    padding: 12px 16px;
+    white-space: pre; overflow: auto;
+    border-right: 2px solid var(--ink);
+    tab-size: 2;
+  }
+  #src:focus { outline: none; }
+  #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; }
+  .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; min-height: var(--row); cursor: text; }
+  .row .no { font: 400 12px/var(--row) var(--mono); color: var(--ink-soft); text-align: right; padding-right: 12px; user-select: none; }
+  .row.active { background: var(--hit); }
+  .row .body { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+  .row.blank { min-height: 14px; }
+  .row.blank .no { line-height: 14px; }
+  .row.heading .body { font: 600 17px/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
+  .row.comment .body { font: 400 14px/var(--row) var(--sans); color: var(--ink-soft); }
+  .row.error .body { font: 400 13px/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
+  .row.error .src { color: var(--ink-soft); display: block; }
+  .row .katex-display { margin: 0; text-align: left; }
+  .row .katex-display > .katex { text-align: left; }
+  .row .katex { font-size: 1.12em; }
+
+  select {
+    font: 500 14px var(--sans); color: var(--ink); background: transparent;
+    border: 1px solid var(--ink); padding: 5px 8px; cursor: pointer;
+  }
+  select[hidden] { display: none; }
+  .row.command .body { font: 400 13px/1.4 var(--mono); color: var(--ink-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
+  .seg { display: flex; border: 1px solid var(--ink); }
+  .seg button { border: 0; border-right: 1px solid var(--ink); }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .row.snip { grid-template-columns: 44px 1fr auto; }
+  .row.snip .body { padding: 3px 0; }
+  .row.snip pre { margin: 0; font: 400 12.5px/1.5 var(--mono); white-space: pre; color: var(--ink); }
+  .row.snip .copy { align-self: start; margin: 3px 8px 0 12px; padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--ink-soft); }
+  .row.snip .copy:hover { color: var(--paper); border-color: var(--ink); }
+  header label { display: flex; align-items: center; gap: 6px; font: 400 14px var(--sans); cursor: pointer; }
+  header input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
+  #status { font: 400 13px var(--sans); color: var(--ink-soft); min-height: 1em; }
+
+  dialog { background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 0; width: min(600px, 92vw); }
+  dialog::backdrop { background: rgba(23, 37, 61, .35); }
+  .dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--paper-deep); border-bottom: 1px solid var(--rule); }
+  .dlg-head h2 { margin: 0; font: 600 16px var(--sans); }
+  .dlg-body { padding: 12px 16px; max-height: 62vh; overflow: auto; }
+  .dlg-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--rule); background: var(--paper-deep); }
+  .dlg-foot .spacer { flex: 1; }
+  .note { font: 400 13px/1.45 var(--sans); color: var(--ink-soft); margin: 0 0 10px; }
+  table.keys { border-collapse: collapse; width: 100%; font: 400 13.5px/1.4 var(--sans); }
+  table.keys td { padding: 5px 10px 5px 0; vertical-align: top; border-bottom: 1px solid var(--grid); }
+  table.keys td:first-child { white-space: nowrap; width: 1%; }
+  code, kbd { font: 400 12.5px var(--mono); }
+  kbd { border: 1px solid var(--ink); padding: 0 4px; }
+  #greekRows { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px 14px; }
+  .g-row { display: flex; align-items: center; gap: 4px; }
+  .g-row input { font: 400 15px var(--mono); width: 2.6ch; text-align: center; padding: 3px 2px; color: var(--ink); background: transparent; border: 1px solid var(--rule); }
+  .g-row input.val { width: 4.2ch; }
+  .g-row button { padding: 0 6px; border-color: var(--rule); color: var(--ink-soft); font-size: 14px; line-height: 22px; }
+  .g-row .arrow { color: var(--ink-soft); }
+
+  /* Narrow or vertical screens: results on top, editor at the bottom. */
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 1fr 40vh; }
+    #out { order: -1; padding-right: 12px; }
+    #src { border-right: 0; border-top: 2px solid var(--ink); }
+    header { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; }
+    header .spacer { display: none; }
+    .brand { border-right: 0; padding-right: 0; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand" title="Laconic Engineering Notebook System">LENS</span>
+  <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
+  <span class="spacer"></span>
+  <span id="status" role="status"></span>
+  <div class="seg" role="group" aria-label="Output view">
+    <button id="viewTypeset" aria-pressed="true">Typeset</button>
+    <button id="viewLatex" aria-pressed="false">LaTeX</button>
+  </div>
+  <select id="wrap" aria-label="LaTeX wrapper" title="How each LaTeX snippet is wrapped" hidden>
+    <option value="inline">Inline</option>
+    <option value="display">\[ \]</option>
+    <option value="align">\begin{align*}</option>
+  </select>
+  <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
+  <button id="keysBtn">Keys</button>
+  <button id="greekBtn">Greek</button>
+  <button id="open">Open</button>
+  <button id="save">Save</button>
+  <button id="export">Export LaTeX</button>
+  <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
+</header>
+<main>
+  <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source"></textarea>
+  <div id="out" aria-live="polite"></div>
+</main>
+
+<dialog id="keysDlg" aria-labelledby="keysTitle">
+  <div class="dlg-head"><h2 id="keysTitle">Math keys</h2><button class="close">Close</button></div>
+  <div class="dlg-body">
+    <p class="note">These keys edit the source text. The result column shows the typeset math. They are inactive on comment lines (starting with <code>#</code>) and can be switched off with the Math keys box.</p>
+    <table class="keys">
+      <tr><td><kbd>/</kbd></td><td>Fraction. Takes the term on the left as numerator and the term on the right, if any, as denominator. <code>a/</code> gives <code>a/(&nbsp;)</code>. After <code>A.</code> it gives <code>A./</code></td></tr>
+      <tr><td><kbd>\</kbd></td><td>Radical. <code>sqrt(&nbsp;)</code>, or wraps the selection</td></tr>
+      <tr><td><kbd>.</kbd></td><td>Subscript after a name. <code>M.max</code> gives <code>M_max</code>. After a number it stays a decimal point</td></tr>
+      <tr><td><kbd>^</kbd></td><td>Exponent slot. <code>x^(&nbsp;)</code></td></tr>
+      <tr><td><kbd>→</kbd> or <kbd>)</kbd></td><td>Leave a slot. If it holds one simple term the parentheses go away: <code>x^(2)</code> becomes <code>x^2</code></td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>With only closing brackets left on the line, finishes the line instead of splitting it</td></tr>
+      <tr><td><kbd>Backspace</kbd></td><td>In an empty slot, removes the slot and its <code>^</code>, <code>/</code> or <code>sqrt</code>. After <code>, </code> or <code>; </code>, removes the separator and its space together</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td>Array. <code>[&nbsp;]</code>, or wraps the selection</td></tr>
+      <tr><td><kbd>,</kbd> <kbd>;</kbd></td><td>A space is added after them automatically. In an array, <code>,</code> separates columns and <code>;</code> separates rows</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd><br><kbd>Alt</kbd>+<kbd>T</kbd></td><td>Transpose the term on the left or the selection. Press again to undo. Browsers reserve Ctrl+T for a new tab, so use Alt+T in a normal tab</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>G</kbd></td><td>Greek letter for the character before the caret. Press again to go back. Edit the mapping under Greek</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd><br><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Type a literal <code>/</code> or <code>\</code> with no fraction or radical slot</td></tr>
+      <tr><td><kbd>=</kbd> <kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd></td><td>Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press</td></tr>
+      <tr><td><kbd>~</kbd></td><td>A name that starts with <code>~</code> is global and survives <code>!clear</code></td></tr>
+      <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
+      <tr><td><kbd>'</kbd></td><td>Starts a unit: <code>12'kN/'m</code>. Bare names are always variables</td></tr>
+    </table>
+  </div>
+</dialog>
+
+<dialog id="greekDlg" aria-labelledby="greekTitle">
+  <div class="dlg-head"><h2 id="greekTitle">Greek letters</h2><button class="close">Done</button></div>
+  <div class="dlg-body">
+    <p class="note">Ctrl+G replaces the character before the caret using this table. Changes apply immediately and stay in this browser.</p>
+    <div id="greekRows"></div>
+  </div>
+  <div class="dlg-foot"><button id="greekAdd">Add row</button><span class="spacer"></span><button id="greekReset">Reset to defaults</button></div>
+</dialog>
+
+<script src="/static/editing.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+// Settings live under "lens:". Older builds used "calcsheet:" and "laconic:", read as a fallback.
+const store = {
+  get(k, d) {
+    for (const prefix of ["lens:", "calcsheet:", "laconic:"]) {
+      try {
+        const raw = localStorage.getItem(prefix + k);
+        if (raw === null) continue;
+        try { return JSON.parse(raw); } catch { return raw; }
+      } catch {}
+    }
+    return d;
+  },
+  set(k, v) { try { localStorage.setItem("lens:" + k, JSON.stringify(v)); } catch {} },
+};
+const src = $("#src"), out = $("#out"), nameEl = $("#name");
+let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
+
+const post = (path) => fetch(path, {
+  method: "POST", headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({text: src.value, title: nameEl.value, view, wrap}),
+});
+
+function typeset(el, tex) {
+  if (window.katex) katex.render(tex, el, {displayMode: true, throwOnError: false});
+  else el.textContent = tex;  // KaTeX not loaded yet; render() runs again on load
+}
+
+function render(rows) {
+  last = rows;
+  out.replaceChildren(...rows.map((r) => {
+    const row = document.createElement("div");
+    const snip = view === "latex" && r.snippet && r.kind !== "error";
+    row.className = snip ? "row snip" : "row " + r.kind;
+    row.dataset.line = r.n;
+    const no = document.createElement("div"); no.className = "no"; no.textContent = r.n;
+    const body = document.createElement("div"); body.className = "body";
+    if (snip) {
+      const pre = document.createElement("pre"); pre.textContent = r.snippet; body.append(pre);
+    } else if (r.kind === "command") body.textContent = r.source.trim() + "  \u2192  " + r.text;
+    else if (r.kind === "heading" || r.kind === "comment") body.textContent = r.text;
+    else if (r.kind === "error") {
+      const s = document.createElement("span"); s.className = "src"; s.textContent = r.source.trim();
+      body.append(s, r.error);
+    } else if (r.latex) typeset(body, r.latex);
+    row.append(no, body);
+    if (snip) {
+      const copy = document.createElement("button");
+      copy.className = "copy"; copy.textContent = "Copy"; copy.ariaLabel = `Copy LaTeX for line ${r.n}`;
+      copy.onclick = (ev) => { ev.stopPropagation(); copyText(r.snippet, `Copied line ${r.n}`); };
+      row.append(copy);
+    }
+    row.addEventListener("click", () => focusLine(r.n));
+    return row;
+  }));
+  markActive();
+}
+
+async function evaluate() {
+  const mine = ++seq;
+  const res = await post("/api/eval");
+  if (mine === seq) render(await res.json());
+}
+
+function caretLine() { return src.value.slice(0, src.selectionStart).split("\n").length; }
+
+function markActive() {
+  const n = caretLine();
+  out.querySelectorAll(".row.active").forEach((e) => e.classList.remove("active"));
+  const row = out.querySelector(`.row[data-line="${n}"]`);
+  if (row) { row.classList.add("active"); row.scrollIntoView({block: "nearest"}); }
+}
+
+function focusLine(n) {
+  const lines = src.value.split("\n");
+  const pos = lines.slice(0, n - 1).reduce((a, l) => a + l.length + 1, 0) + lines[n - 1].length;
+  src.focus(); src.setSelectionRange(pos, pos);
+  src.scrollTop = Math.max(0, (n - 4) * 28);
+  markActive();
+}
+
+src.addEventListener("input", () => {
+  store.set("text", src.value);
+  clearTimeout(timer); timer = setTimeout(evaluate, 120);
+});
+for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
+
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+const stem = () => (nameEl.value.trim() || "sheet").replace(/\.\w+$/, "");
+
+$("#save").onclick = () => download(stem() + ".lens", src.value, "text/plain");
+$("#export").onclick = async () => download(stem() + ".tex", await (await post("/api/export")).text(), "application/x-tex");
+$("#open").onclick = () => $("#file").click();
+$("#file").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  src.value = await f.text(); nameEl.value = f.name.replace(/\.\w+$/, "");
+  evaluate(); e.target.value = "";
+};
+
+// ---- output view ---------------------------------------------------------
+async function copyText(text, msg) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const t = Object.assign(document.createElement("textarea"), {value: text});
+    document.body.append(t); t.select(); document.execCommand("copy"); t.remove();
+  }
+  say(msg);
+}
+function setView(v, save = true) {
+  view = v;
+  $("#viewTypeset").setAttribute("aria-pressed", v === "typeset");
+  $("#viewLatex").setAttribute("aria-pressed", v === "latex");
+  $("#wrap").hidden = v !== "latex";
+  if (save) store.set("view", v);
+  evaluate();
+}
+$("#wrap").onchange = (ev) => { wrap = ev.target.value; store.set("wrap", wrap); evaluate(); };
+$("#viewTypeset").onclick = () => setView("typeset");
+$("#viewLatex").onclick = () => setView("latex");
+
+// ---- math keys -----------------------------------------------------------
+let greek = store.get("greek", null);
+if (!greek || typeof greek !== "object") greek = { ...Editing.DEFAULT_GREEK };
+const mathKeys = $("#mathkeys");
+mathKeys.checked = store.get("mathkeys", true);
+mathKeys.onchange = () => { store.set("mathkeys", mathKeys.checked); src.focus(); };
+
+let statusTimer = 0, applying = false;
+function say(msg) {
+  const el = $("#status"); el.textContent = msg;
+  clearTimeout(statusTimer); statusTimer = setTimeout(() => (el.textContent = ""), 2500);
+}
+const ctx = () => ({ enabled: mathKeys.checked, greek });
+
+// execCommand keeps the browser's undo stack, so Ctrl+Z undoes a hotkey edit.
+function apply(r) {
+  if (r.message) say(r.message);
+  if (r.caretOnly !== undefined) src.setSelectionRange(r.caretOnly, r.caretOnly);
+  else if (r.insert !== undefined) {
+    applying = true;
+    src.setSelectionRange(r.from, r.to);
+    let ok = r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert);
+    if (!ok) { src.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
+    src.setSelectionRange(r.caret, r.caret);
+    applying = false;
+  }
+  markActive();
+}
+
+src.addEventListener("beforeinput", (ev) => {
+  if (applying || ev.isComposing || ev.inputType !== "insertText" || !ev.data || ev.data.length !== 1) return;
+  const r = Editing.charAction(ev.data, src.value, src.selectionStart, src.selectionEnd, ctx());
+  if (r) { ev.preventDefault(); apply(r); }
+});
+src.addEventListener("keydown", (ev) => {
+  if (ev.isComposing) return;
+  const mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
+  const r = Editing.keyAction(ev.key, mods, src.value, src.selectionStart, src.selectionEnd, ctx());
+  if (r) { ev.preventDefault(); apply(r); }
+});
+
+// ---- dialogs ---------------------------------------------------------------
+for (const d of document.querySelectorAll("dialog")) {
+  d.querySelector(".close").onclick = () => d.close();
+  d.addEventListener("close", () => src.focus());
+}
+$("#keysBtn").onclick = () => $("#keysDlg").showModal();
+
+function readGreek() {
+  const next = {};
+  for (const row of $("#greekRows").children) {
+    const [k, v] = row.querySelectorAll("input");
+    if (k.value && v.value) next[k.value] = v.value;
+  }
+  greek = next; store.set("greek", greek);
+}
+function greekRow(k = "", v = "") {
+  const row = document.createElement("div"); row.className = "g-row";
+  const key = Object.assign(document.createElement("input"), {value: k, maxLength: 1, ariaLabel: "Key"});
+  const val = Object.assign(document.createElement("input"), {value: v, maxLength: 4, ariaLabel: "Greek letter"});
+  val.className = "val";
+  const arrow = Object.assign(document.createElement("span"), {className: "arrow", textContent: "→"});
+  const del = Object.assign(document.createElement("button"), {textContent: "×", title: "Remove", ariaLabel: "Remove mapping"});
+  del.onclick = () => { row.remove(); readGreek(); };
+  key.oninput = val.oninput = readGreek;
+  row.append(key, arrow, val, del);
+  return row;
+}
+function buildGreek() { $("#greekRows").replaceChildren(...Object.entries(greek).map(([k, v]) => greekRow(k, v))); }
+$("#greekBtn").onclick = () => { buildGreek(); $("#greekDlg").showModal(); };
+$("#greekAdd").onclick = () => { const r = greekRow(); $("#greekRows").append(r); r.querySelector("input").focus(); };
+$("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", greek); buildGreek(); };
+
+window.addEventListener("load", () => last.length && render(last));
+
+(async () => {
+  const text = store.get("text", null);
+  src.value = text ?? await (await fetch("/static/example.lens")).text();
+  wrap = store.get("wrap", "inline");
+  $("#wrap").value = wrap;
+  setView(store.get("view", "typeset"), false);
+})();
+</script>
+</body>
+</html>
