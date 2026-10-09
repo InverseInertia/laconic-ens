@@ -398,6 +398,13 @@ $("#greekBtn").onclick = () => { buildGreek(); $("#greekDlg").showModal(); };
 $("#greekAdd").onclick = () => { const r = greekRow(); $("#greekRows").append(r); r.querySelector("input").focus(); };
 $("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", greek); buildGreek(); };
 
+// Tell the server this page is open, so the packaged app can quit when it is closed.
+const clientId = Math.random().toString(36).slice(2);
+const beat = (path) => navigator.sendBeacon(path, new Blob([JSON.stringify({ id: clientId })], { type: "application/json" }));
+beat("/api/ping");
+setInterval(() => beat("/api/ping"), 5000);
+window.addEventListener("pagehide", () => beat("/api/bye"));
+
 window.addEventListener("load", () => last.length && render(last));
 
 (async () => {

@@ -37,7 +37,7 @@ jobs:
       - run: pyinstaller packaging/lens.spec
       - name: Smoke test (serves the page and the self-hosted assets)
         shell: bash
-        run: python packaging/smoke_test.py dist/lens*
+        run: python packaging/smoke.py dist/lens*
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}

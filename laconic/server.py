@@ -8,9 +8,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import document, run, snippet
+from .lifecycle import lifecycle
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
+
+
+class Client(BaseModel):
+    id: str
 
 
 class Sheet(BaseModel):
@@ -40,3 +45,13 @@ def evaluate(sheet: Sheet):
 @app.post("/api/export", response_class=PlainTextResponse)
 def export(sheet: Sheet):
     return document(run(sheet.text, siunitx=True), title=sheet.title)
+
+
+@app.post("/api/ping")
+def ping(c: Client):
+    lifecycle.ping(c.id)
+
+
+@app.post("/api/bye")
+def bye(c: Client):
+    lifecycle.bye(c.id)

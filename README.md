@@ -129,7 +129,7 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
 
 ## Standalone builds
 
-`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. PyInstaller does not cross-compile, so build on each target OS. Double-click it to start the UI in an app window; pass arguments to use the CLI. The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
+`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. PyInstaller does not cross-compile, so build on each target OS. Double-click it to start the UI in an app window, and it quits a few seconds after the window is closed; pass arguments to use the CLI (which keeps running until you stop it). The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
 
 ## Not built yet
 
