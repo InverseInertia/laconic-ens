@@ -193,3 +193,19 @@ def test_global_names_render_without_the_tilde():
 def test_command_snippet_is_a_latex_comment():
     from laconic import snippet
     assert snippet(last("a = 1\n!clear"), "inline") == "% !clear"
+
+
+def test_noassume_keeps_typed_units_until_assume():
+    rs = run("F = 10'kN\nd = 2'm\nM = F*d\n!noassume\nM = F*d\nW = 3'kN*5'mm\nN = M -> 'N*'m\n!assume\nM = F*d")
+    text = [r.text for r in rs if r.kind == "assign"][2:]  # skip F and d
+    assert text[0] == "M = 20000 J"
+    assert text[1].startswith("M = 20 kN") and text[1].endswith("m")
+    assert text[2].startswith("W = 15 kN")
+    assert text[3].startswith("N = 20000 ")  # explicit -> still converts
+    assert text[4] == "M = 20000 J"
+    assert [r.kind for r in rs if r.source.startswith("!")] == ["command", "command"]
+
+
+def test_assume_commands_take_no_arguments():
+    assert run("!noassume x")[0].kind == "error"
+    assert run("!assume x")[0].kind == "error"

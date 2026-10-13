@@ -185,6 +185,7 @@
       <tr><td><kbd>=</kbd> <kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd></td><td>Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press</td></tr>
       <tr><td><kbd>~</kbd></td><td>A name that starts with <code>~</code> is global and survives <code>!clear</code></td></tr>
       <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
+      <tr><td><kbd>!noassume</kbd> <kbd>!assume</kbd></td><td>Below <code>!noassume</code>, results keep the units that come out of the arithmetic (<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. <code>!assume</code> returns to SI</td></tr>
       <tr><td><kbd>'</kbd></td><td>Starts a unit: <code>12'kN/'m</code>. Bare names are always variables</td></tr>
     </table>
   </div>
@@ -397,6 +398,13 @@ function buildGreek() { $("#greekRows").replaceChildren(...Object.entries(greek)
 $("#greekBtn").onclick = () => { buildGreek(); $("#greekDlg").showModal(); };
 $("#greekAdd").onclick = () => { const r = greekRow(); $("#greekRows").append(r); r.querySelector("input").focus(); };
 $("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", greek); buildGreek(); };
+
+// Tell the server this page is open, so the packaged app can quit when it is closed.
+const clientId = Math.random().toString(36).slice(2);
+const beat = (path) => navigator.sendBeacon(path, new Blob([JSON.stringify({ id: clientId })], { type: "application/json" }));
+beat("/api/ping");
+setInterval(() => beat("/api/ping"), 5000);
+window.addEventListener("pagehide", () => beat("/api/bye"));
 
 window.addEventListener("load", () => last.length && render(last));
 
