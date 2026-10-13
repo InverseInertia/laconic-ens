@@ -90,13 +90,20 @@ def run(text, siunitx=False):
 
 def _run_command(i, raw, s, ev):
     """`!clear` removes every variable whose name does not start with ~.
-    User functions are left alone."""
+    User functions are left alone. `!noassume` keeps computed results in the
+    units that came out of the arithmetic instead of reducing them to SI, until
+    `!assume` restores the default."""
     parts = s[1:].split()
     name = parts[0] if parts else ""
-    if name != "clear":
-        return LineResult(i, raw, "error", error=f"Unknown command '!{name}'. Available: !clear")
+    if name not in ("clear", "assume", "noassume"):
+        return LineResult(i, raw, "error",
+                          error=f"Unknown command '!{name}'. Available: !clear, !assume, !noassume")
     if len(parts) > 1:
-        return LineResult(i, raw, "error", error="!clear takes no arguments")
+        return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
+    if name in ("assume", "noassume"):
+        ev.assume = name == "assume"
+        text = "Units are reduced to SI again" if ev.assume else "Units are kept as typed unless converted with ->"
+        return LineResult(i, raw, "command", text=text)
     gone = [n for n in ev.vars if not n.startswith("~")]
     for n in gone:
         del ev.vars[n]
@@ -120,8 +127,8 @@ def _run_line(i, raw, s, ev, fmt):
         value = ev.check_finite(ev.eval(expr))
         literal = _is_literal(expr, ev)
         # Explicit `->` conversions and typed-in quantities are shown as given;
-        # computed results are reduced to simple SI.
-        if not (literal or isinstance(expr, Convert)):
+        # computed results are reduced to simple SI unless !noassume is active.
+        if ev.assume and not (literal or isinstance(expr, Convert)):
             value = reduce_si(value, ev.ureg)
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
