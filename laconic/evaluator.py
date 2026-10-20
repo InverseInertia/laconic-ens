@@ -94,6 +94,7 @@ class Evaluator:
         self.assume = True     # False after !noassume: results keep their typed units
         self.cleared = set()   # names removed by !clear, for a clearer error
         self.cleared_funcs = set()  # functions removed by !clearf
+        self.angle = "radian"  # "degree" after !trigdeg: bare numbers in trig calls are degrees
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
@@ -295,12 +296,18 @@ class Evaluator:
 
     def fn_sqrt(self, x): return x ** 0.5
     def fn_abs(self, x): return abs(x)
-    def fn_sin(self, x): return self.Q(np.sin(x.to("radian").magnitude))
-    def fn_cos(self, x): return self.Q(np.cos(x.to("radian").magnitude))
-    def fn_tan(self, x): return self.Q(np.tan(x.to("radian").magnitude))
-    def fn_asin(self, x): return self.Q(np.arcsin(self._dimless(x, "asin")), "radian")
-    def fn_acos(self, x): return self.Q(np.arccos(self._dimless(x, "acos")), "radian")
-    def fn_atan(self, x): return self.Q(np.arctan(self._dimless(x, "atan")), "radian")
+    def _radians(self, x):
+        """Magnitude of x in radians; a bare number is read in the current angle unit."""
+        if not x.unit_items():
+            x = self.Q(x.magnitude, self.angle)
+        return x.to("radian").magnitude
+
+    def fn_sin(self, x): return self.Q(np.sin(self._radians(x)))
+    def fn_cos(self, x): return self.Q(np.cos(self._radians(x)))
+    def fn_tan(self, x): return self.Q(np.tan(self._radians(x)))
+    def fn_asin(self, x): return self.Q(np.arcsin(self._dimless(x, "asin")), "radian").to(self.angle)
+    def fn_acos(self, x): return self.Q(np.arccos(self._dimless(x, "acos")), "radian").to(self.angle)
+    def fn_atan(self, x): return self.Q(np.arctan(self._dimless(x, "atan")), "radian").to(self.angle)
     def fn_exp(self, x): return self.Q(np.exp(self._dimless(x, "exp")))
     def fn_ln(self, x): return self.Q(np.log(self._dimless(x, "ln")))
     def fn_log10(self, x): return self.Q(np.log10(self._dimless(x, "log10")))

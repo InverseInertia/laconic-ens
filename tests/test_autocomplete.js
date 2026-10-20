@@ -10,7 +10,7 @@ const vocab = {
   globalUnits: [['smoot', "1.7018'm"]],
   functions: [['sin', 'sin(angle)'], ['sqrt', 'sqrt(x)'], ['solve', 'solve(A, b)']],
   constants: ['e', 'pi'],
-  commands: [['clear', 'remove all non-global variables'], ['assume', 'back to SI'], ['noassume', 'keep typed units']],
+  commands: [['clear', 'remove all non-global variables'], ['assume', 'back to SI'], ['noassume', 'keep typed units'], ['trigdeg', 'trig in degrees'], ['trigrad', 'trig in radians']],
 };
 // "text|" with the caret marked
 function at(src, opts) {

@@ -233,3 +233,14 @@ def test_clearf_removes_functions_but_keeps_global_ones():
     assert r[2].kind == "command" and "f" in r[2].text
     assert r[3].kind == "assign" and r[3].text == "a = 6"
     assert r[4].kind == "error" and "removed by !clearf" in r[4].error
+
+
+def test_trigdeg_and_trigrad_switch_the_angle_unit():
+    rs = run("!trigdeg\na = sin(30)\nb = asin(0.5)\nc = sin(pi/6'rad)\n!trigrad\nd = sin(pi/6)\ne = asin(0.5)")
+    value = lambda r: float(r.text.split("= ")[1].split()[0])
+    assert abs(value(rs[1]) - 0.5) < 1e-9
+    assert "deg" in rs[2].text and abs(value(rs[2]) - 30) < 1e-9
+    assert abs(value(rs[3]) - 0.5) < 1e-9
+    assert abs(value(rs[5]) - 0.5) < 1e-9
+    assert "rad" in rs[6].text
+    assert run("!trigdeg x")[0].kind == "error"

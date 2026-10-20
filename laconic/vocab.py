@@ -8,6 +8,8 @@ COMMANDS = [
     ("clearf", "remove all non-global functions"),
     ("noassume", "keep typed units in results"),
     ("assume", "reduce results to SI again"),
+    ("trigdeg", "trig functions use degrees"),
+    ("trigrad", "trig functions use radians"),
 ]
 
 # Signature shown next to each function. Anything missing shows just its name.

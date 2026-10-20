@@ -32,6 +32,7 @@ The exported .tex needs siunitx v3 or newer.
     !clear                         remove all non-global variables
     !clearf                        remove all non-global functions
     !noassume / !assume            keep typed units / back to SI results
+    !trigdeg / !trigrad            bare numbers in trig functions are degrees / radians (default)
     x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 
 Rename a variable or function everywhere with the Rename button or F2 (the caret's name is filled in).
