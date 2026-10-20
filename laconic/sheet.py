@@ -188,17 +188,24 @@ def _run_command(i, raw, s, ev):
     """`!clear` removes every variable whose name does not start with ~.
     User functions are left alone. `!noassume` keeps computed results in the
     units that came out of the arithmetic instead of reducing them to SI, until
-    `!assume` restores the default."""
+    `!assume` restores the default. `!trigdeg` and `!trigrad` set the angle unit
+    that trig functions read bare numbers in and that inverse ones return."""
     parts = s[1:].split()
     name = parts[0] if parts else ""
-    if name not in ("clear", "assume", "noassume"):
+    if name not in ("clear", "assume", "noassume", "trigdeg", "trigrad"):
         return LineResult(i, raw, "error",
-                          error=f"Unknown command '!{name}'. Available: !clear, !assume, !noassume")
+                          error=f"Unknown command '!{name}'. "
+                                "Available: !clear, !assume, !noassume, !trigdeg, !trigrad")
     if len(parts) > 1:
         return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
     if name in ("assume", "noassume"):
         ev.assume = name == "assume"
         text = "Units are reduced to SI again" if ev.assume else "Units are kept as typed unless converted with ->"
+        return LineResult(i, raw, "command", text=text)
+    if name in ("trigdeg", "trigrad"):
+        ev.angle = "degree" if name == "trigdeg" else "radian"
+        text = ("Trig functions take and return degrees" if ev.angle == "degree"
+                else "Trig functions take and return radians")
         return LineResult(i, raw, "command", text=text)
     gone = [n for n in ev.vars if not n.startswith("~")]
     for n in gone:
@@ -227,6 +234,8 @@ def _run_line(i, raw, s, ev, fmt, used):
         # computed results are reduced to simple SI unless !noassume is active.
         if ev.assume and not (literal or isinstance(expr, Convert)):
             value = reduce_si(value, ev.ureg)
+            if ev.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
+                value = value.to("degree")
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
         res = fmt.quantity(value)
