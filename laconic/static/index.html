@@ -52,7 +52,12 @@
   button:hover { background: var(--ink); color: var(--paper); }
   :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
-  main { display: grid; grid-template-columns: minmax(280px, 5fr) 7fr; min-height: 0; }
+  main { --split: 41.667%; display: grid; grid-template-columns: minmax(200px, var(--split)) 8px minmax(200px, 1fr); min-height: 0; }
+  #split { position: relative; cursor: col-resize; touch-action: none; user-select: none; }
+  #split::before { content: ""; position: absolute; inset: 0 3px; background: var(--ink); }
+  #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 0 2px; }
+  #split:focus-visible { outline: none; }
+  body.dragging { user-select: none; cursor: col-resize; }
   .grid-paper {
     background-image:
       linear-gradient(var(--grid) 1px, transparent 1px),
@@ -61,6 +66,12 @@
     background-position: 0 12px;
     background-attachment: local;
   }
+  html[data-bg="lines"] .grid-paper { background-image: linear-gradient(var(--grid) 1px, transparent 1px); }
+  html[data-bg="dots"] .grid-paper {
+    background-image: radial-gradient(circle, var(--grid) 1.3px, transparent 1.7px);
+    background-position: calc(var(--row) / -2) calc(12px - var(--row) / 2);
+  }
+  html[data-bg="plain"] .grid-paper { background-image: none; }
   #src {
     font: 400 14px/var(--row) var(--mono);
     color: var(--ink);
@@ -68,9 +79,9 @@
     border: 0; resize: none; margin: 0;
     padding: 12px 16px;
     white-space: pre; overflow: auto;
-    border-right: 2px solid var(--ink);
     tab-size: 2;
   }
+  #src.wrapped { white-space: pre-wrap; overflow-wrap: break-word; overflow-x: hidden; }
   #src:focus { outline: none; }
   #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; }
   .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; min-height: var(--row); cursor: text; }
@@ -144,13 +155,27 @@
   .u-row .eq { color: var(--ink-soft); font: 400 14px var(--mono); }
   .u-row button { padding: 0 8px; border-color: var(--rule); color: var(--ink-soft); line-height: 24px; }
   .u-row .err { grid-column: 1 / -1; color: var(--err); font: 400 12.5px var(--mono); }
+  .set-sec h3 { margin: 0 0 8px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+  .set-grp { margin: 0 0 14px; padding: 8px 12px 10px; border: 1px solid var(--rule); }
+  .set-grp legend { font: 500 13px var(--sans); color: var(--ink-soft); padding: 0 6px; }
+  .set-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font: 400 14px var(--sans); }
+  .set-row > span { flex: 0 0 9em; }
+  .set-row select { flex: 1; min-width: 0; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; margin-top: 8px; }
+  .swatches label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 400 14px var(--sans); }
+  .swatches input[type=color] { width: 42px; height: 26px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
+  .preview { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--rule); font: 400 14px/var(--row) var(--mono); }
   .u-empty { color: var(--ink-soft); font-size: 13.5px; }
 
   /* Narrow or vertical screens: results on top, editor at the bottom. */
   @media (max-width: 760px) {
-    main { grid-template-columns: 1fr; grid-template-rows: 1fr 40vh; }
+    main { --split: 40%; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(80px, 1fr) 8px minmax(80px, var(--split)); }
     #out { order: -1; padding-right: 12px; }
-    #src { border-right: 0; border-top: 2px solid var(--ink); }
+    #src { order: 2; }
+    #split { cursor: row-resize; }
+    #split::before { inset: 3px 0; }
+    #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 2px 0; }
+    body.dragging { cursor: row-resize; }
     header { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; }
     header .spacer { display: none; }
     .brand { border-right: 0; padding-right: 0; }
@@ -178,6 +203,7 @@
   <button id="renameBtn" title="Rename a variable everywhere (F2)">Rename</button>
   <button id="greekBtn">Greek</button>
   <button id="unitsBtn">Units</button>
+  <button id="settingsBtn">Settings</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
   <button id="export">Export LaTeX</button>
@@ -185,6 +211,7 @@
 </header>
 <main>
   <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source" aria-autocomplete="list" aria-controls="ac"></textarea>
+  <div id="split" role="separator" aria-orientation="vertical" aria-label="Resize editor and output" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Drag to resize (double-click to reset)"></div>
   <div id="out" aria-live="polite"></div>
 </main>
 <div id="ac" role="listbox" aria-label="Suggestions" hidden></div>
@@ -219,6 +246,7 @@
       <tr><td><kbd>/</kbd> <kbd>^</kbd> <kbd>\</kbd> <kbd>(</kbd> <kbd>[</kbd> <kbd>|</kbd></td><td>Apply to the highlighted region: fraction numerator, base of a power, square root, brackets, array brackets, <code>abs()</code>. A highlight that cuts through a term is widened to the whole term first: <code>1</code> inside <code>12'kN</code> means the whole quantity, <code>x</code> in <code>x^2</code> means <code>x^2</code>, half a bracket pair means the pair</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>With text highlighted: pick a function to wrap it in (<code>sin(&hellip;)</code>). Type to filter, <kbd>Enter</kbd> or <kbd>Tab</kbd> to apply. With nothing highlighted: opens suggestions by hand</td></tr>
       <tr><td>Double-click</td><td>Selects the whole term under the pointer</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Turn text wrapping in the editor on or off</td></tr>
       <tr><td><kbd>Alt</kbd>+<kbd>&uarr;</kbd><br><kbd>Alt</kbd>+<kbd>&darr;</kbd></td><td>Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back</td></tr>
       <tr><td colspan="2"><strong>Suggestions</strong></td></tr>
       <tr><td><kbd>Tab</kbd></td><td>Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name</td></tr>
@@ -240,6 +268,36 @@
     </div>
     <div class="dlg-foot"><span class="spacer"></span><button type="submit" id="renameGo">Rename</button></div>
   </form>
+</dialog>
+
+<dialog id="settingsDlg" aria-labelledby="settingsTitle">
+  <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
+  <div class="dlg-body">
+    <section class="set-sec">
+      <h3>Theme</h3>
+      <p class="note">Changes apply immediately and are kept in this browser.</p>
+      <fieldset class="set-grp">
+        <legend>Fonts</legend>
+        <label class="set-row"><span>Interface and output</span><select id="fontSans"></select></label>
+        <label class="set-row"><span>Editor</span><select id="fontMono"></select></label>
+      </fieldset>
+      <fieldset class="set-grp">
+        <legend>Colors</legend>
+        <label class="set-row"><span>Preset</span><select id="preset"></select></label>
+        <div class="swatches" id="swatches"></div>
+      </fieldset>
+      <fieldset class="set-grp">
+        <legend>Background style</legend>
+        <label class="set-row"><span>Editor paper</span><select id="bgStyle">
+          <option value="grid">Grid</option>
+          <option value="lines">Ruled lines</option>
+          <option value="dots">Dots</option>
+          <option value="plain">Plain</option>
+        </select></label>
+      </fieldset>
+    </section>
+  </div>
+  <div class="dlg-foot"><button id="themeReset">Reset theme</button><span class="spacer"></span></div>
 </dialog>
 
 <dialog id="greekDlg" aria-labelledby="greekTitle">
@@ -430,6 +488,7 @@ src.addEventListener("beforeinput", (ev) => {
 });
 src.addEventListener("keydown", (ev) => {
   if (ev.isComposing) return;
+  if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ev.code === "KeyZ") { ev.preventDefault(); acClose(); setWrapped(!wrapped); return; }
   if (acKey(ev)) return;
   if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key === " ") { ev.preventDefault(); acOpenByHand(); return; }
   const mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
@@ -487,6 +546,7 @@ function caretXY(pos) {
   const cs = getComputedStyle(src), m = document.createElement("div");
   for (const p of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "tabSize", "paddingTop", "paddingLeft", "borderTopWidth", "borderLeftWidth"]) m.style[p] = cs[p];
   Object.assign(m.style, {position: "absolute", visibility: "hidden", whiteSpace: "pre", top: "0", left: "0"});
+  if (wrapped) Object.assign(m.style, {whiteSpace: "pre-wrap", overflowWrap: "break-word", boxSizing: "border-box", width: src.clientWidth + "px", paddingRight: cs.paddingRight});
   m.textContent = src.value.slice(0, pos);
   const mark = document.createElement("span"); mark.textContent = "\u200b"; m.append(mark);
   document.body.append(m);
@@ -584,6 +644,138 @@ function acKey(ev) {
 src.addEventListener("blur", acClose);
 src.addEventListener("click", acClose);
 src.addEventListener("scroll", () => ac && acPaint());
+
+// ---- editor text wrapping (Alt+Z) ------------------------------------------------
+let wrapped = false;
+function setWrapped(on, save = true) {
+  wrapped = on;
+  src.classList.toggle("wrapped", on);
+  if (save) { store.set("wrapText", on); say(on ? "Text wrapping on" : "Text wrapping off"); }
+  if (on) src.scrollLeft = 0;
+}
+setWrapped(store.get("wrapText", false) === true, false);
+
+// ---- movable split between editor and output ---------------------------------------
+const mainEl = $("main"), splitEl = $("#split"), narrow = matchMedia("(max-width: 760px)");
+const splitKey = () => narrow.matches ? "splitV" : "splitH";
+function setSplit(f) {
+  if (typeof f === "number") mainEl.style.setProperty("--split", (f * 100).toFixed(2) + "%");
+  else mainEl.style.removeProperty("--split");
+  splitEl.setAttribute("aria-orientation", narrow.matches ? "horizontal" : "vertical");
+  if (typeof f === "number") splitEl.setAttribute("aria-valuenow", Math.round(f * 100));
+  else splitEl.removeAttribute("aria-valuenow");
+}
+const clampSplit = (f) => Math.min(0.85, Math.max(0.15, f));
+const loadSplit = () => { const f = store.get(splitKey(), null); setSplit(typeof f === "number" ? clampSplit(f) : null); };
+// The editor's share of the main area: its width, or its height when stacked.
+const currentSplit = () => {
+  const m = mainEl.getBoundingClientRect(), s = src.getBoundingClientRect();
+  return narrow.matches ? s.height / m.height : s.width / m.width;
+};
+splitEl.addEventListener("pointerdown", (ev) => {
+  if (ev.button !== 0) return;
+  ev.preventDefault();
+  splitEl.setPointerCapture(ev.pointerId);
+  splitEl.classList.add("drag"); document.body.classList.add("dragging");
+});
+splitEl.addEventListener("pointermove", (ev) => {
+  if (!splitEl.hasPointerCapture(ev.pointerId)) return;
+  const m = mainEl.getBoundingClientRect();
+  setSplit(clampSplit(narrow.matches ? (m.bottom - ev.clientY) / m.height : (ev.clientX - m.left) / m.width));
+});
+const endDrag = (ev) => {
+  if (!splitEl.classList.contains("drag")) return;
+  splitEl.classList.remove("drag"); document.body.classList.remove("dragging");
+  store.set(splitKey(), clampSplit(currentSplit()));
+  if (ac) acPaint();
+};
+splitEl.addEventListener("pointerup", endDrag);
+splitEl.addEventListener("pointercancel", endDrag);
+splitEl.addEventListener("dblclick", () => { try { localStorage.removeItem("lens:" + splitKey()); } catch {} setSplit(null); });
+splitEl.addEventListener("keydown", (ev) => {
+  const dir = {ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1}[ev.key];
+  if (!dir) return;
+  ev.preventDefault();
+  // Left or up moves the divider toward the start of the screen.
+  const grow = narrow.matches ? -dir : dir;
+  const f = clampSplit(currentSplit() + grow * 0.02);
+  setSplit(f); store.set(splitKey(), f);
+});
+narrow.addEventListener("change", loadSplit);
+loadSplit();
+
+// ---- settings: theme ------------------------------------------------------------------
+const FONTS_SANS = [
+  ["IBM Plex Sans", '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif'],
+  ["System UI", 'system-ui, -apple-system, "Segoe UI", sans-serif'],
+  ["Helvetica / Arial", 'Helvetica, Arial, sans-serif'],
+  ["Georgia (serif)", 'Georgia, "Times New Roman", serif'],
+  ["Verdana", 'Verdana, Geneva, sans-serif'],
+];
+const FONTS_MONO = [
+  ["IBM Plex Mono", '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'],
+  ["System monospace", 'ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace'],
+  ["Consolas / Menlo", 'Consolas, Menlo, "DejaVu Sans Mono", monospace'],
+  ["Courier", '"Courier New", Courier, monospace'],
+];
+const COLOR_FIELDS = [["paper", "Paper"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"]];
+const PRESETS = {
+  "LENS green": {paper: "#e6eedf", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b"},
+  "White paper": {paper: "#fbfbf8", ink: "#1b1b1b", grid: "#dcdcd4", rule: "#b5b5aa", err: "#b3261e"},
+  "Blueprint": {paper: "#1f3a5f", ink: "#e8f1ff", grid: "#335684", rule: "#5d82b3", err: "#ff9a8f"},
+  "Dark": {paper: "#1e2127", ink: "#d9dde3", grid: "#2c313a", rule: "#444b57", err: "#ff7b72"},
+};
+const DEFAULT_THEME = {sans: 0, mono: 0, bg: "grid", colors: {...PRESETS["LENS green"]}};
+let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
+{
+  const saved = store.get("theme", null);
+  if (saved && typeof saved === "object") {
+    if (Number.isInteger(saved.sans) && FONTS_SANS[saved.sans]) theme.sans = saved.sans;
+    if (Number.isInteger(saved.mono) && FONTS_MONO[saved.mono]) theme.mono = saved.mono;
+    if (["grid", "lines", "dots", "plain"].includes(saved.bg)) theme.bg = saved.bg;
+    for (const [k] of COLOR_FIELDS) if (typeof saved.colors?.[k] === "string" && /^#[0-9a-f]{6}$/i.test(saved.colors[k])) theme.colors[k] = saved.colors[k];
+  }
+}
+function applyTheme() {
+  const root = document.documentElement, c = theme.colors;
+  root.style.setProperty("--sans", FONTS_SANS[theme.sans][1]);
+  root.style.setProperty("--mono", FONTS_MONO[theme.mono][1]);
+  for (const [k] of COLOR_FIELDS) root.style.setProperty("--" + k, c[k]);
+  root.style.setProperty("--paper-deep", `color-mix(in srgb, ${c.paper} 94%, ${c.ink})`);
+  root.style.setProperty("--ink-soft", `color-mix(in srgb, ${c.ink} 75%, ${c.paper})`);
+  root.style.setProperty("--hit", `color-mix(in srgb, ${c.ink} 8%, transparent)`);
+  root.dataset.bg = theme.bg;
+  if (ac) acPaint();
+}
+const saveTheme = () => store.set("theme", theme);
+const sameColors = (a, b) => COLOR_FIELDS.every(([k]) => a[k].toLowerCase() === b[k].toLowerCase());
+function syncThemeForm() {
+  $("#fontSans").value = theme.sans; $("#fontMono").value = theme.mono; $("#bgStyle").value = theme.bg;
+  const match = Object.keys(PRESETS).find((n) => sameColors(PRESETS[n], theme.colors));
+  $("#preset").value = match ?? "custom";
+  for (const [k] of COLOR_FIELDS) $("#c-" + k).value = theme.colors[k];
+}
+function buildThemeForm() {
+  const options = (list) => list.map(([name], i) => Object.assign(document.createElement("option"), {value: i, textContent: name}));
+  $("#fontSans").replaceChildren(...options(FONTS_SANS));
+  $("#fontMono").replaceChildren(...options(FONTS_MONO));
+  $("#preset").replaceChildren(...Object.keys(PRESETS).map((n) => Object.assign(document.createElement("option"), {value: n, textContent: n})),
+    Object.assign(document.createElement("option"), {value: "custom", textContent: "Custom", disabled: true}));
+  $("#swatches").replaceChildren(...COLOR_FIELDS.map(([k, label]) => {
+    const l = document.createElement("label"), i = Object.assign(document.createElement("input"), {type: "color", id: "c-" + k});
+    i.oninput = () => { theme.colors[k] = i.value; applyTheme(); saveTheme(); syncThemeForm(); };
+    l.append(label, i);
+    return l;
+  }));
+  $("#fontSans").onchange = (ev) => { theme.sans = +ev.target.value; applyTheme(); saveTheme(); };
+  $("#fontMono").onchange = (ev) => { theme.mono = +ev.target.value; applyTheme(); saveTheme(); };
+  $("#bgStyle").onchange = (ev) => { theme.bg = ev.target.value; applyTheme(); saveTheme(); };
+  $("#preset").onchange = (ev) => { const p = PRESETS[ev.target.value]; if (p) { theme.colors = {...p}; applyTheme(); saveTheme(); syncThemeForm(); } };
+  $("#themeReset").onclick = () => { theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}}; applyTheme(); saveTheme(); syncThemeForm(); };
+}
+buildThemeForm();
+applyTheme();
+$("#settingsBtn").onclick = () => { syncThemeForm(); $("#settingsDlg").showModal(); };
 
 // ---- dialogs ---------------------------------------------------------------
 for (const d of document.querySelectorAll("dialog")) {

@@ -168,3 +168,52 @@ def test_f2_renames_the_name_at_the_caret(page):
     page.keyboard.press("Enter")
     page.wait_for_selector("#renameDlg", state="hidden")
     assert value(page) == "span = 4.5'm\nA = span * 2"
+
+
+def test_alt_z_toggles_wrapping(page):
+    reset(page, "x = 1")
+    assert not page.evaluate("document.querySelector('#src').classList.contains('wrapped')")
+    page.keyboard.press("Alt+z")
+    assert page.evaluate("getComputedStyle(document.querySelector('#src')).whiteSpace") == "pre-wrap"
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    assert page.evaluate("document.querySelector('#src').classList.contains('wrapped')")
+    page.focus("#src")
+    page.keyboard.press("Alt+z")
+    assert page.evaluate("getComputedStyle(document.querySelector('#src')).whiteSpace") == "pre"
+    assert value(page)  # the key never types a character
+
+
+def test_split_can_be_dragged(page):
+    box = page.locator("#split").bounding_box()
+    before = page.locator("#src").bounding_box()["width"]
+    y = box["y"] + 100
+    page.mouse.move(box["x"] + box["width"] / 2, y)
+    page.mouse.down()
+    page.mouse.move(box["x"] + 200, y, steps=5)
+    page.mouse.up()
+    after = page.locator("#src").bounding_box()["width"]
+    assert after > before + 150
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    assert abs(page.locator("#src").bounding_box()["width"] - after) < 2
+    page.locator("#split").dblclick()
+    assert abs(page.locator("#src").bounding_box()["width"] - before) < 2
+
+
+def test_theme_settings(page):
+    page.click("#settingsBtn")
+    page.wait_for_selector("#settingsDlg[open]")
+    page.select_option("#preset", "Dark")
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(30, 33, 39)"
+    page.select_option("#bgStyle", "plain")
+    assert page.evaluate("getComputedStyle(document.querySelector('#src')).backgroundImage") == "none"
+    page.select_option("#fontMono", "3")
+    assert "Courier" in page.evaluate("getComputedStyle(document.querySelector('#src')).fontFamily")
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    assert page.evaluate("document.documentElement.dataset.bg") == "plain"
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(30, 33, 39)"
+    page.click("#settingsBtn")
+    page.click("#themeReset")
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(230, 238, 223)"
