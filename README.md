@@ -175,14 +175,18 @@ it like any other edit. Deleting those lines by hand, or writing different ones,
 the worksheet alone redraws the picture. The page doesn't redraw the ticks until the gesture ends, so
 the grid is hidden while you drag.
 
-**The frame does not move.** The plot area's edges are fixed by the size, the title and whether there are
-axis labels, and never by the numbers on the axes, so the pointer stays on the axis strip you are
-scrolling however wide the tick labels get. Each axis uses one notation: fixed point while every label
-fits in about ten characters, else scientific (`-1.234e-10`, `5e19`) with as few digits as tell the ticks
-apart. One case needs more room than the margin has: a range that is tiny next to its position, like
-`1e9 .. 1000000005`, where telling the ticks apart takes 13 characters. The labels then run wider than the
-margin and the frame stays where it is. (An offset note such as `+1e9` on the axis would be the real fix; it
-is not built.)
+**The frame and the numbers on the axes.** The margins hold room for six characters of tick label, so
+while the numbers on an axis fit in six (`-0.4`, `100`, `5e-11`, `-1e-10`, `-50000`) the plot area's edges
+are fixed by the size, the title and whether there are axis labels, however a pan or zoom changes the
+numbers. The pointer stays on the axis strip you are scrolling. Each axis uses one notation: fixed point
+while every label fits in six characters, else scientific (`2e-6`, `-1.5e-6`) with as few digits as tell the
+ticks apart. A label that needs more than six characters makes the margin grow to fit it (a range like
+`1.5e-6 .. 2.5e-6` shows `-1.5e-6`, seven), and the frame moves with it. So the pointer can lose the strip
+when a zoom takes the labels back under six characters while the pointer is parked in the part of the strip
+that only existed to fit the wide ones. Everyday engineering ranges (1e-3 to 1e3 in position) fit in six
+characters about nine times in ten. For a range that is tiny next to its position, like `1e9 .. 1000000005`,
+telling the ticks apart takes 13 characters and the margin grows to match; an axis offset note such as `+1e9`
+would avoid that and is not built.
 
 When a zoom narrows the view, the curve is sampled over the visible window again, so it stays smooth.
 Editing the text of a title, label or note is done in the editor; the math keys are off on those lines.

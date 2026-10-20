@@ -227,23 +227,48 @@ def test_reset_goes_back_to_the_authors_limits_not_to_automatic(page):
     assert "2" in first and "8" in first
 
 
+def y_label_chars(page):
+    return page.evaluate("Math.max(...[...document.querySelectorAll('svg.lens-plot text[text-anchor=end]')].map(t => t.textContent.length))")
+
+
 def test_the_frame_does_not_move_when_the_y_numbers_change_width(page):
-    """Zoom on the y axis with the pointer left where it is. The numbers go from 2 characters to
-    '1.00000e5'; the strip must stay under the pointer for the whole run."""
+    """Zoom on the y axis with the pointer left where it is. The numbers go from '-1e5' down through
+    '-0.4' and back; while they fit the six-character budget the strip must stay under the pointer."""
     show(page, "!plot 100000*sin(x), x = 0 .. 10\n")
     first = box(page)
     ys = box(page, "pl-yaxis")
     px, py = ys["x"] + ys["width"] / 2, ys["y"] + ys["height"] / 2
     page.mouse.move(px, py)
+    seen = set()
     for delta in (-1500, -1500, -1500, 2500, 2500, 2500, 2500):         # in by 64x three times, then back out
         page.keyboard.down("Control")
         page.mouse.wheel(0, delta)
         page.keyboard.up("Control")
         page.wait_for_timeout(900)
+        chars = y_label_chars(page)
+        seen.add(chars)
+        assert chars <= 6, f"this walk is meant to stay inside the budget, but a label has {chars} characters"
         assert box(page) == first, f"the plot area moved after wheel {delta}"
         under = page.evaluate("([x, y]) => document.elementFromPoint(x, y).getAttribute('class') || ''", [px, py])
         assert "pl-yaxis" in under, f"the pointer left the y axis strip after wheel {delta} (over '{under}')"
+    assert len(seen) > 2                                                  # the labels really did change width
     assert set(views(page)) == {"y"}                                      # only the y axis was ever touched
+
+
+def test_wider_labels_grow_the_margin_without_colliding_or_leaving_the_picture(page):
+    show(page, "!plot sin(x), x = 0 .. 10\n")
+    floor = box(page)
+    show(page, "!plot sin(x), x = 0 .. 10\n  yview: 1.0000001e9 .. 1.0000005e9\n")
+    grown = box(page)
+    assert y_label_chars(page) > 6 and grown["x"] > floor["x"] + 20 and grown["width"] > 150
+    rects = page.evaluate("""() => {
+        const sv = document.querySelector('svg.lens-plot').getBoundingClientRect();
+        const r = (t) => { const b = t.getBoundingClientRect(); return [b.left - sv.left, b.right - sv.left]; };
+        return {ticks: [...document.querySelectorAll('svg.lens-plot text[text-anchor=end]')].map(r),
+                label: r(document.querySelector('svg.lens-plot text[transform]'))};
+    }""")
+    assert all(lo >= 0 for lo, _ in rects["ticks"])                       # inside the picture
+    assert all(lo >= rects["label"][1] for lo, _ in rects["ticks"])       # and clear of the y label
 
 
 def test_tick_labels_stay_inside_the_picture_at_scientific_scales(page):
@@ -254,12 +279,3 @@ def test_tick_labels_stay_inside_the_picture_at_scientific_scales(page):
         return b.left >= s.left - 0.5 && b.right <= s.right + 0.5;
     })""")
     assert inside and width > 0
-
-
-def test_the_frame_holds_on_a_range_far_narrower_than_its_position(page):
-    """1e9 .. 1e9+5 needs 13-character labels to tell the ticks apart, more than the margin has room for
-    (an axis offset note would be the fix). The frame must not move to make room, whatever the labels do."""
-    show(page, "!plot sin(x), x = 0 .. 10\n")
-    first = box(page)
-    show(page, "!plot sin(x), x = 0 .. 10\n  xview: 1e9 .. 1000000005\n  yview: -1.234e-10 .. 5.6e-11\n")
-    assert box(page) == first

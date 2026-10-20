@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from laconic import document, evaluate, run, server, snippet
 from laconic.plotopts import PlotError, apply_patch, parse_option, parse_plot, split_top
-from laconic.plotsvg import axis_ticks, render_svg
+from laconic.plotsvg import LABEL_CHARS, axis_ticks, render_svg
 from laconic.rename import RenameError, rename
 
 BEAM = "L = 4.5'm\nw = 12'kN/'m\nM(x) = w*x*(L-x)/2\n"
@@ -419,37 +419,65 @@ def test_every_style_option_reaches_the_picture():
     assert 'class="pl-legend"' in svg and svg.count("<line vector-effect") == 0     # no grid lines
 
 
-# ---- the frame stays put -------------------------------------------------------------
+# ---- the frame stays put while labels fit the budget ----------------------------------
 
 def box(spec):
     return json.loads(re.search(r'data-lens-plot="([^"]*)"', render_svg(spec)).group(1).replace("&quot;", '"'))["box"]
 
 
-def test_the_frame_is_the_same_whatever_the_numbers_on_the_axes_look_like():
+def widest(lo, hi, scale="lin"):
+    return max(len(t["label"]) for t in axis_ticks({"lim": [lo, hi], "scale": scale, "step": None}))
+
+
+def with_axes(base, lo, hi, scale="lin"):
+    spec = json.loads(json.dumps(base))
+    spec["x"]["lim"], spec["y"]["lim"] = [lo, hi], [lo, hi]
+    spec["x"]["scale"] = spec["y"]["scale"] = scale
+    return spec
+
+
+FITS = [(0, 1), (-1, 1), (0, 100), (-99999.5, 99999.5), (0, 1e6), (0, 1e-5), (-1.234e-10, 5.6e-11),
+        (-4.5e17, 6e17), (-3e20, 4e20), (123456.5, 123461.5), (1.5e-6, 3e-6), (0, 0.012), (-2e-7, 7e-7)]
+
+
+def test_the_frame_is_the_same_while_the_numbers_fit_six_characters():
     """The mouse can change the scale under a pointer that sits on the axis strip; if the numbers got
     wider and the frame moved, the pointer would end up over the plot and the next gesture would pan."""
     base = plot("!plot x, x = 0 .. 10")
     want = box(base)
-    for lo, hi in [(0, 1), (-1.234e-10, 5.6e-11), (1e9, 1e9 + 5), (-3e20, 4e20), (123456.5, 123461.5), (1e-30, 2e-30),
-                   (0, 1e6), (-99999.5, 99999.5), (0.0001, 0.0002)]:
-        for scale in ("lin", "log") if lo > 0 else ("lin",):
-            spec = json.loads(json.dumps(base))
-            spec["x"]["lim"], spec["y"]["lim"] = [lo, hi], [lo, hi]
-            spec["x"]["scale"] = spec["y"]["scale"] = scale
-            assert box(spec) == want, (lo, hi, scale)
+    for lo, hi in FITS:
+        assert widest(lo, hi) <= LABEL_CHARS, (lo, hi)               # the cases this promise is about
+        assert box(with_axes(base, lo, hi)) == want, (lo, hi)
+    for lo, hi in [(1, 1e3), (1e-3, 1e5), (0.5, 20)]:
+        assert box(with_axes(base, lo, hi, "log")) == want
 
 
-def test_the_frame_depends_only_on_size_title_and_labels():
+def test_a_wider_label_grows_the_margin_to_fit_it_and_never_shrinks_it_below_the_budget():
+    base = plot("!plot x, x = 0 .. 10")
+    L0 = box(base)[0]
+    grown = []
+    for lo, hi in [(-2.2e-6, -4e-7), (1.23e-6, 1.27e-6), (-1234567, -1234500), (1.0000001e9, 1.0000005e9), (1e9, 1e9 + 5)]:
+        chars = widest(lo, hi)
+        assert chars > LABEL_CHARS, (lo, hi, chars)
+        L, _, W, _ = box(with_axes(base, lo, hi))
+        assert L == pytest.approx(L0 + (chars - LABEL_CHARS) * 11 * 0.56)      # as much as the extra characters need, no more
+        assert W > 150                                                          # and the plot is still a plot
+        grown.append((chars, L))
+    assert [L for _, L in sorted(grown)] == sorted(L for _, L in grown)         # wider labels never give a smaller margin
+    assert len({c for c, _ in grown}) > 1
+    assert box(with_axes(base, 0, 1))[0] == L0                                  # and back to the budget when they fit again
+
+
+def test_the_frame_depends_on_size_title_and_labels():
     a = plot("!plot x, x = 0 .. 10")
     assert box(plot("!plot x, x = 0 .. 10\n  size: 800 x 400")) != box(a)
     assert box(plot("!plot x, x = 0 .. 10\n  title: T")) != box(a)
     assert box(plot("!plot x, x = 0 .. 10\n  ylabel:")) != box(a)           # no y label, no column for it
-    assert box(plot("!plot x, x = 0 .. 10\n  yview: 0 .. 1e-7")) == box(a)
+    assert box(plot("!plot x, x = 0 .. 10\n  yview: 0 .. 1e-7")) == box(a)  # labels 0 .. 1e-7 fit the budget
 
 
-def test_tick_labels_are_short_distinct_and_true():
+def test_tick_labels_are_distinct_and_true():
     import random
-    from laconic.plotsvg import LABEL_CHARS
     rng = random.Random(1)
     for _ in range(4000):
         e = rng.randint(-30, 30)
@@ -462,16 +490,29 @@ def test_tick_labels_are_short_distinct_and_true():
         assert len(set(labels)) == len(labels), (lo, span, labels)           # never the same label twice
         step = ticks[1]["v"] - ticks[0]["v"]
         assert all(abs(float(l) - t["v"]) <= abs(step) * 1e-3 for l, t in zip(labels, ticks)), (lo, span, labels)
-        assert max(map(len, labels)) <= LABEL_CHARS + 1, (lo, span, labels)  # one over at most, into the gap before the y label
+
+
+def test_the_budget_covers_everyday_engineering_axes():
+    import random
+    rng = random.Random(2)
+    fit = n = 0
+    for _ in range(3000):
+        e = rng.randint(-3, 3)                                               # magnitudes from a millimetre to a kilometre
+        lo = rng.uniform(-5, 5) * 10 ** e
+        hi = lo + 10 ** e * 10 ** rng.uniform(-1, 1)
+        n += 1
+        fit += widest(lo, hi) <= LABEL_CHARS
+    assert fit / n > 0.9
 
 
 def test_awkward_axes_get_sensible_labels():
     def labels(lo, hi):
         return [t["label"] for t in axis_ticks({"lim": [lo, hi], "scale": "lin", "step": None})]
     assert labels(-3e-11, 2e-11) == ["-3e-11", "-2e-11", "-1e-11", "0", "1e-11", "2e-11"]
-    assert labels(0, 1e6) == ["0", "200000", "400000", "600000", "800000", "1000000"]
+    assert labels(0, 1e6) == ["0", "2e5", "4e5", "6e5", "8e5", "1e6"]
     assert labels(-1e20, 1e20) == ["-1e20", "-5e19", "0", "5e19", "1e20"]
-    assert labels(0, 1e-5)[:3] == ["0", "0.000002", "0.000004"]
+    assert labels(0, 1e-5) == ["0", "2e-6", "4e-6", "6e-6", "8e-6", "1e-5"]
+    assert labels(0, 0.012)[-1] == "0.012" and labels(-99999, 99999) == ["-50000", "0", "50000"]
     assert len(set(labels(1e9, 1e9 + 5))) == 6                                # offset range: more digits beat identical labels
     assert not any(l.startswith("-0") for l in labels(-3e-11, 2e-11))
 

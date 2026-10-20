@@ -18,12 +18,11 @@ from pathlib import Path
 INK, SOFT, GRID, PAPER = "#17253d", "#4b5a72", "#d9e0d3", "#ffffff"
 FONT = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif'
 FS, TICK_FS, TITLE_FS = 12, 11, 14
-# The frame never moves. Margins are a fixed budget, not sized to the tick labels, so a
-# pan or zoom that changes how wide the numbers are cannot slide the plot out from under
-# the pointer. Tick labels are held to LABEL_CHARS (room for -1.234e-10); a label that needs
-# more, only on a range far narrower than its position, grows into the gap before the y label.
-LABEL_CHARS = 10
-LABEL_ROOM = LABEL_CHARS * TICK_FS * 0.56
+# The margins hold a fixed budget of LABEL_CHARS characters for the tick labels, so while the
+# numbers on an axis fit in it the frame stays put however a pan or zoom changes them (and the
+# pointer stays on the axis strip being scrolled). A label that needs more makes the margin
+# grow to fit it, and the frame moves with it.
+LABEL_CHARS = 6
 _SUB = re.compile(r"_(\{[^}]*\}|[A-Za-z0-9]+)")
 _DASH = {"solid": "", "dashed": "6 4", "dotted": "1 4"}
 
@@ -72,14 +71,14 @@ def _short(v):
 
 
 def format_ticks(values, step):
-    """One notation for a whole axis, never wider than LABEL_CHARS: fixed point when every
-    label fits, else scientific with as few digits as tell the ticks apart."""
+    """One notation for a whole axis: fixed point when every label fits in LABEL_CHARS, else
+    scientific with as few digits as tell the ticks apart."""
     nd = _decimals(step)
     fixed = ["0" if v == 0 else f"{v:.{nd}f}" for v in values]
-    if nd <= 6 and all(len(t) <= LABEL_CHARS - 1 for t in fixed):
+    if nd <= 6 and all(len(t) <= LABEL_CHARS for t in fixed):
         return fixed
-    # Past two digits the labels outgrow the margin, which is better than printing the same label
-    # on every tick (a range like 1e9 .. 1e9+5); the frame still does not move.
+    # More digits make wider labels, which is better than printing the same label on every tick
+    # (a range like 1e9 .. 1e9+5); the margin grows to fit them.
     for p in range(10):
         sci = ["0" if v == 0 else _sci(v, p) for v in values]
         if all(abs(float(t) - v) <= abs(step) * 1e-3 for t, v in zip(sci, values)):
@@ -127,6 +126,16 @@ def axis_ticks(ax):
     return linear_ticks(lo, hi, ax.get("step"))[1]
 
 
+def label_chars(t):
+    """Width of a tick label in characters (10^k is the 10 and a smaller exponent)."""
+    return 2 + 0.75 * len(str(t["power"])) if "power" in t else len(t["label"])
+
+
+def room(ticks):
+    """Pixels a column of tick labels needs: the budget, or more when a label is wider."""
+    return max([LABEL_CHARS] + [label_chars(t) for t in ticks]) * TICK_FS * 0.56
+
+
 def tick_markup(t):
     """10^k as a raised exponent; any other label as is."""
     if "power" in t:
@@ -166,8 +175,8 @@ def render_svg(spec, uid=0, standalone=False):
     x, y = spec["x"], spec["y"]
     xt, yt = axis_ticks(x), axis_ticks(y)
     title = spec["title"]
-    left = 12 + (FS + 6 if y["label"] else 0) + LABEL_ROOM + 10
-    right = 8 + LABEL_ROOM / 2
+    left = 12 + (FS + 6 if y["label"] else 0) + room(yt) + 10
+    right = 8 + room(xt) / 2
     top = 10 + (TITLE_FS + 10 if title else 0)
     bottom = 6 + (FS + 8 if x["label"] else 0) + TICK_FS + 10
     L, T = left, top
