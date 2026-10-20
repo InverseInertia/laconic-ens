@@ -175,6 +175,7 @@
   <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
   <button id="keysBtn">Keys</button>
+  <button id="renameBtn" title="Rename a variable everywhere (F2)">Rename</button>
   <button id="greekBtn">Greek</button>
   <button id="unitsBtn">Units</button>
   <button id="open">Open</button>
@@ -221,6 +222,22 @@
       <tr><td><kbd>Tab</kbd></td><td>Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name</td></tr>
     </table>
   </div>
+</dialog>
+
+<dialog id="renameDlg" aria-labelledby="renameTitle">
+  <form method="dialog" id="renameForm">
+    <div class="dlg-head"><h2 id="renameTitle">Rename symbol</h2><button type="button" class="close">Cancel</button></div>
+    <div class="dlg-body">
+      <p class="note">Changes every use of a variable or function in the sheet. Units, comments and commands are left alone. With the caret on a name, F2 fills in the old name.</p>
+      <div class="u-row">
+        <input id="renameOld" aria-label="Current name" placeholder="old name" spellcheck="false" autocomplete="off">
+        <span class="eq">→</span>
+        <input id="renameNew" aria-label="New name" placeholder="new name" spellcheck="false" autocomplete="off">
+        <div class="err" id="renameErr" hidden></div>
+      </div>
+    </div>
+    <div class="dlg-foot"><span class="spacer"></span><button type="submit" id="renameGo">Rename</button></div>
+  </form>
 </dialog>
 
 <dialog id="greekDlg" aria-labelledby="greekTitle">
@@ -604,6 +621,50 @@ function buildGreek() { $("#greekRows").replaceChildren(...Object.entries(greek)
 $("#greekBtn").onclick = () => { buildGreek(); $("#greekDlg").showModal(); };
 $("#greekAdd").onclick = () => { const r = greekRow(); $("#greekRows").append(r); r.querySelector("input").focus(); };
 $("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", null); saveGreek(null); buildGreek(); };
+
+// ---- rename symbol -----------------------------------------------------------------
+function nameAtCaret() {
+  const t = src.value, p = src.selectionStart;
+  const sel = t.slice(src.selectionStart, src.selectionEnd);
+  if (sel && /^~?[^\W\d]\w*[`!@]*$/u.test(sel)) return sel;
+  const ls = t.lastIndexOf("\n", p - 1) + 1;
+  let le = t.indexOf("\n", p); if (le < 0) le = t.length;
+  const line = t.slice(ls, le);
+  if (line.trimStart().startsWith("#")) return "";
+  const re = /'(?:[^\W\d]|\u00b0)[\w\u00b0]*|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|(~?[^\W\d]\w*[`!@]*)/gu;
+  for (const m of line.matchAll(re)) {
+    if (m[1] && p - ls >= m.index && p - ls <= m.index + m[0].length) return m[1];
+  }
+  return "";
+}
+function openRename() {
+  $("#renameOld").value = nameAtCaret();
+  $("#renameNew").value = "";
+  $("#renameErr").hidden = true;
+  $("#renameDlg").showModal();
+  ($("#renameOld").value ? $("#renameNew") : $("#renameOld")).focus();
+}
+$("#renameBtn").onclick = openRename;
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "F2" && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !$("#renameDlg").open) { ev.preventDefault(); openRename(); }
+});
+$("#renameForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const err = $("#renameErr");
+  let res;
+  try {
+    res = await (await fetch("/api/rename", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text: src.value, old: $("#renameOld").value, new: $("#renameNew").value}),
+    })).json();
+  } catch { err.textContent = "Could not reach the server"; err.hidden = false; return; }
+  if (!res.ok) { err.textContent = res.error; err.hidden = false; return; }
+  $("#renameDlg").close();
+  // Replace the whole text through the editing pipeline so Ctrl+Z undoes the rename.
+  const caret = Math.min(src.selectionStart, res.text.length);
+  apply({from: 0, to: src.value.length, insert: res.text, caret});
+  say(`Renamed ${res.count} use${res.count === 1 ? "" : "s"}`);
+});
 
 // ---- global units ------------------------------------------------------------------
 function unitRow(name = "", definition = "", error = "") {

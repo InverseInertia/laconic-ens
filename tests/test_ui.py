@@ -156,3 +156,15 @@ def test_global_units_and_server_side_greek(page, server):
     page.wait_for_timeout(600)
     cfg = page.evaluate("async () => (await (await fetch('/api/settings')).json())")
     assert cfg["greek"]["j"] == "ϑ" and cfg["units"][0]["name"] == "smoot"
+
+
+def test_f2_renames_the_name_at_the_caret(page):
+    reset(page, "L = 4.5'm\nA = L * 2")
+    select(page, 1, 1)
+    page.keyboard.press("F2")
+    page.wait_for_selector("#renameDlg[open]")
+    assert page.input_value("#renameOld") == "L"
+    page.fill("#renameNew", "span")
+    page.keyboard.press("Enter")
+    page.wait_for_selector("#renameDlg", state="hidden")
+    assert value(page) == "span = 4.5'm\nA = span * 2"

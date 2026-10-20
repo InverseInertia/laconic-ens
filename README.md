@@ -33,6 +33,9 @@ The exported .tex needs siunitx v3 or newer.
     !noassume / !assume            keep typed units / back to SI results
     x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 
+Rename a variable or function everywhere with the Rename button or F2 (the caret's name is filled in).
+Units, comments and commands are untouched, and a name already in use is refused.
+
 Functions: sqrt abs sin cos tan asin acos atan exp ln log10 det inv transpose norm solve identity.
 Constants: pi, e.
 
