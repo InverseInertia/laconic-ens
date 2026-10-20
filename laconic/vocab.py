@@ -10,6 +10,8 @@ COMMANDS = [
     ("assume", "reduce results to SI again"),
     ("trigdeg", "trig functions use degrees"),
     ("trigrad", "trig functions use radians"),
+    ("plot", "plot functions: !plot f(x), x = 0 .. 1"),
+    ("plotspec", "set a plot option for the plots below, e.g. !plotspec grid: off"),
 ]
 
 # Signature shown next to each function. Anything missing shows just its name.

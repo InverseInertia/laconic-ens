@@ -3,8 +3,8 @@ edit; for worksheet-sized documents that takes a few milliseconds. Settings
 (Greek table, global units) live on the server, in `settings.py`."""
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -12,6 +12,8 @@ from . import document, evaluate as evaluate_sheet, snippet
 from . import settings
 from .evaluator import check_units
 from .lifecycle import lifecycle
+from .plotopts import PlotError, apply_patch
+from .plotsvg import render_svg
 from .rename import RenameError, rename
 from .vocab import vocabulary
 
@@ -34,6 +36,17 @@ class RenameBody(BaseModel):
     text: str
     old: str
     new: str
+
+
+class PlotEditBody(BaseModel):
+    text: str
+    line: int                                           # the plot's `plot` line, 1-based
+    patch: dict[str, str | list[float] | None]          # option -> new value; None removes it
+
+
+class PlotImageBody(BaseModel):
+    text: str
+    line: int
 
 
 class GreekBody(BaseModel):
@@ -90,6 +103,37 @@ def rename_symbol(body: RenameBody):
     except RenameError as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "text": text, "count": count}
+
+
+def _plot_at(text, line):
+    results = evaluate_sheet(text, global_units=settings.global_units()).results
+    r = results[line - 1] if 1 <= line <= len(results) else None
+    return r if r is not None and r.kind == "plot" else None
+
+
+@app.post("/api/plotedit")
+def plot_edit(body: PlotEditBody):
+    """Option lines of one plot, rewritten to say what the mouse just did (a pan, a zoom,
+    a reset). Returns the new source text; the page applies it to the editor, and the
+    plot is then redrawn from the text like any other edit. Nothing changes on error."""
+    r = _plot_at(body.text, body.line)
+    if r is None:
+        return {"ok": False, "error": f"Line {body.line} is not a plot that draws"}
+    try:
+        text = apply_patch(body.text, body.line, body.patch,
+                           {"x": r.plot["x"], "y": r.plot["y"]}, r.plot["inherited"])
+    except PlotError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "text": text}
+
+
+@app.post("/api/plotimage")
+def plot_image(body: PlotImageBody):
+    """The plot as a complete SVG file, exactly as the page draws it."""
+    r = _plot_at(body.text, body.line)
+    if r is None:
+        raise HTTPException(404, f"Line {body.line} is not a plot that draws")
+    return Response(render_svg(r.plot, uid=body.line, standalone=True), media_type="image/svg+xml")
 
 
 @app.get("/api/settings")

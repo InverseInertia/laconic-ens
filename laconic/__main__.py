@@ -7,6 +7,7 @@ import webbrowser
 from pathlib import Path
 
 from . import document, evaluate, settings
+from .plotsvg import render_svg
 
 _CHROMIUM = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
              "microsoft-edge", "brave-browser")
@@ -34,6 +35,7 @@ def main():
     ap = argparse.ArgumentParser(prog="lens", description="Laconic Engineering Notebook System")
     ap.add_argument("file", nargs="?", help="worksheet file (.lens); omit with --serve")
     ap.add_argument("--tex", metavar="OUT", help="write a LaTeX document to OUT")
+    ap.add_argument("--plots", metavar="DIR", help="write each plot as an SVG file in DIR")
     ap.add_argument("--serve", action="store_true", help="start the web UI")
     ap.add_argument("--open", action="store_true", help="with --serve, open the default browser")
     ap.add_argument("--app", action="store_true", help="with --serve, open a Chromium app window")
@@ -58,7 +60,16 @@ def main():
         Path(a.tex).write_text(document(ws.results, title=Path(a.file).stem, declarations=ws.declarations),
                                encoding="utf-8")
         print(f"wrote {a.tex}")
-    for r in evaluate(text, global_units=units).results:
+    results = evaluate(text, global_units=units).results
+    if a.plots:
+        out = Path(a.plots)
+        out.mkdir(parents=True, exist_ok=True)
+        for r in results:
+            if r.kind == "plot":
+                path = out / f"{Path(a.file).stem}-line{r.n}.svg"
+                path.write_text(render_svg(r.plot, uid=r.n, standalone=True), encoding="utf-8")
+                print(f"wrote {path}")
+    for r in results:
         if r.kind == "error":
             print(f"{r.n:>3}  ERROR  {r.error}", file=sys.stderr)
         elif r.text and r.kind in ("assign", "expr"):

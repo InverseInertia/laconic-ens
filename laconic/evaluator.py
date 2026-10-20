@@ -92,6 +92,7 @@ class Evaluator:
         self.vars = {}
         self.funcs = {}
         self.assume = True     # False after !noassume: results keep their typed units
+        self.plotdefs = {}     # set by `!plot key: value`, for the plots below it
         self.cleared = set()   # names removed by !clear, for a clearer error
         self.cleared_funcs = set()  # functions removed by !clearf
         self.angle = "radian"  # "degree" after !trigdeg: bare numbers in trig calls are degrees
