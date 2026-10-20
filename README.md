@@ -30,6 +30,7 @@ The exported .tex needs siunitx v3 or newer.
     ~g = 9.81'm / 's^2             global variable (see below)
     !clear                         remove all non-global variables
     !noassume / !assume            keep typed units / back to SI results
+    x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 
 Functions: sqrt abs sin cos tan asin acos atan exp ln log10 det inv transpose norm solve identity.
 Constants: pi, e.
@@ -57,6 +58,19 @@ Not reduced: an explicit `->` conversion, and a line that is only one typed-in q
 (`E = 200'GPa` stays `200 GPa`). `10'kN / 5'mm` has two numbers, so it is a calculation and
 comes out as `2000000 N/m`. Angles keep their radians (`asin(0.5)` gives `0.5236 rad`), degF
 becomes degC, and degC stays.
+
+## Accents over variables
+
+A mark typed right after a name puts an accent over it in the typeset view and the export:
+
+| Mark | Accent | Example | LaTeX |
+|---|---|---|---|
+| backtick | dot (two backticks: double dot) | ``v` `` | `\dot{v}` |
+| `!` | arrow | `F!` | `\vec{F}` |
+| `@` | hat | `a@` | `\hat{a}` |
+
+Marks can be combined (``v`! `` is `\vec{\dot{v}}`). With a subscript the mark goes at the end and sits
+over the base letter: `F_x!` is `\vec{F}_{x}`. `x`, `x!` and `x@` are three different variables.
 
 ## Global variables and commands
 

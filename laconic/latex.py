@@ -3,11 +3,12 @@
 
 Two unit styles: KaTeX-friendly `\\mathrm{kN}` for the live preview, and
 siunitx `\\qty{..}{..}` for the exported .tex file."""
+import itertools
 import re
 
 import numpy as np
 
-from .evaluator import CONSTANTS
+from .evaluator import CONSTANTS, EvalError
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num,
                     UnitLit)
 
@@ -23,15 +24,37 @@ GREEK.update({g: "\\" + g for g in
 GREEK["varepsilon"] = "\\varepsilon"
 
 
+_ACCENTS = {"!": "\\vec", "@": "\\hat"}
+_DOTS = {1: "\\dot", 2: "\\ddot"}
+
+
+def _accent(tex, marks):
+    """Wrap tex in the accents typed after a name, innermost first. A run of
+    backticks is one dot per backtick (one or two)."""
+    for mark, run in itertools.groupby(marks):
+        n = len(list(run))
+        if mark == "`":
+            if n not in _DOTS:
+                raise EvalError("At most two dots fit over a variable")
+            tex = f"{_DOTS[n]}{{{tex}}}"
+        else:
+            tex = f"{_ACCENTS[mark]}{{{tex}}}"
+    return tex
+
+
 def name_latex(name):
-    """sigma_max -> \\sigma_{\\mathrm{max}}, x1 -> x_{1}, width -> \\mathrm{width}."""
+    """sigma_max -> \\sigma_{\\mathrm{max}}, x1 -> x_{1}, width -> \\mathrm{width}.
+    Marks after the name go over the base symbol, with subscripts outside:
+    v` -> \\dot{v}, F_x! -> \\vec{F}_{x}, a@ -> \\hat{a}."""
     name = name.lstrip("~")  # the global marker is source-only
-    parts = name.split("_")
+    bare = name.rstrip("`!@")
+    marks = name[len(bare):]
+    parts = bare.split("_")
     base, subs = parts[0], [p for p in parts[1:] if p]
     m = re.fullmatch(r"([A-Za-z])(\d+)", base)
     if m and not subs:
         base, subs = m.group(1), [m.group(2)]
-    out = _word(base)
+    out = _accent(_word(base), marks)
     if subs:
         out += "_{" + ",".join(_word(s) for s in subs) + "}"
     return out
