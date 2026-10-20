@@ -8,6 +8,7 @@ line, see typeset results update as you edit, and copy LaTeX snippets or export 
     lens --serve --open               # or in your default browser
     lens examples/beam.lens           # print results in the terminal
     lens examples/beam.lens --tex beam.tex
+    lens examples/plots.lens --plots figures    # each plot as an SVG file
 
 `python -m laconic` works too. Worksheets are plain text files, conventionally `.lens`.
 The web page serves KaTeX 0.16.11 and IBM Plex fonts from `laconic/static/`, so it works offline.
@@ -32,6 +33,7 @@ The exported .tex needs siunitx v3 or newer.
     !clear                         remove all non-global variables
     !noassume / !assume            keep typed units / back to SI results
     x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
+    plot M(x), x = 0'm .. L        plot a function (see Plots)
 
 Rename a variable or function everywhere with the Rename button or F2 (the caret's name is filled in).
 Units, comments and commands are untouched, and a name already in use is refused.
@@ -118,6 +120,70 @@ on another instance:
   If they differ, the definition line shows an error naming the instance's value; rename the unit in
   the sheet or change the global.
 
+## Plots
+
+A `plot` line draws one or more functions of one variable over a range. Indented `key: value` lines
+under it set the details:
+
+    plot M(x), V(x), x = 0'm .. L
+      title: Bending moment and shear
+      ylabel: M (kN·m)
+      xlim: 0'm .. 3.2'm
+      color 2: red
+      note: "max" at (L / 2, M(L / 2))
+
+The expressions can use any variable and function above them. They are sampled point by point
+(`samples`, default 400), so units are checked at every point and a result in kN·m is shown in
+kN·m. Several expressions share one y axis and must have compatible units; give them separate
+plots otherwise. Where an expression is undefined (`1/x` at 0, `sqrt` of a negative) the line
+breaks there, and a line that jumps from beyond one limit to beyond the other (a pole) is not
+joined across the picture. `gaps: error` turns an undefined point into an error instead.
+
+| Option | Meaning (default in brackets) |
+|---|---|
+| `title`, `xlabel`, `ylabel` | text; the axis labels are `name [unit]` unless set. `x_max` or `x_{max}` is a subscript. An empty value removes the label |
+| `xlim`, `ylim` | `low .. high`, with units or plain numbers in the axis's display unit. Either end can be `auto` (automatic, with 5% headroom) |
+| `xunit`, `yunit` | the unit the axis is shown in, e.g. `'kN * 'm` (the typed range's unit for x, the simplest SI unit for y) |
+| `xscale`, `yscale` | `lin` or `log` (`lin`) |
+| `xstep`, `ystep` | tick spacing in the display unit (automatic) |
+| `grid` | `on` or `off` (`on`) |
+| `legend` | `auto`, `off`, `top right`, `top left`, `bottom right`, `bottom left` (`auto`: top right when there are several series) |
+| `size` | `width x height` in pixels (`520 x 320`) |
+| `samples` | 10 to 5000 (`400`) |
+| `gaps` | `break` or `error` (`break`) |
+| `color`, `width`, `dash`, `marker`, `label` | per series. `color 2: red` is series 2; with no number the setting applies to every series. Colors are `#rrggbb` or a name (`red`, `blue`, `green`, `orange`, `purple`, `sky`, `gray`, `black`, `navy`). `dash` is `solid`, `dashed` or `dotted`; `marker` is `none`, `circle` or `square` |
+| `note` | `"text" at (x, y)`: a dot and a label at a point, in data coordinates. Repeat the line for more |
+
+**Defaults.** Three layers, each overriding the one before: the built-in values above, then a
+`!plot key: value` line, which applies to every plot below it (`!plot grid: off`, `!plot size: 560 x 300`;
+`!plot reset` clears them), then the option lines under a plot.
+
+**Mouse.** The picture is drawn on the server from the worksheet text, and the mouse only edits that
+text. Drag in a plot to pan; Ctrl + wheel (or a trackpad pinch) zooms about the pointer; a plain wheel
+still scrolls the results. Dragging or zooming on the strip under or beside an axis moves just that
+axis. Double-click resets (a strip resets only its axis), and so does the Reset view button. Hovering
+reads off the nearest point. When a gesture ends, the new limits are written under the plot as
+`xlim:` and `ylim:` lines, only for what moved and rounded to the precision on screen, and Ctrl+Z undoes
+it like any other edit. Deleting those lines by hand, or writing different ones, works the same way:
+the worksheet alone redraws the picture. The page doesn't redraw the ticks until the gesture ends, so
+the grid is hidden while you drag.
+
+When a zoom narrows `xlim`, the curve is sampled over the visible window again, so it stays smooth.
+Editing the text of a title, label or note is done in the editor; the math keys are off on those lines.
+
+**Exporting.** Each plot has three ways out:
+
+- **SVG** and **PNG** buttons under the plot save the picture exactly as shown, with the font
+  embedded (PNG at three times the size). `lens file.lens --plots DIR` writes the same SVGs without a browser.
+- **LaTeX.** Export LaTeX (and the LaTeX view) writes the plot as a `pgfplots` figure built from the
+  same data, limits, scales, labels, colors and dash styles, with units through siunitx. TeX draws
+  it with the document's fonts and its own tick placement, so it is a close match and not the same
+  picture; use the SVG when you need the exact one. The exported document loads `pgfplots` when it
+  has a plot.
+
+Save keeps the units a plot uses with the sheet, like any other line. Options are checked as they are
+read: a bad one is reported on its own line and the plot is drawn without it.
+
 ## Settings on this machine
 
 The Greek table (Ctrl+G) and the global units are stored by the server in a JSON file, so they are
@@ -152,7 +218,7 @@ remembered in the browser. On a narrow or vertical screen the results sit above 
 ## Math keys
 
 These edit the source text. They are off on comment lines and can be switched off with the
-Math keys box. The Keys button lists them in the app.
+Math keys box. The Keys button lists them in the app. They are also off on the text lines under a plot (title, labels, notes).
 
 | Key | Effect |
 | --- | --- |
@@ -236,12 +302,17 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
     laconic/evaluator.py     AST -> Pint quantities
     laconic/si.py            default SI display units
     laconic/latex.py         AST -> LaTeX (symbolic, substituted, result), snippets, .tex document
+    laconic/plotopts.py      plot option lines: parsing, defaults, and the writer that edits them in the source
+    laconic/plotspec.py      samples a plot and resolves its options into one plain dict (the spec)
+    laconic/plotsvg.py       spec -> SVG, the only renderer of the picture (UI, exports and CLI use it)
+    laconic/plotpgf.py       spec -> pgfplots figure for the .tex export
     laconic/sheet.py         runs a worksheet line by line, including commands and unit definitions
     laconic/settings.py      per-user settings file: Greek table, global units
     laconic/vocab.py         what the editor suggests: units, functions, constants, commands
     laconic/server.py        FastAPI app
     laconic/static/          index.html (UI), editing.js (math keys, selections), autocomplete.js
-                             (what to suggest; both are pure functions)
+                             (what to suggest; both are pure functions), plotview.js (mouse on plots)
+    laconic/static/vendor/   KaTeX, and d3-zoom with d3-scale and their dependencies (see vendor/d3/README.md)
 
 ## Tests
 
@@ -249,8 +320,10 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
     node tests/test_editing.js    # the math keys and selections on their own
     node tests/test_autocomplete.js
 
-`tests/test_ui.py` drives the real page in Chromium and is skipped unless `playwright` is installed
-(`pip install playwright`; set `CHROMIUM_PATH` to use a browser you already have).
+`tests/test_ui.py` and `tests/test_plots_ui.py` drive the real page in Chromium (the second with real pointer
+events on plots) and are skipped unless `playwright` is installed
+(`pip install playwright`; set `CHROMIUM_PATH` to use a browser you already have). One test compiles an
+exported document with plots and is skipped unless `pdflatex` (with pgfplots and siunitx v3) is installed.
 
 ## Standalone builds
 
@@ -258,8 +331,13 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
 
 ## Not built yet
 
-Symbolic math, plotting, solve blocks, dark mode,
+Symbolic math, solve blocks, dark mode,
 long-equation line breaking inside a single stage, and globals that are usable above their
 definition (units are, see Custom units). Custom units cannot define a new base dimension or an
 offset scale,. Selecting with
 the mouse is not snapped to terms; use double-click or `Alt+Up`.
+
+Plots are functions of one variable only. Not built: plotting arrays or measured data, box-zoom, dragging
+legends, notes and labels with the mouse, minor grid lines, per-instance plot styles (colors and fonts for
+every sheet), and PDF output of the picture (use SVG or PNG; a `.tex` export that includes the picture
+as a file instead of a pgfplots figure would need a zip).

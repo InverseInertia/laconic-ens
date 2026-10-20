@@ -22,6 +22,12 @@ function pick(src, opts, extras) {
   return A.candidates(ctx, vocab, text, extras).map((c) => c.insert);
 }
 
+// --- no popup inside the text of a plot option -------------------------------------
+eq(at('plot f(x), x = 0 .. 1\n  title: Mom|').ctx, null, 'no suggestions in a plot title');
+eq(at('  ylabel: Mom|').ctx, null, 'no suggestions in an axis label');
+eq(at('  label 2: Mom|').ctx, null, 'no suggestions in a series label');
+eq(at('  xlim: 0 .. mo|').ctx !== null, true, 'suggestions still work in a limit');
+
 // --- when to open --------------------------------------------------------------
 eq(at("w = 12'k|").ctx.kind, 'unit', 'after an apostrophe');
 eq(at("w = 12'|").ctx.query, '', 'an apostrophe alone opens the unit list');

@@ -92,6 +92,7 @@ class Evaluator:
         self.vars = {}
         self.funcs = {}
         self.assume = True     # False after !noassume: results keep their typed units
+        self.plotdefs = {}     # set by `!plot key: value`, for the plots below it
         self.cleared = set()   # names removed by !clear, for a clearer error
 
     # ---- name classification (shared with the LaTeX printer) -------------

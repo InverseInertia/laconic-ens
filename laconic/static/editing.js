@@ -27,7 +27,12 @@
 
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
-  const isComment = (t, ls) => t.slice(ls, lineEndOf(t, ls)).trimStart().startsWith('#');
+  // Lines that hold text and not math: comments, and the title, label and note text under a plot.
+  const TEXT_OPTION = /^\s+(title|xlabel|ylabel|label|note)(\s+\d+)?\s*:/;
+  const isComment = (t, ls) => {
+    const line = t.slice(ls, lineEndOf(t, ls));
+    return line.trimStart().startsWith('#') || TEXT_OPTION.test(line);
+  };
   const edit = (from, to, insert, caret) => ({ from, to, insert, caret });
 
   // ---- bracket helpers (always limited to one line) -----------------------
@@ -584,6 +589,7 @@
     DEFAULT_GREEK, charAction, keyAction,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall,
+    isTextLine: isComment,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Editing = api;

@@ -60,7 +60,7 @@
     const force = !!(opts && opts.force);
     const ls = lineStartOf(t, pos), le = lineEndOf(t, pos);
     const line = t.slice(ls, le);
-    if (line.trimStart().startsWith('#')) return null;
+    if (line.trimStart().startsWith('#') || /^\s+(title|xlabel|ylabel|label|note)(\s+\d+)?\s*:/.test(line)) return null;
     let s = pos;
     while (s > ls && WORD.test(t[s - 1])) s--;
     let e = pos;

@@ -197,6 +197,16 @@ assert.ok(E.keyAction('g', { ctrl: true }, 'x = 5', 5, 5, {}).message.includes('
 eq(sim('x = a|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = ȧ|', 'custom table is used');
 eq(sim('x = b|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = b|', 'custom table replaces the default');
 
+// --- text lines under a plot ----------------------------------------------------
+eq(sim('plot f(x), x = 0 .. 1\n  title: M|', '/'), 'plot f(x), x = 0 .. 1\n  title: M/|', 'slash is literal in a plot title');
+eq(sim('  ylabel: a|', '.'), '  ylabel: a.|', 'period is literal in an axis label');
+eq(sim('  label 2: a|', '^'), '  label 2: a^|', 'caret is literal in a series label');
+eq(sim('  note: "a|"', '/'), '  note: "a/|"', 'slash is literal in a note');
+eq(sim('  xlim: a|', '/'), '  xlim: a / (|)', 'math keys still work in a limit');
+eq(E.isTextLine('  title: x', 0), true, 'title line is text');
+eq(E.isTextLine('title = 3', 0), false, 'an unindented line is not an option');
+eq(E.isTextLine('  xlim: 1 .. 2', 0), false, 'a limit is math');
+
 // --- comments and the off switch ------------------------------------------------
 eq(sim('# see a|', '/'), '# see a/|', 'slash is literal in comments');
 eq(sim('# a|', '.'), '# a.|', 'period is literal in comments');

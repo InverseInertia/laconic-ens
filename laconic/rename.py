@@ -4,6 +4,7 @@ the source text, token by token, so comments, commands, units (`'m` is the metre
 import re
 
 from .evaluator import CONSTANTS, Evaluator
+from .plotopts import OPT_RE, expr_spans, is_plot_line
 
 NAME = r"~?[^\W\d]\w*[`!@]*"
 _TOKEN = re.compile(
@@ -21,16 +22,20 @@ def _builtins():
     return {n[3:] for n in dir(Evaluator) if n.startswith("fn_")} | set(CONSTANTS)
 
 
-def _code(line):
-    """True for lines that hold an expression or definition."""
-    s = line.strip()
-    return bool(s) and not s.startswith(("#", "!"))
+def _scan(text):
+    """(line, spans) for each line, where spans are the parts that hold expressions.
+    Under a `plot` only its limits, units and note positions are expressions; a title
+    is text and is never renamed."""
+    in_plot = False
+    for line in text.splitlines(keepends=True):
+        yield line, expr_spans(line, in_plot)
+        in_plot = is_plot_line(line) or (in_plot and bool(OPT_RE.match(line)))
 
 
 def _names(text):
-    for line in text.splitlines():
-        if _code(line):
-            for m in _TOKEN.finditer(line):
+    for line, spans in _scan(text):
+        for a, b in spans:
+            for m in _TOKEN.finditer(line, a, b):
                 if m.lastgroup == "name":
                     yield m.group()
 
@@ -65,6 +70,10 @@ def rename(text, old, new):
         return m.group()
 
     out = []
-    for line in text.splitlines(keepends=True):
-        out.append(_TOKEN.sub(sub, line) if _code(line) else line)
+    for line, spans in _scan(text):
+        pos = 0
+        for a, b in spans:
+            out += [line[pos:a], _TOKEN.sub(sub, line[a:b])]
+            pos = b
+        out.append(line[pos:])
     return "".join(out), count
