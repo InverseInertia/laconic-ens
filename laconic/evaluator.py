@@ -93,6 +93,7 @@ class Evaluator:
         self.funcs = {}
         self.assume = True     # False after !noassume: results keep their typed units
         self.cleared = set()   # names removed by !clear, for a clearer error
+        self.cleared_funcs = set()  # functions removed by !clearf
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
@@ -269,6 +270,8 @@ class Evaluator:
             return self.eval(body, {**self.vars, **dict(zip(params, args))})
         fn = getattr(self, "fn_" + n.func, None)
         if fn is None:
+            if n.func in self.cleared_funcs:
+                raise EvalError(f"'{n.func}' was removed by !clearf")
             raise EvalError(f"Unknown function '{n.func}'")
         try:
             return fn(*args)

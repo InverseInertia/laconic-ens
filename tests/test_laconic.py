@@ -226,3 +226,10 @@ def test_accented_name_is_its_own_variable():
 
 def test_too_many_dots_is_an_error():
     assert run("x``` = 1")[0].kind == "error"
+
+
+def test_clearf_removes_functions_but_keeps_global_ones():
+    r = run("f(x) = x^2\n~g(x) = 2*x\n!clearf\na = ~g(3)\nb = f(2)")
+    assert r[2].kind == "command" and "f" in r[2].text
+    assert r[3].kind == "assign" and r[3].text == "a = 6"
+    assert r[4].kind == "error" and "removed by !clearf" in r[4].error

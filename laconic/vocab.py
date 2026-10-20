@@ -5,6 +5,7 @@ from .evaluator import CONSTANTS, Evaluator, registry
 
 COMMANDS = [
     ("clear", "remove all non-global variables"),
+    ("clearf", "remove all non-global functions"),
     ("noassume", "keep typed units in results"),
     ("assume", "reduce results to SI again"),
 ]

@@ -30,6 +30,7 @@ The exported .tex needs siunitx v3 or newer.
     'smoot = 1.7018'm              define a unit (see Custom units)
     ~g = 9.81'm / 's^2             global variable (see below)
     !clear                         remove all non-global variables
+    !clearf                        remove all non-global functions
     !noassume / !assume            keep typed units / back to SI results
     x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 
@@ -79,7 +80,9 @@ over the base letter: `F_x!` is `\vec{F}_{x}`. `x`, `x!` and `x@` are three diff
 ## Global variables and commands
 
 A name that starts with `~` is global: `~g = 9.81'm / 's^2`, used as `~g`. `!clear` on its own
-line removes every variable above it that is not global; user functions are kept. Evaluation is
+line removes every variable above it that is not global; user functions are kept. `!clearf` does
+the same for user functions, and a function whose name starts with `~` (`~f(x) = x^2`) is global
+and survives it. Evaluation is
 top to bottom, so a global is available only below its definition. Using a variable that was
 cleared says so: `'m' was removed by !clear`.
 

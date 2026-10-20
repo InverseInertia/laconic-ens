@@ -186,19 +186,26 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
 
 def _run_command(i, raw, s, ev):
     """`!clear` removes every variable whose name does not start with ~.
-    User functions are left alone. `!noassume` keeps computed results in the
+    `!clearf` does the same for user functions. `!noassume` keeps computed results in the
     units that came out of the arithmetic instead of reducing them to SI, until
     `!assume` restores the default."""
     parts = s[1:].split()
     name = parts[0] if parts else ""
-    if name not in ("clear", "assume", "noassume"):
+    if name not in ("clear", "clearf", "assume", "noassume"):
         return LineResult(i, raw, "error",
-                          error=f"Unknown command '!{name}'. Available: !clear, !assume, !noassume")
+                          error=f"Unknown command '!{name}'. Available: !clear, !clearf, !assume, !noassume")
     if len(parts) > 1:
         return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
     if name in ("assume", "noassume"):
         ev.assume = name == "assume"
         text = "Units are reduced to SI again" if ev.assume else "Units are kept as typed unless converted with ->"
+        return LineResult(i, raw, "command", text=text)
+    if name == "clearf":
+        gone = [n for n in ev.funcs if not n.startswith("~")]
+        for n in gone:
+            del ev.funcs[n]
+        ev.cleared_funcs.update(gone)
+        text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
         return LineResult(i, raw, "command", text=text)
     gone = [n for n in ev.vars if not n.startswith("~")]
     for n in gone:

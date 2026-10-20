@@ -13,7 +13,7 @@
 
   const WORD = /[\p{L}\p{N}_°]/u;
   const NAME_START = '[\\p{L}_][\\p{L}\\p{N}_]*';
-  const FUNC_RE = new RegExp('^(' + NAME_START + ')\\s*\\(([^)]*)\\)\\s*=(?!=)', 'u');
+  const FUNC_RE = new RegExp('^(~?' + NAME_START + ')\\s*\\(([^)]*)\\)\\s*=(?!=)', 'u');
   const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
   const MAX = 8;
@@ -31,6 +31,7 @@
       if (!s || s[0] === '#' || s[0] === "'") continue;
       if (s[0] === '!') {
         if (/^!clear\s*$/.test(s)) for (const n of [...vars.keys()]) if (n[0] !== '~') vars.delete(n);
+        if (/^!clearf\s*$/.test(s)) for (const n of [...funcs.keys()]) if (n[0] !== '~') funcs.delete(n);
         continue;
       }
       let m = FUNC_RE.exec(s);
@@ -131,8 +132,8 @@
         add({ kind: 'variable', insert: name, label: name, detail: values[name] || 'variable' }, 0, name.replace(/^~/, ''), '');
       }
       for (const [name, f] of funcs) {
-        if (ctx.tilde) continue;
-        add({ kind: 'function', insert: name, label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name, '');
+        if (ctx.tilde && name[0] !== '~') continue;
+        add({ kind: 'function', insert: name, label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name.replace(/^~/, ''), '');
       }
       for (const [name, sig] of vocab.functions || []) {
         if (ctx.tilde || funcs.has(name)) continue;
