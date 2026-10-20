@@ -51,12 +51,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { path: artifacts }
-      - run: |
-          cd artifacts
-          mv lens-windows-x64/lens.exe lens-windows-x64.exe
-          mv lens-linux-x64/lens lens-linux-x64
+      - name: Collect release files
+        run: |
+          mkdir release
+          mv artifacts/lens-windows-x64/lens.exe release/lens-windows-x64.exe
+          mv artifacts/lens-linux-x64/lens release/lens-linux-x64
+          chmod +x release/lens-linux-x64  # upload-artifact drops the executable bit
       - uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/lens-windows-x64.exe
-            artifacts/lens-linux-x64
+          files: release/*
