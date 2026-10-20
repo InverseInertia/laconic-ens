@@ -8,8 +8,8 @@ import pytest
 pytest.importorskip("playwright.sync_api")
 from test_ui import page, reset, server, value  # noqa: E402,F401  (fixtures and helpers)
 
-SRC = "plot sin(x), x = 0 .. 10\n"
-LIMITS = re.compile(r"^\s+([xy])lim: (\S+) \.\. (\S+)$", re.M)
+SRC = "!plot sin(x), x = 0 .. 10\n"
+VIEWS = re.compile(r"^\s+([xy])view: (\S+) \.\. (\S+)$", re.M)
 
 
 def show(page, text=SRC):
@@ -18,8 +18,8 @@ def show(page, text=SRC):
     page.wait_for_timeout(250)     # the page re-evaluates 120 ms after an edit
 
 
-def lims(page):
-    return {m.group(1): (float(m.group(2)), float(m.group(3))) for m in LIMITS.finditer(value(page))}
+def views(page):
+    return {m.group(1): (float(m.group(2)), float(m.group(3))) for m in VIEWS.finditer(value(page))}
 
 
 def box(page, name="pl-area"):
@@ -54,13 +54,13 @@ def test_a_plot_is_drawn_with_its_option_lines_folded_in(page):
     assert page.locator(".plot-wrap svg.lens-plot").count() == 1 and page.get_by_role("button", name="PNG").is_visible()
 
 
-def test_dragging_pans_and_writes_the_limits_into_the_editor(page):
+def test_dragging_pans_and_writes_the_view_into_the_editor(page):
     show(page)
     b = box(page)
     drag(page, b, -b["width"] / 10, 0)                 # a tenth of the width to the left
-    x = lims(page)["x"]
+    x = views(page)["x"]
     assert x[0] == pytest.approx(1.0, abs=0.05) and x[1] == pytest.approx(11.0, abs=0.05)
-    assert "y" not in lims(page)                       # only what moved is written
+    assert "y" not in views(page)                       # only what moved is written
     # the picture was redrawn from the text, not left as a moved copy
     assert page.evaluate("document.querySelector('.pl-view').getAttribute('transform')") is None
     assert page.locator(".plot-tools button", has_text="Reset view").count() == 1
@@ -77,20 +77,20 @@ def test_the_picture_follows_the_pointer_during_a_drag(page):
     nums = [float(v) for v in re.findall(r"-?[\d.]+", transform)]
     assert nums[4] == pytest.approx(-80, abs=1) and nums[5] == pytest.approx(-20, abs=1)    # a pure translation
     assert page.evaluate("getComputedStyle(document.querySelector('.pl-grid')).opacity") == "0"
-    assert "lim" not in value(page)                     # nothing is written until the gesture ends
+    assert "view" not in value(page)                     # nothing is written until the gesture ends
     page.mouse.up()
     page.wait_for_timeout(500)
-    assert "xlim" in value(page)
+    assert "xview" in value(page)
     assert page.evaluate("getComputedStyle(document.querySelector('.pl-grid')).opacity") == "1"
 
 
 def test_ctrl_z_undoes_a_pan(page):
     show(page)
     drag(page, box(page), -60, 0)
-    assert "xlim" in value(page)
+    assert "xview" in value(page)
     page.keyboard.press("Control+z")
     page.wait_for_timeout(400)
-    assert "lim" not in value(page)
+    assert "view" not in value(page)
 
 
 def test_ctrl_wheel_zooms_about_the_pointer_and_a_plain_wheel_does_not(page):
@@ -100,17 +100,17 @@ def test_ctrl_wheel_zooms_about_the_pointer_and_a_plain_wheel_does_not(page):
     page.mouse.move(x, y)
     page.mouse.wheel(0, -300)
     page.wait_for_timeout(500)
-    assert "lim" not in value(page)                     # the results stay free to scroll
+    assert "view" not in value(page)                     # the results stay free to scroll
     ctrl_wheel(page, -100)                              # one notch
-    lo, hi = lims(page)["x"]
+    lo, hi = views(page)["x"]
     assert (hi - lo) == pytest.approx(10 / 1.32, rel=0.03)
     assert (lo + hi) / 2 == pytest.approx(5, abs=0.15)  # centred on the pointer, which is mid-plot
     ctrl_wheel(page, 100)
-    assert "lim" in value(page)
+    assert "view" in value(page)
 
 
 def test_zoom_keeps_the_curve_smooth(page):
-    show(page, "plot sin(x), x = 0 .. 100\n  xlim: 10 .. 10.5\n  samples: 50\n")
+    show(page, "!plot sin(x), x = 0 .. 100\n  xlim: 10 .. 10.5\n  samples: 50\n")
     pts = page.evaluate("document.querySelector('.pl-view path').getAttribute('d').split('L').length")
     assert pts >= 50
 
@@ -119,41 +119,41 @@ def test_the_axis_strips_move_only_their_axis(page):
     show(page)
     xs = box(page, "pl-xaxis")
     drag(page, xs, -50, 0, at=(xs["x"] + xs["width"] / 2, xs["y"] + 8))
-    assert set(lims(page)) == {"x"}
+    assert set(views(page)) == {"x"}
     ys = box(page, "pl-yaxis")
     drag(page, ys, 0, 30, at=(ys["x"] + ys["width"] / 2, ys["y"] + ys["height"] / 2))
-    assert set(lims(page)) == {"x", "y"}
+    assert set(views(page)) == {"x", "y"}
     ys = box(page, "pl-yaxis")
     page.mouse.dblclick(ys["x"] + 10, ys["y"] + ys["height"] / 2)
     page.wait_for_timeout(500)
-    assert set(lims(page)) == {"x"}                     # a double-click on one strip resets just that axis
+    assert set(views(page)) == {"x"}                     # a double-click on one strip resets just that axis
 
 
-def test_double_click_and_the_reset_button_go_back_to_automatic_limits(page):
+def test_double_click_and_the_reset_button_remove_the_mouse_view(page):
     show(page)
     drag(page, box(page), -60, 15)
-    assert set(lims(page)) == {"x", "y"}
+    assert set(views(page)) == {"x", "y"}
     b = box(page)
     page.mouse.dblclick(b["x"] + 40, b["y"] + 40)
     page.wait_for_timeout(500)
-    assert "lim" not in value(page)
+    assert "view" not in value(page)
     drag(page, box(page), 40, 0)
     page.get_by_role("button", name="Reset view").click()
     page.wait_for_timeout(500)
-    assert "lim" not in value(page)
+    assert "view" not in value(page)
 
 
 def test_a_log_axis_is_panned_in_log_space(page):
-    show(page, "plot 1/x^2, x = 0.1 .. 100\n  xscale: log\n  yscale: log\n")
+    show(page, "!plot 1/x^2, x = 0.1 .. 100\n  xscale: log\n  yscale: log\n")
     b = box(page)
     drag(page, b, -b["width"] / 3, 0)                   # a third of the width, which is a third of the decades
-    lo, hi = lims(page)["x"]
+    lo, hi = views(page)["x"]
     assert hi / lo == pytest.approx(1000, rel=0.02)     # the span in decades is unchanged
     assert lo == pytest.approx(0.1 * 10, rel=0.05)      # and it moved one decade
 
 
 def test_hover_reads_off_the_nearest_point(page):
-    show(page, "plot sin(x), x = 0 .. 10\n  yunit: 'rad\n")
+    show(page, "!plot sin(x), x = 0 .. 10\n  yunit: 'rad\n")
     b = box(page)
     page.mouse.move(b["x"] + b["width"] * 0.157, b["y"] + b["height"] / 2)
     page.mouse.move(b["x"] + b["width"] * 0.1571, b["y"] + b["height"] / 2)
@@ -169,7 +169,7 @@ def test_a_refused_edit_puts_the_picture_back(page):
     show(page)
     page.route("**/api/plotedit", lambda route: route.fulfill(json={"ok": False, "error": "nope"}))
     drag(page, box(page), -60, 0)
-    assert "lim" not in value(page)
+    assert "view" not in value(page)
     assert page.evaluate("document.querySelector('.pl-view').getAttribute('transform')") is None
     assert "nope" in page.inner_text("#status")
 
@@ -187,7 +187,7 @@ def test_svg_and_png_downloads_are_the_picture_as_shown(page):
 
 
 def test_math_keys_leave_the_text_of_a_title_alone(page):
-    reset(page, "plot sin(x), x = 0 .. 10\n  title: ")
+    reset(page, "!plot sin(x), x = 0 .. 10\n  title: ")
     page.keyboard.type("M/EI")
     assert value(page).endswith("title: M/EI")
     page.keyboard.press("Enter")
@@ -209,3 +209,57 @@ def test_the_caret_on_an_option_line_marks_the_plot_row(page):
     page.evaluate("document.querySelector('#src').setSelectionRange(document.querySelector('#src').value.length - 3, document.querySelector('#src').value.length - 3)")
     page.evaluate("document.querySelector('#src').dispatchEvent(new Event('keyup'))")
     assert "active" in page.locator(".row.plot").get_attribute("class")
+
+
+def test_reset_goes_back_to_the_authors_limits_not_to_automatic(page):
+    """The default view is whatever the text says without an xview/yview line: the author's xlim and
+    ylim if there are any, else automatic. Nothing else is stored, and the mouse never touches those."""
+    show(page, SRC + "  xlim: 2 .. 8\n  ylim: -3 .. 3\n")
+    assert page.locator(".plot-tools button", has_text="Reset view").count() == 0      # nothing for the mouse to undo
+    drag(page, box(page), -60, 20)
+    assert set(views(page)) == {"x", "y"} and "xlim: 2 .. 8" in value(page) and "ylim: -3 .. 3" in value(page)
+    b = box(page)
+    page.mouse.dblclick(b["x"] + 40, b["y"] + 40)
+    page.wait_for_timeout(500)
+    assert "view" not in value(page) and "xlim: 2 .. 8" in value(page) and "ylim: -3 .. 3" in value(page)
+    first = page.evaluate("[...document.querySelectorAll('.pl-xaxis ~ g text, svg text')].map(t => t.textContent).join(' ')")
+    assert page.locator(".plot-tools button", has_text="Reset view").count() == 0
+    assert "2" in first and "8" in first
+
+
+def test_the_frame_does_not_move_when_the_y_numbers_change_width(page):
+    """Zoom on the y axis with the pointer left where it is. The numbers go from 2 characters to
+    '1.00000e5'; the strip must stay under the pointer for the whole run."""
+    show(page, "!plot 100000*sin(x), x = 0 .. 10\n")
+    first = box(page)
+    ys = box(page, "pl-yaxis")
+    px, py = ys["x"] + ys["width"] / 2, ys["y"] + ys["height"] / 2
+    page.mouse.move(px, py)
+    for delta in (-1500, -1500, -1500, 2500, 2500, 2500, 2500):         # in by 64x three times, then back out
+        page.keyboard.down("Control")
+        page.mouse.wheel(0, delta)
+        page.keyboard.up("Control")
+        page.wait_for_timeout(900)
+        assert box(page) == first, f"the plot area moved after wheel {delta}"
+        under = page.evaluate("([x, y]) => document.elementFromPoint(x, y).getAttribute('class') || ''", [px, py])
+        assert "pl-yaxis" in under, f"the pointer left the y axis strip after wheel {delta} (over '{under}')"
+    assert set(views(page)) == {"y"}                                      # only the y axis was ever touched
+
+
+def test_tick_labels_stay_inside_the_picture_at_scientific_scales(page):
+    show(page, "!plot sin(x), x = 0 .. 10\n  yview: -1.234e-10 .. 5.6e-11\n  xview: -4.5e17 .. 6e17\n")
+    width = page.evaluate("Number(document.querySelector('svg.lens-plot').getAttribute('width'))")
+    inside = page.evaluate("""() => [...document.querySelectorAll('svg.lens-plot text:not(.pl-hover text)')].every((t) => {
+        const b = t.getBoundingClientRect(), s = document.querySelector('svg.lens-plot').getBoundingClientRect();
+        return b.left >= s.left - 0.5 && b.right <= s.right + 0.5;
+    })""")
+    assert inside and width > 0
+
+
+def test_the_frame_holds_on_a_range_far_narrower_than_its_position(page):
+    """1e9 .. 1e9+5 needs 13-character labels to tell the ticks apart, more than the margin has room for
+    (an axis offset note would be the fix). The frame must not move to make room, whatever the labels do."""
+    show(page, "!plot sin(x), x = 0 .. 10\n")
+    first = box(page)
+    show(page, "!plot sin(x), x = 0 .. 10\n  xview: 1e9 .. 1000000005\n  yview: -1.234e-10 .. 5.6e-11\n")
+    assert box(page) == first

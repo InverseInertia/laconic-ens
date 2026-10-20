@@ -198,7 +198,7 @@ eq(sim('x = a|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = ȧ|', 'custom table 
 eq(sim('x = b|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = b|', 'custom table replaces the default');
 
 // --- text lines under a plot ----------------------------------------------------
-eq(sim('plot f(x), x = 0 .. 1\n  title: M|', '/'), 'plot f(x), x = 0 .. 1\n  title: M/|', 'slash is literal in a plot title');
+eq(sim('!plot f(x), x = 0 .. 1\n  title: M|', '/'), '!plot f(x), x = 0 .. 1\n  title: M/|', 'slash is literal in a plot title');
 eq(sim('  ylabel: a|', '.'), '  ylabel: a.|', 'period is literal in an axis label');
 eq(sim('  label 2: a|', '^'), '  label 2: a^|', 'caret is literal in a series label');
 eq(sim('  note: "a|"', '/'), '  note: "a/|"', 'slash is literal in a note');

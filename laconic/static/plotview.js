@@ -2,16 +2,18 @@
 
    This file never draws the picture. While a drag or zoom is in progress it
    transforms the picture already on screen, so the view follows the pointer.
-   When the gesture ends it reports the new axis limits through `onPatch`, the
-   page writes them into the worksheet as `xlim:` / `ylim:` lines, and the plot
+   When the gesture ends it reports the new axis range through `onPatch`, the
+   page writes it into the worksheet as `xview:` / `yview:` lines, and the plot
    is redrawn from the text like any other edit. The text stays the only record.
+   `xview` sits over any `xlim` the author wrote, so a reset removes only what the
+   mouse added and returns to the author's view (or to automatic limits).
 
    Gestures (pan, zoom) come from d3-zoom, scales from d3-scale (static/vendor/d3).
    - drag in the plot: pan both axes
    - Ctrl + wheel, or a trackpad pinch, in the plot: zoom both axes about the pointer.
      A plain wheel is left alone so the results can still scroll
    - the same on the strip under or beside the axis: that axis only
-   - double-click: back to automatic limits (the strips reset just their axis)
+   - double-click: back to the author's view (the strips reset just their axis)
    - hover: reads off the nearest point of the curve */
 const PlotView = (() => {
   const NS = "http://www.w3.org/2000/svg";
@@ -81,8 +83,8 @@ const PlotView = (() => {
     function commit() {
       if (!next) return;
       const patch = {};
-      if (moved(next.x, cur.x)) patch.xlim = next.x;
-      if (moved(next.y, cur.y)) patch.ylim = next.y;
+      if (moved(next.x, cur.x)) patch.xview = next.x;
+      if (moved(next.y, cur.y)) patch.yview = next.y;
       const before = cur;
       if (Object.keys(patch).length) cur = next;
       next = null;
@@ -114,9 +116,9 @@ const PlotView = (() => {
     bind(area, "xy"); bind(xstrip, "x"); bind(ystrip, "y");
 
     const reset = (keys) => onPatch(Object.fromEntries(keys.map((k) => [k, null])));
-    area.addEventListener("dblclick", () => reset(["xlim", "ylim"]));
-    xstrip.addEventListener("dblclick", () => reset(["xlim"]));
-    ystrip.addEventListener("dblclick", () => reset(["ylim"]));
+    area.addEventListener("dblclick", () => reset(["xview", "yview"]));
+    xstrip.addEventListener("dblclick", () => reset(["xview"]));
+    ystrip.addEventListener("dblclick", () => reset(["yview"]));
 
     // ---- hover read-out ----
     const tip = el("g", { "pointer-events": "none", class: "pl-hover" });

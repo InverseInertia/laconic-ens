@@ -7,7 +7,8 @@ COMMANDS = [
     ("clear", "remove all non-global variables"),
     ("noassume", "keep typed units in results"),
     ("assume", "reduce results to SI again"),
-    ("plot", "set a plot option for the plots below, e.g. !plot grid: off"),
+    ("plot", "plot functions: !plot f(x), x = 0 .. 1"),
+    ("plotspec", "set a plot option for the plots below, e.g. !plotspec grid: off"),
 ]
 
 # Signature shown next to each function. Anything missing shows just its name.

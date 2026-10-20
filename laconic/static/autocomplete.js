@@ -68,14 +68,15 @@
     const query = t.slice(s, pos);
     const before = t.slice(ls, s), after = t.slice(e, le);
 
-    if (line.trimStart().startsWith('!')) {
+    const isPlot = /^\s*!plot\s/.test(line);   // a plot statement holds expressions, unlike other commands
+    if (line.trimStart().startsWith('!') && !isPlot) {
       if (!/^\s*!$/.test(before)) return null;
       return { kind: 'command', start: s, end: e, query, tilde: false };
     }
     if (/^[\d.]/.test(query)) return null;                     // a number
     if (t[s - 1] === '.' && /[\d]/.test(t[s - 2] || '')) return null;
     // The left of = is a name being defined (or a unit, or a function's parameters): nothing to complete.
-    if (!before.includes('=') && after.includes('=')) return null;
+    if (!isPlot && !before.includes('=') && after.includes('=')) return null;
     if (t[s - 1] === "'") return { kind: 'unit', start: s, end: e, query, tilde: false };
     const tilde = t[s - 1] === '~';
     if (!force && query.length < 2) return null;

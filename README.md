@@ -33,7 +33,7 @@ The exported .tex needs siunitx v3 or newer.
     !clear                         remove all non-global variables
     !noassume / !assume            keep typed units / back to SI results
     x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
-    plot M(x), x = 0'm .. L        plot a function (see Plots)
+    !plot M(x), x = 0'm .. L       plot a function (see Plots)
 
 Rename a variable or function everywhere with the Rename button or F2 (the caret's name is filled in).
 Units, comments and commands are untouched, and a name already in use is refused.
@@ -122,10 +122,10 @@ on another instance:
 
 ## Plots
 
-A `plot` line draws one or more functions of one variable over a range. Indented `key: value` lines
-under it set the details:
+A `!plot` line draws one or more functions of one variable over a range. It is a command, so `plot` stays
+available as an ordinary name. Indented `key: value` lines under it set the details:
 
-    plot M(x), V(x), x = 0'm .. L
+    !plot M(x), V(x), x = 0'm .. L
       title: Bending moment and shear
       ylabel: M (kN·m)
       xlim: 0'm .. 3.2'm
@@ -142,7 +142,8 @@ joined across the picture. `gaps: error` turns an undefined point into an error 
 | Option | Meaning (default in brackets) |
 |---|---|
 | `title`, `xlabel`, `ylabel` | text; the axis labels are `name [unit]` unless set. `x_max` or `x_{max}` is a subscript. An empty value removes the label |
-| `xlim`, `ylim` | `low .. high`, with units or plain numbers in the axis's display unit. Either end can be `auto` (automatic, with 5% headroom) |
+| `xlim`, `ylim` | the view you choose: `low .. high`, with units or plain numbers in the axis's display unit. Either end can be `auto` (automatic, with 5% headroom) |
+| `xview`, `yview` | the same form, but written by the mouse (see Mouse). It sits over `xlim`/`ylim`, and removing it goes back to them |
 | `xunit`, `yunit` | the unit the axis is shown in, e.g. `'kN * 'm` (the typed range's unit for x, the simplest SI unit for y) |
 | `xscale`, `yscale` | `lin` or `log` (`lin`) |
 | `xstep`, `ystep` | tick spacing in the display unit (automatic) |
@@ -155,20 +156,35 @@ joined across the picture. `gaps: error` turns an undefined point into an error 
 | `note` | `"text" at (x, y)`: a dot and a label at a point, in data coordinates. Repeat the line for more |
 
 **Defaults.** Three layers, each overriding the one before: the built-in values above, then a
-`!plot key: value` line, which applies to every plot below it (`!plot grid: off`, `!plot size: 560 x 300`;
-`!plot reset` clears them), then the option lines under a plot.
+`!plotspec key: value` line, which applies to every plot below it (`!plotspec grid: off`,
+`!plotspec size: 560 x 300`; `!plotspec reset` clears them), then the option lines under a plot.
+
+**The view.** An axis range has three layers too: `xview` (what the mouse set), over `xlim` (what you wrote),
+over automatic limits computed from the data. The default view is therefore whatever the text says with no
+`xview` or `yview` line, and nothing else is stored anywhere. Reset view removes only those lines, so it
+goes back to your `xlim`/`ylim` if you wrote any, and the Reset view button appears only while the mouse has
+a view to remove.
 
 **Mouse.** The picture is drawn on the server from the worksheet text, and the mouse only edits that
 text. Drag in a plot to pan; Ctrl + wheel (or a trackpad pinch) zooms about the pointer; a plain wheel
 still scrolls the results. Dragging or zooming on the strip under or beside an axis moves just that
 axis. Double-click resets (a strip resets only its axis), and so does the Reset view button. Hovering
-reads off the nearest point. When a gesture ends, the new limits are written under the plot as
-`xlim:` and `ylim:` lines, only for what moved and rounded to the precision on screen, and Ctrl+Z undoes
+reads off the nearest point. When a gesture ends, the new range is written under the plot as
+`xview:` and `yview:` lines, only for what moved and rounded to the precision on screen, and Ctrl+Z undoes
 it like any other edit. Deleting those lines by hand, or writing different ones, works the same way:
 the worksheet alone redraws the picture. The page doesn't redraw the ticks until the gesture ends, so
 the grid is hidden while you drag.
 
-When a zoom narrows `xlim`, the curve is sampled over the visible window again, so it stays smooth.
+**The frame does not move.** The plot area's edges are fixed by the size, the title and whether there are
+axis labels, and never by the numbers on the axes, so the pointer stays on the axis strip you are
+scrolling however wide the tick labels get. Each axis uses one notation: fixed point while every label
+fits in about ten characters, else scientific (`-1.234e-10`, `5e19`) with as few digits as tell the ticks
+apart. One case needs more room than the margin has: a range that is tiny next to its position, like
+`1e9 .. 1000000005`, where telling the ticks apart takes 13 characters. The labels then run wider than the
+margin and the frame stays where it is. (An offset note such as `+1e9` on the axis would be the real fix; it
+is not built.)
+
+When a zoom narrows the view, the curve is sampled over the visible window again, so it stays smooth.
 Editing the text of a title, label or note is done in the editor; the math keys are off on those lines.
 
 **Exporting.** Each plot has three ways out:
@@ -182,7 +198,8 @@ Editing the text of a title, label or note is done in the editor; the math keys 
   has a plot.
 
 Save keeps the units a plot uses with the sheet, like any other line. Options are checked as they are
-read: a bad one is reported on its own line and the plot is drawn without it.
+read: a bad one is reported on its own line and the plot is drawn without it (a bad `xview` falls back to
+`xlim`, then to automatic).
 
 ## Settings on this machine
 
@@ -338,6 +355,6 @@ offset scale,. Selecting with
 the mouse is not snapped to terms; use double-click or `Alt+Up`.
 
 Plots are functions of one variable only. Not built: plotting arrays or measured data, box-zoom, dragging
-legends, notes and labels with the mouse, minor grid lines, per-instance plot styles (colors and fonts for
+legends, notes and labels with the mouse, an offset note for ranges far narrower than their position, minor grid lines, per-instance plot styles (colors and fonts for
 every sheet), and PDF output of the picture (use SVG or PNG; a `.tex` export that includes the picture
 as a file instead of a pgfplots figure would need a zip).

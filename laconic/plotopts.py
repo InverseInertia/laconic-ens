@@ -1,9 +1,9 @@
-"""Plot options: the indented `key: value` lines under a `plot` statement, the
-sheet-wide `!plot` command, and the writer that edits those lines in the source
+"""Plot options: the indented `key: value` lines under a `!plot` statement, the
+sheet-wide `!plotspec` command, and the writer that edits those lines in the source
 text. A change made by dragging in the UI is a few plain lines in the worksheet,
 and the worksheet alone is enough to redraw the same graph.
 
-    plot M(x), x = 0'm .. L
+    !plot M(x), x = 0'm .. L
       title: Bending moment
       xlim: 0'm .. 3.2'm
 
@@ -14,7 +14,7 @@ import re
 
 PALETTE = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9")
 
-# The built-in layer. A `!plot` command overrides it for the plots below, and
+# The built-in layer. A `!plotspec` command overrides it for the plots below, and
 # options under a plot override both.
 BUILTIN = {
     "grid": "on", "xscale": "lin", "yscale": "lin", "legend": "auto", "gaps": "break",
@@ -35,13 +35,14 @@ NUMBERS = {"samples": (int, 10, 5000), "width": (float, 0.5, 12.0),
 SERIES_KEYS = ("color", "width", "dash", "marker", "label")
 SHEET_KEYS = ("grid", "xscale", "yscale", "legend", "gaps", "size", "samples", "width", "dash", "marker")
 KEYS = (set(CHOICES) | set(TEXT) | set(NUMBERS) | set(SERIES_KEYS)
-        | {"size", "color", "xunit", "yunit", "xlim", "ylim", "note"})
+        | {"size", "color", "xunit", "yunit", "xlim", "ylim", "xview", "yview", "note"})
+LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")   # `lim` is the view the author chose, `view` what the mouse set over it
 
 COLORS = {"black": "#000000", "gray": "#7f7f7f", "grey": "#7f7f7f", "red": "#d55e00", "blue": "#0072b2",
           "green": "#009e73", "orange": "#e69f00", "purple": "#cc79a7", "sky": "#56b4e9",
           "navy": "#17253d"}
 
-PLOT_RE = re.compile(r"^plot[ \t]+(?!=)(\S.*)$")
+PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
 OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RANGE_RE = re.compile(r"^(.*),\s*([^\W\d]\w*)\s*=\s*(.+?)\s*\.\.\s*(.+)$")
 _NOTE_RE = re.compile(r'^"(.*)"\s+at\s*\((.*)\)$')
@@ -74,11 +75,11 @@ def split_top(s):
 
 
 def parse_plot(line):
-    """`plot M(x), V(x), x = 0'm .. L` -> (series sources, variable, low, high)."""
+    """`!plot M(x), V(x), x = 0'm .. L` -> (series sources, variable, low, high)."""
     m = PLOT_RE.match(line.strip())
     m = m and _RANGE_RE.match(m.group(1))
     if not m:
-        raise PlotError("A plot reads `plot f(x), x = low .. high`")
+        raise PlotError("A plot reads `!plot f(x), x = low .. high`")
     series = split_top(m.group(1))
     if not all(series):
         raise PlotError("A plot needs an expression before each comma")
@@ -129,7 +130,7 @@ def parse_value(key, v):
         if not re.fullmatch(r"#[0-9a-f]{6}", c):
             raise PlotError("color is #rrggbb or one of: " + ", ".join(sorted(COLORS)))
         return c
-    if key in ("xlim", "ylim"):
+    if key in LIMIT_KEYS:
         return _limits(v)
     if key in ("xunit", "yunit"):
         if not v:
@@ -153,7 +154,7 @@ def parse_option(key, index, value, sheet=False):
     if index is not None and int(index) < 1:
         raise PlotError("Series are numbered from 1")
     if sheet and (key not in SHEET_KEYS or index is not None):
-        raise PlotError("!plot sets " + ", ".join(SHEET_KEYS) + " for every plot below it")
+        raise PlotError("!plotspec sets " + ", ".join(SHEET_KEYS) + " for every plot below it")
     if value == "" and key not in TEXT:
         raise PlotError(f"{key} needs a value")
     return key, (int(index) if index else None), parse_value(key, value)
@@ -182,11 +183,11 @@ def expr_spans(line, in_plot):
     m = OPT_RE.match(line) if in_plot else None
     if not m:
         s = line.strip()
-        if not s or s.startswith(("#", "!")):
-            return []
-        return [(re.match(r"[ \t]*plot", line).end(), len(line))] if is_plot_line(s) else [(0, len(line))]
+        if is_plot_line(s):
+            return [(re.match(r"[ \t]*!plot", line).end(), len(line))]
+        return [] if not s or s.startswith(("#", "!")) else [(0, len(line))]
     key = m.group(1)
-    if key in ("xlim", "ylim"):
+    if key in LIMIT_KEYS:
         return [(m.start(3), m.end(3))]
     if key == "note":
         at = re.search(r'"\s+at\s*\(', line)
@@ -223,8 +224,8 @@ def split_key(k):
 def apply_patch(text, line, patch, axes, inherited):
     """Rewrite the option lines of the plot on `line` (1-based) in `text`.
 
-    `patch` maps an option name (`xlim`, `color 2`) to None (remove the line), a
-    string (written as typed, after checking it) or, for limits, `[low, high]`
+    `patch` maps an option name (`xview`, `color 2`) to None (remove the line), a
+    string (written as typed, after checking it) or, for limits and views, `[low, high]`
     in the axis's display unit. `axes` gives each axis's `unit_src` and `scale`;
     `inherited` is the text form of what each option would be without a line.
     A value equal to its inherited one removes the line instead, so the source
@@ -239,8 +240,8 @@ def apply_patch(text, line, patch, axes, inherited):
 
     for name, value in patch.items():
         key, index = split_key(name)
-        if key in ("xlim", "ylim") and isinstance(value, (list, tuple)):
-            ax = axes["x" if key == "xlim" else "y"]
+        if key in LIMIT_KEYS and isinstance(value, (list, tuple)):
+            ax = axes[key[0]]
             lo, hi = value
             if not (math.isfinite(lo) and math.isfinite(hi)) or lo == hi:
                 raise PlotError("A limit needs two different, finite numbers")

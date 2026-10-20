@@ -27,7 +27,7 @@ try:
     out = urllib.request.urlopen(req, timeout=10).read().decode()
     assert "6" in out, out
     # A plot draws, and its standalone SVG finds the font file it embeds.
-    body = {"text": "plot sin(x), x = 0 .. 6", "line": 1}
+    body = {"text": "!plot sin(x), x = 0 .. 6", "line": 1}
     req = urllib.request.Request(base + "/api/plotimage", data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     svg = urllib.request.urlopen(req, timeout=10).read().decode()

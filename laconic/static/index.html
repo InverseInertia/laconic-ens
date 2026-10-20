@@ -446,7 +446,7 @@ function plotBody(r) {
     b.onclick = async (ev) => { ev.stopPropagation(); try { await fn(); } catch (e) { say(e.message || "Failed"); } };
     tools.append(b);
   };
-  if (r.plot.x.view || r.plot.y.view) btn("Reset view", "Back to automatic limits", () => patchPlot(r.n, {xlim: null, ylim: null}));
+  if (r.plot.x.view || r.plot.y.view) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(r.n, {xview: null, yview: null}));
   btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${r.n}.svg`, await plotSvg(r.n), "image/svg+xml"));
   btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${r.n}.png`, await plotPng(r.n)));
   const hint = document.createElement("span"); hint.className = "hint";

@@ -157,14 +157,7 @@ class Builder:
         xlog = get("xscale", 0) == "log"
         if xlog and x0 <= 0:
             raise EvalError("A log x axis needs a range above zero")
-        xl = self.limits(at["xlim"], block["xlim"], xdisp) if "xlim" in block else (None, None)
-        if xlog and any(v is not None and v <= 0 for v in xl):
-            self.errors.append((at["xlim"], "A log axis needs positive limits"))
-            xl = (None, None)
-        xlim = [x0 if xl[0] is None else xl[0], x1 if xl[1] is None else xl[1]]
-        if xlim[0] >= xlim[1]:
-            self.errors.append((at["xlim"], "A limit goes from low to high"))
-            xlim = [x0, x1]
+        xlim = self.window("x", block, at, xdisp, [x0, x1], xlog)
 
         # ---- sample over what is visible, so a zoomed view stays smooth ----
         w0, w1 = max(x0, xlim[0]), min(x1, xlim[1])
@@ -215,19 +208,12 @@ class Builder:
         if ylog:
             for a in ys:
                 a[a <= 0] = np.nan
-        yl = self.limits(at["ylim"], block["ylim"], ydisp) if "ylim" in block else (None, None)
-        if ylog and any(v is not None and v <= 0 for v in yl):
-            self.errors.append((at["ylim"], "A log axis needs positive limits"))
-            yl = (None, None)
         finite = np.concatenate([a[np.isfinite(a)] for a in ys]) if ys else np.array([])
-        if ylog and finite.size == 0 and None in yl:
+        explicit = "ylim" in block or "yview" in block
+        if ylog and finite.size == 0 and not explicit:
             raise EvalError("A log y axis needs values above zero")
-        ylim = [self.auto_y(finite, ylog, 0), self.auto_y(finite, ylog, 1)]
-        ylim = [ylim[k] if yl[k] is None else yl[k] for k in (0, 1)]
-        if ylim[0] >= ylim[1]:
-            if "ylim" in at:
-                self.errors.append((at["ylim"], "A limit goes from low to high"))
-            ylim = [self.auto_y(finite, ylog, 0), self.auto_y(finite, ylog, 1)]
+        y_auto = [1.0, 10.0] if ylog and finite.size == 0 else [self.auto_y(finite, ylog, 0), self.auto_y(finite, ylog, 1)]
+        ylim = self.window("y", block, at, ydisp, y_auto, ylog)
 
         # ---- labels, series, notes ----
         xu, yu = unit_text(xdisp), unit_text(ydisp)
@@ -265,7 +251,7 @@ class Builder:
             step = block.get(step_key)
             return {"lim": [float(lim[0]), float(lim[1])], "scale": scale, "step": step,
                     "unit": unit_text(disp), "unit_tex": self.fmt.unit_inline(disp),
-                    "unit_src": unit_source(ev, disp), "view": f"{name}lim" in block}
+                    "unit_src": unit_source(ev, disp), "view": f"{name}view" in block}
 
         return {
             "line": line, "var": var, "var_tex": name_latex(var), "siunitx": self.fmt.siunitx,
@@ -276,6 +262,24 @@ class Builder:
             "series": series, "notes": out_notes,
             "inherited": {k: canon(k, v) for k, v in cfg.items()},
         }
+
+    def window(self, name, block, at, disp, auto, log):
+        """An axis's limits in three layers: `xview` (what the mouse set) over `xlim` (what the
+        author wrote) over automatic. A layer that is wrong is reported on its line and skipped."""
+        lim = list(auto)
+        for key in (f"{name}lim", f"{name}view"):
+            if key not in block:
+                continue
+            got = self.limits(at[key], block[key], disp)
+            if log and any(v is not None and v <= 0 for v in got):
+                self.errors.append((at[key], "A log axis needs positive limits"))
+                continue
+            cand = [lim[k] if got[k] is None else got[k] for k in (0, 1)]
+            if cand[0] >= cand[1]:
+                self.errors.append((at[key], "A limit goes from low to high"))
+                continue
+            lim = cand
+        return lim
 
     @staticmethod
     def break_poles(xs, ys, lim):

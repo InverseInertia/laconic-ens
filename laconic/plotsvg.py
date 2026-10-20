@@ -18,6 +18,12 @@ from pathlib import Path
 INK, SOFT, GRID, PAPER = "#17253d", "#4b5a72", "#d9e0d3", "#ffffff"
 FONT = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif'
 FS, TICK_FS, TITLE_FS = 12, 11, 14
+# The frame never moves. Margins are a fixed budget, not sized to the tick labels, so a
+# pan or zoom that changes how wide the numbers are cannot slide the plot out from under
+# the pointer. Tick labels are held to LABEL_CHARS (room for -1.234e-10); a label that needs
+# more, only on a range far narrower than its position, grows into the gap before the y label.
+LABEL_CHARS = 10
+LABEL_ROOM = LABEL_CHARS * TICK_FS * 0.56
 _SUB = re.compile(r"_(\{[^}]*\}|[A-Za-z0-9]+)")
 _DASH = {"solid": "", "dashed": "6 4", "dotted": "1 4"}
 
@@ -46,19 +52,39 @@ def text_width(text, size):
 
 
 def _decimals(step):
+    """Decimal places that write `step` exactly (0.25 needs 2); tolerance is relative, so 1e-11 is not 0."""
     for d in range(9):
-        if abs(step * 10 ** d - round(step * 10 ** d)) < 1e-9 * max(1, step * 10 ** d):
+        x = step * 10 ** d
+        if abs(x - round(x)) <= 1e-6 * x:
             return d
     return 8
 
 
-def tick_label(v, step):
-    if v == 0:
-        return "0"
-    if abs(v) >= 1e6 or _decimals(step) > 6:
-        s = f"{v:.3g}"
-        return re.sub(r"e\+?(-?)0*(\d)", r"e\1\2", s)
-    return f"{v:.{_decimals(step)}f}"
+def _sci(v, p):
+    m, e = f"{v:.{p}e}".split("e")
+    return f"{m}e{int(e)}"
+
+
+def _short(v):
+    """1, 2.5, 1e3: three significant digits, with e-notation only when needed."""
+    s = f"{v:.3g}"
+    return f"{s.split('e')[0]}e{int(s.split('e')[1])}" if "e" in s else s
+
+
+def format_ticks(values, step):
+    """One notation for a whole axis, never wider than LABEL_CHARS: fixed point when every
+    label fits, else scientific with as few digits as tell the ticks apart."""
+    nd = _decimals(step)
+    fixed = ["0" if v == 0 else f"{v:.{nd}f}" for v in values]
+    if nd <= 6 and all(len(t) <= LABEL_CHARS - 1 for t in fixed):
+        return fixed
+    # Past two digits the labels outgrow the margin, which is better than printing the same label
+    # on every tick (a range like 1e9 .. 1e9+5); the frame still does not move.
+    for p in range(10):
+        sci = ["0" if v == 0 else _sci(v, p) for v in values]
+        if all(abs(float(t) - v) <= abs(step) * 1e-3 for t, v in zip(sci, values)):
+            return sci
+    return sci
 
 
 def nice_step(span, target=6):
@@ -71,7 +97,8 @@ def linear_ticks(lo, hi, step=None):
     if step is None or (hi - lo) / step > 200:
         step = nice_step(hi - lo)
     k0, k1 = math.ceil(lo / step - 1e-9), math.floor(hi / step + 1e-9)
-    return step, [{"v": k * step, "label": tick_label(k * step, step), "major": True} for k in range(k0, k1 + 1)]
+    values = [k * step for k in range(k0, k1 + 1)]
+    return step, [{"v": v, "label": t, "major": True} for v, t in zip(values, format_ticks(values, step))]
 
 
 def log_ticks(lo, hi):
@@ -89,7 +116,7 @@ def log_ticks(lo, hi):
         for m in range(1, 10):
             v = m * 10.0 ** k
             if lo * (1 - 1e-9) <= v <= hi * (1 + 1e-9):
-                out.append({"v": v, "major": m in (1, 2, 5), "label": f"{v:.3g}" if m in (1, 2, 5) else ""})
+                out.append({"v": v, "major": m in (1, 2, 5), "label": _short(v) if m in (1, 2, 5) else ""})
     return out
 
 
@@ -105,10 +132,6 @@ def tick_markup(t):
     if "power" in t:
         return f'10<tspan dy="{-TICK_FS * 0.4:.1f}" font-size="{TICK_FS * 0.75:.1f}">{t["power"]}</tspan>'
     return esc(t["label"])
-
-
-def tick_width(t):
-    return text_width(f"10{t['power']}", TICK_FS) if "power" in t else text_width(t["label"], TICK_FS)
 
 
 def _scale(ax, p0, p1):
@@ -143,8 +166,8 @@ def render_svg(spec, uid=0, standalone=False):
     x, y = spec["x"], spec["y"]
     xt, yt = axis_ticks(x), axis_ticks(y)
     title = spec["title"]
-    left = 12 + (FS + 6 if y["label"] else 0) + max((tick_width(t) for t in yt if t["label"]), default=0) + 10
-    right = max(16, int(tick_width(xt[-1]) / 2) + 4) if xt and xt[-1]["label"] else 16
+    left = 12 + (FS + 6 if y["label"] else 0) + LABEL_ROOM + 10
+    right = 8 + LABEL_ROOM / 2
     top = 10 + (TITLE_FS + 10 if title else 0)
     bottom = 6 + (FS + 8 if x["label"] else 0) + TICK_FS + 10
     L, T = left, top

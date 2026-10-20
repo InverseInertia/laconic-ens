@@ -204,11 +204,13 @@ def _run_command(i, raw, s, ev):
     `!assume` restores the default."""
     parts = s[1:].split()
     name = parts[0] if parts else ""
-    if name == "plot":
-        return _plot_command(i, raw, s, ev)
+    if name == "plotspec":
+        return _plotspec_command(i, raw, s, ev)
+    if name == "plot":     # a plot statement with something after it never gets here
+        return LineResult(i, raw, "error", error="A plot reads `!plot f(x), x = low .. high`")
     if name not in ("clear", "assume", "noassume"):
         return LineResult(i, raw, "error",
-                          error=f"Unknown command '!{name}'. Available: !clear, !assume, !noassume, !plot")
+                          error=f"Unknown command '!{name}'. Available: !clear, !assume, !noassume, !plot, !plotspec")
     if len(parts) > 1:
         return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
     if name in ("assume", "noassume"):
@@ -223,8 +225,8 @@ def _run_command(i, raw, s, ev):
     return LineResult(i, raw, "command", text=text)
 
 
-def _plot_command(i, raw, s, ev):
-    """`!plot grid: off` sets an option for every plot below it; `!plot reset` clears them."""
+def _plotspec_command(i, raw, s, ev):
+    """`!plotspec grid: off` sets an option for every plot below it; `!plotspec reset` clears them."""
     words = s[1:].split(None, 1)
     rest = words[1].strip() if len(words) > 1 else ""
     if rest == "reset":
@@ -233,7 +235,7 @@ def _plot_command(i, raw, s, ev):
     m = re.fullmatch(r"([A-Za-z]\w*)\s*:\s*(.*)", rest)
     try:
         if not m:
-            raise PlotError("!plot reads `!plot key: value` or `!plot reset`")
+            raise PlotError("!plotspec reads `!plotspec key: value` or `!plotspec reset`")
         key, _, value = parse_option(m.group(1), None, m.group(2), sheet=True)
     except PlotError as e:
         return LineResult(i, raw, "error", error=str(e))
@@ -242,7 +244,7 @@ def _plot_command(i, raw, s, ev):
 
 
 def _run_plot(i, raw, lines, ev, fmt, used):
-    """A `plot` line and the option lines under it. Returns the plot's result and the
+    """A `!plot` line and the option lines under it. Returns the plot's result and the
     results for its option lines, keyed by line number. A bad option line is reported
     on that line and the plot is drawn without it."""
     end = block_end(lines, i - 1)
