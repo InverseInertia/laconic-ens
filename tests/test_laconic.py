@@ -209,3 +209,20 @@ def test_noassume_keeps_typed_units_until_assume():
 def test_assume_commands_take_no_arguments():
     assert run("!noassume x")[0].kind == "error"
     assert run("!assume x")[0].kind == "error"
+
+
+def test_accent_marks_after_names():
+    rs = run("x` = 2'm/'s\nx`` = 3'm/'s^2\nF_x! = 5'kN\nq@ = 1\nv`! = 4'm/'s\ny = x` * 2'm/'s")
+    assert [r.lhs for r in rs[:5]] == [
+        "\\dot{x}", "\\ddot{x}", "\\vec{F}_{x}", "\\hat{q}", "\\vec{\\dot{v}}"]
+    assert rs[5].kind == "assign" and "\\dot{x}" in rs[5].stages[0]
+    assert rs[0].text.startswith("x` = 2")
+
+
+def test_accented_name_is_its_own_variable():
+    r = last("x = 1\nx! = 2\nx! + x")
+    assert r.kind == "expr" and r.text == "3"
+
+
+def test_too_many_dots_is_an_error():
+    assert run("x``` = 1")[0].kind == "error"
