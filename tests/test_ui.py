@@ -1,0 +1,158 @@
+"""Drives the real page in Chromium (Playwright). Skipped when Playwright or a
+browser is not available."""
+import os
+import socket
+import threading
+import time
+
+import pytest
+
+playwright = pytest.importorskip("playwright.sync_api")
+uvicorn = pytest.importorskip("uvicorn")
+
+
+@pytest.fixture(scope="module")
+def server(tmp_path_factory):
+    os.environ["LENS_CONFIG_DIR"] = str(tmp_path_factory.mktemp("cfg"))
+    from laconic.server import app
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    threading.Thread(target=srv.run, daemon=True).start()
+    for _ in range(100):
+        if srv.started:
+            break
+        time.sleep(0.05)
+    yield f"http://127.0.0.1:{port}"
+    srv.should_exit = True
+
+
+@pytest.fixture()
+def page(server):
+    with playwright.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH") or None)
+        except Exception as e:  # no browser installed
+            pytest.skip(f"no Chromium: {e}")
+        pg = browser.new_page(viewport={"width": 1200, "height": 800})
+        pg.goto(server)
+        pg.wait_for_function("document.querySelector('#src').value.length > 0")
+        pg.evaluate("localStorage.clear()")
+        yield pg
+        browser.close()
+
+
+def reset(page, text):
+    page.evaluate("t => { const s = document.querySelector('#src'); s.value = t; s.focus(); s.setSelectionRange(t.length, t.length); }", text)
+
+
+def value(page):
+    return page.evaluate("document.querySelector('#src').value")
+
+
+def select(page, a, b):
+    page.evaluate("([a, b]) => document.querySelector('#src').setSelectionRange(a, b)", [a, b])
+
+
+def test_unit_suggestions_and_tab_accept(page):
+    reset(page, "w = 12")
+    page.keyboard.type("'kN")
+    page.wait_for_selector("#ac:not([hidden])")
+    assert "kN" in page.inner_text("#ac")
+    page.keyboard.type(" ")
+    page.wait_for_selector("#ac", state="hidden")
+    reset(page, "x = 5")
+    page.keyboard.type("'kil")
+    page.wait_for_selector("#ac:not([hidden])")
+    page.keyboard.press("Tab")
+    assert value(page).startswith("x = 5'k")
+
+
+def test_enter_ends_the_line_unless_you_chose(page):
+    reset(page, "delta_max = 3\nx = ")
+    page.keyboard.type("delt")
+    page.wait_for_selector("#ac:not([hidden])")
+    page.keyboard.press("Enter")
+    assert value(page) == "delta_max = 3\nx = delt\n"
+    reset(page, "delta_max = 3\nx = ")
+    page.keyboard.type("delt")
+    page.wait_for_selector("#ac:not([hidden])")
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("Enter")
+    assert value(page) == "delta_max = 3\nx = delta_max"
+
+
+def test_function_suggestion_puts_the_caret_inside_brackets(page):
+    reset(page, "x = ")
+    page.keyboard.type("sqr")
+    page.wait_for_selector("#ac:not([hidden])")
+    page.keyboard.press("Tab")
+    assert value(page) == "x = sqrt()"
+    assert page.evaluate("document.querySelector('#src').selectionStart") == len("x = sqrt(")
+
+
+def test_highlight_then_fraction_and_brackets(page):
+    reset(page, "x = a+b")
+    select(page, 4, 7)
+    page.keyboard.type("/")
+    assert value(page) == "x = (a+b) / ()"
+    reset(page, "x = 12'kN + a")
+    select(page, 5, 6)           # the "2": snaps to the whole quantity
+    page.keyboard.type("(")
+    assert value(page) == "x = (12'kN) + a"
+
+
+def test_ctrl_space_wraps_the_selection_in_a_function(page):
+    reset(page, "x = a+b")
+    select(page, 4, 7)
+    page.keyboard.press("Control+Space")
+    page.wait_for_selector("#ac:not([hidden])")
+    page.keyboard.type("sin")
+    page.keyboard.press("Enter")
+    assert value(page) == "x = sin(a+b)"
+
+
+def test_alt_up_grows_and_alt_down_shrinks(page):
+    reset(page, "M = w * L^2 / 8 + c")
+    select(page, 9, 9)
+    sel = lambda: page.evaluate("document.querySelector('#src').value.slice(document.querySelector('#src').selectionStart, document.querySelector('#src').selectionEnd)")
+    page.keyboard.press("Alt+ArrowUp")
+    assert sel() == "L^2"
+    page.keyboard.press("Alt+ArrowUp")
+    assert sel() == "w * L^2 / 8"
+    page.keyboard.press("Alt+ArrowDown")
+    assert sel() == "L^2"
+
+
+def test_double_click_selects_the_whole_quantity(page):
+    reset(page, "x = 12'kN + a")
+    box = page.evaluate("(() => { const r = document.querySelector('#src').getBoundingClientRect(); return [r.left, r.top]; })()")
+    # 14px mono, 8.4px per character, 16px padding, 28px rows, 12px top padding
+    page.mouse.dblclick(box[0] + 16 + 8.4 * 5.5, box[1] + 12 + 14)
+    assert page.evaluate("document.querySelector('#src').value.slice(document.querySelector('#src').selectionStart, document.querySelector('#src').selectionEnd)") == "12'kN"
+
+
+def test_global_units_and_server_side_greek(page, server):
+    page.click("#unitsBtn")
+    page.click("#unitAdd")
+    inputs = page.locator("#unitRows .u-row input")
+    inputs.nth(0).fill("smoot")
+    inputs.nth(1).fill("1.7018'm")
+    page.click("#unitSave")
+    page.wait_for_selector("#unitsDlg", state="hidden")
+    reset(page, "L = 3'smoot -> 'm")
+    page.keyboard.type("\n")
+    page.wait_for_function("document.querySelector('#out').innerText.includes('5.105')")
+    # saving carries the definition along
+    text = page.evaluate("async () => (await (await fetch('/api/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: \"L = 3'smoot\"})})).text())")
+    assert "'smoot = 1.7018'm" in text
+    # the Greek table is stored on the server
+    page.click("#greekBtn")
+    page.click("#greekAdd")
+    ins = page.locator("#greekRows .g-row").last.locator("input")
+    ins.nth(0).fill("j")
+    ins.nth(1).fill("ϑ")
+    page.wait_for_timeout(600)
+    cfg = page.evaluate("async () => (await (await fetch('/api/settings')).json())")
+    assert cfg["greek"]["j"] == "ϑ" and cfg["units"][0]["name"] == "smoot"

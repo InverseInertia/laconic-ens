@@ -126,6 +126,26 @@
   .g-row button { padding: 0 6px; border-color: var(--rule); color: var(--ink-soft); font-size: 14px; line-height: 22px; }
   .g-row .arrow { color: var(--ink-soft); }
 
+  .row.meta .body { font: 400 12px/1.4 var(--sans); color: var(--ink-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
+
+  #ac { position: fixed; z-index: 30; max-height: 60vh; overflow-y: auto; min-width: 230px; max-width: min(460px, 92vw); background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 rgba(23, 37, 61, .25); font: 400 13px/1.3 var(--mono); }
+  #ac[hidden] { display: none; }
+  .ac-item { display: flex; align-items: baseline; gap: 10px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+  .ac-item[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+  .ac-item .kind { flex: none; min-width: 3.6em; font: 500 10.5px var(--sans); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+  .ac-item .lbl { font-weight: 500; }
+  .ac-item .det { margin-left: auto; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--sans); color: var(--ink-soft); }
+  .ac-item[aria-selected="true"] .kind, .ac-item[aria-selected="true"] .det { color: var(--paper); opacity: .85; }
+  .ac-hint { padding: 3px 8px; border-top: 1px solid var(--grid); font: 400 11.5px var(--sans); color: var(--ink-soft); }
+
+  .u-row { display: grid; grid-template-columns: 11ch auto 1fr auto; align-items: center; gap: 4px 8px; margin-bottom: 8px; }
+  .u-row input { font: 400 14px var(--mono); padding: 3px 6px; color: var(--ink); background: transparent; border: 1px solid var(--rule); min-width: 0; }
+  .u-row input.bad { border-color: var(--err); }
+  .u-row .eq { color: var(--ink-soft); font: 400 14px var(--mono); }
+  .u-row button { padding: 0 8px; border-color: var(--rule); color: var(--ink-soft); line-height: 24px; }
+  .u-row .err { grid-column: 1 / -1; color: var(--err); font: 400 12.5px var(--mono); }
+  .u-empty { color: var(--ink-soft); font-size: 13.5px; }
+
   /* Narrow or vertical screens: results on top, editor at the bottom. */
   @media (max-width: 760px) {
     main { grid-template-columns: 1fr; grid-template-rows: 1fr 40vh; }
@@ -153,17 +173,20 @@
     <option value="align">\begin{align*}</option>
   </select>
   <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
+  <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
   <button id="keysBtn">Keys</button>
   <button id="greekBtn">Greek</button>
+  <button id="unitsBtn">Units</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
   <button id="export">Export LaTeX</button>
   <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
 </header>
 <main>
-  <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source"></textarea>
+  <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source" aria-autocomplete="list" aria-controls="ac"></textarea>
   <div id="out" aria-live="polite"></div>
 </main>
+<div id="ac" role="listbox" aria-label="Suggestions" hidden></div>
 
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <div class="dlg-head"><h2 id="keysTitle">Math keys</h2><button class="close">Close</button></div>
@@ -188,6 +211,14 @@
       <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
       <tr><td><kbd>!noassume</kbd> <kbd>!assume</kbd></td><td>Below <code>!noassume</code>, results keep the units that come out of the arithmetic (<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. <code>!assume</code> returns to SI</td></tr>
       <tr><td><kbd>'</kbd></td><td>Starts a unit: <code>12'kN/'m</code>. Bare names are always variables</td></tr>
+      <tr><td><code>'smoot = 1.7018'm</code></td><td>Defines a unit for this sheet. It works on every line, above or below. Units used by many sheets can be defined under Units, and are then copied into any file you save or export that uses them</td></tr>
+      <tr><td colspan="2"><strong>Highlighted text</strong></td></tr>
+      <tr><td><kbd>/</kbd> <kbd>^</kbd> <kbd>\</kbd> <kbd>(</kbd> <kbd>[</kbd> <kbd>|</kbd></td><td>Apply to the highlighted region: fraction numerator, base of a power, square root, brackets, array brackets, <code>abs()</code>. A highlight that cuts through a term is widened to the whole term first: <code>1</code> inside <code>12'kN</code> means the whole quantity, <code>x</code> in <code>x^2</code> means <code>x^2</code>, half a bracket pair means the pair</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>With text highlighted: pick a function to wrap it in (<code>sin(&hellip;)</code>). Type to filter, <kbd>Enter</kbd> or <kbd>Tab</kbd> to apply. With nothing highlighted: opens suggestions by hand</td></tr>
+      <tr><td>Double-click</td><td>Selects the whole term under the pointer</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>&uarr;</kbd><br><kbd>Alt</kbd>+<kbd>&darr;</kbd></td><td>Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back</td></tr>
+      <tr><td colspan="2"><strong>Suggestions</strong></td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name</td></tr>
     </table>
   </div>
 </dialog>
@@ -201,7 +232,17 @@
   <div class="dlg-foot"><button id="greekAdd">Add row</button><span class="spacer"></span><button id="greekReset">Reset to defaults</button></div>
 </dialog>
 
+<dialog id="unitsDlg" aria-labelledby="unitsTitle">
+  <div class="dlg-head"><h2 id="unitsTitle">Global units</h2><button class="close">Cancel</button></div>
+  <div class="dlg-body">
+    <p class="note">Units defined here exist in every sheet on this instance and are stored with your settings on this machine. A saved <code>.lens</code> file or exported <code>.tex</code> that uses one carries its definition, so it opens correctly elsewhere. A definition can use numbers and earlier units. For a unit that only one sheet needs, write <code>'smoot = 1.7018'm</code> in the sheet instead.</p>
+    <div id="unitRows"></div>
+  </div>
+  <div class="dlg-foot"><button id="unitAdd">Add unit</button><span class="spacer"></span><button id="unitSave">Save</button></div>
+</dialog>
+
 <script src="/static/editing.js"></script>
+<script src="/static/autocomplete.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 // Settings live under "lens:". Older builds used "calcsheet:" and "laconic:", read as a fallback.
@@ -243,7 +284,7 @@ function render(rows) {
     if (snip) {
       const pre = document.createElement("pre"); pre.textContent = r.snippet; body.append(pre);
     } else if (r.kind === "command") body.textContent = r.source.trim() + "  \u2192  " + r.text;
-    else if (r.kind === "heading" || r.kind === "comment") body.textContent = r.text;
+    else if (r.kind === "heading" || r.kind === "comment" || r.kind === "meta") body.textContent = r.text;
     else if (r.kind === "error") {
       const s = document.createElement("span"); s.className = "src"; s.textContent = r.source.trim();
       body.append(s, r.error);
@@ -287,6 +328,7 @@ function focusLine(n) {
 src.addEventListener("input", () => {
   store.set("text", src.value);
   clearTimeout(timer); timer = setTimeout(evaluate, 120);
+  if (!applying) acUpdate();
 });
 for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
 
@@ -297,7 +339,11 @@ function download(name, text, type) {
 }
 const stem = () => (nameEl.value.trim() || "sheet").replace(/\.\w+$/, "");
 
-$("#save").onclick = () => download(stem() + ".lens", src.value, "text/plain");
+$("#save").onclick = async () => {
+  let text = src.value;
+  try { const res = await post("/api/save"); if (res.ok) text = await res.text(); } catch {}
+  download(stem() + ".lens", text, "text/plain");
+};
 $("#export").onclick = async () => download(stem() + ".tex", await (await post("/api/export")).text(), "application/x-tex");
 $("#open").onclick = () => $("#file").click();
 $("#file").onchange = async (e) => {
@@ -344,7 +390,8 @@ const ctx = () => ({ enabled: mathKeys.checked, greek });
 // execCommand keeps the browser's undo stack, so Ctrl+Z undoes a hotkey edit.
 function apply(r) {
   if (r.message) say(r.message);
-  if (r.caretOnly !== undefined) src.setSelectionRange(r.caretOnly, r.caretOnly);
+  if (r.select) src.setSelectionRange(r.select[0], r.select[1]);
+  else if (r.caretOnly !== undefined) src.setSelectionRange(r.caretOnly, r.caretOnly);
   else if (r.insert !== undefined) {
     applying = true;
     src.setSelectionRange(r.from, r.to);
@@ -354,6 +401,7 @@ function apply(r) {
     applying = false;
   }
   markActive();
+  if (acSkip) acSkip = false; else acUpdate();
 }
 
 src.addEventListener("beforeinput", (ev) => {
@@ -363,10 +411,160 @@ src.addEventListener("beforeinput", (ev) => {
 });
 src.addEventListener("keydown", (ev) => {
   if (ev.isComposing) return;
+  if (acKey(ev)) return;
+  if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key === " ") { ev.preventDefault(); acOpenByHand(); return; }
   const mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
-  const r = Editing.keyAction(ev.key, mods, src.value, src.selectionStart, src.selectionEnd, ctx());
-  if (r) { ev.preventDefault(); apply(r); }
+  if (mathKeys.checked && mods.alt && !mods.ctrl && !mods.shift && !mods.meta && ev.key === "ArrowDown") {
+    ev.preventDefault(); shrinkSelection(); return;
+  }
+  const before = [src.selectionStart, src.selectionEnd];
+  const r = Editing.keyAction(ev.key, mods, src.value, before[0], before[1], ctx());
+  if (r) {
+    ev.preventDefault();
+    if (r.select) trailPush(before, r.select);
+    apply(r);
+  }
 });
+
+// ---- selections: grow and shrink by term, double-click ---------------------------
+// The trail is the chain of selections Alt+Up has produced, so Alt+Down can step back.
+let trail = [];
+const sameSel = (a) => a && a[0] === src.selectionStart && a[1] === src.selectionEnd;
+function trailPush(from, to) {
+  if (!sameSel(trail[trail.length - 1])) trail = [from];
+  trail.push(to);
+}
+function shrinkSelection() {
+  if (trail.length < 2 || !sameSel(trail[trail.length - 1])) { say("Nothing to shrink back to"); return; }
+  trail.pop();
+  const t = trail[trail.length - 1];
+  src.setSelectionRange(t[0], t[1]);
+  markActive();
+}
+const onCommentLine = () => src.value.slice(src.value.lastIndexOf("\n", src.selectionStart - 1) + 1).trimStart().startsWith("#");
+src.addEventListener("dblclick", () => {
+  if (!mathKeys.checked || onCommentLine()) return;
+  const n = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
+  if (n) { src.setSelectionRange(n[0], n[1]); trail = [n]; }
+});
+
+// ---- suggestions -----------------------------------------------------------------
+// ac = null when closed, else {ctx, items, index, moved, wrap: [from, to] | null, query}
+const acEl = $("#ac"), suggest = $("#suggest");
+suggest.checked = store.get("suggest", true);
+suggest.onchange = () => { store.set("suggest", suggest.checked); if (!suggest.checked) acClose(); src.focus(); };
+let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands: []};
+let ac = null, acSkip = false;
+
+async function loadVocab() {
+  try { vocab = await (await fetch("/api/vocab")).json(); } catch {}
+}
+function values() {
+  const out = {};
+  for (const r of last) if (r.kind === "assign") { const i = r.text.indexOf(" = "); out[r.text.slice(0, i)] = r.text.slice(i + 3); }
+  return out;
+}
+function caretXY(pos) {
+  const cs = getComputedStyle(src), m = document.createElement("div");
+  for (const p of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "tabSize", "paddingTop", "paddingLeft", "borderTopWidth", "borderLeftWidth"]) m.style[p] = cs[p];
+  Object.assign(m.style, {position: "absolute", visibility: "hidden", whiteSpace: "pre", top: "0", left: "0"});
+  m.textContent = src.value.slice(0, pos);
+  const mark = document.createElement("span"); mark.textContent = "\u200b"; m.append(mark);
+  document.body.append(m);
+  const box = src.getBoundingClientRect();
+  const x = box.left + mark.offsetLeft - src.scrollLeft, y = box.top + mark.offsetTop - src.scrollTop;
+  const h = parseFloat(cs.lineHeight) || 28;
+  m.remove();
+  return {x, y, h};
+}
+function acClose() {
+  ac = null; acEl.hidden = true; acEl.replaceChildren(); src.removeAttribute("aria-activedescendant");
+}
+function acPaint() {
+  const items = ac.items.map((c, i) => {
+    const el = document.createElement("div");
+    el.className = "ac-item"; el.id = "ac-" + i; el.role = "option"; el.ariaSelected = i === ac.index;
+    const kind = Object.assign(document.createElement("span"), {className: "kind", textContent: c.custom ? "custom" : c.kind});
+    const lbl = Object.assign(document.createElement("span"), {className: "lbl", textContent: c.label});
+    const det = Object.assign(document.createElement("span"), {className: "det", textContent: c.detail || ""});
+    el.append(kind, lbl, det);
+    el.addEventListener("mousedown", (ev) => { ev.preventDefault(); ac.index = i; acAccept(); });
+    return el;
+  });
+  const hint = Object.assign(document.createElement("div"), {className: "ac-hint",
+    textContent: ac.wrap ? "Type to filter \u00b7 Enter or Tab apply \u00b7 Esc cancel" : "Tab accept \u00b7 \u2191\u2193 choose \u00b7 Esc close"});
+  acEl.replaceChildren(...items, hint);
+  acEl.hidden = false;
+  src.setAttribute("aria-activedescendant", "ac-" + ac.index);
+  const at = caretXY(ac.wrap ? ac.wrap[0] : ac.ctx.start);
+  const w = acEl.offsetWidth, h = acEl.offsetHeight;
+  const x = Math.max(4, Math.min(at.x, innerWidth - w - 4));
+  const y = at.y + at.h + h > innerHeight - 4 ? Math.max(4, at.y - h) : at.y + at.h;
+  acEl.style.left = x + "px"; acEl.style.top = y + "px";
+  acEl.children[ac.index]?.scrollIntoView({block: "nearest"});
+}
+function acShow(next) {
+  if (!next.items.length) return acClose();
+  ac = next; acPaint();
+}
+// Called after edits and when asked by hand. Nothing happens when suggestions are off,
+// when text is highlighted, or when there is nothing at the caret to complete.
+function acUpdate(force = false) {
+  if (!suggest.checked && !force) return acClose();
+  if (src.selectionStart !== src.selectionEnd) return acClose();
+  const text = src.value, ctx = Autocomplete.context(text, src.selectionStart, {force});
+  if (!ctx) return acClose();
+  const items = Autocomplete.candidates(ctx, vocab, text, {values: values()});
+  acShow({ctx, items, index: 0, moved: false, wrap: null, query: ""});
+}
+// Ctrl+Space. With text highlighted, offer functions to wrap it in.
+function acOpenByHand() {
+  if (src.selectionStart === src.selectionEnd) { acUpdate(true); if (!ac) say("Nothing to suggest here"); return; }
+  if (onCommentLine()) return;
+  const range = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
+  if (!range) { say("Highlight something on one line to wrap it"); return; }
+  src.setSelectionRange(range[0], range[1]);
+  wrapRefresh({wrap: range, query: "", index: 0, moved: true});
+}
+function wrapRefresh(st) {
+  const ctx = {kind: "name", start: st.wrap[0], end: st.wrap[0], query: st.query, tilde: false};
+  const items = Autocomplete.candidates(ctx, {functions: vocab.functions, constants: [], units: [], commands: []}, src.value,
+    {max: 24, kinds: ["function"]});
+  if (!items.length && st.query) return say("No function starts with that");
+  acShow({ctx, items, index: Math.min(st.index, Math.max(items.length - 1, 0)), moved: true, wrap: st.wrap, query: st.query});
+}
+function acAccept() {
+  const c = ac.items[ac.index], text = src.value;
+  if (ac.wrap) {
+    const r = Editing.wrapWithCall(text, ac.wrap[0], ac.wrap[1], c.insert);
+    acClose();
+    if (r) { acSkip = true; apply(r); }
+    return;
+  }
+  const r = Autocomplete.accept(text, ac.ctx, c);
+  acClose(); acSkip = true; apply(r);
+}
+// Keys while the list is open. Returns true when the key was used.
+function acKey(ev) {
+  if (!ac || ev.ctrlKey || ev.metaKey) return false;
+  if (ev.altKey) { acClose(); return false; }
+  const k = ev.key, n = ac.items.length;
+  const eat = () => { ev.preventDefault(); return true; };
+  if (ac.wrap) {
+    if (k.length === 1 && !ev.altKey) { wrapRefresh({...ac, query: ac.query + k, index: 0}); return eat(); }
+    if (k === "Backspace") { wrapRefresh({...ac, query: ac.query.slice(0, -1), index: 0}); return eat(); }
+  }
+  if (k === "ArrowDown" && !ev.altKey) { ac.index = (ac.index + 1) % n; ac.moved = true; acPaint(); return eat(); }
+  if (k === "ArrowUp" && !ev.altKey) { ac.index = (ac.index + n - 1) % n; ac.moved = true; acPaint(); return eat(); }
+  if (k === "Tab" && !ev.shiftKey) { acAccept(); return eat(); }
+  if (k === "Enter" && (ac.moved || ac.wrap)) { acAccept(); return eat(); }
+  if (k === "Escape") { acClose(); return eat(); }
+  if (["Enter", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(k)) acClose();
+  return false;
+}
+src.addEventListener("blur", acClose);
+src.addEventListener("click", acClose);
+src.addEventListener("scroll", () => ac && acPaint());
 
 // ---- dialogs ---------------------------------------------------------------
 for (const d of document.querySelectorAll("dialog")) {
@@ -381,7 +579,14 @@ function readGreek() {
     const [k, v] = row.querySelectorAll("input");
     if (k.value && v.value) next[k.value] = v.value;
   }
-  greek = next; store.set("greek", greek);
+  greek = next; store.set("greek", greek); saveGreek(greek);
+}
+let greekTimer = 0;
+function saveGreek(value) {
+  clearTimeout(greekTimer);
+  greekTimer = setTimeout(() => fetch("/api/greek", {
+    method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({greek: value}),
+  }).catch(() => say("Could not save the Greek table to the server")), 300);
 }
 function greekRow(k = "", v = "") {
   const row = document.createElement("div"); row.className = "g-row";
@@ -398,7 +603,59 @@ function greekRow(k = "", v = "") {
 function buildGreek() { $("#greekRows").replaceChildren(...Object.entries(greek).map(([k, v]) => greekRow(k, v))); }
 $("#greekBtn").onclick = () => { buildGreek(); $("#greekDlg").showModal(); };
 $("#greekAdd").onclick = () => { const r = greekRow(); $("#greekRows").append(r); r.querySelector("input").focus(); };
-$("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", greek); buildGreek(); };
+$("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", null); saveGreek(null); buildGreek(); };
+
+// ---- global units ------------------------------------------------------------------
+function unitRow(name = "", definition = "", error = "") {
+  const row = document.createElement("div"); row.className = "u-row";
+  const n = Object.assign(document.createElement("input"), {value: name, ariaLabel: "Unit name", placeholder: "name", spellcheck: false});
+  const eq = Object.assign(document.createElement("span"), {className: "eq", textContent: "= 1 ="});
+  const d = Object.assign(document.createElement("input"), {value: definition, ariaLabel: "Definition", placeholder: "1.7018'm", spellcheck: false});
+  const del = Object.assign(document.createElement("button"), {textContent: "\u00d7", title: "Remove", ariaLabel: "Remove unit"});
+  del.onclick = () => { row.remove(); emptyNote(); };
+  const err = Object.assign(document.createElement("div"), {className: "err", textContent: error, hidden: !error});
+  n.classList.toggle("bad", !!error); d.classList.toggle("bad", !!error);
+  row.append(n, eq, d, del, err);
+  return row;
+}
+function emptyNote() {
+  const box = $("#unitRows");
+  box.querySelector(".u-empty")?.remove();
+  if (!box.querySelector(".u-row")) box.append(Object.assign(document.createElement("p"), {className: "u-empty", textContent: "No global units yet."}));
+}
+$("#unitsBtn").onclick = async () => {
+  let units = [];
+  try { units = (await (await fetch("/api/settings")).json()).units; } catch {}
+  $("#unitRows").replaceChildren(...units.map((u) => unitRow(u.name, u.definition)));
+  emptyNote();
+  $("#unitsDlg").showModal();
+};
+$("#unitAdd").onclick = () => {
+  $("#unitRows").querySelector(".u-empty")?.remove();
+  const r = unitRow(); $("#unitRows").append(r); r.querySelector("input").focus();
+};
+$("#unitSave").onclick = async () => {
+  const rows = [...$("#unitRows").querySelectorAll(".u-row")];
+  const units = rows.map((r) => { const [n, d] = r.querySelectorAll("input"); return {name: n.value.trim(), definition: d.value.trim()}; });
+  const keep = units.map((u, i) => [u, rows[i]]).filter(([u]) => u.name || u.definition);
+  let res;
+  try {
+    res = await (await fetch("/api/units", {
+      method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({units: keep.map(([u]) => u)}),
+    })).json();
+  } catch { say("Could not save the units"); return; }
+  if (!res.ok) {
+    keep.forEach(([u, row], i) => {
+      const [n, d] = row.querySelectorAll("input"), err = row.querySelector(".err");
+      err.textContent = res.errors[i] || ""; err.hidden = !res.errors[i];
+      n.classList.toggle("bad", !!res.errors[i]); d.classList.toggle("bad", !!res.errors[i]);
+    });
+    return;
+  }
+  $("#unitsDlg").close();
+  say(keep.length ? `Saved ${keep.length} global unit${keep.length === 1 ? "" : "s"}` : "Global units cleared");
+  loadVocab(); evaluate();
+};
 
 // Tell the server this page is open, so the packaged app can quit when it is closed.
 const clientId = Math.random().toString(36).slice(2);
@@ -409,7 +666,18 @@ window.addEventListener("pagehide", () => beat("/api/bye"));
 
 window.addEventListener("load", () => last.length && render(last));
 
+// Greek table and global units live on the server. A table saved in this browser by an
+// older build is sent up once, so nothing is lost.
+async function loadSettings() {
+  try {
+    const cfg = await (await fetch("/api/settings")).json();
+    if (cfg.greek) greek = cfg.greek;
+    else if (store.get("greek", null)) saveGreek(greek);
+  } catch {}
+}
+
 (async () => {
+  await Promise.all([loadSettings(), loadVocab()]);
   const text = store.get("text", null);
   src.value = text ?? await (await fetch("/static/example.lens")).text();
   wrap = store.get("wrap", "inline");

@@ -9,6 +9,7 @@ function start(src) {
   return { t: src.replace('|', ''), s: i, e: i };
 }
 function applyEdit(st, r) {
+  if (r.select) return { ...st, s: r.select[0], e: r.select[1] };
   if (r.caretOnly !== undefined) return { ...st, s: r.caretOnly, e: r.caretOnly };
   if (r.insert === undefined) return st; // message only
   const t = st.t.slice(0, r.from) + r.insert + st.t.slice(r.to);
@@ -207,5 +208,80 @@ eq(sim('x = a|', [ctrl('g')], { enabled: false }), 'x = a|', 'switch turns Greek
 // --- only the current line is considered ----------------------------------------
 eq(sim('f(x = 1\ny = a|', '/'), 'f(x = 1\ny = a / (|)', 'brackets do not span lines');
 eq(sim('# note [\ny = a|', ','), '# note [\ny = a, |', 'an open bracket on another line does not matter');
+
+// --- highlighted text ---------------------------------------------------------
+// `a[b]c` marks the highlighted region. press() on a selection: charAction gets (s, e).
+function selPress(src, key, ctx = {}) {
+  const s = src.indexOf('['), e = src.indexOf(']') - 1;
+  const t = src.replace('[', '').replace(']', '');
+  const r = typeof key === 'string' && key.length === 1 ? E.charAction(key, t, s, e, ctx)
+    : E.keyAction(key.key, { ctrl: !!key.ctrl, alt: !!key.alt, shift: false, meta: false }, t, s, e, ctx);
+  if (!r) return null;
+  if (r.message) return 'message: ' + r.message;
+  if (r.select) return t.slice(0, r.select[0]) + '[' + t.slice(r.select[0], r.select[1]) + ']' + t.slice(r.select[1]);
+  const out = t.slice(0, r.from) + r.insert + t.slice(r.to);
+  return out.slice(0, r.caret) + '|' + out.slice(r.caret);
+}
+eq(selPress("x = [a+b]", '('), 'x = (a+b)|', '( wraps the selection');
+eq(selPress("x = [a+b]", '['), 'x = [a+b]|', '[ wraps the selection');
+eq(selPress("x = [a+b]", '|'), 'x = abs(a+b)|', '| takes the absolute value');
+eq(selPress("x = [a+b]", '/'), 'x = (a+b) / (|)', 'fraction over a sum');
+eq(selPress("x = [a] + b", '/'), 'x = a / (|) + b', 'fraction over one name');
+eq(selPress("x = [a+b]", '^'), 'x = (a+b)^(|)', 'power of a sum');
+eq(selPress("x = [a] + b", '^'), 'x = a^(|) + b', 'power of a name');
+eq(selPress("x = [a+b]", '\\'), 'x = sqrt(a+b)|', 'radical');
+eq(selPress("x = [a+b]", { key: 'm', ctrl: true }), 'x = [a+b]|', 'Ctrl+M wraps in an array');
+eq(selPress("x = [A*C]", { key: 't', ctrl: true }), 'x = transpose(A*C)|', 'transpose');
+
+// highlighting only part of a term still means the whole term
+eq(selPress("x = 1[2]'kN + a", '/'), "x = 12'kN / (|) + a", 'half a number takes its unit');
+eq(selPress("x = 12'[kN] + a", '/'), "x = 12'kN / (|) + a", 'the unit alone takes its number');
+eq(selPress("x = 12 '[kN]", '/'), "x = 12 'kN / (|)", 'a space between number and unit');
+eq(selPress("x = [1]2'kN", '^'), "x = (12'kN)^(|)", 'a power covers the number as well as its unit');
+eq(selPress("x = [x]^2 + y", '/'), 'x = x^2 / (|) + y', 'the base takes its exponent');
+eq(selPress("x = x^[2] + y", '/'), 'x = x^2 / (|) + y', 'the exponent takes its base');
+eq(selPress("x = x^-[2]", '/'), 'x = x^-2 / (|)', 'a negative exponent takes its base');
+eq(selPress("x = [s]in(a) + y", '('), 'x = (sin(a))| + y', 'a function name takes its arguments');
+eq(selPress("x = sin[(a)] + y", '('), 'x = (sin(a))| + y', 'brackets take their function name');
+eq(selPress("x = f(a, [b)] + y", '/'), 'x = f(a, b) / (|) + y', 'a stray ) pulls in its partner');
+eq(selPress("x = [(a + b] + c) * d", '('), 'x = ((a + b + c))| * d', 'a stray ( pulls in its partner');
+eq(selPress("x = [ a ] + b", '('), 'x =  (a)|  + b', 'surrounding spaces stay outside the brackets');
+eq(selPress("x = ~[g]", '/'), 'x = ~g / (|)', 'global marker is part of the name');
+eq(selPress("x = a_[m]ax", '/'), 'x = a_max / (|)', 'subscripts are part of the name');
+eq(selPress("x = a [ ] b", '('), null, 'a blank selection is left to the browser');
+eq(selPress("x = [a\ny = b]", '('), 'message: Highlight one line or less to wrap it', 'a selection across lines is not overwritten');
+eq(selPress("x = [(a + b] + c", '('), 'message: Brackets in the highlight do not match', 'unmatched brackets are not overwritten');
+eq(selPress("# [a+b]", '('), null, 'comments are left alone');
+eq(selPress("x = [a+b]", '(', { enabled: false }), null, 'switch turns it off');
+
+// wrapping with a function
+const wrap = (src, name) => { const s = src.indexOf('['), e = src.indexOf(']') - 1; const t = src.replace('[', '').replace(']', ''); const r = E.wrapWithCall(t, s, e, name); return r && (t.slice(0, r.from) + r.insert + t.slice(r.to)); };
+eq(wrap('x = [a+b] * c', 'sin'), 'x = sin(a+b) * c', 'a function applied to the selection');
+eq(wrap('x = 1[2]\'m', 'sqrt'), "x = sqrt(12'm)", 'the function takes the whole quantity');
+
+// growing the selection
+function growTo(src, times) { // the caret is marked with |
+  const caret = src.indexOf('|');
+  const t = src.replace('|', '');
+  let s = caret, e = caret;
+  const seen = [];
+  for (let i = 0; i < times; i++) {
+    const r = E.keyAction('ArrowUp', { alt: true, ctrl: false, shift: false, meta: false }, t, s, e, {});
+    if (!r || !r.select) break;
+    [s, e] = r.select; seen.push(t.slice(s, e));
+  }
+  return seen;
+}
+assert.deepStrictEqual(growTo("M = w * L^2 / 8 + c|", 9), ['c', 'w * L^2 / 8 + c', 'M = w * L^2 / 8 + c'], 'grow: name, sum, line'); n++;
+assert.deepStrictEqual(growTo("M = w * L^|2 / 8 + c", 9), ['L^2', 'w * L^2 / 8', 'w * L^2 / 8 + c', 'M = w * L^2 / 8 + c'], 'grow: power, product, sum, line'); n++;
+assert.deepStrictEqual(growTo("x = sin(a + b|) * c", 9), ['b', 'a + b', 'sin(a + b)', 'sin(a + b) * c', 'x = sin(a + b) * c'], 'grow through a call'); n++;
+assert.deepStrictEqual(growTo("x = f(a, b|, c)", 9), ['b', 'a, b, c', 'f(a, b, c)', 'x = f(a, b, c)'], 'grow through arguments'); n++;
+assert.deepStrictEqual(growTo("x = 12|'kN", 9), ["12'kN", "x = 12'kN"], 'grow over a quantity'); n++;
+assert.deepStrictEqual(growTo("x = 1e-|3 + a", 9), ['1e-3', '1e-3 + a', 'x = 1e-3 + a'], 'minus in 1e-3 is not a split'); n++;
+assert.deepStrictEqual(growTo("F = [10; 5|] * 'kN", 9), ['5', '10; 5', '[10; 5]', "[10; 5] * 'kN", "F = [10; 5] * 'kN"], 'grow in an array'); n++;
+assert.deepStrictEqual(growTo("a = b|", 9), ['b', 'a = b'], 'two sides of ='); n++;
+assert.deepStrictEqual(growTo("x = a -> b|", 9), ['b', 'x = a -> b'], 'conversion target'); n++;
+eq(E.keyAction('ArrowUp', { alt: true }, '# note', 3, 3, {}), null, 'comments are left alone');
+eq(E.keyAction('ArrowUp', { alt: true }, 'x = 1', 0, 5, {}).message, 'Nothing larger to select', 'whole line is the top');
 
 console.log(`${n} editing checks passed`);

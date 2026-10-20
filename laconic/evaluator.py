@@ -2,7 +2,9 @@
 
 Every value is a Pint Quantity, scalars and matrices alike, so the arithmetic
 code has one path instead of two."""
+import copy
 import math
+import re
 from functools import lru_cache
 
 import numpy as np
@@ -10,6 +12,7 @@ import pint
 
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
                     Matrix, Name, Neg, Num, UnitLit)
+from .parser import parse_expr
 
 CONSTANTS = {"pi": math.pi, "e": math.e}
 
@@ -28,9 +31,63 @@ def _ndim(q):
     return np.ndim(q.magnitude)
 
 
+_UNIT_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
+
+
+def names_in(node):
+    """Every Name node under `node` (used to keep unit definitions free of variables)."""
+    if isinstance(node, Name):
+        return [node.name]
+    out = []
+    for v in getattr(node, "__dict__", {}).values():
+        for item in (v if isinstance(v, tuple) else (v,)):
+            for x in (item if isinstance(item, tuple) else (item,)):
+                out += names_in(x)
+    return out
+
+
+@lru_cache(maxsize=4)
+def _registry_with(units):
+    """A registry with the instance's global units defined. Built once per distinct
+    list and never mutated afterwards. Returns (registry, valid names, errors)."""
+    ev = Evaluator(fork=True)
+    ok, bad = [], {}
+    for name, definition in units:
+        try:
+            ev.define_unit(name, parse_expr(definition))
+            ok.append(name)
+        except Exception as e:
+            bad[name] = str(e)
+    return ev.ureg, tuple(ok), bad
+
+
+def check_units(units):
+    """Validate (name, definition) pairs in order. Returns one error string or None per pair."""
+    ev = Evaluator(fork=True)
+    errors = []
+    for name, definition in units:
+        try:
+            ev.define_unit(name, parse_expr(definition))
+            errors.append(None)
+        except Exception as e:
+            errors.append(str(e))
+    return errors
+
+
 class Evaluator:
-    def __init__(self):
-        self.ureg = registry()
+    def __init__(self, global_units=(), fork=False):
+        """`global_units` are (name, definition) pairs from the instance settings.
+        A sheet that defines units of its own needs `fork=True`: Pint cannot
+        undefine a unit, so each run gets a private copy of the registry."""
+        units = tuple((str(n), str(d)) for n, d in global_units)
+        if units:
+            base, ok, _ = _registry_with(units)
+        else:
+            base, ok = registry(), ()
+        self._owned = fork
+        self.ureg = copy.deepcopy(base) if fork else base
+        self.globals = {n: d for n, d in units if n in ok}   # instance-wide units
+        self.custom = dict(self.globals)                     # globals plus this sheet's, name -> definition
         self.Q = self.ureg.Quantity
         self.vars = {}
         self.funcs = {}
@@ -47,6 +104,33 @@ class Evaluator:
             return True
         except Exception:
             return False
+
+    def define_unit(self, name, expr, source=""):
+        """Define `name` as the value of `expr`, which may use numbers and units only."""
+        if not self._owned:
+            raise RuntimeError("define_unit needs an Evaluator built with fork=True")
+        if not _UNIT_NAME_RE.match(name):
+            raise EvalError("Unit names use ASCII letters, digits and _, and start with a letter")
+        if self.is_unit(name):
+            means = str(self.ureg.parse_units(name))  # `dsmoot` reads as deci + smoot
+            raise EvalError(f"'{name}' is already a unit" + ("" if means == name else f" ({means})"))
+        if names_in(expr):
+            raise EvalError("A unit definition can use only numbers and units")
+        q = self.eval(expr)
+        if _ndim(q) != 0:
+            raise EvalError("A unit definition must be a single value")
+        mag = float(q.magnitude)
+        if not math.isfinite(mag) or mag <= 0:
+            raise EvalError("A unit must be defined as a positive number of something")
+        for uname, _ in q.unit_items():
+            if self.ureg.Quantity(0, uname).to_base_units().magnitude != 0:
+                raise EvalError("Offset units such as 'degC cannot be used to define a unit")
+        text = f"{name} = {mag!r}"
+        if q.units != self.ureg.Unit("dimensionless"):
+            text += f" * {q.units}"
+        self.ureg.define(text)
+        self.custom[name] = source or ""
+        return q
 
     def is_unit_node(self, node):
         """True for `'kN` and `'mm^4`. Units are lexically marked, so a bare

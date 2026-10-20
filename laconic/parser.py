@@ -7,7 +7,7 @@ from lark import Lark, Transformer, v_args
 from lark.exceptions import UnexpectedInput
 
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
-                    Matrix, Name, Neg, Num, UnitLit)
+                    Matrix, Name, Neg, Num, UnitDef, UnitLit)
 
 GRAMMAR = r"""
 ?start: expr
@@ -84,6 +84,7 @@ _parser = Lark(GRAMMAR, parser="lalr", start="start", transformer=_ToAst())
 
 _FUNC_RE = re.compile(
     r"^([^\W\d]\w*)\s*\(\s*([^\W\d]\w*(?:\s*,\s*[^\W\d]\w*)*)\s*\)\s*=(?!=)\s*(.+)$")
+_UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(r"^(~?[^\W\d]\w*[`!@]*)\s*=(?!=)\s*(.+)$")
 
 
@@ -101,6 +102,9 @@ def parse_expr(src):
 
 def parse_line(src):
     src = src.strip()
+    m = _UNITDEF_RE.match(src)
+    if m:
+        return UnitDef(m.group(1), parse_expr(m.group(2)), m.group(2).strip())
     m = _FUNC_RE.match(src)
     if m:
         params = tuple(p.strip() for p in m.group(2).split(","))

@@ -68,5 +68,13 @@ class FuncDef:
 
 
 @dataclass(frozen=True)
+class UnitDef:
+    """`'smoot = 1.7018'm`: defines a unit. `source` is the right-hand side as typed."""
+    name: str
+    expr: Any
+    source: str
+
+
+@dataclass(frozen=True)
 class ExprStmt:
     expr: Any
