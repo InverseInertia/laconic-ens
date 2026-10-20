@@ -4,7 +4,8 @@
  * returns one edit, or null to let the browser handle the key normally.
  * An edit is {from, to, insert, caret}: replace text[from:to] with `insert`
  * and put the caret at `caret` in the new text. Two other results exist:
- * {caretOnly} moves the caret, {message} reports something without editing.
+ * {caretOnly} moves the caret, {select: [from, to]} changes the selection and
+ * {message} reports something without editing.
  *
  * The page applies edits; the same functions run under Node for tests.
  */
@@ -173,6 +174,203 @@
     return spaced(t, s, e, op, ls);
   }
 
+  // ---- selections ---------------------------------------------------------
+  // Whatever the user highlights, the edit applies to whole terms: `1` inside
+  // `12'kN` means the quantity, `x` in `x^2` means the power, half a bracket
+  // pair means the pair, and a function name means the call.
+
+  function openBefore(t, pos, ls) {
+    let depth = 0;
+    for (let j = pos - 1; j >= ls; j--) {
+      const c = t[j];
+      if (c === ')' || c === ']') depth++;
+      else if (c === '(' || c === '[') { if (depth === 0) return j; depth--; }
+    }
+    return -1;
+  }
+
+  function tokenStart(t, e, ls) {
+    let s = e;
+    while (s > ls && isTok(t[s - 1])) s--;
+    return s;
+  }
+
+  // The smallest run of whole terms that covers [s, e), or null when there is
+  // nothing to select (blank, or more than one line).
+  function snap(t, s, e) {
+    const ls = lineStartOf(t, s), le = lineEndOf(t, s);
+    while (s < e && t[s] === ' ') s++;
+    while (e > s && t[e - 1] === ' ') e--;
+    if (e <= s || e > le) return null;
+    for (let n = 0; n < 24; n++) {
+      const s0 = s, e0 = e;
+      // unbalanced brackets: pull in the partner
+      let open = 0, stray = 0;
+      for (let j = s; j < e; j++) {
+        const c = t[j];
+        if (c === '(' || c === '[') open++;
+        else if (c === ')' || c === ']') { if (open > 0) open--; else stray++; }
+      }
+      if (stray) {
+        let need = stray, j = s - 1;
+        for (; j >= ls && need > 0; j--) {
+          if (t[j] === ')' || t[j] === ']') need++;
+          else if (t[j] === '(' || t[j] === '[') need--;
+        }
+        if (need > 0) return null;
+        s = j + 1;
+      }
+      if (open) {
+        let need = open, j = e;
+        for (; j < le && need > 0; j++) {
+          if (t[j] === '(' || t[j] === '[') need++;
+          else if (t[j] === ')' || t[j] === ']') need--;
+        }
+        if (need > 0) return null;
+        e = j;
+      }
+      // a cut through the middle of a name, number or unit
+      while (s > ls && isTok(t[s - 1]) && isTok(t[s])) s--;
+      while (e < le && isTok(t[e - 1]) && isTok(t[e])) e++;
+      // 1e-3 is one number
+      if (/^[+-]$/.test(t[s - 1] || '')) {
+        const ts = tokenStart(t, s - 1, ls);
+        if (/^\d[\d.]*[eE]$/.test(t.slice(ts, s - 1))) s = ts;
+      }
+      if (/^[+-]$/.test(t[e] || '') && /\d/.test(t[e + 1] || '') && /^\d[\d.]*[eE]$/.test(t.slice(tokenStart(t, e, ls), e))) {
+        e++;
+        while (e < le && isTok(t[e])) e++;
+      }
+      // `12 'kN`: number and unit are one term even with a space between
+      if (isTok(t[e - 1])) {
+        const ts = tokenStart(t, e, ls);
+        let k = e;
+        while (k < le && t[k] === ' ') k++;
+        if (k > e && t[k] === "'" && /[\d.]/.test(t[ts])) { e = k; while (e < le && isTok(t[e])) e++; }
+      }
+      if (t[s] === "'") {
+        let k = s;
+        while (k > ls && t[k - 1] === ' ') k--;
+        if (k < s && isTok(t[k - 1])) {
+          const ts = tokenStart(t, k, ls);
+          if (/[\d.]/.test(t[ts])) s = ts;
+        }
+      }
+      // a function: name and arguments go together
+      if (t[e] === '(' && isIdent(t[e - 1])) { const m = matchFwd(t, e, le); if (m >= 0) e = m + 1; }
+      if (t[s] === '(' && s > ls && isIdent(t[s - 1])) while (s > ls && isIdent(t[s - 1])) s--;
+      // exponents belong to their base: x|^2 and x^|2 both mean x^2
+      while (t[e] === '^') {
+        const e2 = atomAfter(t, e + 1, le);
+        if (e2 <= e + 1) break;
+        e = e2;
+      }
+      const hat = t[s - 1] === '^' ? s - 1 : t[s - 1] === '-' && t[s - 2] === '^' ? s - 2 : -1;
+      if (hat > ls) { const b = termBefore(t, hat, ls); if (b < hat) s = b; }
+      if (s === s0 && e === e0) break;
+    }
+    return [s, e];
+  }
+
+  // Split points at bracket depth 0 inside [a, b): level 1 is a binary + or -,
+  // level 2 is , ; = and ->. A product lies between any two; a sum between level 2 ones.
+  function splits(t, a, b) {
+    const out = [];
+    let depth = 0;
+    for (let j = a; j < b; j++) {
+      const c = t[j];
+      if (c === '(' || c === '[') depth++;
+      else if (c === ')' || c === ']') depth--;
+      else if (depth === 0) {
+        if (c === ',' || c === ';' || c === '=') out.push({ i: j, end: j + 1, level: 2 });
+        else if (c === '-' && t[j + 1] === '>') { out.push({ i: j, end: j + 2, level: 2 }); j++; }
+        else if (c === '+' || c === '-') {
+          const prev = prevNonSpace(t, j, a);
+          let k = j;
+          while (k > a && isTok(t[k - 1])) k--;
+          if (prev !== null && !startsOperand.has(prev) && !/^\d[\d.]*[eE]$/.test(t.slice(k, j))) {
+            out.push({ i: j, end: j + 1, level: 1 });
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  const trimmed = (t, a, b) => {
+    while (a < b && t[a] === ' ') a++;
+    while (b > a && t[b - 1] === ' ') b--;
+    return [a, b];
+  };
+  const grows = (r, s, e) => r[0] <= s && r[1] >= e && (r[0] < s || r[1] > e);
+
+  // The next larger meaningful selection: term, product, sum, bracket contents,
+  // bracket, then outwards, ending at the whole line. null when there is none.
+  function grow(t, s, e) {
+    const ls = lineStartOf(t, s), le = lineEndOf(t, s);
+    if (e > le) return null;
+    if (e > s) {
+      const n = snap(t, s, e);
+      if (n && (n[0] !== s || n[1] !== e)) return n;
+      if (n) { s = n[0]; e = n[1]; }
+    } else {
+      let a = -1;
+      if (s < le && (isTok(t[s]) || t[s] === '(' || t[s] === '[')) a = s;
+      else if (s > ls && (isTok(t[s - 1]) || t[s - 1] === ')' || t[s - 1] === ']')) a = s - 1;
+      if (a >= 0) { const n = snap(t, a, a + 1); if (n) return n; }
+    }
+    const contexts = [];
+    for (let pos = s; ;) {
+      const o = openBefore(t, pos, ls);
+      if (o < 0) break;
+      const c = matchFwd(t, o, le);
+      if (c < e) break;
+      contexts.push({ o, c });
+      pos = o;
+    }
+    contexts.push(null);
+    for (const ctx of contexts) {
+      const [a, b] = ctx ? trimmed(t, ctx.o + 1, ctx.c) : trimmed(t, ls, le);
+      const seps = splits(t, a, b);
+      // first the run of operands between any split (a product), then between , ; = -> only (a sum)
+      for (const minLevel of [1, 2]) {
+        if (seps.some((x) => x.level >= minLevel && x.i >= s && x.end <= e)) continue; // the selection spans one
+        let left = a, right = b;
+        for (const x of seps) {
+          if (x.level < minLevel) continue;
+          if (x.end <= s) left = x.end;
+          else if (x.i >= e) { right = x.i; break; }
+        }
+        const r = trimmed(t, left, right);
+        if (grows(r, s, e)) return r;
+      }
+      if (grows([a, b], s, e)) return [a, b];
+      if (ctx) {
+        let from = ctx.o;
+        if (t[from] === '(') while (from > ls && isIdent(t[from - 1])) from--;
+        if (grows([from, ctx.c + 1], s, e)) return [from, ctx.c + 1];
+      }
+    }
+    return null;
+  }
+
+  // A base for ^ that keeps its meaning: a bare name or number stays as it is,
+  // anything else gets brackets. `12'kN` is bracketed so the power covers the
+  // number as well as the unit.
+  function asBase(t, s, e, ls) {
+    const sel = t.slice(s, e);
+    const single = termBefore(t, e, ls) === s;
+    return single && (!sel.includes("'") || sel[0] === "'") ? sel : '(' + sel + ')';
+  }
+
+  // name(selection): wraps whole terms in a call and leaves the caret after it.
+  function wrapWithCall(t, s, e, name) {
+    const n = snap(t, s, e);
+    if (!n) return null;
+    const ins = name + '(' + t.slice(n[0], n[1]) + ')';
+    return edit(n[0], n[1], ins, n[0] + ins.length);
+  }
+
   // ---- individual actions ---------------------------------------------------
   function fraction(t, s, e, ls, le) {
     if (e > s) {
@@ -214,7 +412,8 @@
   }
 
   function exponent(t, s, e, ls) {
-    if (e > s || termBefore(t, s, ls) === s) return null;
+    if (e > s) { const ins = asBase(t, s, e, ls) + '^()'; return edit(s, e, ins, s + ins.length - 1); }
+    if (termBefore(t, s, ls) === s) return null;
     return edit(s, s, '^()', s + 2);
   }
 
@@ -233,7 +432,11 @@
 
   function transpose(t, s, e, ls) {
     let from, to;
-    if (e > s) { from = s; to = e; } else {
+    if (e > s) {
+      const n = snap(t, s, e);
+      if (!n) return null;
+      [from, to] = n;
+    } else {
       from = termBefore(t, s, ls);
       to = s;
       if (from === s) return null;
@@ -283,12 +486,26 @@
     return edit(from, s + 1, '', from);
   }
 
+  // Keys that wrap a highlighted region instead of replacing it.
+  const WRAPPERS = new Set(['/', '\\', '^', '(', '[', '|']);
+
   // ---- entry points -------------------------------------------------------
   // Printable characters (call from `beforeinput`).
   function charAction(ch, t, s, e, ctx) {
     if (ctx && ctx.enabled === false) return null;
     const ls = lineStartOf(t, s), le = lineEndOf(t, e);
     if (isComment(t, ls)) return null;
+    if (e > s && WRAPPERS.has(ch)) {
+      const n = snap(t, s, e); // act on whole terms, however the text was highlighted
+      if (!n) {
+        if (t.slice(s, e).trim() === '') return null; // spaces: an ordinary replace
+        // Do not let a stray key overwrite several lines or half a bracket pair.
+        return { message: t.slice(s, e).includes('\n') ? 'Highlight one line or less to wrap it' : 'Brackets in the highlight do not match' };
+      }
+      [s, e] = n;
+      if (ch === '(' || ch === '[') return edit(s, e, ch + t.slice(s, e) + (ch === '(' ? ')' : ']'), e + 2);
+      if (ch === '|') { const ins = 'abs(' + t.slice(s, e) + ')'; return edit(s, e, ins, s + ins.length); }
+    }
     const sel = e > s;
     switch (ch) {
       case '/': // after `A.` the period became a subscript underscore; `A_/` means `A ./ `
@@ -331,7 +548,11 @@
     if (mods.ctrl && !mods.alt && !mods.shift && !mods.meta) {
       if (k === 'g') return greek(t, s, e, (ctx && ctx.greek) || DEFAULT_GREEK);
       if (comment) return null;
-      if (k === 'm') return e > s ? edit(s, e, '[' + t.slice(s, e) + ']', e + 2) : edit(s, s, '[]', s + 1);
+      if (k === 'm') {
+        if (e === s) return edit(s, s, '[]', s + 1);
+        const n = snap(t, s, e);
+        return n ? edit(n[0], n[1], '[' + t.slice(n[0], n[1]) + ']', n[1] + 2) : null;
+      }
       if (k === 't') return transpose(t, s, e, ls);
       if (key === '/') {
         return t[s - 1] === '_' && isIdent(t[s - 2]) && e === s ? spaced(t, s - 1, e, './', ls) : spaced(t, s, e, '/', ls);
@@ -341,6 +562,11 @@
     // Ctrl+T is reserved by most browsers, so Alt+T does the same thing.
     if (mods.alt && !mods.ctrl && !mods.shift && !mods.meta && k === 't' && !comment) {
       return transpose(t, s, e, ls);
+    }
+    // Alt+Up grows the selection by one term-aware step (Alt+Down, in the page, undoes a step).
+    if (mods.alt && !mods.ctrl && !mods.shift && !mods.meta && key === 'ArrowUp' && !comment) {
+      const g = grow(t, s, e);
+      return g ? { select: g } : { message: 'Nothing larger to select' };
     }
     // Enter with only closing brackets left on the line finishes the line, so the
     // `]` that Ctrl+M added is not stranded on the next line.
@@ -357,6 +583,7 @@
   const api = {
     DEFAULT_GREEK, charAction, keyAction,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
+    snap, grow, wrapWithCall,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Editing = api;

@@ -86,10 +86,29 @@ def _word(w):
     return "\\mathrm{" + inner + "}"
 
 
+_DIGIT_WORDS = "Zero One Two Three Four Five Six Seven Eight Nine".split()
+
+
+def _unit_macro(name):
+    """siunitx macro names are letters only: psi_g -> psiUnderg, a2 -> aTwo."""
+    return "".join("Under" if c == "_" else _DIGIT_WORDS[int(c)] if c.isdigit() else c for c in name)
+
+
 class Fmt:
-    def __init__(self, ureg, siunitx=False, sig=4):
+    def __init__(self, ureg, siunitx=False, sig=4, custom=()):
+        """`custom` holds the names of user-defined units. In export mode each one
+        gets a siunitx macro, collected in `macros` (name -> macro) for the preamble."""
         self.ureg, self.siunitx, self.sig = ureg, siunitx, sig
+        self.custom, self.macros = custom, {}
         self._dimless = ureg.Unit("dimensionless")
+
+    def _macro(self, name):
+        if name not in self.macros:
+            macro = _unit_macro(name)
+            while macro in self.macros.values():
+                macro += "X"
+            self.macros[name] = macro
+        return self.macros[name]
 
     def _parts(self, x, sig):
         """(mantissa, exponent or None). Plain notation between 1e-4 and 1e7."""
@@ -123,7 +142,11 @@ class Fmt:
             return ""
         if self.siunitx:
             m = re.fullmatch(r"\\si\[\]\{(.*)\}", format(units, "Lx"))
-            return m.group(1) if m else ""
+            if not m:
+                return ""
+            return re.sub(r"\\([A-Za-z_][A-Za-z0-9_]*)",
+                          lambda t: "\\" + self._macro(t.group(1)) if t.group(1) in self.custom else t.group(0),
+                          m.group(1))
         return format(units, "~L")
 
     def quantity(self, q):
@@ -290,7 +313,7 @@ def snippet(r, wrap="inline"):
         return f"% line {r.n}: {r.error}"
     if r.kind == "command":
         return f"% {r.source.strip()}"
-    if r.kind in ("assign", "expr", "funcdef"):
+    if r.kind in ("assign", "expr", "funcdef", "unitdef"):
         if wrap == "align":
             rows = [f"{r.lhs} &= {r.stages[0]}" if r.lhs else f"&{r.stages[0]}"]
             rows += [f"&= {s}" for s in r.stages[1:]]
@@ -301,16 +324,18 @@ def snippet(r, wrap="inline"):
     return None
 
 
-def document(results, title=None):
+def document(results, title=None, declarations=()):
     """Full .tex document. Each calculation becomes an align* block with one
-    row per stage, so long lines break at the equals signs instead of overflowing."""
+    row per stage, so long lines break at the equals signs instead of overflowing.
+    `declarations` are the \\DeclareSIUnit lines for user-defined units."""
     out = [r"\documentclass[11pt]{article}",
            r"\usepackage[margin=2.5cm]{geometry}",
            r"\usepackage{amsmath,amssymb}",
            r"\usepackage{siunitx}  % siunitx v3 or newer (\qty, \unit)",
            r"\sisetup{per-mode=symbol, inter-unit-product=\ensuremath{{\cdot}}}",
-           r"\setlength{\parindent}{0pt}",
-           r"\begin{document}"]
+           r"\setlength{\parindent}{0pt}"]
+    out += list(declarations)
+    out.append(r"\begin{document}")
     if title:
         out.append(rf"\section*{{{escape(title)}}}")
     out += [x for x in (snippet(r, "align") for r in results) if x is not None]

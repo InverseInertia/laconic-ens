@@ -6,7 +6,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import document, run
+from . import document, evaluate, settings
 
 _CHROMIUM = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
              "microsoft-edge", "brave-browser")
@@ -52,10 +52,13 @@ def main():
         ap.error("give a worksheet file or use --serve")
 
     text = Path(a.file).read_text(encoding="utf-8")
+    units = settings.global_units()
     if a.tex:
-        Path(a.tex).write_text(document(run(text, siunitx=True), title=Path(a.file).stem), encoding="utf-8")
+        ws = evaluate(text, siunitx=True, global_units=units)
+        Path(a.tex).write_text(document(ws.results, title=Path(a.file).stem, declarations=ws.declarations),
+                               encoding="utf-8")
         print(f"wrote {a.tex}")
-    for r in run(text):
+    for r in evaluate(text, global_units=units).results:
         if r.kind == "error":
             print(f"{r.n:>3}  ERROR  {r.error}", file=sys.stderr)
         elif r.text and r.kind in ("assign", "expr"):

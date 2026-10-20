@@ -25,7 +25,8 @@ def _key(items):
     return tuple(round(float(items.get(b, 0)), 9) for b in _BASE)
 
 
-@lru_cache(maxsize=None)
+# Bounded: a sheet that defines units gets a private registry per run, which should not pile up here.
+@lru_cache(maxsize=8)
 def _table(ureg):
     table = {}
     for target in _PREFERRED:

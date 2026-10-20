@@ -1,0 +1,79 @@
+"""Per-user settings kept on the machine running the server, so they follow the
+user across browsers and are shared with the command line: the Greek table
+behind Ctrl+G and the global unit definitions.
+
+The file is JSON, written atomically. `LENS_CONFIG_DIR` overrides where it lives."""
+import json
+import os
+import sys
+import tempfile
+import threading
+from pathlib import Path
+
+_lock = threading.Lock()
+
+
+def config_dir():
+    if os.environ.get("LENS_CONFIG_DIR"):
+        return Path(os.environ["LENS_CONFIG_DIR"])
+    if sys.platform == "win32":
+        return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / "laconic"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "laconic"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "laconic"
+
+
+def _path():
+    return config_dir() / "settings.json"
+
+
+def load():
+    """{"greek": dict or None, "units": [{"name", "definition"}]}. A missing or
+    unreadable file gives the defaults rather than an error."""
+    try:
+        data = json.loads(_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    greek = data.get("greek")
+    units = data.get("units")
+    return {
+        "greek": greek if isinstance(greek, dict) else None,
+        "units": [u for u in units if isinstance(u, dict) and isinstance(u.get("name"), str)
+                  and isinstance(u.get("definition"), str)] if isinstance(units, list) else [],
+    }
+
+
+def _write(data):
+    path = _path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".settings-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def save_greek(greek):
+    """`None` goes back to the built-in table."""
+    with _lock:
+        data = load()
+        data["greek"] = greek
+        _write(data)
+
+
+def save_units(units):
+    with _lock:
+        data = load()
+        data["units"] = [{"name": n, "definition": d} for n, d in units]
+        _write(data)
+
+
+def global_units():
+    """(name, definition) pairs, in definition order."""
+    return [(u["name"], u["definition"]) for u in load()["units"]]

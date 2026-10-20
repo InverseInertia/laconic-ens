@@ -27,6 +27,7 @@ The exported .tex needs siunitx v3 or newer.
     f(x, y) = x^2 + y              user function
     T = 20'degC -> 'degF           offset units work
     σ_max = 3                      Greek letters and subscripts in names
+    'smoot = 1.7018'm              define a unit (see Custom units)
     ~g = 9.81'm / 's^2             global variable (see below)
     !clear                         remove all non-global variables
     !noassume / !assume            keep typed units / back to SI results
@@ -83,6 +84,52 @@ cleared says so: `'m' was removed by !clear`.
 reducing them to SI, for every line below it: `10'kN * 2'm` shows `20 kN⋅m` rather than
 `20000 J`. An explicit `->` still converts. `!assume` restores the default.
 
+## Custom units
+
+A line that starts with a unit and an equals sign defines that unit for the sheet:
+
+    'smoot = 1.7018'm
+    'ksmoot = 1000'smoot           may build on earlier units
+    d = 3'smoot -> 'm              5.105 m
+
+The right-hand side is numbers and units only (no variables), and must be a positive size. A
+definition applies to the whole sheet, above or below the line, so a block of definitions can sit
+at the end. Names use ASCII letters, digits and `_`. A name that already means something is an
+error, and the message says what it means: `'m` is the metre, and `'dsmoot` would read as
+deci-smoot. Offset units such as `'degC` cannot be used in a definition. `!clear` does not remove
+units.
+
+**Global units** are defined once per instance under the **Units** button and are available in
+every sheet, in the web UI and on the command line. They live in the settings file (below).
+
+**Portability.** Save and Export carry the definitions a sheet depends on, so a copy opens correctly
+on another instance:
+
+- Save (`.lens`) appends the global units the sheet uses, and the units those are defined in terms of,
+  inside a marked block at the end: `#@ unit definitions ...` / `'smoot = 1.7018'm` / `#@ end ...`.
+  Units the sheet already defines itself are not repeated, so saving a sheet twice does not stack
+  blocks.
+- Export (`.tex`) writes a `\DeclareSIUnit` line per custom unit in the preamble, so siunitx can
+  typeset them. Names that are not letters only get a letters-only macro (`psi_g` becomes `\psiUnderg`).
+- Opening a sheet on an instance that has its own global of the same name is fine if the sizes agree.
+  If they differ, the definition line shows an error naming the instance's value; rename the unit in
+  the sheet or change the global.
+
+## Settings on this machine
+
+The Greek table (Ctrl+G) and the global units are stored by the server in a JSON file, so they are
+the same in every browser and for `lens file.lens`:
+
+| System | Location |
+|---|---|
+| Linux | `$XDG_CONFIG_HOME/laconic/settings.json`, or `~/.config/laconic/settings.json` |
+| macOS | `~/Library/Application Support/laconic/settings.json` |
+| Windows | `%APPDATA%\laconic\settings.json` |
+
+`LENS_CONFIG_DIR` overrides the directory. A Greek table saved in the browser by an earlier build is
+copied to the server the first time the page loads. The Units dialog stores nothing unless every
+definition is valid.
+
 ## Output view
 
 The Typeset / LaTeX switch in the header chooses how results are shown. Typeset renders the
@@ -120,8 +167,57 @@ Math keys box. The Keys button lists them in the app.
 | `Ctrl+G` | Greek letter for the character before the caret. Press again to revert |
 | `Ctrl+/`, `Ctrl+\` | A literal `/` (spaced) or `\`, with no fraction or radical slot |
 | `Enter` | With only closing brackets left on the line, finishes the line |
+| `Ctrl+Space` | Opens suggestions by hand. With text highlighted: pick a function to wrap it in |
+| `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
 
 Division is typed with the fraction key: `a`, `/`, then the denominator.
+
+## Highlighted text
+
+With text highlighted, `/` `^` `\` `(` `[` `|` and Ctrl+M apply to the highlighted region instead of
+replacing it: `/` makes it the numerator, `^` the base of a power, `\` a square root, `(` and `[`
+wrap it in brackets, `|` takes `abs()`, and Ctrl+T transposes it. Brackets are added only when the
+region is more than one term.
+
+The edit always applies to **whole terms**, however the text was highlighted. A term is a name, a
+number with its unit, a call, or a bracketed group, together with its exponents:
+
+| Highlighted | Treated as |
+|---|---|
+| `2` in `12'kN` | `12'kN` |
+| `x` in `x^2`, or the `2` | `x^2` |
+| `sin` in `sin(a)` | `sin(a)` |
+| `(a)` in `sin(a)` | `sin(a)` |
+| `b)` in `f(a, b)` | `f(a, b)` |
+
+So `^` on `1` inside `12'kN` gives `(12'kN)^()`, with the power over the number as well as the unit.
+Highlighting spaces only is an ordinary replace, and a highlight across lines or with unmatched
+brackets is left alone with a message rather than overwritten.
+
+**Selecting by term:** double-click selects the whole term under the pointer. `Alt+Up` grows the
+selection one step at a time: term, product (`w * L^2 / 8`), sum (`... + c`), bracket contents,
+bracket with its function name, and outwards to the whole line, with `=`, `->`, `,` and `;` as the
+boundaries between steps. `Alt+Down` steps back. Highlighting with the mouse or Shift+arrows is never
+changed; the widening happens when you press a key.
+
+With text highlighted, `Ctrl+Space` offers functions to wrap it in. Type to filter, `Enter` applies:
+highlight `a+b`, press Ctrl+Space, type `sin`, and `Enter` gives `sin(a+b)`.
+
+## Suggestions
+
+Suggestions appear as you type, from the **Suggest** box in the header:
+
+| After | Offers |
+|---|---|
+| `'` | units: your own and the instance's first, then common units (`kN`, `mm`, `GPa`) and everything Pint knows, matched by symbol or full name (`newt` finds `N`) |
+| `!` | commands |
+| two letters of a name | variables defined above (with their current value), your functions, built-in functions, `pi` and `e` |
+
+`Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows,
+so it still ends the line when you just kept typing. A function is inserted with brackets and the caret
+inside, unless the word is already followed by `(`. The name on the left of `=` (a new variable, a
+unit being defined, function parameters) and comment lines get no suggestions. `Ctrl+Space` opens the
+list by hand, even for a single letter.
 
 The Greek table behind Ctrl+G is editable under the Greek button and is stored in the browser.
 Mathcad-style defaults: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν,
@@ -137,14 +233,21 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
     laconic/evaluator.py     AST -> Pint quantities
     laconic/si.py            default SI display units
     laconic/latex.py         AST -> LaTeX (symbolic, substituted, result), snippets, .tex document
-    laconic/sheet.py         runs a worksheet line by line, including commands
+    laconic/sheet.py         runs a worksheet line by line, including commands and unit definitions
+    laconic/settings.py      per-user settings file: Greek table, global units
+    laconic/vocab.py         what the editor suggests: units, functions, constants, commands
     laconic/server.py        FastAPI app
-    laconic/static/          index.html (UI), editing.js (math keys, pure functions)
+    laconic/static/          index.html (UI), editing.js (math keys, selections), autocomplete.js
+                             (what to suggest; both are pure functions)
 
 ## Tests
 
     python -m pytest -q           # Python, plus the Node suite if node is installed
-    node tests/test_editing.js    # the math keys on their own
+    node tests/test_editing.js    # the math keys and selections on their own
+    node tests/test_autocomplete.js
+
+`tests/test_ui.py` drives the real page in Chromium and is skipped unless `playwright` is installed
+(`pip install playwright`; set `CHROMIUM_PATH` to use a browser you already have).
 
 ## Standalone builds
 
@@ -154,4 +257,6 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
 
 Symbolic math, plotting, solve blocks, dark mode,
 long-equation line breaking inside a single stage, and globals that are usable above their
-definition.
+definition (units are, see Custom units). Custom units cannot define a new base dimension or an
+offset scale,. Selecting with
+the mouse is not snapped to terms; use double-click or `Alt+Up`.
