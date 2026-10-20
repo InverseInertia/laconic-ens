@@ -12,6 +12,7 @@ from . import document, evaluate as evaluate_sheet, snippet
 from . import settings
 from .evaluator import check_units
 from .lifecycle import lifecycle
+from .rename import RenameError, rename
 from .vocab import vocabulary
 
 app = FastAPI(title="laconic")
@@ -27,6 +28,12 @@ class Sheet(BaseModel):
     title: str | None = None
     view: str = "typeset"  # or "latex"
     wrap: str = "inline"   # latex view: inline, display or align
+
+
+class RenameBody(BaseModel):
+    text: str
+    old: str
+    new: str
 
 
 class GreekBody(BaseModel):
@@ -73,6 +80,16 @@ def export(sheet: Sheet):
 def save(sheet: Sheet):
     """The worksheet source, with the unit definitions it needs appended."""
     return _run(sheet, False).portable_text()
+
+
+@app.post("/api/rename")
+def rename_symbol(body: RenameBody):
+    """Every use of a variable or function name, renamed. Nothing changes on error."""
+    try:
+        text, count = rename(body.text, body.old, body.new)
+    except RenameError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "text": text, "count": count}
 
 
 @app.get("/api/settings")
