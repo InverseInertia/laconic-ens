@@ -2,6 +2,7 @@
 an error; an error never stops later lines (lines that depend on a failed
 variable fail on their own with 'x is not defined')."""
 import math
+import re
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 
 import pint
@@ -12,17 +13,24 @@ from .nodes import (Assign, BinOp, Convert, FuncDef, Implicit, Neg, Num,
                     UnitDef, UnitLit)
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
+from .plotopts import (OPT_RE, PlotError, block_end, canon, is_plot_line,
+                       parse_option, parse_plot)
+from .plotspec import Builder
+from .plotsvg import render_svg
 
 
 @dataclass
 class LineResult:
     n: int
     source: str
-    kind: str  # blank comment heading meta command assign expr funcdef unitdef error
+    kind: str  # blank comment heading meta command assign expr funcdef unitdef plot plotopt error
     lhs: str = ""
     stages: list = field(default_factory=list)
     text: str = ""
     error: str = ""
+    svg: str = ""          # plot: the picture
+    plot: dict = None      # plot: the data and settings it was drawn from (see plotspec.py)
+    end: int = 0           # plot: last line of its option lines
 
     @property
     def latex(self):
@@ -122,11 +130,16 @@ def evaluate(text, siunitx=False, global_units=None):
         s = raw.strip()
         if s.startswith("'") and "=" in s:
             defs[i] = _define_unit(i, raw, s, ev, fmt, here, used)
-    results = []
+    results, owned = [], {}   # `owned`: option lines of a plot, handled when the plot ran
     for i, raw in enumerate(lines, 1):
         s = raw.strip()
         if i in defs:
             results.append(defs[i])
+        elif i in owned:
+            results.append(owned.pop(i))
+        elif is_plot_line(s):
+            r, owned = _run_plot(i, raw, lines, ev, fmt, used)
+            results.append(r)
         elif not s:
             results.append(LineResult(i, raw, "blank"))
         elif s.startswith("##"):
@@ -186,19 +199,37 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
 
 def _run_command(i, raw, s, ev):
     """`!clear` removes every variable whose name does not start with ~.
-    User functions are left alone. `!noassume` keeps computed results in the
+    `!clearf` does the same for user functions. `!noassume` keeps computed results in the
     units that came out of the arithmetic instead of reducing them to SI, until
-    `!assume` restores the default."""
+    `!assume` restores the default. `!trigdeg` and `!trigrad` set the angle unit
+    that trig functions read bare numbers in and that inverse ones return."""
     parts = s[1:].split()
     name = parts[0] if parts else ""
-    if name not in ("clear", "assume", "noassume"):
+    if name == "plotspec":
+        return _plotspec_command(i, raw, s, ev)
+    if name == "plot":     # a plot statement with something after it never gets here
+        return LineResult(i, raw, "error", error="A plot reads `!plot f(x), x = low .. high`")
+    if name not in ("clear", "clearf", "assume", "noassume", "trigdeg", "trigrad"):
         return LineResult(i, raw, "error",
-                          error=f"Unknown command '!{name}'. Available: !clear, !assume, !noassume")
+                          error=f"Unknown command '!{name}'. Available: !clear, !clearf, !assume, "
+                                "!noassume, !trigdeg, !trigrad, !plot, !plotspec")
     if len(parts) > 1:
         return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
     if name in ("assume", "noassume"):
         ev.assume = name == "assume"
         text = "Units are reduced to SI again" if ev.assume else "Units are kept as typed unless converted with ->"
+        return LineResult(i, raw, "command", text=text)
+    if name == "clearf":
+        gone = [n for n in ev.funcs if not n.startswith("~")]
+        for n in gone:
+            del ev.funcs[n]
+        ev.cleared_funcs.update(gone)
+        text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
+        return LineResult(i, raw, "command", text=text)
+    if name in ("trigdeg", "trigrad"):
+        ev.angle = "degree" if name == "trigdeg" else "radian"
+        text = ("Trig functions take and return degrees" if ev.angle == "degree"
+                else "Trig functions take and return radians")
         return LineResult(i, raw, "command", text=text)
     gone = [n for n in ev.vars if not n.startswith("~")]
     for n in gone:
@@ -206,6 +237,55 @@ def _run_command(i, raw, s, ev):
     ev.cleared.update(gone)
     text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
     return LineResult(i, raw, "command", text=text)
+
+
+def _plotspec_command(i, raw, s, ev):
+    """`!plotspec grid: off` sets an option for every plot below it; `!plotspec reset` clears them."""
+    words = s[1:].split(None, 1)
+    rest = words[1].strip() if len(words) > 1 else ""
+    if rest == "reset":
+        ev.plotdefs.clear()
+        return LineResult(i, raw, "command", text="Plot options are back to the defaults")
+    m = re.fullmatch(r"([A-Za-z]\w*)\s*:\s*(.*)", rest)
+    try:
+        if not m:
+            raise PlotError("!plotspec reads `!plotspec key: value` or `!plotspec reset`")
+        key, _, value = parse_option(m.group(1), None, m.group(2), sheet=True)
+    except PlotError as e:
+        return LineResult(i, raw, "error", error=str(e))
+    ev.plotdefs[key] = value
+    return LineResult(i, raw, "command", text=f"Plots below: {key} {canon(key, value)}")
+
+
+def _run_plot(i, raw, lines, ev, fmt, used):
+    """A `!plot` line and the option lines under it. Returns the plot's result and the
+    results for its option lines, keyed by line number. A bad option line is reported
+    on that line and the plot is drawn without it."""
+    end = block_end(lines, i - 1)
+    owned, opts = {}, []
+    for n in range(i + 1, end + 1):
+        m = OPT_RE.match(lines[n - 1])
+        try:
+            key, idx, value = parse_option(m.group(1), m.group(2), m.group(3))
+            opts.append((n, key, idx, value))
+            owned[n] = LineResult(n, lines[n - 1], "plotopt")
+        except PlotError as e:
+            owned[n] = LineResult(n, lines[n - 1], "error", error=str(e))
+
+    def parse(src):
+        node = parse_expr(src)
+        used.update(_unit_names(node))
+        return node
+    try:
+        series, var, lo, hi = parse_plot(raw)
+        b = Builder(ev, fmt, parse)
+        spec = b.build(i, series, var, lo, hi, opts)
+    except Exception as e:
+        return LineResult(i, raw, "error", error=_describe(e, None, ev), end=end), owned
+    for n, msg in b.errors:
+        owned[n] = LineResult(n, lines[n - 1], "error", error=msg)
+    text = spec["title"] or "plot " + ", ".join(s["label"] for s in spec["series"])
+    return LineResult(i, raw, "plot", text=text, svg=render_svg(spec, uid=i), plot=spec, end=end), owned
 
 
 def _run_line(i, raw, s, ev, fmt, used):
@@ -227,6 +307,8 @@ def _run_line(i, raw, s, ev, fmt, used):
         # computed results are reduced to simple SI unless !noassume is active.
         if ev.assume and not (literal or isinstance(expr, Convert)):
             value = reduce_si(value, ev.ureg)
+            if ev.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
+                value = value.to("degree")
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
         res = fmt.quantity(value)
@@ -241,7 +323,7 @@ def _run_line(i, raw, s, ev, fmt, used):
 
 
 def _describe(e, stmt, ev):
-    if isinstance(e, (ParseError, EvalError)):
+    if isinstance(e, (ParseError, EvalError, PlotError)):
         return str(e)
     if isinstance(e, pint.errors.DimensionalityError):
         return f"Incompatible units: {e}"

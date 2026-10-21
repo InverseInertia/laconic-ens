@@ -13,7 +13,7 @@
 
   const WORD = /[\p{L}\p{N}_°]/u;
   const NAME_START = '[\\p{L}_][\\p{L}\\p{N}_]*';
-  const FUNC_RE = new RegExp('^(' + NAME_START + ')\\s*\\(([^)]*)\\)\\s*=(?!=)', 'u');
+  const FUNC_RE = new RegExp('^(~?' + NAME_START + ')\\s*\\(([^)]*)\\)\\s*=(?!=)', 'u');
   const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
   const MAX = 8;
@@ -31,6 +31,7 @@
       if (!s || s[0] === '#' || s[0] === "'") continue;
       if (s[0] === '!') {
         if (/^!clear\s*$/.test(s)) for (const n of [...vars.keys()]) if (n[0] !== '~') vars.delete(n);
+        if (/^!clearf\s*$/.test(s)) for (const n of [...funcs.keys()]) if (n[0] !== '~') funcs.delete(n);
         continue;
       }
       let m = FUNC_RE.exec(s);
@@ -60,7 +61,7 @@
     const force = !!(opts && opts.force);
     const ls = lineStartOf(t, pos), le = lineEndOf(t, pos);
     const line = t.slice(ls, le);
-    if (line.trimStart().startsWith('#')) return null;
+    if (line.trimStart().startsWith('#') || /^\s+(title|xlabel|ylabel|label|note)(\s+\d+)?\s*:/.test(line)) return null;
     let s = pos;
     while (s > ls && WORD.test(t[s - 1])) s--;
     let e = pos;
@@ -68,14 +69,15 @@
     const query = t.slice(s, pos);
     const before = t.slice(ls, s), after = t.slice(e, le);
 
-    if (line.trimStart().startsWith('!')) {
+    const isPlot = /^\s*!plot\s/.test(line);   // a plot statement holds expressions, unlike other commands
+    if (line.trimStart().startsWith('!') && !isPlot) {
       if (!/^\s*!$/.test(before)) return null;
       return { kind: 'command', start: s, end: e, query, tilde: false };
     }
     if (/^[\d.]/.test(query)) return null;                     // a number
     if (t[s - 1] === '.' && /[\d]/.test(t[s - 2] || '')) return null;
     // The left of = is a name being defined (or a unit, or a function's parameters): nothing to complete.
-    if (!before.includes('=') && after.includes('=')) return null;
+    if (!isPlot && !before.includes('=') && after.includes('=')) return null;
     if (t[s - 1] === "'") return { kind: 'unit', start: s, end: e, query, tilde: false };
     const tilde = t[s - 1] === '~';
     if (!force && query.length < 2) return null;
@@ -131,8 +133,8 @@
         add({ kind: 'variable', insert: name, label: name, detail: values[name] || 'variable' }, 0, name.replace(/^~/, ''), '');
       }
       for (const [name, f] of funcs) {
-        if (ctx.tilde) continue;
-        add({ kind: 'function', insert: name, label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name, '');
+        if (ctx.tilde && name[0] !== '~') continue;
+        add({ kind: 'function', insert: name, label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name.replace(/^~/, ''), '');
       }
       for (const [name, sig] of vocab.functions || []) {
         if (ctx.tilde || funcs.has(name)) continue;

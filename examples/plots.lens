@@ -1,0 +1,36 @@
+## Simply supported beam: diagrams
+# Drag a plot to pan it, Ctrl+wheel to zoom, double-click to reset. What you do is written
+# under the plot as `xview:` and `yview:` lines, so this file redraws the same picture, and
+# resetting removes them again. Limits you write yourself (`xlim:`, `ylim:`) are the view it resets to.
+L = 4.5'm
+w = 12'kN / 'm
+M(x) = w * x * (L - x) / 2
+V(x) = w * (L / 2 - x)
+
+!plot M(x), x = 0'm .. L
+  title: Bending moment
+  yunit: 'kN * 'm
+  note: "M_max" at (L / 2, M(L / 2))
+
+!plot V(x), x = 0'm .. L
+  title: Shear force
+  yunit: 'kN
+  color: red
+
+## Several curves, and options for every plot below
+!plotspec size: 560 x 300
+!plot sin(x), cos(x), sin(2*x), x = 0 .. 2*pi
+  title: Three signals
+  dash 2: dashed
+  color 3: #009e73
+  label 3: sin(2x)
+  xstep: 1
+
+## A log-log plot, and a pole
+!plot 1 / x^2, x = 0.1 .. 100
+  title: Inverse square
+  xscale: log
+  yscale: log
+
+!plot 1 / x, x = -2 .. 2
+  ylim: -10 .. 10

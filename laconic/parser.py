@@ -83,7 +83,7 @@ class _ToAst(Transformer):
 _parser = Lark(GRAMMAR, parser="lalr", start="start", transformer=_ToAst())
 
 _FUNC_RE = re.compile(
-    r"^([^\W\d]\w*)\s*\(\s*([^\W\d]\w*(?:\s*,\s*[^\W\d]\w*)*)\s*\)\s*=(?!=)\s*(.+)$")
+    r"^(~?[^\W\d]\w*)\s*\(\s*([^\W\d]\w*(?:\s*,\s*[^\W\d]\w*)*)\s*\)\s*=(?!=)\s*(.+)$")
 _UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(r"^(~?[^\W\d]\w*[`!@]*)\s*=(?!=)\s*(.+)$")
 

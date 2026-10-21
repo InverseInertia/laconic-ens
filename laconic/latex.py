@@ -313,6 +313,9 @@ def snippet(r, wrap="inline"):
         return f"% line {r.n}: {r.error}"
     if r.kind == "command":
         return f"% {r.source.strip()}"
+    if r.kind == "plot":
+        from .plotpgf import pgfplots   # imported late: plotpgf uses this module's escape()
+        return pgfplots(r.plot)
     if r.kind in ("assign", "expr", "funcdef", "unitdef"):
         if wrap == "align":
             rows = [f"{r.lhs} &= {r.stages[0]}" if r.lhs else f"&{r.stages[0]}"]
@@ -334,6 +337,8 @@ def document(results, title=None, declarations=()):
            r"\usepackage{siunitx}  % siunitx v3 or newer (\qty, \unit)",
            r"\sisetup{per-mode=symbol, inter-unit-product=\ensuremath{{\cdot}}}",
            r"\setlength{\parindent}{0pt}"]
+    if any(r.kind == "plot" for r in results):
+        out += [r"\usepackage{pgfplots}", r"\pgfplotsset{compat=newest}"]
     out += list(declarations)
     out.append(r"\begin{document}")
     if title:

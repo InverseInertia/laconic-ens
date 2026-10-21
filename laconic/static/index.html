@@ -52,7 +52,12 @@
   button:hover { background: var(--ink); color: var(--paper); }
   :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
-  main { display: grid; grid-template-columns: minmax(280px, 5fr) 7fr; min-height: 0; }
+  main { --split: 41.667%; display: grid; grid-template-columns: minmax(200px, var(--split)) 8px minmax(200px, 1fr); min-height: 0; }
+  #split { position: relative; cursor: col-resize; touch-action: none; user-select: none; }
+  #split::before { content: ""; position: absolute; inset: 0 3px; background: var(--ink); }
+  #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 0 2px; }
+  #split:focus-visible { outline: none; }
+  body.dragging { user-select: none; cursor: col-resize; }
   .grid-paper {
     background-image:
       linear-gradient(var(--grid) 1px, transparent 1px),
@@ -61,6 +66,12 @@
     background-position: 0 12px;
     background-attachment: local;
   }
+  html[data-bg="lines"] .grid-paper { background-image: linear-gradient(var(--grid) 1px, transparent 1px); }
+  html[data-bg="dots"] .grid-paper {
+    background-image: radial-gradient(circle, var(--grid) 1.3px, transparent 1.7px);
+    background-position: calc(var(--row) / -2) calc(12px - var(--row) / 2);
+  }
+  html[data-bg="plain"] .grid-paper { background-image: none; }
   #src {
     font: 400 14px/var(--row) var(--mono);
     color: var(--ink);
@@ -68,9 +79,9 @@
     border: 0; resize: none; margin: 0;
     padding: 12px 16px;
     white-space: pre; overflow: auto;
-    border-right: 2px solid var(--ink);
     tab-size: 2;
   }
+  #src.wrapped { white-space: pre-wrap; overflow-wrap: break-word; overflow-x: hidden; }
   #src:focus { outline: none; }
   #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; }
   .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; min-height: var(--row); cursor: text; }
@@ -126,6 +137,12 @@
   .g-row button { padding: 0 6px; border-color: var(--rule); color: var(--ink-soft); font-size: 14px; line-height: 22px; }
   .g-row .arrow { color: var(--ink-soft); }
 
+  .row.plot .body { padding: 6px 0 4px; }
+  .plot-wrap svg { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); background: #fff; user-select: none; }
+  .plot-tools { display: flex; gap: 6px; margin-top: 5px; }
+  .plot-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--ink-soft); }
+  .plot-tools button:hover { color: var(--paper); border-color: var(--ink); }
+  .plot-tools .hint { font: 400 12px var(--sans); color: var(--ink-soft); align-self: center; margin-left: 6px; }
   .row.meta .body { font: 400 12px/1.4 var(--sans); color: var(--ink-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
 
   #ac { position: fixed; z-index: 30; max-height: 60vh; overflow-y: auto; min-width: 230px; max-width: min(460px, 92vw); background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 rgba(23, 37, 61, .25); font: 400 13px/1.3 var(--mono); }
@@ -144,13 +161,27 @@
   .u-row .eq { color: var(--ink-soft); font: 400 14px var(--mono); }
   .u-row button { padding: 0 8px; border-color: var(--rule); color: var(--ink-soft); line-height: 24px; }
   .u-row .err { grid-column: 1 / -1; color: var(--err); font: 400 12.5px var(--mono); }
+  .set-sec h3 { margin: 0 0 8px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+  .set-grp { margin: 0 0 14px; padding: 8px 12px 10px; border: 1px solid var(--rule); }
+  .set-grp legend { font: 500 13px var(--sans); color: var(--ink-soft); padding: 0 6px; }
+  .set-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font: 400 14px var(--sans); }
+  .set-row > span { flex: 0 0 9em; }
+  .set-row select { flex: 1; min-width: 0; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; margin-top: 8px; }
+  .swatches label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 400 14px var(--sans); }
+  .swatches input[type=color] { width: 42px; height: 26px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
+  .preview { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--rule); font: 400 14px/var(--row) var(--mono); }
   .u-empty { color: var(--ink-soft); font-size: 13.5px; }
 
   /* Narrow or vertical screens: results on top, editor at the bottom. */
   @media (max-width: 760px) {
-    main { grid-template-columns: 1fr; grid-template-rows: 1fr 40vh; }
+    main { --split: 40%; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(80px, 1fr) 8px minmax(80px, var(--split)); }
     #out { order: -1; padding-right: 12px; }
-    #src { border-right: 0; border-top: 2px solid var(--ink); }
+    #src { order: 2; }
+    #split { cursor: row-resize; }
+    #split::before { inset: 3px 0; }
+    #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 2px 0; }
+    body.dragging { cursor: row-resize; }
     header { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; }
     header .spacer { display: none; }
     .brand { border-right: 0; padding-right: 0; }
@@ -178,6 +209,7 @@
   <button id="renameBtn" title="Rename a variable everywhere (F2)">Rename</button>
   <button id="greekBtn">Greek</button>
   <button id="unitsBtn">Units</button>
+  <button id="settingsBtn">Settings</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
   <button id="export">Export LaTeX</button>
@@ -185,6 +217,7 @@
 </header>
 <main>
   <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source" aria-autocomplete="list" aria-controls="ac"></textarea>
+  <div id="split" role="separator" aria-orientation="vertical" aria-label="Resize editor and output" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Drag to resize (double-click to reset)"></div>
   <div id="out" aria-live="polite"></div>
 </main>
 <div id="ac" role="listbox" aria-label="Suggestions" hidden></div>
@@ -208,15 +241,18 @@
       <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd><br><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Type a literal <code>/</code> or <code>\</code> with no fraction or radical slot</td></tr>
       <tr><td><kbd>=</kbd> <kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd></td><td>Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press</td></tr>
       <tr><td><kbd>`</kbd> <kbd>!</kbd> <kbd>@</kbd></td><td>After a variable name: <code>x`</code> puts a dot over it (<code>x``</code> two dots), <code>F!</code> an arrow, <code>a@</code> a hat. <code>F_x!</code> marks the F and keeps the subscript. Each marked name is a separate variable</td></tr>
-      <tr><td><kbd>~</kbd></td><td>A name that starts with <code>~</code> is global and survives <code>!clear</code></td></tr>
+      <tr><td><kbd>~</kbd></td><td>A variable or function name that starts with <code>~</code> is global and survives <code>!clear</code> / <code>!clearf</code></td></tr>
+      <tr><td><kbd>!clearf</kbd></td><td>On its own line, removes every non-global function above it</td></tr>
       <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
       <tr><td><kbd>!noassume</kbd> <kbd>!assume</kbd></td><td>Below <code>!noassume</code>, results keep the units that come out of the arithmetic (<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. <code>!assume</code> returns to SI</td></tr>
+      <tr><td><kbd>!trigdeg</kbd> <kbd>!trigrad</kbd></td><td>Set the angle unit for <code>sin</code>, <code>cos</code>, <code>tan</code> on bare numbers, and for <code>asin</code>, <code>acos</code>, <code>atan</code> results. Radians by default; explicit units such as <code>30'deg</code> always work</td></tr>
       <tr><td><kbd>'</kbd></td><td>Starts a unit: <code>12'kN/'m</code>. Bare names are always variables</td></tr>
       <tr><td><code>'smoot = 1.7018'm</code></td><td>Defines a unit for this sheet. It works on every line, above or below. Units used by many sheets can be defined under Units, and are then copied into any file you save or export that uses them</td></tr>
       <tr><td colspan="2"><strong>Highlighted text</strong></td></tr>
       <tr><td><kbd>/</kbd> <kbd>^</kbd> <kbd>\</kbd> <kbd>(</kbd> <kbd>[</kbd> <kbd>|</kbd></td><td>Apply to the highlighted region: fraction numerator, base of a power, square root, brackets, array brackets, <code>abs()</code>. A highlight that cuts through a term is widened to the whole term first: <code>1</code> inside <code>12'kN</code> means the whole quantity, <code>x</code> in <code>x^2</code> means <code>x^2</code>, half a bracket pair means the pair</td></tr>
       <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>With text highlighted: pick a function to wrap it in (<code>sin(&hellip;)</code>). Type to filter, <kbd>Enter</kbd> or <kbd>Tab</kbd> to apply. With nothing highlighted: opens suggestions by hand</td></tr>
       <tr><td>Double-click</td><td>Selects the whole term under the pointer</td></tr>
+      <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Turn text wrapping in the editor on or off</td></tr>
       <tr><td><kbd>Alt</kbd>+<kbd>&uarr;</kbd><br><kbd>Alt</kbd>+<kbd>&darr;</kbd></td><td>Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back</td></tr>
       <tr><td colspan="2"><strong>Suggestions</strong></td></tr>
       <tr><td><kbd>Tab</kbd></td><td>Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name</td></tr>
@@ -240,6 +276,36 @@
   </form>
 </dialog>
 
+<dialog id="settingsDlg" aria-labelledby="settingsTitle">
+  <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
+  <div class="dlg-body">
+    <section class="set-sec">
+      <h3>Theme</h3>
+      <p class="note">Changes apply immediately and are kept in this browser.</p>
+      <fieldset class="set-grp">
+        <legend>Fonts</legend>
+        <label class="set-row"><span>Interface and output</span><select id="fontSans"></select></label>
+        <label class="set-row"><span>Editor</span><select id="fontMono"></select></label>
+      </fieldset>
+      <fieldset class="set-grp">
+        <legend>Colors</legend>
+        <label class="set-row"><span>Preset</span><select id="preset"></select></label>
+        <div class="swatches" id="swatches"></div>
+      </fieldset>
+      <fieldset class="set-grp">
+        <legend>Background style</legend>
+        <label class="set-row"><span>Editor paper</span><select id="bgStyle">
+          <option value="grid">Grid</option>
+          <option value="lines">Ruled lines</option>
+          <option value="dots">Dots</option>
+          <option value="plain">Plain</option>
+        </select></label>
+      </fieldset>
+    </section>
+  </div>
+  <div class="dlg-foot"><button id="themeReset">Reset theme</button><span class="spacer"></span></div>
+</dialog>
+
 <dialog id="greekDlg" aria-labelledby="greekTitle">
   <div class="dlg-head"><h2 id="greekTitle">Greek letters</h2><button class="close">Done</button></div>
   <div class="dlg-body">
@@ -258,7 +324,9 @@
   <div class="dlg-foot"><button id="unitAdd">Add unit</button><span class="spacer"></span><button id="unitSave">Save</button></div>
 </dialog>
 
+<script src="/static/vendor/d3/d3.min.js"></script>
 <script src="/static/editing.js"></script>
+<script src="/static/plotview.js"></script>
 <script src="/static/autocomplete.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
@@ -279,9 +347,9 @@ const store = {
 const src = $("#src"), out = $("#out"), nameEl = $("#name");
 let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
 
-const post = (path) => fetch(path, {
+const post = (path, extra = {}) => fetch(path, {
   method: "POST", headers: {"Content-Type": "application/json"},
-  body: JSON.stringify({text: src.value, title: nameEl.value, view, wrap}),
+  body: JSON.stringify({text: src.value, title: nameEl.value, view, wrap, ...extra}),
 });
 
 function typeset(el, tex) {
@@ -291,11 +359,13 @@ function typeset(el, tex) {
 
 function render(rows) {
   last = rows;
-  out.replaceChildren(...rows.map((r) => {
+  // A plot's option lines are part of its row, so they get no row of their own (unless one is wrong).
+  out.replaceChildren(...rows.filter((r) => r.kind !== "plotopt").map((r) => {
     const row = document.createElement("div");
     const snip = view === "latex" && r.snippet && r.kind !== "error";
     row.className = snip ? "row snip" : "row " + r.kind;
     row.dataset.line = r.n;
+    if (r.end) row.dataset.end = r.end;
     const no = document.createElement("div"); no.className = "no"; no.textContent = r.n;
     const body = document.createElement("div"); body.className = "body";
     if (snip) {
@@ -305,7 +375,8 @@ function render(rows) {
     else if (r.kind === "error") {
       const s = document.createElement("span"); s.className = "src"; s.textContent = r.source.trim();
       body.append(s, r.error);
-    } else if (r.latex) typeset(body, r.latex);
+    } else if (r.kind === "plot") body.append(plotBody(r));
+    else if (r.latex) typeset(body, r.latex);
     row.append(no, body);
     if (snip) {
       const copy = document.createElement("button");
@@ -330,7 +401,9 @@ function caretLine() { return src.value.slice(0, src.selectionStart).split("\n")
 function markActive() {
   const n = caretLine();
   out.querySelectorAll(".row.active").forEach((e) => e.classList.remove("active"));
-  const row = out.querySelector(`.row[data-line="${n}"]`);
+  // The caret may be on one of a plot's option lines, which have no row of their own.
+  const row = out.querySelector(`.row[data-line="${n}"]`) ||
+    [...out.querySelectorAll(".row[data-end]")].find((r) => +r.dataset.line <= n && n <= +r.dataset.end);
   if (row) { row.classList.add("active"); row.scrollIntoView({block: "nearest"}); }
 }
 
@@ -349,11 +422,12 @@ src.addEventListener("input", () => {
 });
 for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
 
-function download(name, text, type) {
+function downloadBlob(name, blob) {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], {type}));
+  a.href = URL.createObjectURL(blob);
   a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
+const download = (name, text, type) => downloadBlob(name, new Blob([text], {type}));
 const stem = () => (nameEl.value.trim() || "sheet").replace(/\.\w+$/, "");
 
 $("#save").onclick = async () => {
@@ -368,6 +442,80 @@ $("#file").onchange = async (e) => {
   src.value = await f.text(); nameEl.value = f.name.replace(/\.\w+$/, "");
   evaluate(); e.target.value = "";
 };
+
+// ---- plots -----------------------------------------------------------------
+// The picture is drawn on the server from the worksheet text. Dragging or zooming it
+// asks the server for the option lines that say the same thing, and writes them into
+// the editor, so the worksheet alone redraws what you see.
+function replaceText(next) {
+  const old = src.value;
+  const m = Math.min(old.length, next.length);
+  let a = 0, b = 0;
+  while (a < m && old[a] === next[a]) a++;
+  while (b < m - a && old[old.length - 1 - b] === next[next.length - 1 - b]) b++;
+  const from = a, to = old.length - b, insert = next.slice(a, next.length - b);
+  if (from === to && insert === "") return;
+  let caret = src.selectionStart;
+  if (caret >= to) caret += insert.length - (to - from); else if (caret > from) caret = from;
+  src.focus({preventScroll: true});   // so the edit joins the editor's undo stack
+  acSkip = true;
+  apply({from, to, insert, caret});
+}
+
+async function patchPlot(line, patch) {
+  let res;
+  try {
+    res = await (await fetch("/api/plotedit", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({text: src.value, line, patch}),
+    })).json();
+  } catch { say("Could not reach the server"); return false; }
+  if (!res.ok) { say(res.error); return false; }
+  replaceText(res.text);
+  return true;
+}
+
+async function plotSvg(line) {
+  const res = await post("/api/plotimage", {line});
+  if (!res.ok) throw new Error(await res.text());
+  return res.text();
+}
+
+async function plotPng(line, scale = 3) {
+  const url = URL.createObjectURL(new Blob([await plotSvg(line)], {type: "image/svg+xml"}));
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const c = Object.assign(document.createElement("canvas"), {width: img.width * scale, height: img.height * scale});
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise((ok) => c.toBlob(ok, "image/png"));
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function plotBody(r) {
+  const box = document.createElement("div");
+  const wrap = document.createElement("div"); wrap.className = "plot-wrap";
+  wrap.innerHTML = r.svg;   // drawn by the server, which escapes every piece of text in it
+  // A drag should not also count as a click that jumps the editor to this line.
+  wrap.addEventListener("click", (ev) => ev.stopPropagation());
+  const tools = document.createElement("div"); tools.className = "plot-tools";
+  const btn = (text, title, fn) => {
+    const b = document.createElement("button");
+    b.textContent = text; b.title = title;
+    b.onclick = async (ev) => { ev.stopPropagation(); try { await fn(); } catch (e) { say(e.message || "Failed"); } };
+    tools.append(b);
+  };
+  if (r.plot.x.view || r.plot.y.view) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(r.n, {xview: null, yview: null}));
+  btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${r.n}.svg`, await plotSvg(r.n), "image/svg+xml"));
+  btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${r.n}.png`, await plotPng(r.n)));
+  const hint = document.createElement("span"); hint.className = "hint";
+  hint.textContent = "Drag to pan \u00b7 Ctrl+wheel to zoom \u00b7 double-click to reset";
+  tools.append(hint);
+  box.append(wrap, tools);
+  PlotView.attach(wrap, r.plot, (patch) => patchPlot(r.n, patch));
+  return box;
+}
 
 // ---- output view ---------------------------------------------------------
 async function copyText(text, msg) {
@@ -428,6 +576,7 @@ src.addEventListener("beforeinput", (ev) => {
 });
 src.addEventListener("keydown", (ev) => {
   if (ev.isComposing) return;
+  if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ev.code === "KeyZ") { ev.preventDefault(); acClose(); setWrapped(!wrapped); return; }
   if (acKey(ev)) return;
   if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key === " ") { ev.preventDefault(); acOpenByHand(); return; }
   const mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
@@ -458,7 +607,10 @@ function shrinkSelection() {
   src.setSelectionRange(t[0], t[1]);
   markActive();
 }
-const onCommentLine = () => src.value.slice(src.value.lastIndexOf("\n", src.selectionStart - 1) + 1).trimStart().startsWith("#");
+const onCommentLine = () => {
+  const ls = src.value.lastIndexOf("\n", src.selectionStart - 1) + 1;
+  return Editing.isTextLine(src.value, ls);
+};
 src.addEventListener("dblclick", () => {
   if (!mathKeys.checked || onCommentLine()) return;
   const n = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
@@ -485,6 +637,7 @@ function caretXY(pos) {
   const cs = getComputedStyle(src), m = document.createElement("div");
   for (const p of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "tabSize", "paddingTop", "paddingLeft", "borderTopWidth", "borderLeftWidth"]) m.style[p] = cs[p];
   Object.assign(m.style, {position: "absolute", visibility: "hidden", whiteSpace: "pre", top: "0", left: "0"});
+  if (wrapped) Object.assign(m.style, {whiteSpace: "pre-wrap", overflowWrap: "break-word", boxSizing: "border-box", width: src.clientWidth + "px", paddingRight: cs.paddingRight});
   m.textContent = src.value.slice(0, pos);
   const mark = document.createElement("span"); mark.textContent = "\u200b"; m.append(mark);
   document.body.append(m);
@@ -582,6 +735,138 @@ function acKey(ev) {
 src.addEventListener("blur", acClose);
 src.addEventListener("click", acClose);
 src.addEventListener("scroll", () => ac && acPaint());
+
+// ---- editor text wrapping (Alt+Z) ------------------------------------------------
+let wrapped = false;
+function setWrapped(on, save = true) {
+  wrapped = on;
+  src.classList.toggle("wrapped", on);
+  if (save) { store.set("wrapText", on); say(on ? "Text wrapping on" : "Text wrapping off"); }
+  if (on) src.scrollLeft = 0;
+}
+setWrapped(store.get("wrapText", false) === true, false);
+
+// ---- movable split between editor and output ---------------------------------------
+const mainEl = $("main"), splitEl = $("#split"), narrow = matchMedia("(max-width: 760px)");
+const splitKey = () => narrow.matches ? "splitV" : "splitH";
+function setSplit(f) {
+  if (typeof f === "number") mainEl.style.setProperty("--split", (f * 100).toFixed(2) + "%");
+  else mainEl.style.removeProperty("--split");
+  splitEl.setAttribute("aria-orientation", narrow.matches ? "horizontal" : "vertical");
+  if (typeof f === "number") splitEl.setAttribute("aria-valuenow", Math.round(f * 100));
+  else splitEl.removeAttribute("aria-valuenow");
+}
+const clampSplit = (f) => Math.min(0.85, Math.max(0.15, f));
+const loadSplit = () => { const f = store.get(splitKey(), null); setSplit(typeof f === "number" ? clampSplit(f) : null); };
+// The editor's share of the main area: its width, or its height when stacked.
+const currentSplit = () => {
+  const m = mainEl.getBoundingClientRect(), s = src.getBoundingClientRect();
+  return narrow.matches ? s.height / m.height : s.width / m.width;
+};
+splitEl.addEventListener("pointerdown", (ev) => {
+  if (ev.button !== 0) return;
+  ev.preventDefault();
+  splitEl.setPointerCapture(ev.pointerId);
+  splitEl.classList.add("drag"); document.body.classList.add("dragging");
+});
+splitEl.addEventListener("pointermove", (ev) => {
+  if (!splitEl.hasPointerCapture(ev.pointerId)) return;
+  const m = mainEl.getBoundingClientRect();
+  setSplit(clampSplit(narrow.matches ? (m.bottom - ev.clientY) / m.height : (ev.clientX - m.left) / m.width));
+});
+const endDrag = (ev) => {
+  if (!splitEl.classList.contains("drag")) return;
+  splitEl.classList.remove("drag"); document.body.classList.remove("dragging");
+  store.set(splitKey(), clampSplit(currentSplit()));
+  if (ac) acPaint();
+};
+splitEl.addEventListener("pointerup", endDrag);
+splitEl.addEventListener("pointercancel", endDrag);
+splitEl.addEventListener("dblclick", () => { try { localStorage.removeItem("lens:" + splitKey()); } catch {} setSplit(null); });
+splitEl.addEventListener("keydown", (ev) => {
+  const dir = {ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1}[ev.key];
+  if (!dir) return;
+  ev.preventDefault();
+  // Left or up moves the divider toward the start of the screen.
+  const grow = narrow.matches ? -dir : dir;
+  const f = clampSplit(currentSplit() + grow * 0.02);
+  setSplit(f); store.set(splitKey(), f);
+});
+narrow.addEventListener("change", loadSplit);
+loadSplit();
+
+// ---- settings: theme ------------------------------------------------------------------
+const FONTS_SANS = [
+  ["IBM Plex Sans", '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif'],
+  ["System UI", 'system-ui, -apple-system, "Segoe UI", sans-serif'],
+  ["Helvetica / Arial", 'Helvetica, Arial, sans-serif'],
+  ["Georgia (serif)", 'Georgia, "Times New Roman", serif'],
+  ["Verdana", 'Verdana, Geneva, sans-serif'],
+];
+const FONTS_MONO = [
+  ["IBM Plex Mono", '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'],
+  ["System monospace", 'ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace'],
+  ["Consolas / Menlo", 'Consolas, Menlo, "DejaVu Sans Mono", monospace'],
+  ["Courier", '"Courier New", Courier, monospace'],
+];
+const COLOR_FIELDS = [["paper", "Paper"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"]];
+const PRESETS = {
+  "LENS green": {paper: "#e6eedf", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b"},
+  "White paper": {paper: "#fbfbf8", ink: "#1b1b1b", grid: "#dcdcd4", rule: "#b5b5aa", err: "#b3261e"},
+  "Blueprint": {paper: "#1f3a5f", ink: "#e8f1ff", grid: "#335684", rule: "#5d82b3", err: "#ff9a8f"},
+  "Dark": {paper: "#1e2127", ink: "#d9dde3", grid: "#2c313a", rule: "#444b57", err: "#ff7b72"},
+};
+const DEFAULT_THEME = {sans: 0, mono: 0, bg: "grid", colors: {...PRESETS["LENS green"]}};
+let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
+{
+  const saved = store.get("theme", null);
+  if (saved && typeof saved === "object") {
+    if (Number.isInteger(saved.sans) && FONTS_SANS[saved.sans]) theme.sans = saved.sans;
+    if (Number.isInteger(saved.mono) && FONTS_MONO[saved.mono]) theme.mono = saved.mono;
+    if (["grid", "lines", "dots", "plain"].includes(saved.bg)) theme.bg = saved.bg;
+    for (const [k] of COLOR_FIELDS) if (typeof saved.colors?.[k] === "string" && /^#[0-9a-f]{6}$/i.test(saved.colors[k])) theme.colors[k] = saved.colors[k];
+  }
+}
+function applyTheme() {
+  const root = document.documentElement, c = theme.colors;
+  root.style.setProperty("--sans", FONTS_SANS[theme.sans][1]);
+  root.style.setProperty("--mono", FONTS_MONO[theme.mono][1]);
+  for (const [k] of COLOR_FIELDS) root.style.setProperty("--" + k, c[k]);
+  root.style.setProperty("--paper-deep", `color-mix(in srgb, ${c.paper} 94%, ${c.ink})`);
+  root.style.setProperty("--ink-soft", `color-mix(in srgb, ${c.ink} 75%, ${c.paper})`);
+  root.style.setProperty("--hit", `color-mix(in srgb, ${c.ink} 8%, transparent)`);
+  root.dataset.bg = theme.bg;
+  if (ac) acPaint();
+}
+const saveTheme = () => store.set("theme", theme);
+const sameColors = (a, b) => COLOR_FIELDS.every(([k]) => a[k].toLowerCase() === b[k].toLowerCase());
+function syncThemeForm() {
+  $("#fontSans").value = theme.sans; $("#fontMono").value = theme.mono; $("#bgStyle").value = theme.bg;
+  const match = Object.keys(PRESETS).find((n) => sameColors(PRESETS[n], theme.colors));
+  $("#preset").value = match ?? "custom";
+  for (const [k] of COLOR_FIELDS) $("#c-" + k).value = theme.colors[k];
+}
+function buildThemeForm() {
+  const options = (list) => list.map(([name], i) => Object.assign(document.createElement("option"), {value: i, textContent: name}));
+  $("#fontSans").replaceChildren(...options(FONTS_SANS));
+  $("#fontMono").replaceChildren(...options(FONTS_MONO));
+  $("#preset").replaceChildren(...Object.keys(PRESETS).map((n) => Object.assign(document.createElement("option"), {value: n, textContent: n})),
+    Object.assign(document.createElement("option"), {value: "custom", textContent: "Custom", disabled: true}));
+  $("#swatches").replaceChildren(...COLOR_FIELDS.map(([k, label]) => {
+    const l = document.createElement("label"), i = Object.assign(document.createElement("input"), {type: "color", id: "c-" + k});
+    i.oninput = () => { theme.colors[k] = i.value; applyTheme(); saveTheme(); syncThemeForm(); };
+    l.append(label, i);
+    return l;
+  }));
+  $("#fontSans").onchange = (ev) => { theme.sans = +ev.target.value; applyTheme(); saveTheme(); };
+  $("#fontMono").onchange = (ev) => { theme.mono = +ev.target.value; applyTheme(); saveTheme(); };
+  $("#bgStyle").onchange = (ev) => { theme.bg = ev.target.value; applyTheme(); saveTheme(); };
+  $("#preset").onchange = (ev) => { const p = PRESETS[ev.target.value]; if (p) { theme.colors = {...p}; applyTheme(); saveTheme(); syncThemeForm(); } };
+  $("#themeReset").onclick = () => { theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}}; applyTheme(); saveTheme(); syncThemeForm(); };
+}
+buildThemeForm();
+applyTheme();
+$("#settingsBtn").onclick = () => { syncThemeForm(); $("#settingsDlg").showModal(); };
 
 // ---- dialogs ---------------------------------------------------------------
 for (const d of document.querySelectorAll("dialog")) {

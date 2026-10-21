@@ -10,7 +10,7 @@ const vocab = {
   globalUnits: [['smoot', "1.7018'm"]],
   functions: [['sin', 'sin(angle)'], ['sqrt', 'sqrt(x)'], ['solve', 'solve(A, b)']],
   constants: ['e', 'pi'],
-  commands: [['clear', 'remove all non-global variables'], ['assume', 'back to SI'], ['noassume', 'keep typed units']],
+  commands: [['clear', 'remove all non-global variables'], ['assume', 'back to SI'], ['noassume', 'keep typed units'], ['trigdeg', 'trig in degrees'], ['trigrad', 'trig in radians']],
 };
 // "text|" with the caret marked
 function at(src, opts) {
@@ -21,6 +21,17 @@ function pick(src, opts, extras) {
   const { text, ctx } = at(src, opts);
   return A.candidates(ctx, vocab, text, extras).map((c) => c.insert);
 }
+
+// --- no popup inside the text of a plot option -------------------------------------
+eq(at('!plot f(x), x = 0 .. 1\n  title: Mom|').ctx, null, 'no suggestions in a plot title');
+eq(at('  ylabel: Mom|').ctx, null, 'no suggestions in an axis label');
+eq(at('  label 2: Mom|').ctx, null, 'no suggestions in a series label');
+eq(at('  xlim: 0 .. mo|').ctx !== null, true, 'suggestions still work in a limit');
+// a !plot statement holds expressions, unlike other commands
+eq(at('!plot mom|ent(x), x = 0 .. 1').ctx.kind, 'name', 'names are suggested in a plot statement, even before the =');
+eq(at("!plot M(x), x = 0 .. 2'|").ctx.kind, 'unit', 'units are suggested in the range of a plot statement');
+eq(at('!cl|').ctx.kind, 'command', 'other commands still complete as commands');
+eq(at('!plotspec gr|').ctx, null, 'no suggestions in a !plotspec option');
 
 // --- when to open --------------------------------------------------------------
 eq(at("w = 12'k|").ctx.kind, 'unit', 'after an apostrophe');
