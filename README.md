@@ -227,7 +227,7 @@ definition is valid.
 ## Output view
 
 The Typeset / LaTeX switch in the header chooses how results are shown. Typeset renders the
-math. LaTeX shows the source for each line in the export flavour (siunitx units), with a Copy
+math. LaTeX shows the source for each line in the export flavor (siunitx units), with a Copy
 button per line. The wrapper menu next to the switch chooses how a calculation is wrapped:
 
 | Wrapper | Result |
