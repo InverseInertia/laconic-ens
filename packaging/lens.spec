@@ -3,7 +3,7 @@ import os
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-hidden = collect_submodules("laconic") + collect_submodules("uvicorn")
+hidden = collect_submodules("laconic") + collect_submodules("uvicorn") + ["CoolProp.CoolProp"]
 ROOT = os.path.dirname(SPECPATH)  # SPECPATH is the directory holding this file
 datas = [(os.path.join(ROOT, "laconic", "static"), "laconic/static")] + collect_data_files("pint")
 

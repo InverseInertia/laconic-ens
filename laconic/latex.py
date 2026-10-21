@@ -9,7 +9,7 @@ import re
 import numpy as np
 
 from .evaluator import CONSTANTS, EvalError
-from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num,
+from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Str,
                     UnitLit)
 
 # Precedence levels. A child is wrapped in parentheses when its level is lower
@@ -204,6 +204,8 @@ class Printer:
             return s, (MUL if "\\times" in s else ATOM)
         if isinstance(n, Name):
             return self.name(n)
+        if isinstance(n, Str):
+            return f"\\text{{{escape(n.value)}}}", ATOM
         if isinstance(n, UnitLit):
             return self.fmt.unit_inline(self.ev.ureg.parse_units(n.unit)), ATOM
         if isinstance(n, Neg):
@@ -280,6 +282,8 @@ class Printer:
             return f"\\left\\lceil {a[0]} \\right\\rceil", ATOM
         if f in ("heaviside", "step", "heav"):
             return f"\\operatorname{{H}}\\left({a[0]}\\right)", ATOM
+        if f == "props":
+            return f"\\mathrm{{props}}\\left({', '.join(a)}\\right)", ATOM
         if f == "exp":
             return f"e^{{{a[0]}}}", POW
         if f == "inv":

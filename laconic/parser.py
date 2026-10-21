@@ -7,7 +7,7 @@ from lark import Lark, Transformer, v_args
 from lark.exceptions import UnexpectedInput
 
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
-                    Matrix, Name, Neg, Num, UnitDef, UnitLit)
+                    Matrix, Name, Neg, Num, Str, UnitDef, UnitLit)
 
 GRAMMAR = r"""
 ?start: expr
@@ -39,6 +39,7 @@ GRAMMAR = r"""
      | power
 
 ?atom: NUMBER                       -> num
+     | STRING                       -> string
      | atom_nn
 
 ?atom_nn: NAME                      -> name
@@ -52,6 +53,7 @@ row: expr ("," expr)*
 
 NAME: /~?[^\W\d]\w*[`!@]*/
 NUMBER: /(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?/
+STRING: /"[^"\n]*"/
 UNIT: /'(?:[^\W\d]|°)[\w°]*/
 
 %import common.WS
@@ -62,6 +64,7 @@ UNIT: /'(?:[^\W\d]|°)[\w°]*/
 @v_args(inline=True)
 class _ToAst(Transformer):
     def num(self, t): return Num(float(t))
+    def string(self, t): return Str(str(t)[1:-1])
     def name(self, t): return Name(str(t))
     def unitlit(self, t): return UnitLit(str(t)[1:])
     def neg(self, x): return Neg(x)
