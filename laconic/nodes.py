@@ -9,6 +9,12 @@ class Num:
 
 
 @dataclass(frozen=True)
+class Str:
+    """`"Water"`: text, only meaningful as a built-in function argument."""
+    value: str
+
+
+@dataclass(frozen=True)
 class Name:
     name: str
 

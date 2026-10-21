@@ -21,6 +21,7 @@ _SIGNATURES = {
     "asin": "asin(x)", "acos": "acos(x)", "atan": "atan(x)", "exp": "exp(x)", "ln": "ln(x)",
     "log10": "log10(x)", "det": "det(A)", "inv": "inv(A)", "transpose": "transpose(A)",
     "norm": "norm(x)", "identity": "identity(n)", "solve": "solve(A, b)",
+    "props": 'props("D", "T", T, "P", p, "Water")',
 }
 
 # Offered first, and the ones that get SI prefixes spelled out (kN, mm, GPa).

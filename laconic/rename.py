@@ -8,7 +8,8 @@ from .plotopts import OPT_RE, expr_spans, is_plot_line
 
 NAME = r"~?[^\W\d]\w*[`!@]*"
 _TOKEN = re.compile(
-    r"(?P<unit>'(?:[^\W\d]|°)[\w°]*)"
+    r"(?P<text>\"[^\"\n]*\")"
+    r"|(?P<unit>'(?:[^\W\d]|°)[\w°]*)"
     r"|(?P<num>(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)"
     rf"|(?P<name>{NAME})")
 _VALID = re.compile(rf"^{NAME}$")

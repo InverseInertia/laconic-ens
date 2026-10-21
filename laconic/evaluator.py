@@ -11,7 +11,8 @@ import numpy as np
 import pint
 
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
-                    Matrix, Name, Neg, Num, UnitLit)
+                    Matrix, Name, Neg, Num, Str, UnitLit)
+from . import props as _props
 from .parser import parse_expr
 
 CONSTANTS = {"pi": math.pi, "e": math.e}
@@ -160,6 +161,9 @@ class Evaluator:
         hint = f". Units need an apostrophe: '{n.name}" if self.is_unit(n.name) else ""
         raise EvalError(f"'{n.name}' is not defined{hint}")
 
+    def ev_Str(self, n, scope):
+        raise EvalError("Text in quotes can only be an argument to a function such as props")
+
     def ev_UnitLit(self, n, scope):
         try:
             return self.Q(1, self.ureg.parse_units(n.unit))
@@ -264,8 +268,10 @@ class Evaluator:
         return v.to(target.units)
 
     def ev_Call(self, n, scope):
-        args = [self.eval(a, scope) for a in n.args]
+        args = [a.value if isinstance(a, Str) else self.eval(a, scope) for a in n.args]
         if n.func in self.funcs:
+            if any(isinstance(a, str) for a in args):
+                raise EvalError(f"{n.func} is a user function and cannot take text")
             params, body = self.funcs[n.func]
             if len(args) != len(params):
                 raise EvalError(f"{n.func} takes {len(params)} argument(s), got {len(args)}")
@@ -283,6 +289,8 @@ class Evaluator:
             raise
         except np.linalg.LinAlgError as e:
             raise EvalError(f"{n.func}: {e}") from None
+        except _props.PropsError as e:
+            raise EvalError(str(e)) from None
 
     # ---- built-in functions ----------------------------------------------
     def _dimless(self, x, fname):
@@ -336,6 +344,10 @@ class Evaluator:
     def fn_solve(self, A, b):
         self._square(A, "solve")
         return self.Q(np.linalg.solve(A.magnitude, b.magnitude), b.units / A.units)
+
+    def fn_props(self, out, *args):
+        """Material and fluid properties from CoolProp: props("D", "T", 300'K, "P", 1'atm, "Water")."""
+        return _props.props(self.ureg, out, *args)
 
     # ---- statements -------------------------------------------------------
     def check_finite(self, q):

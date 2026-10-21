@@ -7,6 +7,7 @@ dependencies = ["pint>=0.24", "numpy", "lark>=1.1", "fastapi", "uvicorn"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
+coolprop = ["CoolProp>=6.6"]   # material and fluid properties: props(...)
 
 [project.scripts]
 lens = "laconic.__main__:main"

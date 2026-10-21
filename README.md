@@ -41,11 +41,33 @@ Rename a variable or function everywhere with the Rename button or F2 (the caret
 Units, comments and commands are untouched, and a name already in use is refused.
 
 Functions: sqrt abs floor ceil heaviside (aliases step, heav; 0 below zero, 1 at zero and above) sin cos tan asin acos atan exp ln log10 det inv transpose norm solve identity.
-Constants: pi, e.
+Constants: pi, e. `props` looks up fluid and material properties (see Material properties).
 
 A unit is `'` followed by a Pint unit name (`'kN`, `'mm`, `'degC`, `'°C`, `'ohm`). A bare name is
 always a variable, so `m` can be a mass while `'m` is the metre. Only a number followed by units
 may be written without `*`, so `3 x` is an error and `3*x` is right.
+
+## Material properties
+
+`props` calls [CoolProp](http://www.coolprop.org) (about 130 pure fluids, mixtures, humid air, incompressible
+brines and coolants). It mirrors CoolProp's `PropsSI`: the output key, up to two state inputs as key and
+value pairs, then the fluid. Text goes in double quotes, the only place a sheet uses them.
+
+    rho = props("D", "T", 20'degC, "P", 1'atm, "Water")       998.2 kg/m³
+    mu  = props("V", "T", 300'K, "P", 1'bar, "Air") -> 'uPa * 's
+    Tsat = props("T", "P", 5'bar, "Q", 0, "Water") -> 'degC   saturation temperature
+    Tc  = props("Tcrit", "Water")                              fixed properties need no state
+
+Inputs are converted to CoolProp's SI units, so any compatible unit works (`'degC`, `'psi`, `'bar`); a
+bare number where a unit is needed is an error rather than a guess. The result carries the SI unit.
+Keys are CoolProp's: `D` density, `T`, `P`, `H` enthalpy, `S` entropy, `U` internal energy, `Cpmass`,
+`Cvmass`, `V` viscosity, `L` conductivity, `A` speed of sound, `I` surface tension, `Q` quality,
+`Prandtl`, `Tcrit`, `Pcrit`, `M` molar mass. Prefix the fluid for another backend (`"INCOMP::Water"`,
+`"HEOS::Water"`) or write a mixture (`"Methane[0.9]&Ethane[0.1]"`).
+
+CoolProp is optional. `pip install laconic[coolprop]` adds it, and the full binaries (`lens-full-*`) include it.
+In the lite install `props` reports how to get it; nothing else changes. The lite and full binaries differ only
+in whether CoolProp is bundled (about 5 MB).
 
 ## Default SI display
 
@@ -333,6 +355,7 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
     laconic/plotpgf.py       spec -> pgfplots figure for the .tex export
     laconic/sheet.py         runs a worksheet line by line, including commands and unit definitions
     laconic/settings.py      per-user settings file: Greek table, global units
+    laconic/props.py         props(): the optional CoolProp lookup, imported on first use
     laconic/vocab.py         what the editor suggests: units, functions, constants, commands
     laconic/server.py        FastAPI app
     laconic/static/          index.html (UI), editing.js (math keys, selections), autocomplete.js
@@ -352,7 +375,7 @@ exported document with plots and is skipped unless `pdflatex` (with pgfplots and
 
 ## Standalone builds
 
-`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. PyInstaller does not cross-compile, so build on each target OS. Double-click it to start the UI in an app window, and it quits a few seconds after the window is closed; pass arguments to use the CLI (which keeps running until you stop it). The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
+`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. Set `LENS_FULL=1` (with CoolProp installed) to build `dist/lens-full` with material properties included. PyInstaller does not cross-compile, so build on each target OS. Double-click it to start the UI in an app window, and it quits a few seconds after the window is closed; pass arguments to use the CLI (which keeps running until you stop it). The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
 
 ## Not built yet
 
