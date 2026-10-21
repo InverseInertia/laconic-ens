@@ -1,24 +1,14 @@
-"""Material property lookup. CoolProp is optional and imported on first use, so a
-lite install (or binary) never loads it and `props` explains what is missing."""
+"""Material property lookup through CoolProp, imported on first use to keep startup fast."""
 import re
 from functools import lru_cache
 
 import pint
 
-INSTALL_HINT = ("props needs CoolProp, which this build does not include. "
-                "Install it with `pip install laconic[coolprop]` or use the full build")
+INSTALL_HINT = "props needs CoolProp. Install it with `pip install CoolProp`"
 
 
 class PropsError(Exception):
     pass
-
-
-def available():
-    try:
-        _coolprop()
-        return True
-    except PropsError:
-        return False
 
 
 @lru_cache(maxsize=1)

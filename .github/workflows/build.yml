@@ -16,7 +16,7 @@ jobs:
         with: { python-version: "3.12" }
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-      - run: pip install -e '.[dev,coolprop]'
+      - run: pip install -e '.[dev]'
       - run: pytest -q
 
   binary:
@@ -25,21 +25,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, name: lens-windows-x64, full: "0" }
-          - { os: windows-latest, name: lens-full-windows-x64, full: "1" }
+          - { os: windows-latest, name: lens-windows-x64 }
           # Oldest available runner so the binary works on more distros (glibc).
-          - { os: ubuntu-22.04, name: lens-linux-x64, full: "0" }
-          - { os: ubuntu-22.04, name: lens-full-linux-x64, full: "1" }
+          - { os: ubuntu-22.04, name: lens-linux-x64 }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install . pyinstaller
-      - if: matrix.full == '1'
-        run: pip install CoolProp
       - run: pyinstaller packaging/lens.spec
-        env: { LENS_FULL: "${{ matrix.full }}" }
       - name: Smoke test (serves the page and the self-hosted assets)
         shell: bash
         run: python packaging/smoke.py dist/lens*
@@ -60,10 +55,8 @@ jobs:
         run: |
           mkdir release
           mv artifacts/lens-windows-x64/lens.exe release/lens-windows-x64.exe
-          mv artifacts/lens-full-windows-x64/lens-full.exe release/lens-full-windows-x64.exe
           mv artifacts/lens-linux-x64/lens release/lens-linux-x64
-          mv artifacts/lens-full-linux-x64/lens-full release/lens-full-linux-x64
-          chmod +x release/lens-linux-x64 release/lens-full-linux-x64  # upload-artifact drops the executable bit
+          chmod +x release/lens-linux-x64  # upload-artifact drops the executable bit
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*

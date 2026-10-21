@@ -3,11 +3,10 @@ name = "laconic"
 version = "0.1.0"
 description = "Laconic Engineering Notebook System (LENS): a units-aware line worksheet on Pint with live evaluation and LaTeX export"
 requires-python = ">=3.10"
-dependencies = ["pint>=0.24", "numpy", "lark>=1.1", "fastapi", "uvicorn"]
+dependencies = ["pint>=0.24", "numpy", "lark>=1.1", "fastapi", "uvicorn", "CoolProp>=6.6"]
 
 [project.optional-dependencies]
 dev = ["pytest"]
-coolprop = ["CoolProp>=6.6"]   # material and fluid properties: props(...)
 
 [project.scripts]
 lens = "laconic.__main__:main"

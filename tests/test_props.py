@@ -4,30 +4,23 @@ from laconic import props as P, run
 from laconic.latex import snippet
 from laconic.rename import rename
 
-needs_coolprop = pytest.mark.skipif(not P.available(), reason="CoolProp is not installed")
-
-
 def last(text):
     return [r for r in run(text) if r.kind != "blank"][-1]
 
 
-@needs_coolprop
 def test_density_of_water_converts_inputs_and_carries_si_unit():
     r = last('rho = props("D", "T", 20\'degC, "P", 1\'atm, "Water")')
     assert r.kind == "assign" and r.text.startswith("rho = 998.2") and "kg/m" in r.text
 
 
-@needs_coolprop
 def test_fixed_fluid_property_needs_no_state():
     assert last('Tc = props("Tcrit", "Water")').text.startswith("Tc = 647.1")
 
 
-@needs_coolprop
 def test_result_converts_and_dimensionless_inputs():
     assert last('props("T", "P", 1\'bar, "Q", 0, "Water") -> \'degC').text.startswith("99.6")
 
 
-@needs_coolprop
 @pytest.mark.parametrize("line,msg", [
     ('props("D", "T", 300, "P", 1\'atm, "Water")', "'T' needs a value in K"),
     ('props("D", "T", 300\'K, "P", 1\'atm, "Nope")', "Nope"),
@@ -53,7 +46,7 @@ def test_user_function_cannot_take_text():
 def test_missing_coolprop_explains_itself(monkeypatch):
     monkeypatch.setattr(P, "_coolprop", lambda: (_ for _ in ()).throw(P.PropsError(P.INSTALL_HINT)))
     r = last('props("D", "T", 300\'K, "P", 1\'atm, "Water")')
-    assert r.kind == "error" and "pip install laconic[coolprop]" in r.error
+    assert r.kind == "error" and "pip install CoolProp" in r.error
 
 
 def test_latex_prints_text_arguments():
