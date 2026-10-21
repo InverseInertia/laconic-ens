@@ -40,7 +40,7 @@ The exported .tex needs siunitx v3 or newer.
 Rename a variable or function everywhere with the Rename button or F2 (the caret's name is filled in).
 Units, comments and commands are untouched, and a name already in use is refused.
 
-Functions: sqrt abs sin cos tan asin acos atan exp ln log10 det inv transpose norm solve identity.
+Functions: sqrt abs floor ceil heaviside (aliases step, heav; 0 below zero, 1 at zero and above) sin cos tan asin acos atan exp ln log10 det inv transpose norm solve identity.
 Constants: pi, e.
 
 A unit is `'` followed by a Pint unit name (`'kN`, `'mm`, `'degC`, `'°C`, `'ohm`). A bare name is

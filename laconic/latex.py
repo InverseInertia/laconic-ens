@@ -274,6 +274,12 @@ class Printer:
             return f"\\sqrt{{{a[0]}}}", ATOM
         if f == "abs":
             return f"\\left|{a[0]}\\right|", ATOM
+        if f == "floor":
+            return f"\\left\\lfloor {a[0]} \\right\\rfloor", ATOM
+        if f == "ceil":
+            return f"\\left\\lceil {a[0]} \\right\\rceil", ATOM
+        if f in ("heaviside", "step", "heav"):
+            return f"\\operatorname{{H}}\\left({a[0]}\\right)", ATOM
         if f == "exp":
             return f"e^{{{a[0]}}}", POW
         if f == "inv":
