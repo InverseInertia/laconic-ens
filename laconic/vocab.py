@@ -16,7 +16,8 @@ COMMANDS = [
 
 # Signature shown next to each function. Anything missing shows just its name.
 _SIGNATURES = {
-    "sqrt": "sqrt(x)", "abs": "abs(x)", "sin": "sin(angle)", "cos": "cos(angle)", "tan": "tan(angle)",
+    "sqrt": "sqrt(x)", "abs": "abs(x)", "floor": "floor(x)", "ceil": "ceil(x)",
+    "heaviside": "heaviside(x)", "step": "step(x)", "heav": "heav(x)", "sin": "sin(angle)", "cos": "cos(angle)", "tan": "tan(angle)",
     "asin": "asin(x)", "acos": "acos(x)", "atan": "atan(x)", "exp": "exp(x)", "ln": "ln(x)",
     "log10": "log10(x)", "det": "det(A)", "inv": "inv(A)", "transpose": "transpose(A)",
     "norm": "norm(x)", "identity": "identity(n)", "solve": "solve(A, b)",

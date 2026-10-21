@@ -297,6 +297,14 @@ class Evaluator:
 
     def fn_sqrt(self, x): return x ** 0.5
     def fn_abs(self, x): return abs(x)
+    def fn_floor(self, x): return self.Q(np.floor(x.magnitude), x.units)
+    def fn_ceil(self, x): return self.Q(np.ceil(x.magnitude), x.units)
+
+    def fn_heaviside(self, x):
+        """Unit step: 0 below zero, 1 at zero and above. The argument may carry any unit."""
+        return self.Q(np.where(np.asarray(x.magnitude) < 0, 0.0, 1.0))
+    fn_step = fn_heav = fn_heaviside
+
     def _radians(self, x):
         """Magnitude of x in radians; a bare number is read in the current angle unit."""
         if not x.unit_items():

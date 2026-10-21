@@ -244,3 +244,16 @@ def test_trigdeg_and_trigrad_switch_the_angle_unit():
     assert abs(value(rs[5]) - 0.5) < 1e-9
     assert "rad" in rs[6].text
     assert run("!trigdeg x")[0].kind == "error"
+
+
+def test_floor_ceil_keep_units():
+    assert last("floor(2.7'm)").text.endswith("2 m")
+    assert last("ceil(2.1'm)").text.endswith("3 m")
+    assert last("floor(-2.1)").text.endswith("-3")
+
+
+def test_heaviside_and_aliases():
+    for name in ("heaviside", "step", "heav"):
+        assert last(f"{name}(-1'm)").text.endswith("0")
+        assert last(f"{name}(0)").text.endswith("1")
+        assert last(f"{name}(3)").text.endswith("1")
