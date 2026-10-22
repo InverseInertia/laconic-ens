@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LENS: Laconic Engineering Notebook System</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
 <script defer src="/static/vendor/katex/katex.min.js"></script>
@@ -36,6 +37,7 @@
     border-bottom: 1px solid var(--rule);
     background: var(--paper-deep);
   }
+  .logo { display: block; flex: none; }
   .brand { font: 600 14px var(--sans); letter-spacing: .1em; padding-right: 10px; border-right: 1px solid var(--rule); }
   header input[type=text] {
     font: 500 14px var(--sans); color: var(--ink);
@@ -210,6 +212,7 @@
 </head>
 <body>
 <header>
+  <img class="logo" src="/static/logo.svg" alt="" width="26" height="26">
   <span class="brand" title="Laconic Engineering Notebook System">LENS</span>
   <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
   <span class="spacer"></span>

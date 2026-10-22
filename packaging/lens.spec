@@ -5,6 +5,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 hidden = collect_submodules("laconic") + collect_submodules("uvicorn") + ["CoolProp.CoolProp"]
 ROOT = os.path.dirname(SPECPATH)  # SPECPATH is the directory holding this file
+ICON = os.path.join(SPECPATH, "icon.png")  # placeholder logo; PyInstaller converts it (needs Pillow)
 datas = [(os.path.join(ROOT, "laconic", "static"), "laconic/static")] + collect_data_files("pint")
 
 a = Analysis(
@@ -23,4 +24,5 @@ exe = EXE(
     name="lens",
     console=sys.platform != "win32",  # no console window on Windows
     upx=False,
+    icon=ICON if os.path.exists(ICON) and sys.platform in ("win32", "darwin") else None,
 )
