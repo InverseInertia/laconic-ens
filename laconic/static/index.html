@@ -44,12 +44,11 @@
   }
   header input[type=text]:hover { border-bottom-color: var(--rule); }
   header .spacer { flex: 1; }
-  header button { font-size: 13px; padding: 3px 0; width: 62px; }
-  header button.help { width: 24px; height: 24px; padding: 0; border-radius: 50%; font-weight: 600; }
+  header button { font-size: 13px; padding: 3px 0; width: 62px; white-space: nowrap; flex: none; }
+  header label { white-space: nowrap; }
+  header button.help { width: 24px; height: 24px; padding: 0; font-weight: 600; }
   header button.wide { width: auto; padding: 3px 10px; }
-  .tex { font: 400 16px/1 "Latin Modern Roman", "CMU Serif", Georgia, "Times New Roman", serif; white-space: nowrap; }
-  .tex .a { font-size: .7em; position: relative; top: -.26em; margin-left: -.28em; margin-right: -.08em; }
-  .tex .e { position: relative; top: .22em; margin-left: -.1em; margin-right: -.06em; }
+  #texLogo .katex { font-size: 1em; }
   button {
     font: 500 14px var(--sans); color: var(--ink);
     background: transparent; border: 1px solid var(--ink);
@@ -229,7 +228,7 @@
   <button id="settingsBtn">Settings</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
-  <button id="export" class="wide" title="Export a complete LaTeX document" aria-label="Export LaTeX"><span class="tex" aria-hidden="true">L<span class="a">a</span>T<span class="e">e</span>X</span></button>
+  <button id="export" class="wide" title="Export a complete LaTeX document">Export <span id="texLogo">LaTeX</span></button>
   <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
 </header>
 <main>
@@ -1111,7 +1110,10 @@ beat("/api/ping");
 setInterval(() => beat("/api/ping"), 5000);
 window.addEventListener("pagehide", () => beat("/api/bye"));
 
-window.addEventListener("load", () => last.length && render(last));
+window.addEventListener("load", () => {
+  try { katex.render("\\LaTeX", $("#texLogo"), {throwOnError: false}); } catch {}
+  if (last.length) render(last);
+});
 
 // Greek table and global units live on the server. A table saved in this browser by an
 // older build is sent up once, so nothing is lost.
