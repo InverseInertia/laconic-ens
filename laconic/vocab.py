@@ -10,6 +10,8 @@ COMMANDS = [
     ("assume", "reduce results to SI again"),
     ("trigdeg", "trig functions use degrees"),
     ("trigrad", "trig functions use radians"),
+    ("short", "show only final results, no steps or units"),
+    ("long", "show steps and units again"),
     ("plot", "plot functions: !plot f(x), x = 0 .. 1"),
     ("plotspec", "set a plot option for the plots below, e.g. !plotspec grid: off"),
 ]
