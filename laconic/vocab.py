@@ -23,6 +23,14 @@ _SIGNATURES = {
     "asin": "asin(x)", "acos": "acos(x)", "atan": "atan(x)", "exp": "exp(x)", "ln": "ln(x)",
     "log10": "log10(x)", "det": "det(A)", "inv": "inv(A)", "transpose": "transpose(A)",
     "norm": "norm(x)", "identity": "identity(n)", "solve": "solve(A, b)",
+    "idx": "idx(A, i)", "elem": "elem(A, i, j)", "row": "row(A, i)", "col": "col(A, j)",
+    "rows": "rows(A)", "cols": "cols(A)", "length": "length(A)", "trace": "trace(A)",
+    "rank": "rank(A)", "cond": "cond(A)", "pinv": "pinv(A)", "diag": "diag(A)",
+    "zeros": "zeros(rows, cols)", "ones": "ones(rows, cols)", "lstsq": "lstsq(A, b)",
+    "chol": "chol(A)", "eigvals": "eigvals(A)", "eigvecs": "eigvecs(A)", "svdvals": "svdvals(A)",
+    "dot": "dot(a, b)", "cross": "cross(a, b)", "kron": "kron(A, B)",
+    "hstack": "hstack(A, B, ...)", "vstack": "vstack(A, B, ...)",
+    "sum": "sum(A)", "mean": "mean(A)", "min": "min(A)", "max": "max(A)",
     "props": 'props("D", "T", T, "P", p, "Water")',
 }
 
