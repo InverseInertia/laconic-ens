@@ -257,3 +257,14 @@ def test_heaviside_and_aliases():
         assert last(f"{name}(-1'm)").text.endswith("0")
         assert last(f"{name}(0)").text.endswith("1")
         assert last(f"{name}(3)").text.endswith("1")
+
+
+def test_short_shows_only_the_final_result_until_long():
+    rs = run("w = 12'kN/'m\nL = 4.5'm\nM = w*L^2/8\n!short\nM = w*L^2/8\nv = [1; 2]*'kN\n!long\nM = w*L^2/8")
+    full, short, mat, back = rs[2], rs[4], rs[5], rs[7]
+    assert len(full.stages) == 3 and "mathrm{J}" in full.stages[-1]
+    assert short.stages == [full.stages[-1]]
+    assert "bmatrix" in mat.stages[0] and len(mat.stages) == 1
+    assert back.stages == full.stages
+    assert short.text == "M = 30380 J"
+    assert run("!short x")[0].kind == "error"
