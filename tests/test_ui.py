@@ -134,6 +134,7 @@ def test_double_click_selects_the_whole_quantity(page):
 
 
 def test_global_units_and_server_side_greek(page, server):
+    page.click("#settingsBtn")
     page.click("#unitsBtn")
     page.click("#unitAdd")
     inputs = page.locator("#unitRows .u-row input")
@@ -141,6 +142,7 @@ def test_global_units_and_server_side_greek(page, server):
     inputs.nth(1).fill("1.7018'm")
     page.click("#unitSave")
     page.wait_for_selector("#unitsDlg", state="hidden")
+    page.click("#settingsDlg .close")
     reset(page, "L = 3'smoot -> 'm")
     page.keyboard.type("\n")
     page.wait_for_function("document.querySelector('#out').innerText.includes('5.105')")
@@ -148,6 +150,7 @@ def test_global_units_and_server_side_greek(page, server):
     text = page.evaluate("async () => (await (await fetch('/api/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: \"L = 3'smoot\"})})).text())")
     assert "'smoot = 1.7018'm" in text
     # the Greek table is stored on the server
+    page.click("#settingsBtn")
     page.click("#greekBtn")
     page.click("#greekAdd")
     ins = page.locator("#greekRows .g-row").last.locator("input")

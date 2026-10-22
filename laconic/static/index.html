@@ -162,6 +162,7 @@
   .u-row button { padding: 0 8px; border-color: var(--rule); color: var(--ink-soft); line-height: 24px; }
   .u-row .err { grid-column: 1 / -1; color: var(--err); font: 400 12.5px var(--mono); }
   .set-sec h3 { margin: 0 0 8px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+  .set-btns { display: flex; gap: 8px; margin: 0 0 14px; }
   .set-grp { margin: 0 0 14px; padding: 8px 12px 10px; border: 1px solid var(--rule); }
   .set-grp legend { font: 500 13px var(--sans); color: var(--ink-soft); padding: 0 6px; }
   .set-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font: 400 14px var(--sans); }
@@ -205,10 +206,7 @@
   </select>
   <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
-  <button id="keysBtn">Keys</button>
   <button id="renameBtn" title="Rename a variable everywhere (F2)">Rename</button>
-  <button id="greekBtn">Greek</button>
-  <button id="unitsBtn">Units</button>
   <button id="settingsBtn">Settings</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
@@ -279,6 +277,14 @@
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
   <div class="dlg-body">
+    <section class="set-sec">
+      <h3>Reference and tables</h3>
+      <div class="set-btns">
+        <button id="keysBtn">Keys</button>
+        <button id="greekBtn">Greek</button>
+        <button id="unitsBtn">Units</button>
+      </div>
+    </section>
     <section class="set-sec">
       <h3>Theme</h3>
       <p class="note">Changes apply immediately and are kept in this browser.</p>
