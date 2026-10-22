@@ -45,3 +45,20 @@ def test_endpoint():
     assert ok == {"ok": True, "text": "c = 1\nb = c", "count": 2}
     bad = server.rename_symbol(RenameBody(text="a = 1", old="a", new="9"))
     assert bad["ok"] is False and "not a valid" in bad["error"]
+
+
+def test_custom_units_are_renamed_with_their_uses():
+    text = "'smoot = 1.7018'm\nd = 3'smoot -> 'm\nsmoot = 2\n# 'smoot\n"
+    out, n = rename(text, "'smoot", "'span_u")
+    assert out == "'span_u = 1.7018'm\nd = 3'span_u -> 'm\nsmoot = 2\n# 'smoot\n"
+    assert n == 2
+    assert rename(text, "'smoot", "span_u")[0] == out
+
+
+@pytest.mark.parametrize("old,new,msg", [
+    ("'m", "'q", "not defined in this sheet"), ("'zz", "'q", "does not appear"),
+    ("'u", "'m", "already a unit"), ("'u", "'dm", "already a unit"),
+    ("'u", "'v", "already a unit"), ("'u", "'9", "not a valid"), ("'u", "'u", "same")])
+def test_unsafe_unit_renames_are_refused(old, new, msg):
+    with pytest.raises(RenameError, match=msg):
+        rename("'u = 2'm\n'v = 3'm\nx = 1'u\n", old, new)
