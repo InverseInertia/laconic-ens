@@ -180,6 +180,15 @@ eq(sim('B = ~A|', [ctrl('t')]), 'B = transpose(~A)|', 'global names transpose wh
 eq(sim('B = |', [ctrl('t')]), 'B = |', 'nothing to transpose');
 eq(selEdit('B = A*C', 4, 7, (t, s, e) => E.keyAction('t', { ctrl: true }, t, s, e, {})), 'B = transpose(A*C)', 'selection is transposed');
 
+// --- indexing: Ctrl+[ and Ctrl+Shift+[ ----------------------------------------------
+eq(sim('x = A|', [ctrl('[')]), 'x = idx(A, |)', 'Ctrl+[ opens one index');
+eq(sim('x = A|', [{ key: '{', ctrl: true, shift: true }]), 'x = elem(A, |)', 'Ctrl+Shift+[ opens row and column');
+eq(sim('x = A|', [{ key: '{', ctrl: true, shift: true }, 'i', ',', 'j']), 'x = elem(A, i, j|)', 'typing both indexes');
+eq(sim('x = idx(A, 1)|', [ctrl('[')]), 'x = idx(idx(A, 1), |)', 'indexes nest');
+eq(sim('x = |', [ctrl('[')]), 'x = |', 'nothing to index');
+eq(selEdit('x = A*C', 4, 7, (t, s, e) => E.keyAction('[', { ctrl: true }, t, s, e, {})), 'x = idx(A*C, )', 'selection is indexed');
+eq(sim('# A|', [ctrl('[')]), '# A|', 'comments are left alone');
+
 // --- Enter at the end of a bracket ----------------------------------------------
 eq(sim('A = [1, 2|]', ['Enter']), 'A = [1, 2]\n|', 'Enter finishes the line instead of splitting before ]');
 eq(sim('y = f(g(x|))', ['Enter']), 'y = f(g(x))\n|', 'several closers');

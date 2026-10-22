@@ -226,7 +226,7 @@ class Evaluator:
         """`*` is matrix multiplication when both sides are arrays, else scaling."""
         if _ndim(a) >= 1 and _ndim(b) >= 1:
             try:
-                return np.matmul(a, b)
+                return self.Q(np.matmul(a.magnitude, b.magnitude), a.units * b.units)
             except ValueError:
                 raise EvalError(f"Shape mismatch for *: {np.shape(a.magnitude)} * {np.shape(b.magnitude)}. "
                                 "Use .* for elementwise") from None
@@ -257,6 +257,9 @@ class Evaluator:
             for e in row:
                 if _ndim(e) != 0:
                     raise EvalError("Matrix entries must be scalars")
+                if e.units == unit0:
+                    out.append(float(e.magnitude))
+                    continue
                 try:
                     out.append(float(e.to(unit0).magnitude))
                 except pint.errors.DimensionalityError:
@@ -330,6 +333,65 @@ class Evaluator:
     def fn_ln(self, x): return self.Q(np.log(self._dimless(x, "ln")))
     def fn_log10(self, x): return self.Q(np.log10(self._dimless(x, "log10")))
 
+    # ---- matrices ----------------------------------------------------------
+    # Every function works on the raw numpy magnitude and puts the unit back
+    # afterwards, so Pint stays out of the inner loops.
+    def _mat(self, A, fname):
+        """The magnitude of A as a 2-D float array. A 1-D array reads as a column."""
+        m = np.asarray(A.magnitude, dtype=float)
+        if m.ndim == 0:
+            raise EvalError(f"{fname} needs a matrix or vector")
+        return m.reshape(-1, 1) if m.ndim == 1 else m
+
+    def _vec(self, A, fname):
+        m = np.asarray(A.magnitude, dtype=float)
+        if m.ndim == 0 or (m.ndim == 2 and 1 not in m.shape):
+            raise EvalError(f"{fname} needs a vector")
+        return m.ravel()
+
+    def _int(self, x, fname, lo=0):
+        if _ndim(x) != 0 or not x.dimensionless:
+            raise EvalError(f"{fname} needs a dimensionless whole number")
+        v = float(x.to("dimensionless").magnitude)
+        if v != int(v) or v < lo:
+            raise EvalError(f"{fname} needs a whole number of at least {lo}")
+        return int(v)
+
+    def _index(self, x, size, fname, axis):
+        """A 1-based index checked against `size`, as 0-based."""
+        i = self._int(x, fname, lo=-10**9)
+        if not 1 <= i <= size:
+            raise EvalError(f"{fname}: {axis} {i} is out of range 1..{size}")
+        return i - 1
+
+    def fn_idx(self, A, i):
+        """A vector element, or a matrix row as a row vector. Counts from 1."""
+        m = np.asarray(A.magnitude, dtype=float)
+        if m.ndim == 0:
+            raise EvalError("idx needs a matrix or vector")
+        if m.ndim == 1 or 1 in m.shape:
+            v = m.ravel()
+            return self.Q(v[self._index(i, v.size, "idx", "index")], A.units)
+        return self.Q(m[self._index(i, m.shape[0], "idx", "row")][None, :], A.units)
+
+    def fn_elem(self, A, i, j):
+        """The entry in row i, column j. Counts from 1."""
+        m = self._mat(A, "elem")
+        return self.Q(m[self._index(i, m.shape[0], "elem", "row"),
+                        self._index(j, m.shape[1], "elem", "column")], A.units)
+
+    def fn_row(self, A, i):
+        m = self._mat(A, "row")
+        return self.Q(m[self._index(i, m.shape[0], "row", "row")][None, :], A.units)
+
+    def fn_col(self, A, j):
+        m = self._mat(A, "col")
+        return self.Q(m[:, self._index(j, m.shape[1], "col", "column")][:, None], A.units)
+
+    def fn_rows(self, A): return self.Q(float(self._mat(A, "rows").shape[0]))
+    def fn_cols(self, A): return self.Q(float(self._mat(A, "cols").shape[1]))
+    def fn_length(self, A): return self.Q(float(np.asarray(A.magnitude).size))
+
     def fn_det(self, A):
         self._square(A, "det")
         return self.Q(np.linalg.det(A.magnitude), A.units ** A.magnitude.shape[0])
@@ -338,13 +400,109 @@ class Evaluator:
         self._square(A, "inv")
         return self.Q(np.linalg.inv(A.magnitude), A.units ** -1)
 
+    def fn_pinv(self, A): return self.Q(np.linalg.pinv(self._mat(A, "pinv")), A.units ** -1)
     def fn_transpose(self, A): return self.Q(np.atleast_2d(A.magnitude).T, A.units)
+
+    def fn_trace(self, A):
+        self._square(A, "trace")
+        return self.Q(float(np.trace(A.magnitude)), A.units)
+
+    def fn_rank(self, A): return self.Q(float(np.linalg.matrix_rank(self._mat(A, "rank"))))
+
+    def fn_cond(self, A):
+        return self.Q(float(np.linalg.cond(self._mat(A, "cond"))))
+
     def fn_norm(self, x): return self.Q(np.linalg.norm(x.magnitude), x.units)
-    def fn_identity(self, n): return self.Q(np.eye(int(self._dimless(n, "identity"))))
+
+    def fn_diag(self, A):
+        """A vector becomes a diagonal matrix, a matrix gives its diagonal as a column."""
+        m = np.asarray(A.magnitude, dtype=float)
+        if m.ndim == 2 and 1 not in m.shape:
+            return self.Q(np.diag(m)[:, None], A.units)
+        return self.Q(np.diag(self._vec(A, "diag")), A.units)
+
+    def fn_identity(self, n): return self.Q(np.eye(self._int(n, "identity", 1)))
+    def fn_zeros(self, r, c=None):
+        return self.Q(np.zeros((self._int(r, "zeros", 1), self._int(c if c is not None else r, "zeros", 1))))
+    def fn_ones(self, r, c=None):
+        return self.Q(np.ones((self._int(r, "ones", 1), self._int(c if c is not None else r, "ones", 1))))
 
     def fn_solve(self, A, b):
         self._square(A, "solve")
         return self.Q(np.linalg.solve(A.magnitude, b.magnitude), b.units / A.units)
+
+    def fn_lstsq(self, A, b):
+        """Least-squares solution of A x = b for any shape of A."""
+        x = np.linalg.lstsq(self._mat(A, "lstsq"), self._mat(b, "lstsq"), rcond=None)[0]
+        return self.Q(x, b.units / A.units)
+
+    def fn_chol(self, A):
+        """Lower-triangular L with A = L * transpose(L)."""
+        self._square(A, "chol")
+        return self.Q(np.linalg.cholesky(A.magnitude), A.units ** 0.5)
+
+    def fn_eigvals(self, A):
+        self._square(A, "eigvals")
+        w = np.linalg.eigvals(A.magnitude)
+        if np.iscomplexobj(w):
+            if np.abs(w.imag).max() > 1e-9 * max(1.0, np.abs(w).max()):
+                raise EvalError("eigvals: the matrix has complex eigenvalues")
+            w = w.real
+        return self.Q(np.sort(w)[:, None], A.units)
+
+    def fn_eigvecs(self, A):
+        """Unit-length eigenvectors as columns, in the order eigvals gives the values."""
+        self._square(A, "eigvecs")
+        w, v = np.linalg.eig(A.magnitude)
+        if np.iscomplexobj(w):
+            if np.abs(w.imag).max() > 1e-9 * max(1.0, np.abs(w).max()) or np.abs(v.imag).max() > 1e-9:
+                raise EvalError("eigvecs: the matrix has complex eigenvalues")
+            w, v = w.real, v.real
+        return self.Q(v[:, np.argsort(w)])
+
+    def fn_svdvals(self, A):
+        return self.Q(np.linalg.svd(self._mat(A, "svdvals"), compute_uv=False)[:, None], A.units)
+
+    def fn_dot(self, a, b):
+        x, y = self._vec(a, "dot"), self._vec(b, "dot")
+        if x.size != y.size:
+            raise EvalError(f"dot needs vectors of equal length, got {x.size} and {y.size}")
+        return self.Q(float(x @ y), a.units * b.units)
+
+    def fn_cross(self, a, b):
+        x, y = self._vec(a, "cross"), self._vec(b, "cross")
+        if x.size != 3 or y.size != 3:
+            raise EvalError("cross needs two vectors of length 3")
+        out = np.cross(x, y)
+        row = np.shape(a.magnitude) == (1, 3)
+        return self.Q(out[None, :] if row else out[:, None], a.units * b.units)
+
+    def fn_kron(self, a, b):
+        return self.Q(np.kron(self._mat(a, "kron"), self._mat(b, "kron")), a.units * b.units)
+
+    def _stack(self, fname, axis, first, rest):
+        parts = [first, *rest]
+        mats = [self._mat(p, fname) for p in parts]
+        u0 = parts[0].units
+        try:
+            mags = [m * float(self.Q(1, p.units).to(u0).magnitude) for m, p in zip(mats, parts)]
+            return self.Q(np.concatenate(mags, axis=axis), u0)
+        except pint.errors.DimensionalityError:
+            raise EvalError(f"{fname}: all parts must share one dimension") from None
+        except ValueError:
+            raise EvalError(f"{fname}: the parts do not fit together "
+                            f"({'rows' if axis == 1 else 'columns'} differ)") from None
+
+    def fn_hstack(self, a, *rest): return self._stack("hstack", 1, a, rest)
+    def fn_vstack(self, a, *rest): return self._stack("vstack", 0, a, rest)
+
+    def _reduce(self, fname, fn, A):
+        return self.Q(float(fn(np.asarray(A.magnitude, dtype=float))), A.units)
+
+    def fn_sum(self, A): return self._reduce("sum", np.sum, A)
+    def fn_mean(self, A): return self._reduce("mean", np.mean, A)
+    def fn_min(self, A): return self._reduce("min", np.min, A)
+    def fn_max(self, A): return self._reduce("max", np.max, A)
 
     def fn_props(self, out, *args):
         """Material and fluid properties from CoolProp: props("D", "T", 300'K, "P", 1'atm, "Water")."""

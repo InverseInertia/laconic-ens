@@ -435,17 +435,26 @@
     return edit(o, pos + 1, content, o + content.length);
   }
 
+  // The term a hotkey acts on: the (widened) selection, or the term left of the caret.
+  function targetTerm(t, s, e, ls) {
+    if (e > s) return snap(t, s, e);
+    const from = termBefore(t, s, ls);
+    return from === s ? null : [from, s];
+  }
+
+  // idx(term, ) or elem(term, ): the term becomes the array and the caret waits for the index.
+  // For elem, typing `i,` adds the space and the caret moves on to the column.
+  function indexCall(t, s, e, ls, name) {
+    const n = targetTerm(t, s, e, ls);
+    if (!n) return null;
+    const head = name + '(' + t.slice(n[0], n[1]) + ', ';
+    return edit(n[0], n[1], head + ')', n[0] + head.length);
+  }
+
   function transpose(t, s, e, ls) {
-    let from, to;
-    if (e > s) {
-      const n = snap(t, s, e);
-      if (!n) return null;
-      [from, to] = n;
-    } else {
-      from = termBefore(t, s, ls);
-      to = s;
-      if (from === s) return null;
-    }
+    const n = targetTerm(t, s, e, ls);
+    if (!n) return null;
+    const [from, to] = n;
     const term = t.slice(from, to);
     if (term.startsWith('transpose(') && matchFwd(term, 9, term.length) === term.length - 1) {
       const inner = term.slice(10, -1);
@@ -550,6 +559,11 @@
     const k = key.length === 1 ? key.toLowerCase() : key;
     const plain = !mods.ctrl && !mods.alt && !mods.shift && !mods.meta;
 
+    // Ctrl+[ takes the term as an array and opens one index: idx(A, i), shown A_i.
+    // Ctrl+Shift+[ opens row and column: elem(A, i, j), shown A_i,j.
+    if (mods.ctrl && !mods.alt && !mods.meta && !comment && (key === '[' || key === '{')) {
+      return mods.shift || key === '{' ? indexCall(t, s, e, ls, 'elem') : indexCall(t, s, e, ls, 'idx');
+    }
     if (mods.ctrl && !mods.alt && !mods.shift && !mods.meta) {
       if (k === 'g') return greek(t, s, e, (ctx && ctx.greek) || DEFAULT_GREEK);
       if (comment) return null;
