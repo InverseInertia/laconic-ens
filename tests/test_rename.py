@@ -74,4 +74,4 @@ def test_replacing_a_standard_unit_warns_then_swaps_for_an_existing_unit():
 
 def test_replacing_a_standard_unit_with_a_new_one_adds_a_definition():
     out, n = rename("d = 3'm\n", "'m", "'span", confirm=True)
-    assert n == 1 and out == "d = 3'span\n'span = 1'm\n"
+    assert n == 1 and out == "'span = 1'm\nd = 3'span\n"

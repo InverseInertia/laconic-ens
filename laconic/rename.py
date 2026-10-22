@@ -61,7 +61,7 @@ def _rename_unit(text, old, new, confirm):
     """`old` and `new` are unit names without the quote. A unit the sheet defines is
     renamed with its definition. A standard unit lives outside the text, so replacing
     it needs `confirm`: every use is swapped for `new`, which is either another
-    existing unit or a new one, defined here as equal to the old unit for the user to
+    existing unit or a new one, defined at the top of the sheet as equal to the old unit for the user to
     adjust."""
     if not _UNIT_NAME.match(old):
         raise RenameError(f"'{old} is not a valid unit name")
@@ -86,7 +86,7 @@ def _rename_unit(text, old, new, confirm):
             + ". Rename again to confirm.")
     out, count = _substitute(text, "unit", "'" + old, "'" + new)
     if not (new in used or ev.is_unit(new)):
-        out += ("" if out.endswith("\n") or not out else "\n") + f"'{new} = 1'{old}\n"
+        out = f"'{new} = 1'{old}\n" + out
     return out, count
 
 
