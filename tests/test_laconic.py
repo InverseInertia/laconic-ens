@@ -268,3 +268,9 @@ def test_short_shows_only_the_final_result_until_long():
     assert back.stages == full.stages
     assert short.text == "M = 30380 J"
     assert run("!short x")[0].kind == "error"
+
+
+def test_pound_mass_is_lbm_and_lb_is_gone():
+    assert last("3'kg -> 'lbm").text == "6.614 lbm"
+    assert last("5'lb").error
+    assert last("1'lbf -> 'N").text.startswith("4.448")
