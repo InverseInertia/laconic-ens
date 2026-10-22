@@ -14,7 +14,7 @@ from .evaluator import check_units
 from .lifecycle import lifecycle
 from .plotopts import PlotError, apply_patch
 from .plotsvg import render_svg
-from .rename import RenameError, rename
+from .rename import RenameError, RenameWarning, rename
 from .vocab import vocabulary
 
 app = FastAPI(title="laconic")
@@ -36,6 +36,7 @@ class RenameBody(BaseModel):
     text: str
     old: str
     new: str
+    confirm: bool = False
 
 
 class PlotEditBody(BaseModel):
@@ -99,7 +100,9 @@ def save(sheet: Sheet):
 def rename_symbol(body: RenameBody):
     """Every use of a variable or function name, renamed. Nothing changes on error."""
     try:
-        text, count = rename(body.text, body.old, body.new)
+        text, count = rename(body.text, body.old, body.new, body.confirm)
+    except RenameWarning as e:
+        return {"ok": False, "warning": str(e)}
     except RenameError as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "text": text, "count": count}
