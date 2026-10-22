@@ -31,19 +31,25 @@
     grid-template-rows: auto 1fr;
   }
   header {
-    display: flex; align-items: center; gap: 16px;
-    padding: 8px 20px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--rule);
     background: var(--paper-deep);
   }
-  .brand { font: 600 15px var(--sans); letter-spacing: .12em; padding-right: 14px; border-right: 1px solid var(--rule); }
+  .brand { font: 600 14px var(--sans); letter-spacing: .1em; padding-right: 10px; border-right: 1px solid var(--rule); }
   header input[type=text] {
-    font: 500 15px var(--sans); color: var(--ink);
+    font: 500 14px var(--sans); color: var(--ink);
     background: transparent; border: 0; border-bottom: 1px dashed transparent;
-    padding: 4px 0; width: 14ch;
+    padding: 3px 0; width: 12ch;
   }
   header input[type=text]:hover { border-bottom-color: var(--rule); }
   header .spacer { flex: 1; }
+  header button { font-size: 13px; padding: 3px 0; width: 62px; }
+  header button.help { width: 24px; height: 24px; padding: 0; border-radius: 50%; font-weight: 600; }
+  header button.wide { width: auto; padding: 3px 10px; }
+  .tex { font: 400 16px/1 "Latin Modern Roman", "CMU Serif", Georgia, "Times New Roman", serif; white-space: nowrap; }
+  .tex .a { font-size: .7em; position: relative; top: -.26em; margin-left: -.28em; margin-right: -.08em; }
+  .tex .e { position: relative; top: .22em; margin-left: -.1em; margin-right: -.06em; }
   button {
     font: 500 14px var(--sans); color: var(--ink);
     background: transparent; border: 1px solid var(--ink);
@@ -113,7 +119,7 @@
   .row.snip pre { margin: 0; font: 400 12.5px/1.5 var(--mono); white-space: pre; color: var(--ink); }
   .row.snip .copy { align-self: start; margin: 3px 8px 0 12px; padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--ink-soft); }
   .row.snip .copy:hover { color: var(--paper); border-color: var(--ink); }
-  header label { display: flex; align-items: center; gap: 6px; font: 400 14px var(--sans); cursor: pointer; }
+  header label { display: flex; align-items: center; gap: 4px; font: 400 13px/1.15 var(--sans); cursor: pointer; }
   header input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
   #status { font: 400 13px var(--sans); color: var(--ink-soft); min-height: 1em; }
 
@@ -207,6 +213,7 @@
   <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
   <span class="spacer"></span>
   <span id="status" role="status"></span>
+  <button id="helpBtn" class="help" title="Introduction to LENS (F1)" aria-label="Help">?</button>
   <div class="seg" role="group" aria-label="Output view">
     <button id="viewTypeset" aria-pressed="true">Typeset</button>
     <button id="viewLatex" aria-pressed="false">LaTeX</button>
@@ -220,10 +227,9 @@
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
   <button id="renameBtn" title="Rename a variable, function or custom unit everywhere (F2)">Rename</button>
   <button id="settingsBtn">Settings</button>
-  <button id="helpBtn" title="Introduction to LENS (F1)">Help</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
-  <button id="export">Export LaTeX</button>
+  <button id="export" class="wide" title="Export a complete LaTeX document" aria-label="Export LaTeX"><span class="tex" aria-hidden="true">L<span class="a">a</span>T<span class="e">e</span>X</span></button>
   <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
 </header>
 <main>
