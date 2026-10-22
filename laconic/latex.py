@@ -149,9 +149,9 @@ class Fmt:
                           m.group(1))
         return format(units, "~L")
 
-    def quantity(self, q, units=True):
-        """Latex for a scalar or matrix Quantity. `units=False` leaves the unit out."""
-        u = self.unit(q.units) if units else ""
+    def quantity(self, q):
+        """Latex for a scalar or matrix Quantity."""
+        u = self.unit(q.units)
         mag = np.asarray(q.magnitude)
         if mag.ndim == 0:
             if self.siunitx and u:
