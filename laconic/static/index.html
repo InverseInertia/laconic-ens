@@ -176,6 +176,14 @@
   .swatches label > span { flex: 0 0 9em; }
   .swatches input[type=color] { width: 42px; height: 26px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
   .preview { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--rule); font: 400 14px/var(--row) var(--mono); }
+  #helpDlg { width: min(720px, 94vw); }
+  #helpDlg .dlg-body { max-height: 72vh; }
+  .help h3 { margin: 18px 0 6px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+  .help h3:first-child { margin-top: 0; }
+  .help p, .help li { font: 400 14px/1.5 var(--sans); margin: 0 0 8px; }
+  .help ul { margin: 0 0 8px; padding-left: 20px; }
+  .help pre { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--rule); background: var(--paper-deep); font: 400 13px/1.55 var(--mono); overflow-x: auto; }
+  .help pre i { color: var(--ink-soft); font-style: normal; }
   .u-empty { color: var(--ink-soft); font-size: 13.5px; }
 
   /* Narrow or vertical screens: results on top, editor at the bottom. */
@@ -212,6 +220,7 @@
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
   <button id="renameBtn" title="Rename a variable, function or custom unit everywhere (F2)">Rename</button>
   <button id="settingsBtn">Settings</button>
+  <button id="helpBtn" title="Introduction to LENS (F1)">Help</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
   <button id="export">Export LaTeX</button>
@@ -261,6 +270,72 @@
       <tr><td colspan="2"><strong>Suggestions</strong></td></tr>
       <tr><td><kbd>Tab</kbd></td><td>Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name</td></tr>
     </table>
+  </div>
+</dialog>
+
+<dialog id="helpDlg" aria-labelledby="helpTitle">
+  <div class="dlg-head"><h2 id="helpTitle">Welcome to LENS</h2><button class="close">Close</button></div>
+  <div class="dlg-body help">
+    <h3>What it is</h3>
+    <p>LENS is a worksheet for engineering calculations. You write one expression per line on the left, and the typeset result appears on the right as you type. Every number can carry a unit, and the units are checked for you, so <code>kN</code> and <code>mm</code> mix correctly and a mismatch shows up as an error on that line.</p>
+    <pre>## Simply supported beam           <i>## makes a heading, # a comment</i>
+L = 4.5'm
+w = 12'kN / 'm
+M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i></pre>
+
+    <h3>Units</h3>
+    <ul>
+      <li>A unit starts with an apostrophe: <code>4.5'm</code>, <code>200'GPa</code>. Every unit in a compound gets its own: <code>12'kN / 'm</code>.</li>
+      <li>A bare name is always a variable, so <code>m</code> can be a mass while <code>'m</code> is the metre.</li>
+      <li>Results come out in plain SI (N, J, Pa, &hellip;). Use <code>-&gt;</code> to choose another unit, or <code>!noassume</code> to keep the units your arithmetic produced.</li>
+      <li>Define your own with <code>'smoot = 1.7018'm</code>. Units you use in every sheet can be stored under Settings.</li>
+    </ul>
+
+    <h3>Typing math</h3>
+    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines.</p>
+    <ul>
+      <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot.</li>
+      <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
+      <li><kbd>Ctrl</kbd>+<kbd>G</kbd> turns the letter before the caret into Greek (<code>s</code> to <code>&sigma;</code>). Press it again to undo.</li>
+      <li>Double-click selects a whole term, and <kbd>Alt</kbd>+<kbd>&uarr;</kbd> widens the selection step by step.</li>
+      <li>Suggestions pop up after <code>'</code> (units), <code>!</code> (commands) and two letters of a name. <kbd>Tab</kbd> accepts.</li>
+    </ul>
+    <p><button id="helpKeys">All keyboard shortcuts</button></p>
+
+    <h3>Variables and functions</h3>
+    <pre>f(x, y) = x^2 + y         <i>your own function</i>
+~g = 9.81'm / 's^2        <i>~ makes a variable global, so !clear keeps it</i>
+T = 20'degC -> 'degF
+F` = 2   v! = 5   a@ = 1  <i>dot, arrow and hat accents</i>
+!clear                    <i>forget every non-global variable above</i></pre>
+    <p>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>. Evaluation runs top to bottom, so define things before you use them.</p>
+
+    <h3>Matrices</h3>
+    <pre>A = [2, -1; -1, 2]        <i>commas across, semicolons down</i>
+F = [10; 5] * 'kN
+u = solve(A, F)
+A * B    A .* B           <i>matrix product, elementwise product</i></pre>
+    <p>There are also <code>inv</code>, <code>det</code>, <code>transpose</code>, <code>eigvals</code> and more; the suggestion list shows them all. Paste cells from Excel or a Markdown table and they become a matrix.</p>
+
+    <h3>Plots</h3>
+    <pre>!plot M(x), x = 0'm .. L
+  title: Bending moment
+  ylabel: M (kN&middot;m)</pre>
+    <p>Indented <code>key: value</code> lines set the details. Drag the plot to pan, Ctrl + wheel to zoom, double-click to reset. The new view is written back into the sheet as text, so Ctrl+Z undoes it. Each plot can be saved as SVG or PNG.</p>
+
+    <h3>Material properties</h3>
+    <pre>rho = props("D", "T", 20'degC, "P", 1'atm, "Water")</pre>
+    <p><code>props</code> looks up fluids and materials (density, viscosity, enthalpy, saturation temperatures, &hellip;) from CoolProp.</p>
+
+    <h3>Getting results out</h3>
+    <ul>
+      <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped.</li>
+      <li><strong>Export LaTeX</strong> writes a complete <code>.tex</code> document. <strong>Save</strong> and <strong>Open</strong> use plain-text <code>.lens</code> files, which carry the custom units they depend on.</li>
+      <li><code>!short</code> hides the working and shows only each final result. <code>!long</code> brings it back.</li>
+    </ul>
+
+    <h3>Settings</h3>
+    <p>Settings holds the colors, fonts and paper style, the Greek letter table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>, and your global units.</p>
   </div>
 </dialog>
 
@@ -891,6 +966,11 @@ for (const d of document.querySelectorAll("dialog")) {
   d.addEventListener("close", () => src.focus());
 }
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
+$("#helpBtn").onclick = () => $("#helpDlg").showModal();
+$("#helpKeys").onclick = () => $("#keysDlg").showModal();
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "F1" && !ev.ctrlKey && !ev.altKey && !ev.metaKey) { ev.preventDefault(); $("#helpDlg").open ? $("#helpDlg").close() : $("#helpDlg").showModal(); }
+});
 
 function readGreek() {
   const next = {};
