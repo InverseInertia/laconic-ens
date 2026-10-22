@@ -128,7 +128,7 @@ error, and the message says what it means: `'m` is the metre, and `'dsmoot` woul
 deci-smoot. Offset units such as `'degC` cannot be used in a definition. `!clear` does not remove
 units.
 
-**Global units** are defined once per instance under the **Units** button and are available in
+**Global units** are defined once per instance under **Settings → Units** and are available in
 every sheet, in the web UI and on the command line. They live in the settings file (below).
 
 **Portability.** Save and Export carry the definitions a sheet depends on, so a copy opens correctly
@@ -263,7 +263,7 @@ remembered in the browser. On a narrow or vertical screen the results sit above 
 ## Math keys
 
 These edit the source text. They are off on comment lines and can be switched off with the
-Math keys box. The Keys button lists them in the app. They are also off on the text lines under a plot (title, labels, notes).
+Math keys box. Settings → Keys lists them in the app. They are also off on the text lines under a plot (title, labels, notes).
 
 | Key | Effect |
 | --- | --- |
@@ -333,7 +333,7 @@ inside, unless the word is already followed by `(`. The name on the left of `=` 
 unit being defined, function parameters) and comment lines get no suggestions. `Ctrl+Space` opens the
 list by hand, even for a single letter.
 
-The Greek table behind Ctrl+G is editable under the Greek button and is stored in the browser.
+The Greek table behind Ctrl+G is editable under Settings → Greek and is stored in the browser.
 Mathcad-style defaults: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν,
 x→ξ, o→ο, p→π, r→ρ, s→σ, t→τ, u→υ, f→φ, c→χ, y→ψ, w→ω, and G D Q L X P S F Y W for the capitals
 Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω.
