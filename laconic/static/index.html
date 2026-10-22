@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LENS: Laconic Engineering Notebook System</title>
+<link rel="icon" type="image/svg+xml" href="/static/logo.svg">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
 <script defer src="/static/vendor/katex/katex.min.js"></script>
@@ -31,19 +32,27 @@
     grid-template-rows: auto 1fr;
   }
   header {
-    display: flex; align-items: center; gap: 16px;
-    padding: 8px 20px;
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px;
     border-bottom: 1px solid var(--rule);
     background: var(--paper-deep);
   }
-  .brand { font: 600 15px var(--sans); letter-spacing: .12em; padding-right: 14px; border-right: 1px solid var(--rule); }
+  .logo { display: block; flex: none; }
+  .brand { font: 600 14px var(--sans); letter-spacing: .1em; padding-right: 10px; border-right: 1px solid var(--rule); }
   header input[type=text] {
-    font: 500 15px var(--sans); color: var(--ink);
+    font: 500 14px var(--sans); color: var(--ink);
     background: transparent; border: 0; border-bottom: 1px dashed transparent;
-    padding: 4px 0; width: 14ch;
+    padding: 3px 0; width: 12ch;
   }
   header input[type=text]:hover { border-bottom-color: var(--rule); }
   header .spacer { flex: 1; }
+  header button { font-size: 13px; padding: 3px 0; width: 62px; white-space: nowrap; flex: none; }
+  header label { white-space: nowrap; }
+  header button.sq { width: 28px; height: 28px; padding: 0; }
+  header button.help { font-weight: 600; }
+  header button.wide { width: auto; padding: 3px 10px; }
+  .ico { width: 18px; height: 18px; display: block; margin: 0 auto; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
+  .texLogo .katex { font-size: 1em; }
   button {
     font: 500 14px var(--sans); color: var(--ink);
     background: transparent; border: 1px solid var(--ink);
@@ -113,7 +122,7 @@
   .row.snip pre { margin: 0; font: 400 12.5px/1.5 var(--mono); white-space: pre; color: var(--ink); }
   .row.snip .copy { align-self: start; margin: 3px 8px 0 12px; padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--ink-soft); }
   .row.snip .copy:hover { color: var(--paper); border-color: var(--ink); }
-  header label { display: flex; align-items: center; gap: 6px; font: 400 14px var(--sans); cursor: pointer; }
+  header label { display: flex; align-items: center; gap: 4px; font: 400 13px/1.15 var(--sans); cursor: pointer; }
   header input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
   #status { font: 400 13px var(--sans); color: var(--ink-soft); min-height: 1em; }
 
@@ -161,17 +170,29 @@
   .u-row .eq { color: var(--ink-soft); font: 400 14px var(--mono); }
   .u-row button { padding: 0 8px; border-color: var(--rule); color: var(--ink-soft); line-height: 24px; }
   .u-row .err { grid-column: 1 / -1; color: var(--err); font: 400 12.5px var(--mono); }
+  .set-sec + .set-sec { margin-top: 22px; }
   .set-sec h3 { margin: 0 0 8px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
   .set-btns { display: flex; gap: 8px; margin: 0 0 14px; }
+  .set-acts { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .set-acts .spacer { flex: 1; }
   .set-grp { margin: 0 0 14px; padding: 8px 12px 10px; border: 1px solid var(--rule); }
   .set-grp legend { font: 500 13px var(--sans); color: var(--ink-soft); padding: 0 6px; }
   .set-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font: 400 14px var(--sans); }
   .set-row > span { flex: 0 0 9em; }
   .set-row select { flex: 1; min-width: 0; }
-  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 16px; margin-top: 8px; }
-  .swatches label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: 400 14px var(--sans); }
+  .swatches { display: flex; flex-direction: column; }
+  .swatches label { display: flex; align-items: center; gap: 10px; margin: 6px 0; font: 400 14px var(--sans); }
+  .swatches label > span { flex: 0 0 9em; }
   .swatches input[type=color] { width: 42px; height: 26px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
   .preview { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--rule); font: 400 14px/var(--row) var(--mono); }
+  #helpDlg { width: min(720px, 94vw); }
+  #helpDlg .dlg-body { max-height: 72vh; }
+  .help h3 { margin: 18px 0 6px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
+  .help h3:first-child { margin-top: 0; }
+  .help p, .help li { font: 400 14px/1.5 var(--sans); margin: 0 0 8px; }
+  .help ul { margin: 0 0 8px; padding-left: 20px; }
+  .help pre { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--rule); background: var(--paper-deep); font: 400 13px/1.55 var(--mono); overflow-x: auto; }
+  .help pre i { color: var(--ink-soft); font-style: normal; }
   .u-empty { color: var(--ink-soft); font-size: 13.5px; }
 
   /* Narrow or vertical screens: results on top, editor at the bottom. */
@@ -191,13 +212,15 @@
 </head>
 <body>
 <header>
+  <img class="logo" src="/static/logo.svg" alt="" width="26" height="26">
   <span class="brand" title="Laconic Engineering Notebook System">LENS</span>
   <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
   <span class="spacer"></span>
   <span id="status" role="status"></span>
+  <button id="helpBtn" class="help sq" title="Introduction to LENS (F1)" aria-label="Help">?</button>
   <div class="seg" role="group" aria-label="Output view">
     <button id="viewTypeset" aria-pressed="true">Typeset</button>
-    <button id="viewLatex" aria-pressed="false">LaTeX</button>
+    <button id="viewLatex" aria-pressed="false" aria-label="LaTeX"><span class="texLogo">LaTeX</span></button>
   </div>
   <select id="wrap" aria-label="LaTeX wrapper" title="How each LaTeX snippet is wrapped" hidden>
     <option value="inline">Inline</option>
@@ -206,11 +229,11 @@
   </select>
   <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
-  <button id="renameBtn" title="Rename a variable, function or custom unit everywhere (F2)">Rename</button>
-  <button id="settingsBtn">Settings</button>
-  <button id="open">Open</button>
-  <button id="save">Save</button>
-  <button id="export">Export LaTeX</button>
+  <button id="renameBtn" data-icon="rename" class="sq" title="Rename a variable, function or custom unit everywhere (F2)" aria-label="Rename"></button>
+  <button id="settingsBtn" data-icon="settings" class="sq" title="Settings" aria-label="Settings"></button>
+  <button id="open" data-icon="open" class="sq" title="Open a worksheet" aria-label="Open"></button>
+  <button id="save" data-icon="save" class="sq" title="Save the worksheet" aria-label="Save"></button>
+  <button id="export" class="wide" title="Export a complete LaTeX document">Export <span class="texLogo">LaTeX</span></button>
   <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
 </header>
 <main>
@@ -260,6 +283,72 @@
   </div>
 </dialog>
 
+<dialog id="helpDlg" aria-labelledby="helpTitle">
+  <div class="dlg-head"><h2 id="helpTitle">Welcome to LENS</h2><button class="close">Close</button></div>
+  <div class="dlg-body help">
+    <h3>What it is</h3>
+    <p>LENS is a worksheet for engineering calculations. You write one expression per line on the left, and the typeset result appears on the right as you type. Every number can carry a unit, and the units are checked for you, so <code>kN</code> and <code>mm</code> mix correctly and a mismatch shows up as an error on that line.</p>
+    <pre>## Simply supported beam           <i>## makes a heading, # a comment</i>
+L = 4.5'm
+w = 12'kN / 'm
+M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i></pre>
+
+    <h3>Units</h3>
+    <ul>
+      <li>A unit starts with an apostrophe: <code>4.5'm</code>, <code>200'GPa</code>. Every unit in a compound gets its own: <code>12'kN / 'm</code>.</li>
+      <li>A bare name is always a variable, so <code>m</code> can be a mass while <code>'m</code> is the metre.</li>
+      <li>Results come out in plain SI (N, J, Pa, &hellip;). Use <code>-&gt;</code> to choose another unit, or <code>!noassume</code> to keep the units your arithmetic produced.</li>
+      <li>Define your own with <code>'smoot = 1.7018'm</code>. Units you use in every sheet can be stored under Settings.</li>
+    </ul>
+
+    <h3>Typing math</h3>
+    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines.</p>
+    <ul>
+      <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot.</li>
+      <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
+      <li><kbd>Ctrl</kbd>+<kbd>G</kbd> turns the letter before the caret into Greek (<code>s</code> to <code>&sigma;</code>). Press it again to undo.</li>
+      <li>Double-click selects a whole term, and <kbd>Alt</kbd>+<kbd>&uarr;</kbd> widens the selection step by step.</li>
+      <li>Suggestions pop up after <code>'</code> (units), <code>!</code> (commands) and two letters of a name. <kbd>Tab</kbd> accepts.</li>
+    </ul>
+    <p><button id="helpKeys">All keyboard shortcuts</button></p>
+
+    <h3>Variables and functions</h3>
+    <pre>f(x, y) = x^2 + y         <i>your own function</i>
+~g = 9.81'm / 's^2        <i>~ makes a variable global, so !clear keeps it</i>
+T = 20'degC -> 'degF
+F` = 2   v! = 5   a@ = 1  <i>dot, arrow and hat accents</i>
+!clear                    <i>forget every non-global variable above</i></pre>
+    <p>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>. Evaluation runs top to bottom, so define things before you use them.</p>
+
+    <h3>Matrices</h3>
+    <pre>A = [2, -1; -1, 2]        <i>commas across, semicolons down</i>
+F = [10; 5] * 'kN
+u = solve(A, F)
+A * B    A .* B           <i>matrix product, elementwise product</i></pre>
+    <p>There are also <code>inv</code>, <code>det</code>, <code>transpose</code>, <code>eigvals</code> and more; the suggestion list shows them all. Paste cells from Excel or a Markdown table and they become a matrix.</p>
+
+    <h3>Plots</h3>
+    <pre>!plot M(x), x = 0'm .. L
+  title: Bending moment
+  ylabel: M (kN&middot;m)</pre>
+    <p>Indented <code>key: value</code> lines set the details. Drag the plot to pan, Ctrl + wheel to zoom, double-click to reset. The new view is written back into the sheet as text, so Ctrl+Z undoes it. Each plot can be saved as SVG or PNG.</p>
+
+    <h3>Material properties</h3>
+    <pre>rho = props("D", "T", 20'degC, "P", 1'atm, "Water")</pre>
+    <p><code>props</code> looks up fluids and materials (density, viscosity, enthalpy, saturation temperatures, &hellip;) from CoolProp.</p>
+
+    <h3>Getting results out</h3>
+    <ul>
+      <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped.</li>
+      <li><strong>Export LaTeX</strong> writes a complete <code>.tex</code> document. <strong>Save</strong> and <strong>Open</strong> use plain-text <code>.lens</code> files, which carry the custom units they depend on.</li>
+      <li><code>!short</code> hides the working and shows only each final result. <code>!long</code> brings it back.</li>
+    </ul>
+
+    <h3>Settings</h3>
+    <p>Settings holds the colors, fonts and paper style, the Greek letter table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>, and your global units.</p>
+  </div>
+</dialog>
+
 <dialog id="renameDlg" aria-labelledby="renameTitle">
   <form method="dialog" id="renameForm">
     <div class="dlg-head"><h2 id="renameTitle">Rename symbol</h2><button type="button" class="close">Cancel</button></div>
@@ -281,12 +370,20 @@
   <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
   <div class="dlg-body">
     <section class="set-sec">
-      <h3>Reference and tables</h3>
-      <div class="set-btns">
-        <button id="keysBtn">Keys</button>
-        <button id="greekBtn">Greek</button>
-        <button id="unitsBtn">Units</button>
-      </div>
+      <h3>Reference</h3>
+      <div class="set-btns"><button id="keysBtn">Keyboard shortcuts</button></div>
+    </section>
+    <section class="set-sec">
+      <h3>Greek letters</h3>
+      <p class="note">Ctrl+G replaces the character before the caret using this table. Changes apply immediately and are kept on this machine.</p>
+      <div id="greekRows"></div>
+      <div class="set-acts"><button id="greekAdd">Add row</button><span class="spacer"></span><button id="greekReset">Reset to defaults</button></div>
+    </section>
+    <section class="set-sec">
+      <h3>Global units</h3>
+      <p class="note">Units defined here exist in every sheet on this instance and are stored with your settings on this machine. A saved <code>.lens</code> file or exported <code>.tex</code> that uses one carries its definition, so it opens correctly elsewhere. A definition can use numbers and earlier units. For a unit that only one sheet needs, write <code>'smoot = 1.7018'm</code> in the sheet instead.</p>
+      <div id="unitRows"></div>
+      <div class="set-acts"><button id="unitAdd">Add unit</button><span class="spacer"></span><button id="unitSave">Save units</button></div>
     </section>
     <section class="set-sec">
       <h3>Theme</h3>
@@ -313,24 +410,6 @@
     </section>
   </div>
   <div class="dlg-foot"><button id="themeReset">Reset theme</button><span class="spacer"></span></div>
-</dialog>
-
-<dialog id="greekDlg" aria-labelledby="greekTitle">
-  <div class="dlg-head"><h2 id="greekTitle">Greek letters</h2><button class="close">Done</button></div>
-  <div class="dlg-body">
-    <p class="note">Ctrl+G replaces the character before the caret using this table. Changes apply immediately and stay in this browser.</p>
-    <div id="greekRows"></div>
-  </div>
-  <div class="dlg-foot"><button id="greekAdd">Add row</button><span class="spacer"></span><button id="greekReset">Reset to defaults</button></div>
-</dialog>
-
-<dialog id="unitsDlg" aria-labelledby="unitsTitle">
-  <div class="dlg-head"><h2 id="unitsTitle">Global units</h2><button class="close">Cancel</button></div>
-  <div class="dlg-body">
-    <p class="note">Units defined here exist in every sheet on this instance and are stored with your settings on this machine. A saved <code>.lens</code> file or exported <code>.tex</code> that uses one carries its definition, so it opens correctly elsewhere. A definition can use numbers and earlier units. For a unit that only one sheet needs, write <code>'smoot = 1.7018'm</code> in the sheet instead.</p>
-    <div id="unitRows"></div>
-  </div>
-  <div class="dlg-foot"><button id="unitAdd">Add unit</button><span class="spacer"></span><button id="unitSave">Save</button></div>
 </dialog>
 
 <script src="/static/vendor/d3/d3.min.js"></script>
@@ -873,8 +952,9 @@ function buildThemeForm() {
     Object.assign(document.createElement("option"), {value: "custom", textContent: "Custom", disabled: true}));
   $("#swatches").replaceChildren(...COLOR_FIELDS.map(([k, label]) => {
     const l = document.createElement("label"), i = Object.assign(document.createElement("input"), {type: "color", id: "c-" + k});
+    const name = Object.assign(document.createElement("span"), {textContent: label});
     i.oninput = () => { theme.colors[k] = i.value; applyTheme(); saveTheme(); syncThemeForm(); };
-    l.append(label, i);
+    l.append(name, i);
     return l;
   }));
   $("#fontSans").onchange = (ev) => { theme.sans = +ev.target.value; applyTheme(); saveTheme(); };
@@ -885,7 +965,11 @@ function buildThemeForm() {
 }
 buildThemeForm();
 applyTheme();
-$("#settingsBtn").onclick = () => { syncThemeForm(); $("#settingsDlg").showModal(); };
+$("#settingsBtn").onclick = async () => {
+  syncThemeForm(); buildGreek();
+  $("#settingsDlg").showModal();
+  await loadUnits();
+};
 
 // ---- dialogs ---------------------------------------------------------------
 for (const d of document.querySelectorAll("dialog")) {
@@ -893,6 +977,11 @@ for (const d of document.querySelectorAll("dialog")) {
   d.addEventListener("close", () => src.focus());
 }
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
+$("#helpBtn").onclick = () => $("#helpDlg").showModal();
+$("#helpKeys").onclick = () => $("#keysDlg").showModal();
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "F1" && !ev.ctrlKey && !ev.altKey && !ev.metaKey) { ev.preventDefault(); $("#helpDlg").open ? $("#helpDlg").close() : $("#helpDlg").showModal(); }
+});
 
 function readGreek() {
   const next = {};
@@ -922,7 +1011,6 @@ function greekRow(k = "", v = "") {
   return row;
 }
 function buildGreek() { $("#greekRows").replaceChildren(...Object.entries(greek).map(([k, v]) => greekRow(k, v))); }
-$("#greekBtn").onclick = () => { buildGreek(); $("#greekDlg").showModal(); };
 $("#greekAdd").onclick = () => { const r = greekRow(); $("#greekRows").append(r); r.querySelector("input").focus(); };
 $("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", null); saveGreek(null); buildGreek(); };
 
@@ -999,13 +1087,12 @@ function emptyNote() {
   box.querySelector(".u-empty")?.remove();
   if (!box.querySelector(".u-row")) box.append(Object.assign(document.createElement("p"), {className: "u-empty", textContent: "No global units yet."}));
 }
-$("#unitsBtn").onclick = async () => {
+async function loadUnits() {
   let units = [];
   try { units = (await (await fetch("/api/settings")).json()).units; } catch {}
   $("#unitRows").replaceChildren(...units.map((u) => unitRow(u.name, u.definition)));
   emptyNote();
-  $("#unitsDlg").showModal();
-};
+}
 $("#unitAdd").onclick = () => {
   $("#unitRows").querySelector(".u-empty")?.remove();
   const r = unitRow(); $("#unitRows").append(r); r.querySelector("input").focus();
@@ -1028,7 +1115,6 @@ $("#unitSave").onclick = async () => {
     });
     return;
   }
-  $("#unitsDlg").close();
   say(keep.length ? `Saved ${keep.length} global unit${keep.length === 1 ? "" : "s"}` : "Global units cleared");
   loadVocab(); evaluate();
 };
@@ -1040,7 +1126,10 @@ beat("/api/ping");
 setInterval(() => beat("/api/ping"), 5000);
 window.addEventListener("pagehide", () => beat("/api/bye"));
 
-window.addEventListener("load", () => last.length && render(last));
+window.addEventListener("load", () => {
+  for (const el of document.querySelectorAll(".texLogo")) try { katex.render("\\LaTeX", el, {throwOnError: false}); } catch {}
+  if (last.length) render(last);
+});
 
 // Greek table and global units live on the server. A table saved in this browser by an
 // older build is sent up once, so nothing is lost.
@@ -1050,6 +1139,14 @@ async function loadSettings() {
     if (cfg.greek) greek = cfg.greek;
     else if (store.get("greek", null)) saveGreek(greek);
   } catch {}
+}
+
+// Button icons are files under static/icons/, inlined so they take the button's text color.
+for (const el of document.querySelectorAll("[data-icon]")) {
+  fetch(`/static/icons/${el.dataset.icon}.svg`).then((r) => r.text()).then((svg) => {
+    el.innerHTML = svg;
+    el.firstElementChild.setAttribute("aria-hidden", "true");
+  }).catch(() => {});
 }
 
 (async () => {

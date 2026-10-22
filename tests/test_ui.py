@@ -135,13 +135,12 @@ def test_double_click_selects_the_whole_quantity(page):
 
 def test_global_units_and_server_side_greek(page, server):
     page.click("#settingsBtn")
-    page.click("#unitsBtn")
     page.click("#unitAdd")
     inputs = page.locator("#unitRows .u-row input")
     inputs.nth(0).fill("smoot")
     inputs.nth(1).fill("1.7018'm")
     page.click("#unitSave")
-    page.wait_for_selector("#unitsDlg", state="hidden")
+    page.wait_for_selector("#status:has-text('Saved 1 global unit')")
     page.click("#settingsDlg .close")
     reset(page, "L = 3'smoot -> 'm")
     page.keyboard.type("\n")
@@ -151,7 +150,6 @@ def test_global_units_and_server_side_greek(page, server):
     assert "'smoot = 1.7018'm" in text
     # the Greek table is stored on the server
     page.click("#settingsBtn")
-    page.click("#greekBtn")
     page.click("#greekAdd")
     ins = page.locator("#greekRows .g-row").last.locator("input")
     ins.nth(0).fill("j")
@@ -235,3 +233,16 @@ def test_pasted_table_becomes_matrix(page):
     reset(page, "# note ")
     page.evaluate(PASTE, "1\t2\n3\t4")
     assert value(page) == "# note "
+
+
+def test_help_dialog_opens_and_links_to_keys(page):
+    page.click("#helpBtn")
+    page.wait_for_selector("#helpDlg[open]")
+    assert "Welcome to LENS" in page.inner_text("#helpTitle")
+    page.click("#helpKeys")
+    page.wait_for_selector("#keysDlg[open]")
+    page.click("#keysDlg .close")
+    page.click("#helpDlg .close")
+    page.wait_for_selector("#helpDlg", state="hidden")
+    page.keyboard.press("F1")
+    page.wait_for_selector("#helpDlg[open]")
