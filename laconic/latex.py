@@ -177,6 +177,9 @@ _FUNC_TEX = {"sin": r"\sin", "cos": r"\cos", "tan": r"\tan", "asin": r"\arcsin",
              "acos": r"\arccos", "atan": r"\arctan", "ln": r"\ln", "log10": r"\log_{10}"}
 
 
+_BINARY_TEX = {"dot": r"\cdot", "cross": r"\times", "kron": r"\otimes"}
+
+
 class Printer:
     def __init__(self, ev, fmt, subst=False, local=(), expand_matrices=False):
         self.ev, self.fmt, self.subst, self.local = ev, fmt, subst, set(local)
@@ -290,6 +293,17 @@ class Printer:
             return f"{self.child(n.args[0], ATOM)}^{{-1}}", POW
         if f == "transpose":
             return f"{self.child(n.args[0], ATOM)}^{{T}}", POW
+        # Indexing prints as a subscript; the base is braced so subscripts can stack: {A_{i}}_{j}.
+        if f == "idx" and len(a) == 2:
+            return f"{{{self.child(n.args[0], ATOM)}}}_{{{a[1]}}}", ATOM
+        if f == "elem" and len(a) == 3:
+            return f"{{{self.child(n.args[0], ATOM)}}}_{{{a[1]},\\,{a[2]}}}", ATOM
+        if f == "trace":
+            return f"\\operatorname{{tr}}\\left({a[0]}\\right)", ATOM
+        if f in _BINARY_TEX and len(a) == 2:
+            return f"{self.child(n.args[0], MUL)} {_BINARY_TEX[f]} {self.child(n.args[1], MUL)}", MUL
+        if f == "pinv":
+            return f"{self.child(n.args[0], ATOM)}^{{+}}", POW
         if f == "det":
             return f"\\det\\left({a[0]}\\right)", ATOM
         if f == "norm":

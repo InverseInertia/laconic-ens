@@ -268,3 +268,32 @@ def test_short_shows_only_the_final_result_until_long():
     assert back.stages == full.stages
     assert short.text == "M = 30380 J"
     assert run("!short x")[0].kind == "error"
+
+
+def test_index_functions_count_from_one_and_print_as_subscripts():
+    r = last("A = [1,2,3;4,5,6]\nelem(A, 2, 3)")
+    assert r.text == "6" and "{A}_{2,\\,3}" in r.latex
+    r = last("v = [10;20;30]\ni = 2\nidx(v, i)")
+    assert r.text == "20" and "{v}_{i} = {v}_{2}" in r.latex
+    assert last("A = [1,2;3,4]\nidx(A, 2)").latex.endswith("\\begin{bmatrix} 3 & 4 \\end{bmatrix}")
+
+
+def test_indexes_nest_and_keep_units():
+    r = last("A = [1,2;3,4] * 1'm\nelem(idx(A, 2), 1, 2)")
+    assert r.text == "4 m" and "{{A}_{2}}_{1,\\,2}" in r.latex
+
+
+def test_index_out_of_range_is_an_error():
+    assert "out of range" in last("elem([1,2;3,4], 3, 1)").error
+    assert "out of range" in last("idx([1;2], 0)").error
+
+
+def test_matrix_functions():
+    assert last("trace([1,2;3,4])").text == "5"
+    assert last("rank([1,2;2,4])").text == "1"
+    assert last("dot([1;2;3], [4;5;6])").text == "32"
+    assert last("cross([1;0;0], [0;1;0])").latex.endswith("\\begin{bmatrix} 0 \\\\ 0 \\\\ 1 \\end{bmatrix}")
+    assert last("rows(zeros(2, 3))").text == "2" and last("cols(zeros(2, 3))").text == "3"
+    assert last("eigvals([2,0;0,3])").latex.endswith("\\begin{bmatrix} 2 \\\\ 3 \\end{bmatrix}")
+    assert "1 & 1" in last("hstack([1;2], [1;2])").latex
+    assert last("max([1,5;3,2])").text == "5"
