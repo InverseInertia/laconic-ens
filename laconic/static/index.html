@@ -264,13 +264,14 @@
   <form method="dialog" id="renameForm">
     <div class="dlg-head"><h2 id="renameTitle">Rename symbol</h2><button type="button" class="close">Cancel</button></div>
     <div class="dlg-body">
-      <p class="note">Changes every use of a variable or function in the sheet. Units, comments and commands are left alone. With the caret on a name, F2 fills in the old name.</p>
+      <p class="note">Changes every use of a variable, function or custom unit in the sheet. Replacing a standard unit asks you to confirm and swaps it for another unit, or a new one that gets a definition. Comments and commands are left alone. With the caret on a name, F2 fills in the old name.</p>
       <div class="u-row">
         <input id="renameOld" aria-label="Current name" placeholder="old name (units: 'name)" spellcheck="false" autocomplete="off">
         <span class="eq">→</span>
         <input id="renameNew" aria-label="New name" placeholder="new name" spellcheck="false" autocomplete="off">
         <div class="err" id="renameErr" hidden></div>
       </div>
+      <input type="hidden" id="renameConfirm" value="">
     </div>
     <div class="dlg-foot"><span class="spacer"></span><button type="submit" id="renameGo">Rename</button></div>
   </form>
@@ -945,10 +946,15 @@ function openRename() {
   $("#renameOld").value = nameAtCaret();
   $("#renameNew").value = "";
   $("#renameErr").hidden = true;
+  $("#renameConfirm").value = "";
+  $("#renameGo").textContent = "Rename";
   $("#renameDlg").showModal();
   ($("#renameOld").value ? $("#renameNew") : $("#renameOld")).focus();
 }
 $("#renameBtn").onclick = openRename;
+for (const id of ["#renameOld", "#renameNew"]) $(id).addEventListener("input", () => {
+  $("#renameConfirm").value = ""; $("#renameGo").textContent = "Rename"; $("#renameErr").hidden = true;
+});
 document.addEventListener("keydown", (ev) => {
   if (ev.key === "F2" && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !$("#renameDlg").open) { ev.preventDefault(); openRename(); }
 });
@@ -959,9 +965,14 @@ $("#renameForm").addEventListener("submit", async (ev) => {
   try {
     res = await (await fetch("/api/rename", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({text: src.value, old: $("#renameOld").value, new: $("#renameNew").value}),
+      body: JSON.stringify({text: src.value, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value}),
     })).json();
   } catch { err.textContent = "Could not reach the server"; err.hidden = false; return; }
+  if (res.warning) {
+    // Standard unit: show the warning and let the same button confirm the swap.
+    err.textContent = res.warning; err.hidden = false;
+    $("#renameConfirm").value = "1"; $("#renameGo").textContent = "Replace anyway"; return;
+  }
   if (!res.ok) { err.textContent = res.error; err.hidden = false; return; }
   $("#renameDlg").close();
   // Replace the whole text through the editing pipeline so Ctrl+Z undoes the rename.

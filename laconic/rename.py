@@ -21,6 +21,11 @@ class RenameError(ValueError):
     pass
 
 
+class RenameWarning(RenameError):
+    """The rename is possible but touches something standard; repeat with
+    `confirm=True` to go ahead."""
+
+
 def _builtins():
     return {n[3:] for n in dir(Evaluator) if n.startswith("fn_")} | set(CONSTANTS)
 
@@ -47,9 +52,17 @@ def _names(text):
     return _tokens(text, "name")
 
 
-def _rename_unit(text, old, new):
-    """`old` and `new` are unit names without the quote. Only a unit the sheet itself
-    defines can be renamed; built-in and instance-wide units live outside the text."""
+def _defined_in_sheet(text, name):
+    return any(re.match(rf"\s*'{re.escape(name)}\s*=", line[a:b])
+               for line, spans in _scan(text) for a, b in spans)
+
+
+def _rename_unit(text, old, new, confirm):
+    """`old` and `new` are unit names without the quote. A unit the sheet defines is
+    renamed with its definition. A standard unit lives outside the text, so replacing
+    it needs `confirm`: every use is swapped for `new`, which is either another
+    existing unit or a new one, defined here as equal to the old unit for the user to
+    adjust."""
     if not _UNIT_NAME.match(old):
         raise RenameError(f"'{old} is not a valid unit name")
     if not _UNIT_NAME.match(new):
@@ -59,12 +72,22 @@ def _rename_unit(text, old, new):
     used = {u[1:] for u in _tokens(text, "unit")}
     if old not in used:
         raise RenameError(f"'{old} does not appear in the sheet")
-    if not any(re.match(rf"\s*'{re.escape(old)}\s*=", line[a:b])
-               for line, spans in _scan(text) for a, b in spans):
-        raise RenameError(f"'{old} is not defined in this sheet, so it cannot be renamed")
-    if new in used or Evaluator().is_unit(new):
-        raise RenameError(f"'{new} is already a unit; choose another name")
-    return _substitute(text, "unit", "'" + old, "'" + new)
+    ev = Evaluator()
+    if _defined_in_sheet(text, old):
+        if new in used or ev.is_unit(new):
+            raise RenameError(f"'{new} is already a unit; choose another name")
+        return _substitute(text, "unit", "'" + old, "'" + new)
+    if not confirm:
+        raise RenameWarning(
+            f"'{old} is a standard unit, not one defined in this sheet. Replacing it swaps "
+            f"every use for '{new}"
+            + ("" if new in used or ev.is_unit(new)
+               else f" and adds a definition of '{new} for you to adjust")
+            + ". Rename again to confirm.")
+    out, count = _substitute(text, "unit", "'" + old, "'" + new)
+    if not (new in used or ev.is_unit(new)):
+        out += ("" if out.endswith("\n") or not out else "\n") + f"'{new} = 1'{old}\n"
+    return out, count
 
 
 def _substitute(text, kind, old, new):
@@ -87,13 +110,14 @@ def _substitute(text, kind, old, new):
     return "".join(out), count
 
 
-def rename(text, old, new):
+def rename(text, old, new, confirm=False):
     """Returns (new_text, count). Raises RenameError when the rename is not safe:
     a malformed name, a built-in, or a name the sheet already uses. A leading `'`
-    on `old` renames a unit the sheet defines (the quote on `new` is optional)."""
+    on `old` renames a unit (the quote on `new` is optional); replacing a standard unit
+    raises RenameWarning unless `confirm` is set."""
     old, new = old.strip(), new.strip()
     if old.startswith("'"):
-        return _rename_unit(text, old[1:], new.removeprefix("'"))
+        return _rename_unit(text, old[1:], new.removeprefix("'"), confirm)
     if not _VALID.match(old):
         raise RenameError(f"'{old}' is not a valid name")
     if not _VALID.match(new):

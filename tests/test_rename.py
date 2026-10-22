@@ -1,7 +1,7 @@
 import pytest
 
 from laconic import server
-from laconic.rename import RenameError, rename
+from laconic.rename import RenameError, RenameWarning, rename
 from laconic.server import RenameBody
 
 
@@ -56,9 +56,22 @@ def test_custom_units_are_renamed_with_their_uses():
 
 
 @pytest.mark.parametrize("old,new,msg", [
-    ("'m", "'q", "not defined in this sheet"), ("'zz", "'q", "does not appear"),
+    ("'zz", "'q", "does not appear"),
     ("'u", "'m", "already a unit"), ("'u", "'dm", "already a unit"),
     ("'u", "'v", "already a unit"), ("'u", "'9", "not a valid"), ("'u", "'u", "same")])
 def test_unsafe_unit_renames_are_refused(old, new, msg):
     with pytest.raises(RenameError, match=msg):
         rename("'u = 2'm\n'v = 3'm\nx = 1'u\n", old, new)
+
+
+def test_replacing_a_standard_unit_warns_then_swaps_for_an_existing_unit():
+    text = "d = 3'm + 2'm\n# 'm\n"
+    with pytest.raises(RenameWarning, match="standard unit"):
+        rename(text, "'m", "'ft")
+    out, n = rename(text, "'m", "'ft", confirm=True)
+    assert (out, n) == ("d = 3'ft + 2'ft\n# 'm\n", 2)
+
+
+def test_replacing_a_standard_unit_with_a_new_one_adds_a_definition():
+    out, n = rename("d = 3'm\n", "'m", "'span", confirm=True)
+    assert n == 1 and out == "d = 3'span\n'span = 1'm\n"
