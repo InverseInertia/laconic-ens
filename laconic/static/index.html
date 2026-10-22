@@ -334,6 +334,7 @@
 
 <script src="/static/vendor/d3/d3.min.js"></script>
 <script src="/static/editing.js"></script>
+<script src="/static/paste.js"></script>
 <script src="/static/plotview.js"></script>
 <script src="/static/autocomplete.js"></script>
 <script>
@@ -582,8 +583,17 @@ src.addEventListener("beforeinput", (ev) => {
   const r = Editing.charAction(ev.data, src.value, src.selectionStart, src.selectionEnd, ctx());
   if (r) { ev.preventDefault(); apply(r); }
 });
+// Pasting a table (Excel, Obsidian/Markdown, CSV) becomes a matrix. Ctrl+Shift+V pastes plain text.
+let plainPaste = false;
+src.addEventListener("paste", (ev) => {
+  const plain = plainPaste; plainPaste = false;
+  if (plain || !mathKeys.checked || !ev.clipboardData) return;
+  const r = Paste.pasteEdit(src.value, ev.clipboardData.getData("text/plain"), src.selectionStart, src.selectionEnd, {textLine: onCommentLine()});
+  if (r) { ev.preventDefault(); apply(r); }
+});
 src.addEventListener("keydown", (ev) => {
   if (ev.isComposing) return;
+  plainPaste = (ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.code === "KeyV";
   if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ev.code === "KeyZ") { ev.preventDefault(); acClose(); setWrapped(!wrapped); return; }
   if (acKey(ev)) return;
   if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key === " ") { ev.preventDefault(); acOpenByHand(); return; }
