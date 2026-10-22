@@ -220,3 +220,18 @@ def test_theme_settings(page):
     page.click("#settingsBtn")
     page.click("#themeReset")
     assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(230, 238, 223)"
+
+
+PASTE = """
+(t) => { const s = document.querySelector('#src'); const dt = new DataTransfer(); dt.setData('text/plain', t);
+  s.dispatchEvent(new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true})); }
+"""
+
+
+def test_pasted_table_becomes_matrix(page):
+    reset(page, "x = 1\n")
+    page.evaluate(PASTE, "| 110      | 174            | 107,000         |\n| -------- | -------------- | --------------- |\n| 110      | 184            | 67,000          |\n")
+    assert value(page) == "x = 1\nA = [110, 174, 107000; 110, 184, 67000]"
+    reset(page, "# note ")
+    page.evaluate(PASTE, "1\t2\n3\t4")
+    assert value(page) == "# note "

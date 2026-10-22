@@ -67,6 +67,13 @@ Matrix work runs on numpy arrays, with the unit carried alongside. Indexes count
 Ctrl+[ wraps the term on the left (or the highlight) in `idx( , )` and Ctrl+Shift+[ in `elem( , , )`, with
 the caret in the first index slot.
 
+Pasting a table turns it into a matrix: cells copied from Excel or Sheets, an Obsidian or other Markdown
+pipe table, comma separated rows, or a column of numbers. Padding, non-breaking spaces and CRLF are
+ignored; `1,234`, `1 234`, `1,5`, `(5)`, `50%`, `$1,200` and a typographic minus are read as numbers. A header
+row or label column of text is dropped, empty cells become 0, and one unit shared by every cell is
+factored out (`10 kN` cells give `[...] * 'kN`). Tables with text cells or mixed units paste as plain text,
+and so does Ctrl+Shift+V. The status line says what was dropped. The Math keys checkbox turns this off.
+
 Constants: pi, e. `props` looks up fluid and material properties (see Material properties).
 
 A unit is `'` followed by a Pint unit name (`'kN`, `'mm`, `'degC`, `'°C`, `'ohm`). A bare name is
