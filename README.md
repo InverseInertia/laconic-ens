@@ -35,6 +35,7 @@ The exported .tex needs siunitx v3 or newer.
     !noassume / !assume            keep typed units / back to SI results
     !trigdeg / !trigrad            bare numbers in trig functions are degrees / radians (default)
     x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
+    !short / !long                 show only each line's final result, no steps / back to full
     !plot M(x), x = 0'm .. L       plot a function (see Plots)
 
 Rename a variable or function everywhere with the Rename button or F2 (the caret's name is filled in).
@@ -112,6 +113,10 @@ cleared says so: `'m' was removed by !clear`.
 `!noassume` keeps computed results in the units that come out of the arithmetic instead of
 reducing them to SI, for every line below it: `10'kN * 2'm` shows `20 kN⋅m` rather than
 `20000 J`. An explicit `->` still converts. `!assume` restores the default.
+
+`!short` trims the display of every line below it to the final result of the written equation:
+no symbolic or substituted steps (`M = w * L^2 / 8` shows `M = 11.39 kN⋅m`, not the working). Only the
+display changes; `!long` restores the full display.
 
 ## Custom units
 

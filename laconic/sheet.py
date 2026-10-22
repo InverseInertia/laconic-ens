@@ -202,22 +202,29 @@ def _run_command(i, raw, s, ev):
     `!clearf` does the same for user functions. `!noassume` keeps computed results in the
     units that came out of the arithmetic instead of reducing them to SI, until
     `!assume` restores the default. `!trigdeg` and `!trigrad` set the angle unit
-    that trig functions read bare numbers in and that inverse ones return."""
+    that trig functions read bare numbers in and that inverse ones return. `!short`
+    shows only each line's final result, without intermediate steps, until
+    `!long` restores the full display."""
     parts = s[1:].split()
     name = parts[0] if parts else ""
     if name == "plotspec":
         return _plotspec_command(i, raw, s, ev)
     if name == "plot":     # a plot statement with something after it never gets here
         return LineResult(i, raw, "error", error="A plot reads `!plot f(x), x = low .. high`")
-    if name not in ("clear", "clearf", "assume", "noassume", "trigdeg", "trigrad"):
+    if name not in ("clear", "clearf", "assume", "noassume", "trigdeg", "trigrad",
+                    "short", "long"):
         return LineResult(i, raw, "error",
                           error=f"Unknown command '!{name}'. Available: !clear, !clearf, !assume, "
-                                "!noassume, !trigdeg, !trigrad, !plot, !plotspec")
+                                "!noassume, !trigdeg, !trigrad, !short, !long, !plot, !plotspec")
     if len(parts) > 1:
         return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
     if name in ("assume", "noassume"):
         ev.assume = name == "assume"
         text = "Units are reduced to SI again" if ev.assume else "Units are kept as typed unless converted with ->"
+        return LineResult(i, raw, "command", text=text)
+    if name in ("short", "long"):
+        ev.short = name == "short"
+        text = "Showing final results only, without steps" if ev.short else "Showing steps again"
         return LineResult(i, raw, "command", text=text)
     if name == "clearf":
         gone = [n for n in ev.funcs if not n.startswith("~")]
@@ -312,7 +319,7 @@ def _run_line(i, raw, s, ev, fmt, used):
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
         res = fmt.quantity(value)
-        stages = [res] if literal else _dedupe([sym, sub, res])
+        stages = [res] if literal or ev.short else _dedupe([sym, sub, res])
         if isinstance(stmt, Assign):
             ev.vars[stmt.name] = value
             return LineResult(i, raw, "assign", lhs=name_latex(stmt.name), stages=stages,
