@@ -5,10 +5,13 @@ code has one path instead of two."""
 import copy
 import math
 import re
+import shutil
+import tempfile
 from functools import lru_cache
 
 import numpy as np
 import pint
+from pathlib import Path
 
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
                     Matrix, Name, Neg, Num, Str, UnitLit)
@@ -25,7 +28,16 @@ class EvalError(Exception):
 @lru_cache(maxsize=1)
 def registry():
     # Building a registry takes a noticeable fraction of a second, so share one.
-    return pint.UnitRegistry(autoconvert_offset_to_baseunit=True)
+    # Pint's pound is `lb`, which reads as a force as easily as a mass. Name it `lbm`
+    # (matching `lbf`) and drop `lb`.
+    src = Path(pint.__file__).parent
+    with tempfile.TemporaryDirectory() as tmp:
+        shutil.copy(src / "constants_en.txt", tmp)
+        text = (src / "default_en.txt").read_text(encoding="utf-8")
+        renamed = text.replace("7e3 * grain = lb = avoirdupois_pound", "7e3 * grain = lbm = avoirdupois_pound")
+        assert renamed != text, "pint's pound definition changed"
+        (Path(tmp) / "default_en.txt").write_text(renamed, encoding="utf-8")
+        return pint.UnitRegistry(str(Path(tmp) / "default_en.txt"), autoconvert_offset_to_baseunit=True)
 
 
 def _ndim(q):

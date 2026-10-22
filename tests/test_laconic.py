@@ -270,6 +270,12 @@ def test_short_shows_only_the_final_result_until_long():
     assert run("!short x")[0].kind == "error"
 
 
+def test_pound_mass_is_lbm_and_lb_is_gone():
+    assert last("3'kg -> 'lbm").text == "6.614 lbm"
+    assert last("5'lb").error
+    assert last("1'lbf -> 'N").text.startswith("4.448")
+
+
 def test_index_functions_count_from_one_and_print_as_subscripts():
     r = last("A = [1,2,3;4,5,6]\nelem(A, 2, 3)")
     assert r.text == "6" and "{A}_{2,\\,3}" in r.latex

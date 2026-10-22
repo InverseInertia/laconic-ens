@@ -38,8 +38,10 @@ The exported .tex needs siunitx v3 or newer.
     !short / !long                 show only each line's final result, no steps / back to full
     !plot M(x), x = 0'm .. L       plot a function (see Plots)
 
-Rename a variable or function everywhere with the Rename button or F2 (the caret's name is filled in).
-Units, comments and commands are untouched, and a name already in use is refused.
+Rename a variable, function or custom unit everywhere with the Rename button or F2 (the name at the
+caret is filled in). A unit is written with its quote, `'smoot`, and only units the sheet defines can be
+renamed; built-in and global units are refused. Comments and commands are untouched, `m` and `'m` are
+different names, and a name already in use is refused.
 
 Functions: sqrt abs floor ceil heaviside (aliases step, heav; 0 below zero, 1 at zero and above) sin cos tan asin acos atan exp ln log10 det inv transpose norm solve identity, plus the matrix functions below.
 ### Matrices

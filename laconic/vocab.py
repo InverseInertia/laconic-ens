@@ -36,7 +36,7 @@ _SIGNATURES = {
 
 # Offered first, and the ones that get SI prefixes spelled out (kN, mm, GPa).
 _COMMON = ("m s kg g A K mol cd N Pa J W Hz C V ohm F H S Wb T L Wh bar eV rad deg degC degF "
-           "mm cm km kN MN GPa MPa kPa kW MW kJ MJ mA mV kV us ms min h day in ft yd mi lb lbf psi ksi").split()
+           "mm cm km kN MN GPa MPa kPa kW MW kJ MJ mA mV kV us ms min h day in ft yd mi lbm lbf psi ksi").split()
 _PREFIXABLE = "m g s A K mol N Pa J W Hz C V ohm F H S Wb T L Wh bar eV".split()
 _PREFIXES = "T G M k c m u n p".split()
 

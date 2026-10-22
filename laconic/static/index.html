@@ -206,7 +206,7 @@
   </select>
   <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
-  <button id="renameBtn" title="Rename a variable everywhere (F2)">Rename</button>
+  <button id="renameBtn" title="Rename a variable, function or custom unit everywhere (F2)">Rename</button>
   <button id="settingsBtn">Settings</button>
   <button id="open">Open</button>
   <button id="save">Save</button>
@@ -266,7 +266,7 @@
     <div class="dlg-body">
       <p class="note">Changes every use of a variable or function in the sheet. Units, comments and commands are left alone. With the caret on a name, F2 fills in the old name.</p>
       <div class="u-row">
-        <input id="renameOld" aria-label="Current name" placeholder="old name" spellcheck="false" autocomplete="off">
+        <input id="renameOld" aria-label="Current name" placeholder="old name (units: 'name)" spellcheck="false" autocomplete="off">
         <span class="eq">→</span>
         <input id="renameNew" aria-label="New name" placeholder="new name" spellcheck="false" autocomplete="off">
         <div class="err" id="renameErr" hidden></div>
@@ -919,14 +919,15 @@ $("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.s
 function nameAtCaret() {
   const t = src.value, p = src.selectionStart;
   const sel = t.slice(src.selectionStart, src.selectionEnd);
-  if (sel && /^~?[^\W\d]\w*[`!@]*$/u.test(sel)) return sel;
+  if (sel && /^(?:~?[^\W\d]\w*[`!@]*|'[A-Za-z]\w*)$/u.test(sel)) return sel;
   const ls = t.lastIndexOf("\n", p - 1) + 1;
   let le = t.indexOf("\n", p); if (le < 0) le = t.length;
   const line = t.slice(ls, le);
   if (line.trimStart().startsWith("#")) return "";
-  const re = /'(?:[^\W\d]|\u00b0)[\w\u00b0]*|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|(~?[^\W\d]\w*[`!@]*)/gu;
+  const re = /('(?:[^\W\d]|\u00b0)[\w\u00b0]*)|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|(~?[^\W\d]\w*[`!@]*)/gu;
   for (const m of line.matchAll(re)) {
-    if (m[1] && p - ls >= m.index && p - ls <= m.index + m[0].length) return m[1];
+    const name = m[1] || m[2];
+    if (name && p - ls >= m.index && p - ls <= m.index + m[0].length) return name;
   }
   return "";
 }
