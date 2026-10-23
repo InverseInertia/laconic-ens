@@ -95,10 +95,15 @@ def _unit_macro(name):
 
 
 class Fmt:
-    def __init__(self, ureg, siunitx=False, sig=4, custom=()):
+    def __init__(self, ureg, siunitx=False, sig=4, custom=(), places=None, keep_zeros=False):
         """`custom` holds the names of user-defined units. In export mode each one
-        gets a siunitx macro, collected in `macros` (name -> macro) for the preamble."""
-        self.ureg, self.siunitx, self.sig = ureg, siunitx, sig
+        gets a siunitx macro, collected in `macros` (name -> macro) for the preamble.
+        Results show `sig` significant figures, or `places` decimal places when that is
+        set (!sigfigs, !sigfigsbig and !decplace each replace the others); `keep_zeros`
+        (!sigfigsbig) pads to exactly `sig` figures, 2.5 -> 2.500. This only changes what is
+        printed: the evaluator never rounds."""
+        self.ureg, self.siunitx, self.sig, self.places = ureg, siunitx, sig, places
+        self.keep_zeros = keep_zeros
         self.custom, self.macros = custom, {}
         self._dimless = ureg.Unit("dimensionless")
 
@@ -111,21 +116,27 @@ class Fmt:
         return self.macros[name]
 
     def _parts(self, x, sig):
-        """(mantissa, exponent or None). Plain notation between 1e-4 and 1e7."""
+        """(mantissa, exponent or None). Plain notation between 1e-4 and 1e7.
+        An explicit `sig` (typed-in numbers are shown with 12) always counts significant
+        figures; with sig=None the display setting applies, which may be decimal places."""
         x = float(x)
+        if sig is None and self.places is not None:
+            s = f"{x:.{self.places}f}"
+            return (s[1:] if s.startswith("-") and float(s) == 0 else s), None
+        keep = self.keep_zeros and sig is None   # typed-in numbers never get padded
+        sig = sig or self.sig
         if x == 0:
-            return "0", None
-        s = f"{x:.{sig}g}"
-        if "e" not in s:
-            return s, None
-        mant, exp = s.split("e")
+            return ("0." + "0" * (sig - 1) if keep and sig > 1 else "0"), None
+        e = f"{x:.{sig - 1}e}"                   # rounded to sig figures
+        mant, exp = e.split("e")
         exp = int(exp)
         if -4 <= exp < 7:
-            return format(float(s), "f").rstrip("0").rstrip("."), None
-        return mant, exp
+            s = f"{float(e):.{max(0, sig - 1 - exp)}f}"
+            return (s if keep or "." not in s else s.rstrip("0").rstrip(".")), None
+        return (mant if keep or "." not in mant else mant.rstrip("0").rstrip(".")), exp
 
     def number(self, x, sig=None):
-        mant, exp = self._parts(x, sig or self.sig)
+        mant, exp = self._parts(x, sig)
         return mant if exp is None else f"{mant}\\times 10^{{{exp}}}"
 
     def unit_inline(self, units):
@@ -134,7 +145,7 @@ class Fmt:
         return f"\\unit{{{u}}}" if (self.siunitx and u) else u
 
     def _si_number(self, x, sig=None):
-        mant, exp = self._parts(x, sig or self.sig)
+        mant, exp = self._parts(x, sig)
         return mant if exp is None else f"{mant}e{exp}"
 
     def unit(self, units):
@@ -169,8 +180,13 @@ class Fmt:
         mag = np.asarray(q.magnitude)
         u = f"{q.units:~P}"
         if mag.ndim == 0:
-            return f"{self._parts(mag, self.sig)[0] if self._parts(mag, self.sig)[1] is None else f'{float(mag):.{self.sig}g}'} {u}".strip()
-        return np.array2string(mag, precision=self.sig) + (f" {u}" if u else "")
+            return f"{self._plain_number(mag)} {u}".strip()
+        body = np.array2string(mag, formatter={"all": self._plain_number}, separator=" ")
+        return body + (f" {u}" if u else "")
+
+    def _plain_number(self, x):
+        mant, exp = self._parts(x, None)
+        return mant if exp is None else f"{mant}e{exp}"
 
 
 _FUNC_TEX = {"sin": r"\sin", "cos": r"\cos", "tan": r"\tan", "asin": r"\arcsin",
