@@ -415,7 +415,7 @@ exported document with plots and is skipped unless `pdflatex` (with pgfplots and
 
 ## Standalone builds
 
-`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. PyInstaller does not cross-compile, so build on each target OS. The logo is `laconic/static/logo.svg` (header and browser tab) and `packaging/icon.png` (executable icon on Windows and macOS, converted by PyInstaller, which needs Pillow); both are placeholders to replace. Double-click it to start the UI in an app window, and it quits a few seconds after the window is closed; pass arguments to use the CLI (which keeps running until you stop it). The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
+`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. PyInstaller does not cross-compile, so build on each target OS. The logo is `laconic/static/logo.svg` (header and browser tab) and `packaging/icon.png` (executable icon on Windows and macOS, converted by PyInstaller, which needs Pillow). Double-click it to start the UI in an app window, and it quits a few seconds after the window is closed; pass arguments to use the CLI (which keeps running until you stop it). The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
 
 ## Not built yet
 

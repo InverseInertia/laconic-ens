@@ -1,5 +1,64 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Placeholder logo. Replace this file; keep it square. -->
-  <rect x="2" y="2" width="60" height="60" fill="#17253d"/>
-  <path d="M20 18v28h24" fill="none" stroke="#e6eedf" stroke-width="6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+  <!-- LENS logo. Colors read the logo-prefixed CSS variables that the page sets from its theme;
+       the fallbacks are the original blueprint-blue artwork, used when this file stands alone
+       (browser tab, executable icon source). -->
+  <defs>
+    <radialGradient id="lensbg" cx="18.3" cy="29.9" r="25" gradientUnits="userSpaceOnUse">
+      <stop offset="0" style="stop-color:var(--logo-hi,#6099d2)"/>
+      <stop offset="1" style="stop-color:var(--logo-lo,#004989)"/>
+    </radialGradient>
+    <style>
+      .ln { stroke: var(--logo-line, #000); stroke-linecap: round; stroke-linejoin: bevel; }
+      .m { fill: var(--logo-mid, #348fff); }
+      .l { fill: var(--logo-light, #c2deff); }
+      .d { fill: var(--logo-dark, #0058b8); }
+    </style>
+  </defs>
+  <rect width="50" height="50" fill="url(#lensbg)"/>
+  <path fill="#fff" fill-opacity=".9" stroke="var(--logo-line,#000)" stroke-width=".0722895" stroke-linecap="square" transform="matrix(2.7666665,0,0,2.7666601,-95.825751,-13.308344)" d="M 34.67196,4.8464012 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m 1.8,-17.9999998 V 22.846401 m -18,-17.9999998 h 18 m -18,1.8 h 18 m -18,1.8 h 18 m -18,1.7999998 h 18 m -18,1.8 h 18 m -18,1.8 h 18 m -18,1.8 h 18 m -18,1.8 h 18 m -18,1.8 h 18 m -18,1.8 h 18 m -18,1.8 h 18"/>
+  <rect class="ln m" stroke-width=".5" x="4.5" y="3.37" width="6.25" height="43.27"/>
+  <rect class="ln l" stroke-width=".5" x="8.77" y="3.37" width="1.98" height="43.27"/>
+  <rect class="ln m" stroke-width=".5" x="3.09" y="37.99" width="43.82" height="6.3"/>
+  <rect class="ln l" stroke-width=".5" x="44.87" y="37.99" width="2.04" height="6.3"/>
+  <!-- shield: redrawn as a path, the source used the U+26E1 glyph of an installed font -->
+  <path class="ln l" stroke-width=".5" stroke-linejoin="round" d="M30 8 C35 11.5 40 12 44 12 V22 C44 29 38.5 34 30 37.5 C21.500 34 16 29 16 22 V12 C20 12 25 11.500 30 8 Z"/>
+  <g transform="translate(-6.4047635,8.1914873)" fill="#fff" stroke="var(--logo-acc,#ff8f00)" stroke-width=".2" stroke-linecap="round" stroke-linejoin="bevel">
+    <path d="m 24.149944,21.921768 1.625249,-7.819559"/>
+    <path d="m 24.149944,21.921768 4.31063,-7.819559"/>
+    <path d="M 24.149944,21.921768 30.732917,21.40247"/>
+    <path d="m 24.149944,21.921768 -2.250843,7.520229"/>
+    <path d="m 24.149944,21.921768 1.700111,6.156465"/>
+    <path d="m 24.149944,21.921768 8.218015,2.505119"/>
+    <path d="m 24.149944,21.921768 4.578459,-4.308041"/>
+    <path d="m 24.149944,21.921768 8.639127,-2.280175"/>
+    <path d="m 24.149944,21.921768 4.486173,3.361851"/>
+    <path d="M 24.149943,21.921767 23.460754,14.816311"/>
+    <path d="m 24.149944,21.921768 0.867204,1.533245"/>
+    <path d="m 24.149943,21.921767 -0.0752,2.332861"/>
+    <path d="m 24.149944,21.921768 2.866243,0.36238"/>
+    <path d="m 24.149943,21.921767 2.752013,-1.936513"/>
+    <path d="m 28.158494,20.042369 -4.00855,1.879399"/>
+    <path d="m 25.159937,18.885782 -1.009993,3.035986"/>
+    <path d="m 24.288927,19.671119 -0.138983,2.250649"/>
+  </g>
+  <g transform="translate(0,7.0065653)">
+    <rect class="ln l" stroke-width=".5" x="13.8" y="20.65" width="2.59" height="4.92"/>
+    <rect class="ln m" stroke-width=".5" x="8.89" y="20.65" width="4.91" height="4.92"/>
+    <path class="ln" stroke-width=".5" stroke-linejoin="round" style="fill:var(--logo-grey,#96acc3)" d="m 16.385225,25.566641 1.359956,-2.459916 -1.359956,-2.459913 z"/>
+  </g>
+  <path class="ln l" stroke-width=".5" stroke-linecap="square" stroke-linejoin="round" d="m 14.136066,44.292313 3.637493,-6.300321 h 3.837493 l -3.637493,6.300321 z"/>
+  <g transform="matrix(0.884934,0,0,1,0.76361812,0)">
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 7.8490527,11.90992 5.4236443,14.379758 H 7.8490527 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 7.8490527,17.599762 5.4236443,20.069601 H 7.8490527 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 7.8490527,23.289605 5.4236443,25.759444 H 7.8490527 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 7.8490527,28.979447 5.4236443,31.449286 H 7.8490527 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 7.8490527,34.669289 5.4236443,37.139128 H 7.8490527 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 5.4236446,35.459403 7.849053,32.989564 H 5.4236446 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 5.4236446,12.700034 7.849053,10.230195 H 5.4236446 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 5.4236445,7.0101925 7.8490529,4.5403537 H 5.4236445 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 7.8490527,6.2200774 5.4236443,8.6899162 h 2.4254084 z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 5.4236446,29.769562 7.8490534,27.299723 H 5.4236446 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 5.4236446,24.079721 7.849053,21.609882 H 5.4236446 Z"/>
+    <path class="ln d" stroke-width=".318908" stroke-linecap="square" stroke-linejoin="round" d="M 5.4236446,18.389877 7.849053,15.920038 H 5.4236446 Z"/>
+  </g>
 </svg>
