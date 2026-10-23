@@ -12,6 +12,8 @@ COMMANDS = [
     ("trigrad", "trig functions use radians"),
     ("short", "show only final results, no steps"),
     ("long", "show steps again"),
+    ("sigfigs", "display n significant figures (default 4): !sigfigs 5"),
+    ("decplace", "display n decimal places instead: !decplace 2"),
     ("plot", "plot functions: !plot f(x), x = 0 .. 1"),
     ("plotspec", "set a plot option for the plots below, e.g. !plotspec grid: off"),
 ]

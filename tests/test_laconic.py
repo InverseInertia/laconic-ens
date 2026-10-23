@@ -303,3 +303,13 @@ def test_matrix_functions():
     assert last("eigvals([2,0;0,3])").latex.endswith("\\begin{bmatrix} 2 \\\\ 3 \\end{bmatrix}")
     assert "1 & 1" in last("hstack([1;2], [1;2])").latex
     assert last("max([1,5;3,2])").text == "5"
+
+
+def test_sigfigs_and_decplace_change_only_the_display():
+    rs = run("x = 1/3\ny = x * 3\nx\n!sigfigs 6\nx\n!decplace 2\nx\n[1/3, 2]\ny\n!sigfigs 4\nx")
+    shown = lambda r: r.text.split("= ")[-1]
+    assert [shown(rs[i]) for i in (2, 4, 6, 8, 10)] == ["0.3333", "0.333333", "0.33", "1.00", "0.3333"]
+    assert rs[7].text == "[0.33 2.00]"
+    assert [rs[i].kind for i in (3, 5, 9)] == ["command"] * 3
+    assert run("!sigfigs 0")[0].kind == "error" and run("!decplace x")[0].kind == "error"
+    assert run("!sigfigs")[0].kind == "error" and run("!decplace -1")[0].kind == "error"

@@ -48,7 +48,7 @@ def test_vocabulary_has_what_the_editor_completes():
     units = {u[0]: u for u in v["units"]}
     assert units["kN"][1] == "kilonewton" and units["kN"][2] == 1 and "mm" in units and "GPa" in units
     assert ["sqrt", "sqrt(x)"] in v["functions"] and "pi" in v["constants"]
-    assert [c[0] for c in v["commands"]] == ["clear", "clearf", "noassume", "assume", "trigdeg", "trigrad", "short", "long", "plot", "plotspec"]
+    assert [c[0] for c in v["commands"]] == ["clear", "clearf", "noassume", "assume", "trigdeg", "trigrad", "short", "long", "sigfigs", "decplace", "plot", "plotspec"]
 
 
 def test_settings_survive_a_broken_file(config):

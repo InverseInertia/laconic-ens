@@ -268,6 +268,7 @@
       <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
       <tr><td><kbd>!noassume</kbd> <kbd>!assume</kbd></td><td>Below <code>!noassume</code>, results keep the units that come out of the arithmetic (<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. <code>!assume</code> returns to SI</td></tr>
       <tr><td><kbd>!short</kbd> <kbd>!long</kbd></td><td>Below <code>!short</code>, each line shows only its final result, with its unit but no intermediate steps. <code>!long</code> restores the full display</td></tr>
+      <tr><td><kbd>!sigfigs n</kbd> <kbd>!decplace n</kbd></td><td>Choose how many significant figures (4 by default) or decimal places results are displayed with. The last one given wins. Only the display is rounded; every calculation uses the full value</td></tr>
       <tr><td><kbd>!trigdeg</kbd> <kbd>!trigrad</kbd></td><td>Set the angle unit for <code>sin</code>, <code>cos</code>, <code>tan</code> on bare numbers, and for <code>asin</code>, <code>acos</code>, <code>atan</code> results. Radians by default; explicit units such as <code>30'deg</code> always work</td></tr>
       <tr><td><kbd>'</kbd></td><td>Starts a unit: <code>12'kN/'m</code>. Bare names are always variables</td></tr>
       <tr><td><code>'smoot = 1.7018'm</code></td><td>Defines a unit for this sheet. It works on every line, above or below. Units used by many sheets can be defined under Units, and are then copied into any file you save or export that uses them</td></tr>
