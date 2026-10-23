@@ -6,7 +6,7 @@ import struct
 import pytest
 
 pytest.importorskip("playwright.sync_api")
-from test_ui import page, reset, server, value  # noqa: E402,F401  (fixtures and helpers)
+from uihelpers import reset, value  # noqa: E402
 
 SRC = "!plot sin(x), x = 0 .. 10\n"
 VIEWS = re.compile(r"^\s+([xy])view: (\S+) \.\. (\S+)$", re.M)

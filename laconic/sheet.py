@@ -202,7 +202,7 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
         return LineResult(i, raw, "unitdef", lhs="1\\," + fmt.unit_inline(ev.ureg.parse_units(name)),
                           stages=[fmt.quantity(shown)], text=f"1 {name} = {fmt.plain(shown)}")
     except Exception as e:
-        return LineResult(i, raw, "error", error=_describe(e, stmt, ev))
+        return LineResult(i, raw, "error", error=_describe(e))
 
 
 def _run_command(i, raw, s, ev, fmt):
@@ -320,7 +320,7 @@ def _run_plot(i, raw, lines, ev, fmt, used):
         b = Builder(ev, fmt, parse)
         spec = b.build(i, series, var, lo, hi, opts)
     except Exception as e:
-        return LineResult(i, raw, "error", error=_describe(e, None, ev), end=end), owned
+        return LineResult(i, raw, "error", error=_describe(e), end=end), owned
     for n, msg in b.errors:
         owned[n] = LineResult(n, lines[n - 1], "error", error=msg)
     text = spec["title"] or "plot " + ", ".join(s["label"] for s in spec["series"])
@@ -355,7 +355,7 @@ def _run_solver(i, raw, lines, ev, fmt, used, solve):
         prob = solver.prepare(block, ev, _describe)
         h = prob.digest()
     except Exception as e:
-        return fail(_describe(e, None, ev))
+        return fail(_describe(e))
     stored = block.stored
     qs = prob.stored_quantities(stored) if stored is not None else None
     status = "none" if qs is None else ("valid" if stored.get("hash") == h else "stale")
@@ -363,7 +363,7 @@ def _run_solver(i, raw, lines, ev, fmt, used, solve):
         try:
             prob.probe()
         except Exception as e:
-            return fail(_describe(e, None, ev))
+            return fail(_describe(e))
     if mine:
         out = prob.solve(solve.log)
         out["hash"] = h
@@ -453,10 +453,10 @@ def _run_line(i, raw, s, ev, fmt, used):
                               text=f"{key} = {fmt.plain(value)}", stale=stale)
         return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value), stale=stale)
     except Exception as e:
-        return LineResult(i, raw, "error", error=_describe(e, stmt, ev))
+        return LineResult(i, raw, "error", error=_describe(e))
 
 
-def _describe(e, stmt, ev):
+def _describe(e):
     if isinstance(e, (ParseError, EvalError, PlotError, SolverError)):
         return str(e)
     if isinstance(e, pint.errors.DimensionalityError):

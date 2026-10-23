@@ -84,12 +84,12 @@ def main():
     units = settings.global_units()
     if a.solve:
         text = _solve_all(Path(a.file), text, units)
+    ws = evaluate(text, siunitx=bool(a.tex), global_units=units)
+    results = ws.results
     if a.tex:
-        ws = evaluate(text, siunitx=True, global_units=units)
-        Path(a.tex).write_text(document(ws.results, title=Path(a.file).stem, declarations=ws.declarations),
+        Path(a.tex).write_text(document(results, title=Path(a.file).stem, declarations=ws.declarations),
                                encoding="utf-8")
         print(f"wrote {a.tex}")
-    results = evaluate(text, global_units=units).results
     if a.plots:
         out = Path(a.plots)
         out.mkdir(parents=True, exist_ok=True)

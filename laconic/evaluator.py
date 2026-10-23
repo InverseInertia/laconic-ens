@@ -13,8 +13,7 @@ import numpy as np
 import pint
 from pathlib import Path
 
-from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
-                    Matrix, Name, Neg, Num, Str, UnitLit)
+from .nodes import BinOp, Name, Str, UnitLit
 from . import props as _props
 from .parser import parse_expr
 
@@ -44,7 +43,7 @@ def _ndim(q):
     return np.ndim(q.magnitude)
 
 
-_UNIT_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
+UNIT_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
 
 
 def names_in(node):
@@ -152,7 +151,7 @@ class Evaluator:
         """Define `name` as the value of `expr`, which may use numbers and units only."""
         if not self._owned:
             raise RuntimeError("define_unit needs an Evaluator built with fork=True")
-        if not _UNIT_NAME_RE.match(name):
+        if not UNIT_NAME_RE.match(name):
             raise EvalError("Unit names use ASCII letters, digits and _, and start with a letter")
         if self.is_unit(name):
             means = str(self.ureg.parse_units(name))  # `dsmoot` reads as deci + smoot
@@ -538,19 +537,19 @@ class Evaluator:
     def fn_hstack(self, a, *rest): return self._stack("hstack", 1, a, rest)
     def fn_vstack(self, a, *rest): return self._stack("vstack", 0, a, rest)
 
-    def _reduce(self, fname, fn, A):
+    def _reduce(self, fn, A):
         return self.Q(float(fn(np.asarray(A.magnitude, dtype=float))), A.units)
 
-    def fn_sum(self, A): return self._reduce("sum", np.sum, A)
-    def fn_mean(self, A): return self._reduce("mean", np.mean, A)
-    def fn_min(self, A): return self._reduce("min", np.min, A)
-    def fn_max(self, A): return self._reduce("max", np.max, A)
+    def fn_sum(self, A): return self._reduce(np.sum, A)
+    def fn_mean(self, A): return self._reduce(np.mean, A)
+    def fn_min(self, A): return self._reduce(np.min, A)
+    def fn_max(self, A): return self._reduce(np.max, A)
 
     def fn_props(self, out, *args):
         """Material and fluid properties from CoolProp: props("D", "T", 300'K, "P", 1'atm, "Water")."""
         return _props.props(self.ureg, out, *args)
 
-    # ---- statements -------------------------------------------------------
+    # ---- checks -----------------------------------------------------------
     def check_finite(self, q):
         if not np.all(np.isfinite(np.asarray(q.magnitude, dtype=float))):
             raise EvalError("Result is not finite (division by zero or domain error)")

@@ -23,7 +23,7 @@ FS, TICK_FS, TITLE_FS = 12, 11, 14
 # pointer stays on the axis strip being scrolled). A label that needs more makes the margin
 # grow to fit it, and the frame moves with it.
 LABEL_CHARS = 6
-_SUB = re.compile(r"_(\{[^}]*\}|[A-Za-z0-9]+)")
+SUB_RE = re.compile(r"_(\{[^}]*\}|[A-Za-z0-9]+)")
 _DASH = {"solid": "", "dashed": "6 4", "dotted": "1 4"}
 
 
@@ -34,7 +34,7 @@ def esc(s):
 def markup(text, size):
     """Escaped SVG text with `_sub` and `_{sub}` as lowered, smaller runs."""
     out, pos = [], 0
-    for m in _SUB.finditer(text):
+    for m in SUB_RE.finditer(text):
         out.append(esc(text[pos:m.start()]))
         d = size * 0.25
         out.append(f'<tspan dy="{d:.1f}" font-size="{size * 0.75:.1f}">{esc(m.group(1).strip("{}"))}</tspan>'
@@ -46,7 +46,7 @@ def markup(text, size):
 
 def text_width(text, size):
     """Rough width, for sizing margins. Plex Sans averages a little over half an em."""
-    plain = _SUB.sub(lambda m: "." * max(1, round(len(m.group(1).strip("{}")) * 0.75)), text)
+    plain = SUB_RE.sub(lambda m: "." * max(1, round(len(m.group(1).strip("{}")) * 0.75)), text)
     return len(plain) * size * 0.56
 
 

@@ -495,7 +495,7 @@ class Problem:
                     q = self.ev.eval(node).to(u.units)
                     mag = np.broadcast_to(np.asarray(q.magnitude, dtype=float), u.shape).ravel()
                 except Exception as e:
-                    raise SolverError(f"line {line}: {label} bound: {self.describe(e, None, self.ev)}") from None
+                    raise SolverError(f"line {line}: {label} bound: {self.describe(e)}") from None
                 arr[u.off:u.off + u.size] = mag
         if np.any(lo > hi):
             raise SolverError("A lower bound is above its upper bound")
@@ -575,7 +575,7 @@ class Problem:
         except SolverError:
             raise
         except Exception as ex:
-            raise SolverError(f"line {e.rel.line}: {self.describe(ex, None, self.ev)}") from None
+            raise SolverError(f"line {e.rel.line}: {self.describe(ex)}") from None
         e.size = v.size
         if not np.all(np.isfinite(v)):
             raise SolverError(f"line {e.rel.line} is not finite at {self.where(x)} "
@@ -782,7 +782,7 @@ def prepare(block, ev, describe):
     except SolverError:
         raise
     except Exception as e:
-        raise SolverError(describe(e, None, ev)) from None
+        raise SolverError(describe(e)) from None
 
 
 def compare(old, new):

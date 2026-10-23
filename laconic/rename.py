@@ -4,7 +4,7 @@ Works on the source text, token by token, so comments, commands and numbers like
 metre) alone, and renaming `'smoot` leaves a variable `smoot` alone."""
 import re
 
-from .evaluator import CONSTANTS, Evaluator
+from .evaluator import CONSTANTS, UNIT_NAME_RE, Evaluator
 from . import solver
 from .plotopts import OPT_RE, expr_spans, is_plot_line
 
@@ -15,7 +15,6 @@ _TOKEN = re.compile(
     r"|(?P<num>(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)"
     rf"|(?P<name>{NAME})")
 _VALID = re.compile(rf"^{NAME}$")
-_UNIT_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
 
 
 class RenameError(ValueError):
@@ -72,9 +71,9 @@ def _rename_unit(text, old, new, confirm):
     it needs `confirm`: every use is swapped for `new`, which is either another
     existing unit or a new one, defined at the top of the sheet as equal to the old unit for the user to
     adjust."""
-    if not _UNIT_NAME.match(old):
+    if not UNIT_NAME_RE.match(old):
         raise RenameError(f"'{old} is not a valid unit name")
-    if not _UNIT_NAME.match(new):
+    if not UNIT_NAME_RE.match(new):
         raise RenameError(f"'{new} is not a valid unit name: use ASCII letters, digits and _, starting with a letter")
     if old == new:
         raise RenameError("The new name is the same as the old one")

@@ -2,8 +2,8 @@
 # Installs LENS for the current user: copies the binary and icon under ~/.local and adds a
 # launcher entry (.desktop file) to the application menu. Any earlier install is removed first.
 #
-#   ./install-linux.sh              install from lens-linux-x64 and lens-icon.png next to this script
-#   ./install-linux.sh --uninstall  remove LENS and its launcher
+#   sh lens-install-linux.sh        install from lens-linux-x64 and lens-icon.png next to this script
+#   sh lens-install-linux.sh --uninstall  remove LENS and its launcher
 #
 # Run it from the folder holding the files downloaded from the release page. Missing files are
 # fetched from the latest release. No root needed; XDG_DATA_HOME is honoured.

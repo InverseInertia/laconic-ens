@@ -4,7 +4,7 @@ import pytest
 
 pytest.importorskip("playwright.sync_api")
 pytest.importorskip("scipy")
-from test_ui import page, reset, server, value  # noqa: E402,F401  (fixtures and helpers)
+from uihelpers import reset, value  # noqa: E402
 
 ROOT = "x = 1'm\\ny = 1'm\\n!root x, y\\n  equation: x^2 + y^2 = 4'm^2\\n  equation: x = y\\nz = x * 2\\n"
 STATE = "document.querySelector('.solver-tools').dataset.state"
