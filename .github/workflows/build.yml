@@ -61,7 +61,7 @@ jobs:
         with: { path: src }
       - name: Add the Linux installer and its icon
         run: |
-          cp src/packaging/install-linux.sh release/install-linux.sh
+          cp src/packaging/install-linux.sh release/lens-install-linux.sh
           cp src/packaging/icon.png release/lens-icon.png
           chmod +x release/install-linux.sh
       - uses: softprops/action-gh-release@v2
