@@ -123,26 +123,17 @@ class Fmt:
         if sig is None and self.places is not None:
             s = f"{x:.{self.places}f}"
             return (s[1:] if s.startswith("-") and float(s) == 0 else s), None
-        keep = sig is None          # display setting: keep trailing zeros; typed numbers drop them
-        keep = self.keep_zeros and sig is None
+        keep = self.keep_zeros and sig is None   # typed-in numbers never get padded
         sig = sig or self.sig
         if x == 0:
             return ("0." + "0" * (sig - 1) if keep and sig > 1 else "0"), None
-        if keep:
-            e = f"{x:.{sig - 1}e}"
-            mant, exp = e.split("e")
-            exp = int(exp)
-            if -4 <= exp < 7:
-                return f"{float(e):.{max(0, sig - 1 - exp)}f}", None
-            return mant, exp
-        mant, exp = f"{x:.{sig - 1}e}".split("e")
+        e = f"{x:.{sig - 1}e}"                   # rounded to sig figures
+        mant, exp = e.split("e")
         exp = int(exp)
         if -4 <= exp < 7:
-            s = f"{x:.{max(sig - 1 - exp, 0)}f}"
+            s = f"{float(e):.{max(0, sig - 1 - exp)}f}"
             return (s if keep or "." not in s else s.rstrip("0").rstrip(".")), None
-        if not keep and "." in mant:
-            mant = mant.rstrip("0").rstrip(".")
-        return mant, exp
+        return (mant if keep or "." not in mant else mant.rstrip("0").rstrip(".")), exp
 
     def number(self, x, sig=None):
         mant, exp = self._parts(x, sig)
