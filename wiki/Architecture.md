@@ -62,6 +62,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `fonts/` | IBM Plex and OCR-A, self-hosted |
 | `example.lens` | The sheet the page opens with |
 
+The example worksheets live in `laconic/examples/` and are served by `/api/examples`.
+
 The pure-function JS files also load under Node, which is how they are tested without a browser.
 
 ## HTTP API

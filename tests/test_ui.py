@@ -201,3 +201,27 @@ def test_help_dialog_opens_and_links_to_keys(page):
     page.wait_for_selector("#helpDlg", state="hidden")
     page.keyboard.press("F1")
     page.wait_for_selector("#helpDlg[open]")
+
+
+def test_help_shows_on_first_open_only(page, server):
+    import json
+    from laconic import settings
+    path = settings.config_dir() / "settings.json"
+    data = json.loads(path.read_text()); data["welcomed"] = False; path.write_text(json.dumps(data))
+    page.reload()
+    page.wait_for_selector("#helpDlg[open]")
+    assert page.is_visible("#helpLogo svg, #helpLogo img")
+    assert page.get_attribute("a.wiki >> nth=0", "href").startswith("https://github.com/inverseinertia/laconic-ens/wiki")
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    page.wait_for_timeout(300)
+    assert not page.evaluate("document.querySelector('#helpDlg').open")
+
+
+def test_help_opens_bundled_example(page):
+    page.click("#helpBtn")
+    page.wait_for_selector("#exampleList li button")
+    page.once("dialog", lambda d: d.accept())
+    page.click("#exampleList li button >> nth=0")
+    page.wait_for_selector("#helpDlg", state="hidden")
+    assert "Simply supported beam" in page.input_value("#src") or "beam" in page.input_value("#name")

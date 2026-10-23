@@ -22,6 +22,7 @@ from .vocab import props_vocabulary, vocabulary
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
+EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
 
 
 class Client(BaseModel):
@@ -221,6 +222,32 @@ def solve_edit(body: SolveEditBody):
 @app.get("/api/settings")
 def get_settings():
     return settings.load()
+
+
+@app.put("/api/welcomed")
+def put_welcomed():
+    settings.save_welcomed()
+    return {"ok": True}
+
+
+def _example_title(path):
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("##"):
+            return line.lstrip("#").strip()
+    return path.stem
+
+
+@app.get("/api/examples")
+def list_examples():
+    return [{"name": p.stem, "title": _example_title(p)} for p in sorted(EXAMPLES.glob("*.lens"))]
+
+
+@app.get("/api/examples/{name}")
+def get_example(name: str):
+    path = EXAMPLES / f"{name}.lens"
+    if name not in {p.stem for p in EXAMPLES.glob("*.lens")}:
+        raise HTTPException(404, "no such example")
+    return PlainTextResponse(path.read_text(encoding="utf-8"))
 
 
 @app.get("/api/vocab")

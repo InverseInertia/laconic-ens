@@ -20,7 +20,7 @@ build-backend = "setuptools.build_meta"
 packages = ["laconic"]  # explicit: packaging/ holds build scripts, not a package
 
 [tool.setuptools.package-data]
-laconic = ["static/**/*"]
+laconic = ["static/**/*", "examples/*.lens"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

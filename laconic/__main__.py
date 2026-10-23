@@ -11,6 +11,8 @@ from .sheet import solve_block
 from .solver import write_result
 from .plotsvg import render_svg
 
+EXAMPLES = Path(__file__).parent / "examples"
+
 _CHROMIUM = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
              "microsoft-edge", "brave-browser")
 
@@ -67,7 +69,16 @@ def main():
     ap.add_argument("--open", action="store_true", help="with --serve, open the default browser")
     ap.add_argument("--app", action="store_true", help="with --serve, open a Chromium app window")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--export-examples", metavar="DIR", help="copy the example worksheets into DIR and exit")
     a = ap.parse_args()
+
+    if a.export_examples:
+        out = Path(a.export_examples)
+        out.mkdir(parents=True, exist_ok=True)
+        for p in sorted(EXAMPLES.glob("*.lens")):
+            shutil.copyfile(p, out / p.name)
+            print(f"wrote {out / p.name}")
+        return
 
     if a.serve:
         import uvicorn

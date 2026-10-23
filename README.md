@@ -28,10 +28,10 @@ Ready-made programs for Windows and Linux are on the
       pip install -e .[dev]
       lens --serve --app                # web UI in a Chromium app window
       lens --serve --open               # or in your default browser
-      lens examples/beam.lens           # print results in the terminal
-      lens examples/beam.lens --tex beam.tex
-      lens examples/plots.lens --plots figures    # each plot as an SVG file
-      lens examples/solve.lens --solve  # run solver blocks that are out of date
+      lens laconic/examples/beam.lens           # print results in the terminal
+      lens laconic/examples/beam.lens --tex beam.tex
+      lens laconic/examples/plots.lens --plots figures    # each plot as an SVG file
+      lens laconic/examples/solve.lens --solve  # run solver blocks that are out of date
 
 `python -m laconic` works too. The web page serves its fonts and KaTeX from the package, so it works
 offline. Exported `.tex` needs siunitx v3 or newer.

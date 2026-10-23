@@ -19,10 +19,10 @@ Needs Python 3.10 or newer. The dependencies include CoolProp and scipy.
 pip install -e .[dev]
 lens --serve --app                          # web UI in a Chromium app window
 lens --serve --open                         # or in your default browser
-lens examples/beam.lens                     # print results in the terminal
-lens examples/beam.lens --tex beam.tex      # LaTeX document
-lens examples/plots.lens --plots figures    # each plot as an SVG file
-lens examples/solve.lens --solve            # run solver blocks that are out of date and store the results
+lens laconic/examples/beam.lens                     # print results in the terminal
+lens laconic/examples/beam.lens --tex beam.tex      # LaTeX document
+lens laconic/examples/plots.lens --plots figures    # each plot as an SVG file
+lens laconic/examples/solve.lens --solve            # run solver blocks that are out of date and store the results
 ```
 
 `python -m laconic` works too. `--port` changes the port (default 8765).
@@ -31,5 +31,5 @@ lens examples/solve.lens --solve            # run solver blocks that are out of 
 
 - The page serves KaTeX and the fonts from `laconic/static/`, so it works offline.
 - Exported `.tex` files need siunitx v3 or newer (and `pgfplots` when a sheet has plots).
-- Worksheets are UTF-8 text, conventionally `.lens`. The `examples/` folder has two to start from.
+- Worksheets are UTF-8 text, conventionally `.lens`. The examples (`laconic/examples/`) are bundled with the program: open them from the Welcome dialog, or copy them out with `lens --export-examples DIR`. The Linux installer also puts them in its install folder.
 - In a normal browser tab Ctrl+T and Ctrl+N belong to the browser, so use Alt+T. `--app` opens a tab-less Chromium window, which may let Ctrl+T through (untested).
