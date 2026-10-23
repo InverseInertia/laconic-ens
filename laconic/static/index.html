@@ -134,6 +134,7 @@
   .dlg-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--rule); background: var(--paper-deep); }
   .dlg-foot .spacer { flex: 1; }
   .note { font: 400 13px/1.45 var(--sans); color: var(--ink-soft); margin: 0 0 10px; }
+  .theme-msg { color: var(--err); font-weight: 500; }
   table.keys { border-collapse: collapse; width: 100%; font: 400 13.5px/1.4 var(--sans); }
   table.keys td { padding: 5px 10px 5px 0; vertical-align: top; border-bottom: 1px solid var(--grid); }
   table.keys td:first-child { white-space: nowrap; width: 1%; }
@@ -388,6 +389,7 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
     <section class="set-sec">
       <h3>Theme</h3>
       <p class="note">Changes apply immediately and are kept in this browser.</p>
+      <p class="note theme-msg" id="themeMsg" role="alert" hidden></p>
       <fieldset class="set-grp">
         <legend>Fonts</legend>
         <label class="set-row"><span>Interface and output</span><select id="fontSans"></select></label>
@@ -924,6 +926,7 @@ function contrast(a, b) {  // WCAG contrast ratio of two #rrggbb colors
   return (hi + 0.05) / (lo + 0.05);
 }
 const DEFAULT_THEME = {sans: 0, mono: 0, bg: "grid", colors: {...PRESETS["LENS green"]}};
+let themeNotice = "";  // set when a saved theme had to be replaced at load
 let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
 {
   const saved = store.get("theme", null);
@@ -934,9 +937,13 @@ let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
     for (const [k] of COLOR_FIELDS) if (typeof saved.colors?.[k] === "string" && /^#[0-9a-f]{6}$/i.test(saved.colors[k])) theme.colors[k] = saved.colors[k];
     // A saved palette whose ink can't be read on its paper (all black, say) would leave the page
     // unusable and the Settings dialog unreachable by eye, so it falls back to the default colors.
-    if (contrast(theme.colors.paper, theme.colors.ink) < 3) theme.colors = {...DEFAULT_THEME.colors};
+    if (contrast(theme.colors.paper, theme.colors.ink) < 3) {
+      theme.colors = {...DEFAULT_THEME.colors};
+      themeNotice = "Your saved theme colors were unreadable (ink too close to paper), so they were reset to the default.";
+    }
   }
 }
+if (themeNotice) say(themeNotice);
 function applyTheme() {
   const root = document.documentElement, c = theme.colors;
   root.style.setProperty("--sans", FONTS_SANS[theme.sans][1]);
@@ -955,6 +962,11 @@ function syncThemeForm() {
   const match = Object.keys(PRESETS).find((n) => sameColors(PRESETS[n], theme.colors));
   $("#preset").value = match ?? "custom";
   for (const [k] of COLOR_FIELDS) $("#c-" + k).value = theme.colors[k];
+  const ratio = contrast(theme.colors.paper, theme.colors.ink), el = $("#themeMsg");
+  el.textContent = ratio < 3
+    ? `Warning: ink and paper are hard to tell apart (contrast ${ratio.toFixed(1)}:1, at least 3:1 is needed). On reload this theme is replaced by the default colors.`
+    : themeNotice;
+  el.hidden = !el.textContent;
 }
 function buildThemeForm() {
   const options = (list) => list.map(([name], i) => Object.assign(document.createElement("option"), {value: i, textContent: name}));
@@ -965,15 +977,15 @@ function buildThemeForm() {
   $("#swatches").replaceChildren(...COLOR_FIELDS.map(([k, label]) => {
     const l = document.createElement("label"), i = Object.assign(document.createElement("input"), {type: "color", id: "c-" + k});
     const name = Object.assign(document.createElement("span"), {textContent: label});
-    i.oninput = () => { theme.colors[k] = i.value; applyTheme(); saveTheme(); syncThemeForm(); };
+    i.oninput = () => { themeNotice = ""; theme.colors[k] = i.value; applyTheme(); saveTheme(); syncThemeForm(); };
     l.append(name, i);
     return l;
   }));
   $("#fontSans").onchange = (ev) => { theme.sans = +ev.target.value; applyTheme(); saveTheme(); };
   $("#fontMono").onchange = (ev) => { theme.mono = +ev.target.value; applyTheme(); saveTheme(); };
   $("#bgStyle").onchange = (ev) => { theme.bg = ev.target.value; applyTheme(); saveTheme(); };
-  $("#preset").onchange = (ev) => { const p = PRESETS[ev.target.value]; if (p) { theme.colors = {...p}; applyTheme(); saveTheme(); syncThemeForm(); } };
-  $("#themeReset").onclick = () => { theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}}; applyTheme(); saveTheme(); syncThemeForm(); };
+  $("#preset").onchange = (ev) => { const p = PRESETS[ev.target.value]; if (p) { themeNotice = ""; theme.colors = {...p}; applyTheme(); saveTheme(); syncThemeForm(); } };
+  $("#themeReset").onclick = () => { themeNotice = ""; theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}}; applyTheme(); saveTheme(); syncThemeForm(); };
 }
 buildThemeForm();
 applyTheme();
