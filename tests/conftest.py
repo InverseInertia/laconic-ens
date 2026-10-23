@@ -13,6 +13,8 @@ def server(tmp_path_factory):
     uvicorn = pytest.importorskip("uvicorn")
     os.environ["LENS_CONFIG_DIR"] = str(tmp_path_factory.mktemp("cfg"))
     from laconic.server import app
+    from laconic import settings
+    settings.save_welcomed()  # the welcome dialog is for the first run; tests that want it reset this
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]

@@ -204,6 +204,11 @@ def test_help_dialog_opens_and_links_to_keys(page):
 
 
 def test_help_shows_on_first_open_only(page, server):
+    import json
+    from laconic import settings
+    path = settings.config_dir() / "settings.json"
+    data = json.loads(path.read_text()); data["welcomed"] = False; path.write_text(json.dumps(data))
+    page.reload()
     page.wait_for_selector("#helpDlg[open]")
     assert page.is_visible("#helpLogo svg, #helpLogo img")
     assert page.get_attribute("a.wiki >> nth=0", "href").startswith("https://github.com/inverseinertia/laconic-ens/wiki")
