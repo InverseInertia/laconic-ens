@@ -587,9 +587,18 @@ const download = (name, text, type) => downloadBlob(name, new Blob([text], {type
 const stem = () => (nameEl.value.trim() || "sheet").replace(/\.\w+$/, "");
 
 $("#save").onclick = async () => {
+  // Ask for the location first: the picker needs the click's user activation, which the fetch could outlast.
+  let handle = null;
+  if (window.showSaveFilePicker) {
+    try {
+      handle = await showSaveFilePicker({suggestedName: stem() + ".lens", types: [{description: "LENS worksheet", accept: {"text/plain": [".lens"]}}]});
+    } catch (e) { if (e.name === "AbortError") return; }
+  }
   let text = src.value;
   try { const res = await post("/api/save"); if (res.ok) text = await res.text(); } catch {}
-  download(stem() + ".lens", text, "text/plain");
+  if (!handle) return download(stem() + ".lens", text, "text/plain");
+  const w = await handle.createWritable(); await w.write(text); await w.close();
+  nameEl.value = handle.name.replace(/\.\w+$/, "");
 };
 $("#export").onclick = async () => download(stem() + ".tex", await (await post("/api/export")).text(), "application/x-tex");
 $("#open").onclick = () => $("#file").click();
