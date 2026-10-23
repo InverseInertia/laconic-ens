@@ -33,3 +33,17 @@
   font-display: swap;
   src: url("ibm-plex-sans-latin-600-normal.woff2") format("woff2");
 }
+@font-face {
+  font-family: "OCR-A";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("ocr-a-400-normal.ttf") format("truetype");
+}
+@font-face {
+  font-family: "OCR-A";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("ocr-a-700-normal.ttf") format("truetype");
+}
