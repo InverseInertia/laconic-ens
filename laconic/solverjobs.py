@@ -16,7 +16,7 @@ import uuid
 
 from . import solver
 
-STARTUP_SLACK = 30.0     # seconds allowed on top of a block's timeout for the worker to start up
+STARTUP_SLACK = 30.0     # seconds a fresh worker may take to start before the job's own clock begins
 MAX_LOG_LINES = 5000
 KEEP_JOBS = 20
 
@@ -45,6 +45,7 @@ def _worker(conn):
             return
         if job is None:
             return
+        conn.send(("begin", None))   # the block's timeout counts from here, not from worker start-up
         try:
             out = solve_block(job["text"], job["line"], job["units"], log=lambda m: conn.send(("log", m)),
                               mode=job["mode"])
@@ -181,7 +182,9 @@ class Jobs:
             try:
                 if conn.poll(0.1):
                     kind, payload = conn.recv()
-                    if kind == "log":
+                    if kind == "begin":
+                        deadline = time.monotonic() + job.timeout
+                    elif kind == "log":
                         job.add(payload)
                     elif kind == "done":
                         ok = bool(payload.get("ok"))

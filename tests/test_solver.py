@@ -337,3 +337,38 @@ def test_the_cli_solves_what_is_out_of_date_and_writes_the_file(tmp_path, capsys
     assert path.read_text(encoding="utf-8") == text
     assert block(text).solver["status"] == "valid"
     assert _solve_all(path, text, []) == text           # nothing left to do, nothing rewritten
+
+
+# ---- heavier cases (found by stress testing) ---------------------------------------------------------
+def test_a_flat_multiple_root_still_closes_its_bracket():
+    out = solve_block("x = 1\n!root x\n  equation: x^3 = 0\n  bounds: -1 .. 2\n", 2, log=lambda m: None)
+    assert out["ok"] and abs(out["record"]["values"][0]["mag"]) < 1e-6
+    out = solve_block("x = 1\n!root x\n  equation: x^3 = 0\n  bounds: -1 .. 2\n  maxiter: 5\n", 2, log=lambda m: None)
+    assert not out["ok"] and "did not close within 5 steps" in out["message"]
+
+
+def rosenbrock(n, method):
+    return (f"S1 = hstack(identity({n - 1}), zeros({n - 1}, 1))\nS2 = hstack(zeros({n - 1}, 1), identity({n - 1}))\n"
+            f"x = -1.2 * ones({n}, 1)\n!minimize x\n  objective: sum(100 * (S2 * x - (S1 * x) .* (S1 * x))"
+            f" .* (S2 * x - (S1 * x) .* (S1 * x)) + (1 - S1 * x) .* (1 - S1 * x))\n  method: {method}\n")
+
+
+def test_tnc_gets_an_evaluation_budget_that_fits_finite_differences():
+    # scipy's own TNC default (10 n evaluations) stops a 20-variable problem after a few gradients.
+    out = solve_block(rosenbrock(20, "TNC"), 4, log=lambda m: None)
+    assert out["ok"], out["message"]
+    assert max(abs(v - 1) for v in sum(out["record"]["values"][0]["mag"], [])) < 1e-3
+
+
+def test_a_large_matrix_input_hashes_quickly_and_ignores_last_bit_noise():
+    import time
+    from laconic.evaluator import registry
+    Q = registry().Quantity
+    assert solver._qdigest(Q(0.1 + 0.2, "m")) == solver._qdigest(Q(0.3, "m"))
+    assert solver._qdigest(Q(0.3, "m")) != solver._qdigest(Q(0.3000001, "m"))
+    assert solver._qdigest(Q(0.3, "m")) != solver._qdigest(Q(0.3, "s"))
+    import numpy as np
+    big = Q(np.random.default_rng(1).normal(size=(1000, 1000)), "N")
+    t0 = time.monotonic()
+    solver._qdigest(big)
+    assert time.monotonic() - t0 < 0.5

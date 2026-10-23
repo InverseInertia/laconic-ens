@@ -358,9 +358,15 @@ def tainted(ev, nodes, local=()):
 
 def _qdigest(q):
     """A quantity as hashable text. Values are cut to 12 significant digits, so a last-bit
-    difference in a library (another machine, another BLAS) does not make a result look stale."""
+    difference in a library (another machine, another BLAS) does not make a result look stale.
+    Done with numpy, since a matrix input can have a million entries."""
     mag = np.asarray(q.magnitude, dtype=float)
-    return [str(q.units), list(mag.shape), [f"{v:.12g}" for v in mag.ravel()]]
+    flat = mag.ravel()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        exp = np.where(flat == 0, 0.0, np.floor(np.log10(np.abs(flat))))
+        mant = np.round(flat / 10.0 ** (exp - 11))
+    blob = mant.astype(np.int64).tobytes() + exp.astype(np.int16).tobytes()
+    return [str(q.units), list(mag.shape), hashlib.sha256(blob).hexdigest()]
 
 
 def digest(block, ev, unknowns):
@@ -654,7 +660,11 @@ class Problem:
                                  for e in self.cons]
         opts = {}
         if b.maxiter:
-            opts["maxfun" if self.method == "TNC" else "maxiter"] = b.maxiter
+            opts["maxiter"] = b.maxiter
+        if self.method in ("L-BFGS-B", "TNC"):
+            # These cap function evaluations too, and every finite-difference gradient costs n + 1 of
+            # them; scipy's defaults (15000, and 10 n for TNC) stop large problems long before they converge.
+            opts["maxfun"] = max(15000, (b.maxiter or 500) * (self.n + 1))
         x_in = np.clip(x0, self.lo, self.hi) if self.bounded else x0
         r = optimize.minimize(lambda x: sign * self.objective(x), x_in, method=self.method, tol=b.tol,
                               options=opts or None, **kw)
@@ -677,11 +687,16 @@ class Problem:
             raise SolverError(f"The equation has the same sign at both ends of the bounds "
                               f"({flo:.4g} and {fhi:.4g}), so the bracket may hold no root. Widen the bounds or move them")
         b = self.block
-        kw = {"maxiter": b.maxiter} if b.maxiter else {}
+        # One evaluation per step, so a generous cap costs little; scipy's 100 is too few for a
+        # flat (multiple) root, where Brent falls back to slow steps.
+        kw = {"maxiter": b.maxiter or 1000}
         if b.tol:
             kw["xtol"] = b.tol
         x, r = optimize.brentq(f, lo, hi, full_output=True, disp=False, **kw)
-        return np.array([x]), bool(r.converged), "bracketed root found" if r.converged else str(r.flag)
+        if r.converged:
+            return np.array([x]), True, "bracketed root found"
+        return np.array([x]), False, (f"the bracket did not close within {kw['maxiter']} steps (last x = {x:.6g}). "
+                                      "Raise `maxiter:` or loosen `tol:`")
 
     # -- results
     def record(self, x, obj, resid, message):

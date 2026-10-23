@@ -496,6 +496,8 @@ tab-less Chromium window, which may let Ctrl+T through; that has not been tested
 events on plots) and are skipped unless `playwright` is installed
 (`pip install playwright`; set `CHROMIUM_PATH` to use a browser you already have). One test compiles an
 exported document with plots and is skipped unless `pdflatex` (with pgfplots and siunitx v3) is installed.
+`python tests/stress/run_solver_stress.py` runs about 35 heavy solver cases (Rosenbrock up to 100 variables, a
+1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process.
 
 ## Standalone builds
 

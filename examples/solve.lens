@@ -13,7 +13,7 @@ d_max = L / 360
 w = 10'kN / 'm
 !root w
   equation: 5 * w * L^4 / (384 * E * I) = d_max
-  #@ result {"hash":"b8085110e630","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":39.79881115683585,"unit":"kilonewton / meter"}],"nfev":7,"message":"The solution converged.","resid":0.0}
+  #@ result {"hash":"702ea551ed33","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":39.79881115683585,"unit":"kilonewton / meter"}],"nfev":7,"message":"The solution converged.","resid":0.0}
 M_max = w * L^2 / 8 -> 'kN * 'm
 
 ## Root: a pump meets its system curve (several unknowns work the same way)
@@ -24,7 +24,7 @@ Q = 10'L / 's
 !root Q
   equation: H_pump(Q) = H_sys(Q)
   bounds: 0'L / 's .. 100'L / 's
-  #@ result {"hash":"f9c9978c4559","kind":"root","method":"brentq","scipy":"1.18.1","values":[{"mag":20.0,"unit":"liter / second"}],"nfev":15,"message":"bracketed root found","resid":0.0}
+  #@ result {"hash":"1a1af010f877","kind":"root","method":"brentq","scipy":"1.18.1","values":[{"mag":20.0,"unit":"liter / second"}],"nfev":15,"message":"bracketed root found","resid":0.0}
 H_op = H_pump(Q)
 
 ## Minimize: the lightest rectangular section that is strong enough
@@ -37,4 +37,4 @@ h = 200'mm
   constraint: h <= 3 * b
   bounds b: 40'mm .. 300'mm
   bounds h: 40'mm .. 600'mm
-  #@ result {"hash":"f0a0792a9415","kind":"minimize","method":"SLSQP","scipy":"1.18.1","values":[{"mag":69.33612743397613,"unit":"millimeter"},{"mag":208.00838230487713,"unit":"millimeter"}],"nfev":54,"message":"Optimization terminated successfully","resid":9.35e-06,"obj":{"mag":14422.495702826187,"unit":"millimeter ** 2"}}
+  #@ result {"hash":"c3f9bbd74e5d","kind":"minimize","method":"SLSQP","scipy":"1.18.1","values":[{"mag":69.33612743397613,"unit":"millimeter"},{"mag":208.00838230487713,"unit":"millimeter"}],"nfev":54,"message":"Optimization terminated successfully","resid":9.35e-06,"obj":{"mag":14422.495702826187,"unit":"millimeter ** 2"}}

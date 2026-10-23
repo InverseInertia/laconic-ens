@@ -19,6 +19,7 @@ SLOW = "x = 1'm\n!root x\n  equation: x^2 = 4'm^2\n  timeout: 1\n"
 def sleepy_worker(conn):
     """Stands in for a solver stuck inside one call: reports in, then never returns."""
     conn.recv()
+    conn.send(("begin", None))
     conn.send(("log", "started"))
     time.sleep(120)
 
@@ -92,9 +93,11 @@ def test_interrupting_kills_the_worker_even_when_it_is_stuck(sleepy):
 
 
 def test_a_job_over_its_time_limit_is_stopped(sleepy, monkeypatch):
-    monkeypatch.setattr(solverjobs, "STARTUP_SLACK", 0.0)
+    # The limit counts from when the worker takes the job; start-up allowance is not added to it.
+    monkeypatch.setattr(solverjobs, "STARTUP_SLACK", 100.0)
     job = wait(sleepy, sleepy.start(SLOW, 2, "run", []), seconds=10)
     assert job.state == "timeout" and "1 s limit" in job.log[-1]
+    assert job.finished - job.started < 5
 
 
 def test_a_worker_that_dies_is_reported(sleepy):
