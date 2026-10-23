@@ -509,6 +509,8 @@
     if (ctx && ctx.enabled === false) return null;
     const ls = lineStartOf(t, s), le = lineEndOf(t, e);
     if (isComment(t, ls)) return null;
+    // Inside quotes (a props() key or fluid such as "1-Butene") the text is not math.
+    if (((t.slice(ls, s).match(/"/g) || []).length % 2) === 1) return null;
     if (e > s && WRAPPERS.has(ch)) {
       const n = snap(t, s, e); // act on whole terms, however the text was highlighted
       if (!n) {

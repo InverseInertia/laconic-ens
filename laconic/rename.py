@@ -5,6 +5,7 @@ metre) alone, and renaming `'smoot` leaves a variable `smoot` alone."""
 import re
 
 from .evaluator import CONSTANTS, Evaluator
+from . import solver
 from .plotopts import OPT_RE, expr_spans, is_plot_line
 
 NAME = r"~?[^\W\d]\w*[`!@]*"
@@ -33,11 +34,19 @@ def _builtins():
 def _scan(text):
     """(line, spans) for each line, where spans are the parts that hold expressions.
     Under a `plot` only its limits, units and note positions are expressions; a title
-    is text and is never renamed."""
-    in_plot = False
+    is text and is never renamed. In a solver block the unknowns, equations, objective,
+    constraints and bounds are, and the stored result is not."""
+    in_plot = in_solver = False
     for line in text.splitlines(keepends=True):
-        yield line, expr_spans(line, in_plot)
-        in_plot = is_plot_line(line) or (in_plot and bool(OPT_RE.match(line)))
+        if solver.is_solver_line(line):
+            in_plot, in_solver = False, True
+            yield line, solver.expr_spans(line, False)
+        elif in_solver and solver.is_block_line(line):
+            yield line, solver.expr_spans(line, True)
+        else:
+            in_solver = False
+            yield line, expr_spans(line, in_plot)
+            in_plot = is_plot_line(line) or (in_plot and bool(OPT_RE.match(line)))
 
 
 def _tokens(text, kind):

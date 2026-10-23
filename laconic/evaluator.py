@@ -111,6 +111,7 @@ class Evaluator:
         self.plotdefs = {}     # set by `!plot key: value`, for the plots below it
         self.cleared = set()   # names removed by !clear, for a clearer error
         self.cleared_funcs = set()  # functions removed by !clearf
+        self.stale = set()     # variable keys whose value comes from a solver result that is out of date
         self.angle = "radian"  # "degree" after !trigdeg: bare numbers in trig calls are degrees
 
     # ---- name classification (shared with the LaTeX printer) -------------

@@ -157,6 +157,32 @@
   .plot-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
   .plot-tools button:hover { color: var(--paper); border-color: var(--ink); }
   .plot-tools .hint { font: 400 12px var(--sans); color: var(--text-soft); align-self: center; margin-left: 6px; }
+  .row { position: relative; }
+  .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 13px/1 var(--sans); color: var(--text-soft); cursor: help; }
+  .row.stale:not(.solver) .body { opacity: .72; }
+  .row.solver .body { padding: 6px 0 4px; }
+  .solver-box .s-head { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
+  .solver-box .s-values { margin: 2px 0 4px; }
+  .solver-box.is-stale .s-values { opacity: .6; }
+  .solver-box .s-val .katex-display { margin: 0; }
+  .solver-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+  .solver-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
+  .solver-tools button:hover:not(:disabled) { color: var(--paper); border-color: var(--ink); }
+  .solver-tools button:disabled { opacity: .45; cursor: default; }
+  .solver-tools button:disabled:hover { background: transparent; color: var(--text-soft); }
+  .solver-tools .s-autolbl { display: flex; align-items: center; gap: 4px; font: 400 12.5px var(--sans); color: var(--text-soft); cursor: pointer; }
+  .solver-tools .s-autolbl input { accent-color: var(--ink); margin: 0; }
+  .solver-tools .s-status { display: flex; align-items: baseline; gap: 6px; flex: 1 1 100%; font: 500 13px/1.35 var(--sans); }
+  .solver-tools .s-sym { flex: none; width: 1.2em; text-align: center; }
+  .solver-tools[data-state="run"] .s-sym { display: inline-block; animation: spin 1.1s linear infinite; }
+  .solver-tools[data-state="fail"] .s-status { color: var(--err); }
+  .solver-tools[data-state="none"] .s-status, .solver-tools[data-state="warn"] .s-status { color: var(--text); }
+  .solver-box .s-sub { font: 400 12px var(--sans); color: var(--text-soft); margin-top: 3px; min-height: 1em; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .solver-tools[data-state="run"] .s-sym { animation: none; } }
+  #solverLogDlg { width: min(900px, 96vw); }
+  #solverLogDlg .dlg-body { max-height: 70vh; padding: 0; }
+  #solverLogText { margin: 0; padding: 10px 16px; font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 68vh; overflow: auto; }
   .row.meta .body { font: 400 12px/1.4 var(--sans); color: var(--text-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
 
   #ac { position: fixed; z-index: 30; max-height: 60vh; overflow-y: auto; min-width: 230px; max-width: min(460px, 92vw); background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 rgba(23, 37, 61, .25); font: 400 13px/1.3 var(--mono); }
@@ -340,6 +366,18 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
   ylabel: M (kN&middot;m)</pre>
     <p>Indented <code>key: value</code> lines set the details. Drag the plot to pan, Ctrl + wheel to zoom, double-click to reset. The new view is written back into the sheet as text, so Ctrl+Z undoes it. Each plot can be saved as SVG or PNG.</p>
 
+    <h3>Solving and optimizing</h3>
+    <pre>x = 1'm   y = 1'm         <i>starting values come from ordinary variables</i>
+!root x, y
+  equation: x^2 + y^2 = 4'm^2
+  equation: x = y
+
+!minimize d                <i>or !maximize</i>
+  objective: cost(d)
+  constraint: d >= 0.5'm
+  bounds d: 0'm .. 3'm</pre>
+    <p>Solvers use scipy and can be slow, so they never run while you type. Under the block, <strong>Run</strong> solves it, <strong>Interrupt</strong> stops a stuck one, <strong>Auto</strong> re-solves a moment after its inputs change, <strong>Verify</strong> solves again and compares, and <strong>Log</strong> shows what happened. The answer is stored in the block as a <code>#@ result</code> line with a hash of everything the solver reads. If an input changes, the block shows <strong>&#9888; out of date</strong>, and so does every line computed from it.</p>
+
     <h3>Material properties</h3>
     <pre>rho = props("D", "T", 20'degC, "P", 1'atm, "Water")</pre>
     <p><code>props</code> looks up fluids and materials (density, viscosity, enthalpy, saturation temperatures, &hellip;) from CoolProp.</p>
@@ -371,6 +409,12 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
     </div>
     <div class="dlg-foot"><span class="spacer"></span><button type="submit" id="renameGo">Rename</button></div>
   </form>
+</dialog>
+
+<dialog id="solverLogDlg" aria-labelledby="solverLogTitle">
+  <div class="dlg-head"><h2 id="solverLogTitle">Solver log</h2><button class="close">Close</button></div>
+  <div class="dlg-body"><pre id="solverLogText" tabindex="0"></pre></div>
+  <div class="dlg-foot"><button id="solverLogCopy">Copy</button><span class="spacer"></span></div>
 </dialog>
 
 <dialog id="alertDlg" aria-labelledby="alertTitle" role="alertdialog">
@@ -430,6 +474,7 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
 <script src="/static/editing.js"></script>
 <script src="/static/paste.js"></script>
 <script src="/static/plotview.js"></script>
+<script src="/static/solverview.js"></script>
 <script src="/static/autocomplete.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
@@ -463,17 +508,19 @@ function typeset(el, tex) {
 function render(rows) {
   last = rows;
   // A plot's option lines are part of its row, so they get no row of their own (unless one is wrong).
-  out.replaceChildren(...rows.filter((r) => r.kind !== "plotopt").map((r) => {
+  out.replaceChildren(...rows.filter((r) => r.kind !== "plotopt" && r.kind !== "solveropt").map((r) => {
     const row = document.createElement("div");
     const snip = view === "latex" && r.snippet && r.kind !== "error";
-    row.className = snip ? "row snip" : "row " + r.kind;
+    row.className = (snip ? "row snip" : "row " + r.kind) + (r.stale ? " stale" : "");
     row.dataset.line = r.n;
     if (r.end) row.dataset.end = r.end;
     const no = document.createElement("div"); no.className = "no"; no.textContent = r.n;
     const body = document.createElement("div"); body.className = "body";
     if (snip) {
       const pre = document.createElement("pre"); pre.textContent = r.snippet; body.append(pre);
-    } else if (r.kind === "command") body.textContent = r.source.trim() + "  \u2192  " + r.text;
+      if (r.kind === "solver") body.append(Solvers.tools(r));
+    } else if (r.kind === "solver") body.append(Solvers.build(r));
+    else if (r.kind === "command") body.textContent = r.source.trim() + "  \u2192  " + r.text;
     else if (r.kind === "heading" || r.kind === "comment" || r.kind === "meta") body.textContent = r.text;
     else if (r.kind === "error") {
       const s = document.createElement("span"); s.className = "src"; s.textContent = r.source.trim();
@@ -481,6 +528,11 @@ function render(rows) {
     } else if (r.kind === "plot") body.append(plotBody(r));
     else if (r.latex) typeset(body, r.latex);
     row.append(no, body);
+    if (r.stale) {
+      const m = document.createElement("span"); m.className = "stale-mark"; m.textContent = "\u26a0";
+      m.title = "Uses a solver result that is out of date"; m.setAttribute("aria-label", m.title);
+      row.append(m);
+    }
     if (snip) {
       const copy = document.createElement("button");
       copy.className = "copy"; copy.textContent = "Copy"; copy.ariaLabel = `Copy LaTeX for line ${r.n}`;
@@ -491,6 +543,7 @@ function render(rows) {
     return row;
   }));
   markActive();
+  Solvers.after(rows);
 }
 
 async function evaluate() {
@@ -560,6 +613,15 @@ function replaceText(next) {
   if (from === to && insert === "") return;
   let caret = src.selectionStart;
   if (caret >= to) caret += insert.length - (to - from); else if (caret > from) caret = from;
+  // An edit made while the user is typing somewhere else (a dialog, the name box) must not take the
+  // focus; it goes in without joining the editor's undo stack. Otherwise it joins that stack.
+  const other = document.activeElement;
+  if (other && other !== src && other !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(other.tagName)) {
+    src.setRangeText(insert, from, to, "preserve");
+    src.setSelectionRange(Math.min(caret, src.value.length), Math.min(caret, src.value.length));
+    src.dispatchEvent(new Event("input", {bubbles: true}));
+    return;
+  }
   src.focus({preventScroll: true});   // so the edit joins the editor's undo stack
   acSkip = true;
   apply({from, to, insert, caret});
@@ -758,7 +820,15 @@ let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands:
 let ac = null, acSkip = false;
 
 async function loadVocab() {
-  try { vocab = await (await fetch("/api/vocab")).json(); } catch {}
+  try { vocab = {...await (await fetch("/api/vocab")).json(), props: vocab.props}; } catch {}
+}
+// props() keys and fluids need CoolProp on the server, which takes seconds to import, so they are
+// fetched the first time a props string is typed; the list opens when they arrive.
+let propsLoading = null;
+function loadProps() {
+  propsLoading ??= fetch("/api/vocab/props").then((r) => r.json()).then((p) => { vocab.props = p; })
+    .catch(() => { propsLoading = null; });
+  return propsLoading;
 }
 function values() {
   const out = {};
@@ -816,6 +886,11 @@ function acUpdate(force = false) {
   if (src.selectionStart !== src.selectionEnd) return acClose();
   const text = src.value, ctx = Autocomplete.context(text, src.selectionStart, {force});
   if (!ctx) return acClose();
+  if (ctx.kind === "prop" && !vocab.props) {
+    acClose();
+    loadProps().then(() => { if (vocab.props && src.value === text && document.activeElement === src) acUpdate(force); });
+    return;
+  }
   const items = Autocomplete.candidates(ctx, vocab, text, {values: values()});
   acShow({ctx, items, index: 0, moved: false, wrap: null, query: ""});
 }
@@ -1048,6 +1123,18 @@ for (const d of document.querySelectorAll("dialog:not(#alertDlg)")) {
   d.addEventListener("close", () => src.focus());
 }
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
+Solvers.init({
+  text: () => src.value,
+  setText: (next) => replaceText(next),
+  say,
+  typeset,
+});
+$("#solverLogCopy").onclick = () => copyText($("#solverLogText").textContent, "Copied the log");
+// A run belongs to this page: when it goes away the worker should not keep computing for nobody.
+addEventListener("pagehide", () => {
+  const a = Solvers.active;
+  if (a) navigator.sendBeacon(`/api/solve/${a.job}/interrupt`, new Blob(["{}"], {type: "application/json"}));
+});
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
 $("#helpKeys").onclick = () => $("#keysDlg").showModal();
 document.addEventListener("keydown", (ev) => {

@@ -48,7 +48,7 @@ def test_vocabulary_has_what_the_editor_completes():
     units = {u[0]: u for u in v["units"]}
     assert units["kN"][1] == "kilonewton" and units["kN"][2] == 1 and "mm" in units and "GPa" in units
     assert ["sqrt", "sqrt(x)"] in v["functions"] and "pi" in v["constants"]
-    assert [c[0] for c in v["commands"]] == ["clear", "clearf", "noassume", "assume", "trigdeg", "trigrad", "short", "long", "sigfigs", "sigfigsbig", "decplace", "plot", "plotspec"]
+    assert [c[0] for c in v["commands"]] == ["clear", "clearf", "noassume", "assume", "trigdeg", "trigrad", "short", "long", "sigfigs", "sigfigsbig", "decplace", "plot", "plotspec", "root", "minimize", "maximize"]
 
 
 def test_settings_survive_a_broken_file(config):
@@ -63,3 +63,22 @@ def test_saving_one_setting_keeps_the_other():
     server.put_greek(GreekBody(greek={"b": "ḃ"}))
     cfg = server.get_settings()
     assert cfg["greek"] == {"b": "ḃ"} and cfg["units"][0]["name"] == "smoot"
+
+
+def test_vocabulary_has_solver_options_and_methods():
+    v = server.vocab()["solver"]
+    assert [k for k, _ in v["keys"]["root"]][:2] == ["equation", "bounds"]
+    assert "objective" in [k for k, _ in v["keys"]["minimize"]]
+    assert [m for m, _ in v["methods"]["root"]] == ["hybr", "lm", "broyden1", "broyden2", "krylov", "brentq"]
+    assert "SLSQP" in [m for m, _ in v["methods"]["optimize"]] and all(d for _, d in v["methods"]["optimize"])
+    assert [c for c, _ in v["choices"]["autorun"]] == ["on", "off"]
+
+
+def test_props_vocabulary_lists_keys_and_fluids():
+    v = server.vocab_props()
+    keys = {k[0]: k for k in v["keys"]}
+    assert keys["T"][1:] == ["Temperature", "K", True, False]
+    assert keys["Tcrit"][4] is True and keys["Cpmass"][3] is False and keys["Prandtl"][2] == ""
+    names = [f[0] for f in v["fluids"]]
+    assert names[:2] == ["Water", "Air"] and "R134a" in names and "INCOMP::MEG[0.3]" in names
+    assert "H2O" in dict(v["fluids"])["Water"]

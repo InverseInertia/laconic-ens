@@ -110,4 +110,62 @@ eq([...A.scan('a = 1\nb = 2\nf(x, y) = x\n', 4).funcs.get('f').params], ['x', 'y
 eq([...A.scan('a = 1\nb = 2\n', 2).vars.keys()], ['a'], 'only the lines above');
 eq(A.unitDefs("# c\n'zap = 3'm\nx = 1\n  'a_b = 1/12").map((u) => u.name), ['zap', 'a_b'], 'unit definitions');
 
+// --- solver blocks -------------------------------------------------------------------------
+vocab.solver = {
+  keys: { root: [['equation', 'lhs = rhs'], ['bounds', 'low .. high'], ['method', 'which solver'], ['autorun', 'on/off']],
+          minimize: [['objective', 'f'], ['constraint', 'c'], ['bounds', 'low .. high'], ['method', 'which solver']] },
+  methods: { root: [['hybr', 'default'], ['lm', 'least squares'], ['brentq', 'bracketed']],
+             optimize: [['BFGS', 'default'], ['Nelder-Mead', 'simplex'], ['L-BFGS-B', 'bounds'], ['SLSQP', 'constraints']] },
+  choices: { autorun: [['on', 'auto'], ['off', 'manual']] },
+};
+const ROOT = 'x1 = 1\nx2 = 2\n!root x1, x2\n';
+eq(pick(ROOT + '  m|'), ['method'], 'option keys under a block');
+eq(pick('x = 1\n!root x\n  equation: x = 1\n  |', { force: true }), ['equation', 'bounds', 'method', 'autorun'], 'all keys by hand, in the block\'s order');
+eq(at(ROOT + '  |').ctx, null, 'no popup on a bare indent');
+eq(pick(ROOT + '  bo|'), ['bounds x1', 'bounds x2'], 'several unknowns: one bounds line per unknown');
+eq(pick('d = 1\n!minimize d\n  bo|'), ['bounds'], 'one unknown: plain bounds');
+eq(pick('d = 1\n!minimize d\n  ob|'), ['objective'], 'minimize has its own keys');
+eq(accepting(ROOT + '  me|'), ROOT + '  method: |', 'a key is inserted with its colon');
+eq(accepting(ROOT + '  me|: lm'), ROOT + '  method|: lm', 'not a second colon');
+eq(pick(ROOT + '  bounds |', { force: true }), ['x1', 'x2'], 'after bounds, the unknowns');
+eq(accepting(ROOT + '  bounds x|'), ROOT + '  bounds x1: |', 'and its colon');
+eq(pick(ROOT + '  method: |'), ['hybr', 'lm', 'brentq'], 'root methods');
+eq(pick('d = 1\n!minimize d\n  objective: d^2\n  method: |'), ['BFGS', 'Nelder-Mead', 'L-BFGS-B', 'SLSQP'], 'optimizer methods');
+eq(pick('d = 1\n!maximize d\n  method: l-|'), ['L-BFGS-B'], 'a method with a hyphen, ignoring case');
+eq(accepting('d = 1\n!minimize d\n  method: Nel|der'), 'd = 1\n!minimize d\n  method: Nelder-Mead|', 'the whole value is replaced');
+eq(pick(ROOT + '  autorun: |'), ['on', 'off'], 'autorun values');
+eq(at(ROOT + '  tol: 1|').ctx, null, 'nothing for a number option');
+eq(pick(ROOT + '  equation: x|1 = x2', { force: true }), ['x1', 'x2'], 'the left of an equation is an expression');
+eq(pick('x1 = 1\n!minimize x1\n  constraint: x| <= 3', { force: true }), ['x1'], 'and of a constraint');
+eq(pick('aa = 1\nab = 2\n!root a|', { force: true }), ['aa', 'ab'], 'variables in the header');
+eq(pick('aa = 1\nf(t) = t\n!root aa, f|', { force: true }), [], 'only variables: functions cannot be unknowns');
+eq(at('!ro|').ctx.kind, 'command', 'the command word is still a command');
+eq(at('x = 1\n!root x\n  equation: x = 1\n  #@ result {"a|').ctx, null, 'nothing in the stored result');
+eq(at('x = 1\n!root x\n  equation: x = 1\ny = x|x', { force: true }).ctx.kind, 'name', 'after the block, back to normal lines');
+eq(at('x = 1\n!root x\n  equation: x = 1\nzz|w = 3').ctx, null, '... where the left of = is a definition again');
+
+// --- props() strings ---------------------------------------------------------------------------------
+vocab.props = {
+  keys: [['T', 'Temperature', 'K', true, false], ['P', 'Pressure', 'Pa', true, false], ['D', 'Mass density', 'kg/m^3', true, false],
+         ['Cpmass', 'Mass specific constant pressure specific heat', 'J/kg/K', false, false], ['Tcrit', 'Temperature at the critical point', 'K', false, true]],
+  fluids: [['Water', 'pure fluid, H2O, R718'], ['Air', 'pure fluid, R729'], ['1-Butene', 'pure fluid, Butene'], ['INCOMP::MEG[0.3]', 'incompressible solution']],
+};
+eq(pick('rho = props("|'), ['T', 'P', 'D', 'Cpmass', 'Tcrit'], 'the output: every key, opened by the quote');
+eq(pick('rho = props("D", "|'), ['T', 'P', 'D'], 'a state input: only keys that can be inputs');
+eq(pick('rho = props("D", "T", 300\'K, "|'), ['T', 'P', 'D'], 'the second input');
+eq(pick('rho = props("D", "T", 300\'K, "P", p, "W|'), ['Water'], 'the fluid is the last argument');
+eq(pick('Tc = props("Tcrit", "|'), ['Water', 'Air', '1-Butene', 'INCOMP::MEG[0.3]'], 'a fixed property takes the fluid next');
+eq(pick('r = props("D", "T", T, "P", p, "h2o|'), ['Water'], 'fluids match their aliases');
+eq(pick('r = props("D", "T", T, "P", p, "1-|'), ['1-Butene'], 'names with hyphens');
+eq(pick('r = props("D", "T", T, "P", p, "INC|'), ['INCOMP::MEG[0.3]'], 'backend prefixes');
+eq(pick('r = props("cp|'), ['Cpmass'], 'keys ignoring case');
+eq(accepting('r = props("Cp|'), 'r = props("Cpmass"|', 'accepting closes the string');
+eq(accepting('r = props("D|'), 'r = props("D"|', 'even when the key is already typed in full');
+eq(pick('r = props("D|")'), [], 'but a closed string that already says it offers nothing');
+eq(accepting('r = props("C|", "T", T, "P", p, "Water")'), 'r = props("Cpmass"|, "T", T, "P", p, "Water")', 'or replaces its text');
+eq(at('x = props("D", "T", T|', { force: true }).ctx.kind, 'name', 'a value argument is an ordinary expression');
+eq(at('x = foo("D|').ctx, null, 'nothing in strings elsewhere');
+eq(at('x = props(min("D|').ctx, null, 'nor in a nested call');
+eq(A.candidates(at('r = props("|').ctx, { ...vocab, props: undefined }, 'r = props("'), [], 'nothing until the props list has arrived');
+
 console.log(`${n} autocomplete checks passed`);

@@ -1,6 +1,7 @@
 """Local web UI. One page, a few endpoints. The whole sheet is re-run on each
 edit; for worksheet-sized documents that takes a few milliseconds. Settings
 (Greek table, global units) live on the server, in `settings.py`."""
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -15,7 +16,9 @@ from .lifecycle import lifecycle
 from .plotopts import PlotError, apply_patch
 from .plotsvg import render_svg
 from .rename import RenameError, RenameWarning, rename
-from .vocab import vocabulary
+from .solver import SolverError, set_option, write_result
+from .solverjobs import Busy, jobs
+from .vocab import props_vocabulary, vocabulary
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
@@ -50,6 +53,23 @@ class PlotImageBody(BaseModel):
     line: int
 
 
+class SolveStartBody(BaseModel):
+    text: str
+    line: int                  # the `!root`, `!minimize` or `!maximize` line, 1-based
+    mode: str = "run"          # or "verify": run again and compare with the stored result
+
+
+class SolveStoreBody(BaseModel):
+    text: str
+    record: dict               # what a finished job returned
+
+
+class SolveEditBody(BaseModel):
+    text: str
+    line: int
+    autorun: bool
+
+
 class GreekBody(BaseModel):
     greek: dict[str, str] | None = None  # None: back to the built-in table
 
@@ -77,11 +97,14 @@ def _run(sheet, siunitx):
 
 @app.post("/api/eval")
 def evaluate(sheet: Sheet):
+    results = _run(sheet, sheet.view == "latex").results
+    if any(r.kind == "solver" for r in results):
+        threading.Thread(target=jobs.warm, daemon=True).start()   # so the first Run does not wait for imports
     if sheet.view == "latex":
         # Export flavour (siunitx), so the snippets paste straight into a document.
         # The exported .tex file always uses align* blocks.
-        return [{**r.to_dict(), "snippet": snippet(r, sheet.wrap)} for r in _run(sheet, True).results]
-    return [r.to_dict() for r in _run(sheet, False).results]
+        return [{**r.to_dict(), "snippet": snippet(r, sheet.wrap)} for r in results]
+    return [r.to_dict() for r in results]
 
 
 @app.post("/api/export", response_class=PlainTextResponse)
@@ -139,6 +162,62 @@ def plot_image(body: PlotImageBody):
     return Response(render_svg(r.plot, uid=body.line, standalone=True), media_type="image/svg+xml")
 
 
+# ---- solver blocks ---------------------------------------------------------------------------------
+# Evaluating a sheet never runs a solver. The page starts a job, polls it, and when it has finished
+# asks for the result to be written into the block (/store), which returns the new text.
+@app.post("/api/solve/start")
+def solve_start(body: SolveStartBody):
+    if body.mode not in ("run", "verify"):
+        raise HTTPException(400, "mode is run or verify")
+    try:
+        job = jobs.start(body.text, body.line, body.mode, settings.global_units())
+    except Busy as e:
+        raise HTTPException(409, str(e)) from None
+    except SolverError as e:
+        raise HTTPException(400, str(e)) from None
+    return {"job": job.id}
+
+
+@app.get("/api/solve/{job_id}")
+def solve_poll(job_id: str, since: int = 0):
+    job = jobs.get(job_id)
+    if job is None:
+        raise HTTPException(404, "No such job")
+    return job.view(max(since, 0))
+
+
+@app.post("/api/solve/{job_id}/interrupt")
+def solve_interrupt(job_id: str):
+    job = jobs.interrupt(job_id)
+    if job is None:
+        raise HTTPException(404, "No such job")
+    return job.view(0)
+
+
+@app.post("/api/solvestore")
+def solve_store(body: SolveStoreBody):
+    """Write a finished result into every block whose inputs hash to the record's hash. If the
+    sheet was edited while the job ran, no block matches and nothing is written."""
+    h = body.record.get("hash")
+    results = evaluate_sheet(body.text, global_units=settings.global_units()).results
+    hits = [r.n for r in results if r.kind == "solver" and r.solver["hash"] == h]
+    if not hits:
+        return {"ok": False, "error": "The inputs changed while the solver was running, so its result was not stored"}
+    text = body.text
+    for n in reversed(hits):    # a block that gains a result line pushes the ones below it down
+        text = write_result(text, n, body.record)
+    return {"ok": True, "text": text, "lines": hits}
+
+
+@app.post("/api/solveedit")
+def solve_edit(body: SolveEditBody):
+    """Turn a block's `autorun:` line on or off. Returns the new source text."""
+    try:
+        return {"ok": True, "text": set_option(body.text, body.line, "autorun", "on" if body.autorun else None)}
+    except SolverError as e:
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/settings")
 def get_settings():
     return settings.load()
@@ -147,6 +226,12 @@ def get_settings():
 @app.get("/api/vocab")
 def vocab():
     return vocabulary(settings.global_units())
+
+
+@app.get("/api/vocab/props")
+def vocab_props():
+    """Keys and fluids for props(...) strings. Imports CoolProp, so the page asks for it lazily."""
+    return props_vocabulary()
 
 
 @app.put("/api/greek")

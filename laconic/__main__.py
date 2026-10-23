@@ -7,6 +7,8 @@ import webbrowser
 from pathlib import Path
 
 from . import document, evaluate, settings
+from .sheet import solve_block
+from .solver import write_result
 from .plotsvg import render_svg
 
 _CHROMIUM = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
@@ -31,11 +33,36 @@ def _launch(url, app):
     webbrowser.open(url)
 
 
+_STATUS = {"valid": "solved", "stale": "OUT OF DATE: run with --solve", "none": "NOT SOLVED: run with --solve"}
+
+
+def _solve_all(path, text, units):
+    """Solve the blocks that are not up to date, top to bottom (a later block may read an earlier
+    one's answer), and write each result into the file as it arrives."""
+    done = set()
+    while True:
+        todo = [r for r in evaluate(text, global_units=units).results
+                if r.kind == "solver" and r.solver["status"] != "valid" and r.solver["hash"] not in done]
+        if not todo:
+            return text
+        r = todo[0]
+        done.add(r.solver["hash"])
+        print(f"{r.n:>3}  solving {r.source.strip()}", file=sys.stderr)
+        out = solve_block(text, r.n, units, log=lambda m: print("       " + m, file=sys.stderr))
+        if not out["ok"]:
+            print(f"{r.n:>3}  FAILED  {out['message']}", file=sys.stderr)
+            continue
+        text = write_result(text, r.n, out["record"])
+        path.write_text(text, encoding="utf-8")
+
+
 def main():
     ap = argparse.ArgumentParser(prog="lens", description="Laconic Engineering Notebook System")
     ap.add_argument("file", nargs="?", help="worksheet file (.lens); omit with --serve")
     ap.add_argument("--tex", metavar="OUT", help="write a LaTeX document to OUT")
     ap.add_argument("--plots", metavar="DIR", help="write each plot as an SVG file in DIR")
+    ap.add_argument("--solve", action="store_true",
+                    help="run every !root/!minimize/!maximize block that is not up to date and store the results in the file")
     ap.add_argument("--serve", action="store_true", help="start the web UI")
     ap.add_argument("--open", action="store_true", help="with --serve, open the default browser")
     ap.add_argument("--app", action="store_true", help="with --serve, open a Chromium app window")
@@ -55,6 +82,8 @@ def main():
 
     text = Path(a.file).read_text(encoding="utf-8")
     units = settings.global_units()
+    if a.solve:
+        text = _solve_all(Path(a.file), text, units)
     if a.tex:
         ws = evaluate(text, siunitx=True, global_units=units)
         Path(a.tex).write_text(document(ws.results, title=Path(a.file).stem, declarations=ws.declarations),
@@ -73,7 +102,9 @@ def main():
         if r.kind == "error":
             print(f"{r.n:>3}  ERROR  {r.error}", file=sys.stderr)
         elif r.text and r.kind in ("assign", "expr"):
-            print(f"{r.n:>3}  {r.text}")
+            print(f"{r.n:>3}  {r.text}" + ("   (out of date)" if r.stale else ""))
+        elif r.kind == "solver":
+            print(f"{r.n:>3}  {r.text}   ({_STATUS[r.solver['status']]})")
 
 
 if __name__ == "__main__":
