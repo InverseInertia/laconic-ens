@@ -122,3 +122,42 @@ def test_auto_run_solves_again_after_an_edit_and_gives_up_on_a_failure(page):
     page.wait_for_timeout(2500)
     assert state(page) == "fail"
     assert page.evaluate("[...Solvers.runs.values()].filter(r => r.state === 'failed').length") == 1
+
+
+def popup(page):
+    page.wait_for_selector("#ac:not([hidden])")
+    return page.eval_on_selector_all("#ac .ac-item .lbl", "els => els.map(e => e.textContent)")
+
+
+def test_suggestions_offer_solver_options_and_methods(page):
+    reset(page, "x = 1\ny = 2\n!minimize x, y\n  objective: x^2 + y^2\n  ")
+    page.keyboard.type("me")
+    assert popup(page) == ["method"]
+    page.keyboard.press("Tab")
+    assert value(page).endswith("  method: ")
+    page.wait_for_timeout(100)
+    page.keyboard.press("Control+Space")
+    items = popup(page)
+    assert items[:3] == ["BFGS", "Nelder-Mead", "Powell"] and "SLSQP" in items
+    page.keyboard.type("sl")
+    assert popup(page) == ["SLSQP"]
+    page.keyboard.press("Tab")
+    assert value(page).endswith("  method: SLSQP")
+
+
+def test_props_suggests_keys_and_fluids_once_coolprop_has_loaded(page):
+    reset(page, "rho = props(")
+    page.keyboard.type('"')
+    items = popup(page)                     # arrives after the lazy /api/vocab/props fetch
+    assert items[:3] == ["T", "P", "D"]
+    page.keyboard.type("D")
+    assert popup(page) == ["D"]                 # still open: Tab closes the string
+    assert "Mass density [kg/m^3]" in page.inner_text("#ac")
+    page.keyboard.press("Tab")
+    assert value(page) == 'rho = props("D"'
+    page.keyboard.type(', "T", 20\'degC, "P", 1\'atm, "h2o')
+    assert popup(page)[0] == "Water"
+    page.keyboard.press("Tab")
+    assert value(page) == 'rho = props("D", "T", 20\'degC, "P", 1\'atm, "Water"'
+    page.keyboard.type(", \"1-")
+    assert value(page).endswith('"1-')          # math keys leave a hyphen in quotes alone

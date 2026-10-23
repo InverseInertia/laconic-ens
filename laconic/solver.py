@@ -39,6 +39,34 @@ WITH_CONSTRAINTS = ("SLSQP", "trust-constr", "COBYLA")
 KEYS = {"root": ("equation", "bounds", "method", "tol", "maxiter", "timeout", "autorun"),
         "minimize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun"),
         "maximize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun")}
+# What the editor shows next to each option and method in its suggestions (see vocab.py).
+KEY_NOTES = {
+    "equation": "lhs = rhs, or one expression that is zero",
+    "objective": "the expression to minimize or maximize",
+    "constraint": "lhs <= rhs, >= or =",
+    "bounds": "low .. high on an unknown; either end may be auto",
+    "method": "which scipy solver to use",
+    "tol": "convergence tolerance passed to scipy",
+    "maxiter": "iteration limit passed to scipy",
+    "timeout": "seconds before a run is killed (default 300)",
+    "autorun": "on: solve again after the inputs change",
+}
+METHOD_NOTES = {
+    "hybr": "Powell hybrid (MINPACK). Default",
+    "lm": "Levenberg-Marquardt; more equations than unknowns allowed (least squares)",
+    "broyden1": "Broyden's good method; large systems, no Jacobian",
+    "broyden2": "Broyden's bad method; large systems, no Jacobian",
+    "krylov": "Newton-Krylov; large systems",
+    "brentq": "one unknown bracketed by bounds; default when the bounds bracket it",
+    "BFGS": "quasi-Newton. Default without bounds or constraints",
+    "Nelder-Mead": "simplex, no gradients; noisy or kinked objectives; bounds",
+    "Powell": "direction set, no gradients; bounds",
+    "L-BFGS-B": "quasi-Newton with bounds. Default with bounds; many unknowns",
+    "TNC": "truncated Newton; bounds",
+    "SLSQP": "bounds and constraints. Default with constraints",
+    "trust-constr": "interior point; bounds and constraints, many unknowns",
+    "COBYLA": "no gradients; bounds and <= / >= constraints",
+}
 NOT_PARAMETERS = ("timeout", "autorun")   # how a run is supervised, not what it computes
 DEFAULT_TIMEOUT = 300.0
 RECORD_VERSION = 1

@@ -18,7 +18,7 @@ from .plotsvg import render_svg
 from .rename import RenameError, RenameWarning, rename
 from .solver import SolverError, set_option, write_result
 from .solverjobs import Busy, jobs
-from .vocab import vocabulary
+from .vocab import props_vocabulary, vocabulary
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
@@ -226,6 +226,12 @@ def get_settings():
 @app.get("/api/vocab")
 def vocab():
     return vocabulary(settings.global_units())
+
+
+@app.get("/api/vocab/props")
+def vocab_props():
+    """Keys and fluids for props(...) strings. Imports CoolProp, so the page asks for it lazily."""
+    return props_vocabulary()
 
 
 @app.put("/api/greek")

@@ -449,9 +449,14 @@ Suggestions appear as you type, from the **Suggest** box in the header:
 | `'` | units: your own and the instance's first, then common units (`kN`, `mm`, `GPa`) and everything Pint knows, matched by symbol or full name (`newt` finds `N`) |
 | `!` | commands |
 | two letters of a name | variables defined above (with their current value), your functions, built-in functions, `pi` and `e` |
+| an indented line under `!root`, `!minimize`, `!maximize` | the block's options (`equation`, `objective`, `bounds x`, `method`, ...), inserted with their colon |
+| `method:` / `autorun:` in a solver block | the methods that block kind takes, each with what it is for / `on`, `off` |
+| the unknowns in `!root x, y` | variables defined above |
+| `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`) |
 
 `Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows,
-so it still ends the line when you just kept typing. A function is inserted with brackets and the caret
+so it still ends the line when you just kept typing. The props list loads the first time it is needed (CoolProp takes a few seconds to
+import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. A function is inserted with brackets and the caret
 inside, unless the word is already followed by `(`. The name on the left of `=` (a new variable, a
 unit being defined, function parameters) and comment lines get no suggestions. `Ctrl+Space` opens the
 list by hand, even for a single letter.

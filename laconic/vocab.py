@@ -1,6 +1,7 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
+from . import solver
 from .evaluator import CONSTANTS, Evaluator, registry
 
 COMMANDS = [
@@ -84,4 +85,61 @@ def vocabulary(global_units=()):
         "functions": [[f, _SIGNATURES.get(f, f)] for f in funcs],
         "constants": sorted(CONSTANTS),
         "commands": [list(c) for c in COMMANDS],
+        "solver": {
+            "keys": {kind: [[k, solver.KEY_NOTES[k]] for k in keys] for kind, keys in solver.KEYS.items()},
+            "methods": {"root": [[m, solver.METHOD_NOTES[m]] for m in solver.ROOT_METHODS],
+                        "optimize": [[m, solver.METHOD_NOTES[m]] for m in solver.MIN_METHODS]},
+            "choices": {"autorun": [["on", "solve again after the inputs change"], ["off", "only when Run is pressed"]]},
+        },
     }
+
+
+# props() keys in the order they are offered: the common state and transport properties first.
+PROPS_KEYS = ("T P D H S U Q Cpmass Cvmass V L A I Prandtl Z Gmass Hmolar Smolar Tcrit Pcrit rhocrit M "
+              "Tmin Tmax Ttriple ptriple isobaric_expansion_coefficient Phase").split()
+
+
+# Offered first when nothing is typed yet; the rest follow alphabetically.
+COMMON_FLUIDS = ("Water", "Air", "Nitrogen", "Oxygen", "CarbonDioxide", "Ammonia", "R134a", "R410A", "R32",
+                 "R1234yf", "Propane", "Methane", "Hydrogen", "Helium", "Argon")
+
+
+@lru_cache(maxsize=1)
+def props_vocabulary():
+    """Keys and fluids for the strings inside props(...). Separate from vocabulary() because importing
+    CoolProp takes a few seconds; the page asks for this only once a props string is being typed.
+    keys: [key, description, SI unit, usable as a state input, fixed for a fluid (needs no state)]"""
+    try:
+        import CoolProp.CoolProp as cp
+    except ImportError:
+        return {"keys": [], "fluids": []}
+    keys = []
+    for k in PROPS_KEYS:
+        try:
+            i = cp.get_parameter_index(k)
+            unit = cp.get_parameter_information(i, "units")
+            keys.append([k, cp.get_parameter_information(i, "long"), "" if unit in ("-", "mol/mol") else unit,
+                         cp.get_parameter_information(i, "IO") == "IO", bool(cp.is_trivial_parameter(i))])
+        except Exception:
+            continue
+    fluids = []
+    names = cp.get_global_param_string("FluidsList").split(",")
+    common = [n for n in COMMON_FLUIDS if n in names]
+    for name in common + sorted((n for n in names if n not in common), key=str.lower):
+        try:
+            raw = cp.get_fluid_param_string(name, "aliases").split(",")
+        except Exception:
+            raw = []
+        seen, aliases = {name.lower()}, []
+        for a in raw:      # CoolProp lists case variants (water, WATER); keep one of each
+            if a and a.lower() not in seen:
+                seen.add(a.lower())
+                aliases.append(a)
+        fluids.append([name, ", ".join(["pure fluid"] + aliases[:4])])
+    for name in cp.get_global_param_string("incompressible_list_pure").split(","):
+        if name:
+            fluids.append(["INCOMP::" + name, "incompressible liquid"])
+    for name in cp.get_global_param_string("incompressible_list_solution").split(","):
+        if name:
+            fluids.append([f"INCOMP::{name}[0.3]", "incompressible solution; [0.3] is the fraction, edit it"])
+    return {"keys": keys, "fluids": fluids}

@@ -820,7 +820,15 @@ let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands:
 let ac = null, acSkip = false;
 
 async function loadVocab() {
-  try { vocab = await (await fetch("/api/vocab")).json(); } catch {}
+  try { vocab = {...await (await fetch("/api/vocab")).json(), props: vocab.props}; } catch {}
+}
+// props() keys and fluids need CoolProp on the server, which takes seconds to import, so they are
+// fetched the first time a props string is typed; the list opens when they arrive.
+let propsLoading = null;
+function loadProps() {
+  propsLoading ??= fetch("/api/vocab/props").then((r) => r.json()).then((p) => { vocab.props = p; })
+    .catch(() => { propsLoading = null; });
+  return propsLoading;
 }
 function values() {
   const out = {};
@@ -878,6 +886,11 @@ function acUpdate(force = false) {
   if (src.selectionStart !== src.selectionEnd) return acClose();
   const text = src.value, ctx = Autocomplete.context(text, src.selectionStart, {force});
   if (!ctx) return acClose();
+  if (ctx.kind === "prop" && !vocab.props) {
+    acClose();
+    loadProps().then(() => { if (vocab.props && src.value === text && document.activeElement === src) acUpdate(force); });
+    return;
+  }
   const items = Autocomplete.candidates(ctx, vocab, text, {values: values()});
   acShow({ctx, items, index: 0, moved: false, wrap: null, query: ""});
 }
