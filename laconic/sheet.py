@@ -322,7 +322,7 @@ def _run_line(i, raw, s, ev, fmt, used):
         if isinstance(stmt, FuncDef):
             printer = Printer(ev, fmt, local=stmt.params)
             sym = printer.tex(stmt.body)
-            ev.funcs[stmt.name] = (stmt.params, stmt.body)
+            ev.funcs[ev.bind_key(stmt.name, func=True)] = (stmt.params, stmt.body)
             head = f"{name_latex(stmt.name)}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
             return LineResult(i, raw, "funcdef", lhs=head, stages=[sym], text=s)
 
@@ -340,9 +340,10 @@ def _run_line(i, raw, s, ev, fmt, used):
         res = fmt.quantity(value)
         stages = [res] if literal or ev.short else _dedupe([sym, sub, res])
         if isinstance(stmt, Assign):
-            ev.vars[stmt.name] = value
-            return LineResult(i, raw, "assign", lhs=name_latex(stmt.name), stages=stages,
-                              text=f"{stmt.name} = {fmt.plain(value)}")
+            key = ev.bind_key(stmt.name)
+            ev.vars[key] = value
+            return LineResult(i, raw, "assign", lhs=name_latex(key), stages=stages,
+                              text=f"{key} = {fmt.plain(value)}")
         return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value))
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e, stmt, ev))

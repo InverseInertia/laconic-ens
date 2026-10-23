@@ -265,7 +265,7 @@
       <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd><br><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Type a literal <code>/</code> or <code>\</code> with no fraction or radical slot</td></tr>
       <tr><td><kbd>=</kbd> <kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd></td><td>Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press</td></tr>
       <tr><td><kbd>`</kbd> <kbd>!</kbd> <kbd>@</kbd></td><td>After a variable name: <code>x`</code> puts a dot over it (<code>x``</code> two dots), <code>F!</code> an arrow, <code>a@</code> a hat. <code>F_x!</code> marks the F and keeps the subscript. Each marked name is a separate variable</td></tr>
-      <tr><td><kbd>~</kbd></td><td>A variable or function name that starts with <code>~</code> is global and survives <code>!clear</code> / <code>!clearf</code></td></tr>
+      <tr><td><kbd>~</kbd></td><td>A <code>~</code> on a variable or function definition makes the name global, and every later use of it (written without the <code>~</code>) is the global one. Globals survive <code>!clear</code> / <code>!clearf</code></td></tr>
       <tr><td><kbd>!clearf</kbd></td><td>On its own line, removes every non-global function above it</td></tr>
       <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
       <tr><td><kbd>!noassume</kbd> <kbd>!assume</kbd></td><td>Below <code>!noassume</code>, results keep the units that come out of the arithmetic (<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. <code>!assume</code> returns to SI</td></tr>
@@ -317,7 +317,7 @@ M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i><
 
     <h3>Variables and functions</h3>
     <pre>f(x, y) = x^2 + y         <i>your own function</i>
-~g = 9.81'm / 's^2        <i>~ makes a variable global, so !clear keeps it</i>
+~g = 9.81'm / 's^2        <i>~ on the definition makes g global, so !clear keeps it; use plain g after</i>
 T = 20'degC -> 'degF
 F` = 2   v! = 5   a@ = 1  <i>dot, arrow and hat accents</i>
 !clear                    <i>forget every non-global variable above</i></pre>

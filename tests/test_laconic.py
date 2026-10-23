@@ -167,10 +167,22 @@ def test_reduce_si_on_temperatures():
 
 # ---- globals and !clear --------------------------------------------------------
 def test_global_survives_clear_and_plain_variables_do_not():
-    res = run("~g = 9.81'm/'s^2\nm = 10'kg\n!clear\nW = m*~g\nv = ~g")
+    res = run("~g = 9.81'm/'s^2\nm = 10'kg\n!clear\nW = m*g\nv = g")
     assert res[2].kind == "command" and "m" in res[2].text
     assert res[3].kind == "error" and "'m' was removed by !clear" in res[3].error
     assert res[4].kind == "assign" and "9.81" in res[4].text
+
+
+def test_a_global_and_a_plain_variable_never_share_a_name():
+    res = run("~g = 5\ng = 7\n!clear\nv = g\nw = ~g")
+    assert res[1].kind == "assign" and res[1].text == "~g = 7"   # assigns the global
+    assert res[3].text == "v = 7" and res[4].text == "w = 7"
+    res = run("g = 1\n~g = 2")
+    assert res[1].kind == "error" and "non-global" in res[1].error
+    res = run("f(x) = x\n~f(x) = 2*x")
+    assert res[1].kind == "error" and "non-global" in res[1].error
+    res = run("~f(x) = x\nf(x) = 2*x\n!clearf\na = f(3)")
+    assert res[3].text == "a = 6"
 
 
 def test_clear_reports_what_it_removed_and_keeps_functions():
@@ -229,7 +241,7 @@ def test_too_many_dots_is_an_error():
 
 
 def test_clearf_removes_functions_but_keeps_global_ones():
-    r = run("f(x) = x^2\n~g(x) = 2*x\n!clearf\na = ~g(3)\nb = f(2)")
+    r = run("f(x) = x^2\n~g(x) = 2*x\n!clearf\na = g(3)\nb = f(2)")
     assert r[2].kind == "command" and "f" in r[2].text
     assert r[3].kind == "assign" and r[3].text == "a = 6"
     assert r[4].kind == "error" and "removed by !clearf" in r[4].error

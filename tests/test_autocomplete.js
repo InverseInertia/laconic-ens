@@ -70,10 +70,11 @@ eq(pick("w = 12'za|\n'zap = 3'm"), ['zap'], 'even when it is defined below');
 
 eq(pick('delta_max = 3\nx = de|'), ['delta_max'], 'a variable defined above');
 eq(pick('x = de|\ndelta_max = 3'), [], 'not one defined below');
-eq(pick('~g = 9.81\nx = g|', { force: true }), ['~g'], 'a global found without its tilde');
-eq(pick('~gg = 9.81\ngx = 1\nx = ~g|', { force: true }), ['~gg'], 'typing ~ shows only globals');
+eq(pick('~grav = 9.81\nx = gr|', { force: true }), ['grav'], 'a global found without its tilde');
+eq(pick('~gg = 9.81\ngx = 1\nx = ~g|', { force: true }), ['gg'], 'typing ~ shows only globals');
 eq(pick('abc = 1\n!clear\nx = ab|'), [], 'removed by !clear');
-eq(pick('~abc = 1\n!clear\nx = ab|'), ['~abc'], 'globals survive !clear');
+eq(pick('~abc = 1\n!clear\nx = ab|'), ['abc'], 'globals survive !clear');
+eq(pick('~abc = 1\nabc = 2\n!clear\nx = ab|'), ['abc'], 'a later definition of a global stays global');
 eq(pick('KE(m, v) = m*v\nx = K|', { force: true }), ['KE'], 'your function');
 eq(pick('x = so|'), ['solve'], 'built-in function');
 eq(pick('x = s|', { force: true }), ['sin', 'sqrt', 'solve'], 'functions ordered by length, then name');
@@ -100,7 +101,7 @@ eq(accepting('x = so|'), 'x = solve(|)', 'a function gets brackets with the care
 eq(accepting('x = so|(a, b)'), 'x = solve|(a, b)', 'unless it already has them');
 eq(accepting('x = so|lv(a)'), 'x = solve|(a)', 'the rest of the word is replaced');
 eq(accepting('delta = 1\nx = de|'), 'delta = 1\nx = delta|', 'a variable');
-eq(accepting('~gg = 1\nx = ~g|', 0, { force: true }), '~gg = 1\nx = ~gg|', 'a global replaces the typed ~');
+eq(accepting('~gg = 1\nx = ~g|', 0, { force: true }), '~gg = 1\nx = gg|', 'a global is inserted without its ~, which the sheet adds');
 eq(accepting('!cl|'), '!clear|', 'a command');
 
 // --- scanning -----------------------------------------------------------------

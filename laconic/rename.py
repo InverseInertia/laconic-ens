@@ -95,10 +95,18 @@ def _substitute(text, kind, old, new):
 
     def sub(m):
         nonlocal count
-        if m.lastgroup == kind and m.group() == old:
+        if m.lastgroup != kind:
+            return m.group()
+        tok = m.group()
+        if kind == "name":   # the ~ marks a definition as global and stays where it is
+            if tok.lstrip("~") != old:
+                return tok
+            count += 1
+            return tok[:len(tok) - len(tok.lstrip("~"))] + new
+        if tok == old:
             count += 1
             return new
-        return m.group()
+        return tok
 
     out = []
     for line, spans in _scan(text):
@@ -116,6 +124,8 @@ def rename(text, old, new, confirm=False):
     on `old` renames a unit (the quote on `new` is optional); replacing a standard unit
     raises RenameWarning unless `confirm` is set."""
     old, new = old.strip(), new.strip()
+    if not old.startswith("'"):
+        old, new = old.lstrip("~"), new.lstrip("~")   # a global and its later uses are one name
     if old.startswith("'"):
         return _rename_unit(text, old[1:], new.removeprefix("'"), confirm)
     if not _VALID.match(old):
@@ -128,7 +138,7 @@ def rename(text, old, new, confirm=False):
         raise RenameError(f"'{old}' is built in and cannot be renamed")
     if new in _builtins():
         raise RenameError(f"'{new}' is built in; choose another name")
-    used = set(_names(text))
+    used = {n.lstrip("~") for n in _names(text)}
     if old not in used:
         raise RenameError(f"'{old}' does not appear in the sheet")
     if new in used:

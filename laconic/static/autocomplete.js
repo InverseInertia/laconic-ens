@@ -24,7 +24,9 @@
   // Variables and functions defined on the lines above `line` (1-based), following
   // !clear the way the evaluator does.
   function scan(text, line) {
-    const vars = new Map(), funcs = new Map();
+    const vars = new Map(), funcs = new Map(), gv = new Set(), gf = new Set();
+    // A ~ on a definition makes the name global; later definitions of it stay global.
+    const key = (name, globals) => { const bare = name.replace(/^~/, ''); if (name !== bare) globals.add(bare); return globals.has(bare) ? '~' + bare : bare; };
     const lines = text.split('\n');
     for (let i = 0; i < Math.min(line - 1, lines.length); i++) {
       const s = lines[i].trim();
@@ -35,9 +37,9 @@
         continue;
       }
       let m = FUNC_RE.exec(s);
-      if (m) { funcs.set(m[1], { params: m[2].split(',').map((p) => p.trim()).filter(Boolean), line: i + 1 }); continue; }
+      if (m) { funcs.set(key(m[1], gf), { params: m[2].split(',').map((p) => p.trim()).filter(Boolean), line: i + 1 }); continue; }
       m = ASSIGN_RE.exec(s);
-      if (m) vars.set(m[1], { line: i + 1 });
+      if (m) vars.set(key(m[1], gv), { line: i + 1 });
     }
     return { vars, funcs };
   }
@@ -130,11 +132,11 @@
       const values = (extras && extras.values) || {};
       for (const name of vars.keys()) {
         if (ctx.tilde && name[0] !== '~') continue;
-        add({ kind: 'variable', insert: name, label: name, detail: values[name] || 'variable' }, 0, name.replace(/^~/, ''), '');
+        add({ kind: 'variable', insert: name.replace(/^~/, ''), label: name, detail: values[name] || 'variable' }, 0, name.replace(/^~/, ''), '');
       }
       for (const [name, f] of funcs) {
         if (ctx.tilde && name[0] !== '~') continue;
-        add({ kind: 'function', insert: name, label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name.replace(/^~/, ''), '');
+        add({ kind: 'function', insert: name.replace(/^~/, ''), label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name.replace(/^~/, ''), '');
       }
       for (const [name, sig] of vocab.functions || []) {
         if (ctx.tilde || funcs.has(name)) continue;
