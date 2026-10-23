@@ -1,0 +1,83 @@
+# Architecture
+
+## Data flow
+
+```
+worksheet text
+   │  sheet.py        splits into lines, runs each in order
+   ▼
+parser.py ──► nodes.py (AST) ──► evaluator.py ──► Pint quantities ──► si.py (display units)
+                    │
+                    └──────────► latex.py (same AST) ──► symbolic / substituted / result strings
+                                                              │
+plot lines ─► plotopts.py (options) ─► plotspec.py (samples, resolves) ─► spec dict
+                                                              │
+                                      ┌───────────────────────┼──────────────────────┐
+                                  plotsvg.py              plotpgf.py             browser (plotview.js
+                                  (the only SVG)          (.tex export)           adds mouse only)
+```
+
+Two ideas hold it together:
+
+- **One tree, two consumers.** The evaluator and the LaTeX printer walk the same AST, so the layout of a result (symbolic, substituted, result) is decided in `latex.py` and nowhere else.
+- **One spec, three outputs.** `plotspec.py` turns a plot's source into a plain dict. The SVG renderer, the pgfplots writer and the page all read that dict. The mouse never draws; it only rewrites the option lines in the worksheet text, and the plot is redrawn from the text.
+
+The whole sheet is re-run on every edit (a few milliseconds at worksheet size), so there is no incremental state to get out of sync.
+
+## Python modules (`laconic/`)
+
+| Module | Role |
+|---|---|
+| `parser.py` | Lark LALR grammar for expressions. Assignment, function and unit definitions are split off with regexes first, which avoids a grammar clash between `f(x) = ...` and the call `f(x)` |
+| `nodes.py` | Frozen dataclasses for the AST |
+| `evaluator.py` | AST to Pint quantities. Built-in functions are the `fn_*` methods; every value (scalar or matrix) is a Quantity |
+| `si.py` | Reduces a result to simplest coherent SI with a familiar name |
+| `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`); `snippet` and `document` |
+| `sheet.py` | Runs a worksheet line by line: commands, unit definitions, plots, results, portable save text |
+| `plotopts.py` | Plot option parsing, defaults, and the writer that edits option lines in the source |
+| `plotspec.py` | Samples a plot and resolves options into the spec |
+| `plotsvg.py` | Spec to SVG |
+| `plotpgf.py` | Spec to pgfplots |
+| `props.py` | CoolProp lookup, imported on first use |
+| `rename.py` | Token-level rename of names and units in source text |
+| `vocab.py` | What the editor suggests: units, functions, constants, commands |
+| `settings.py` | The per-user settings file (Greek table, global units) |
+| `server.py` | FastAPI app |
+| `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
+| `__main__.py` | The `lens` command line |
+
+## Front end (`laconic/static/`)
+
+| File | Role |
+|---|---|
+| `index.html` | The page: layout, styles, theme, dialogs, and the glue script |
+| `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits) |
+| `autocomplete.js` | What to suggest, as pure functions |
+| `paste.js` | Table paste to matrix, pure functions |
+| `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server |
+| `vendor/` | KaTeX, and d3-zoom with d3-scale and dependencies (see `vendor/d3/README.md`) |
+| `fonts/` | IBM Plex and OCR-A, self-hosted |
+| `example.lens` | The sheet the page opens with |
+
+The pure-function JS files also load under Node, which is how they are tested without a browser.
+
+## HTTP API
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /` | the page |
+| `POST /api/eval` | run a sheet; `view: "latex"` adds a snippet per line |
+| `POST /api/export` | complete `.tex` document |
+| `POST /api/save` | source with needed unit definitions appended |
+| `POST /api/rename` | rename a name or unit; returns new text or a warning/error |
+| `POST /api/plotedit` | rewrite one plot's option lines for a pan, zoom or reset |
+| `POST /api/plotimage` | one plot as a standalone SVG |
+| `GET /api/settings`, `GET /api/vocab` | settings, editor vocabulary |
+| `PUT /api/greek`, `PUT /api/units` | store settings (units only if all valid) |
+| `POST /api/ping`, `POST /api/bye` | page lifecycle for the packaged app |
+
+## Conventions
+
+- Errors are per line: `sheet.py` turns any exception into an `error` result for that line and carries on.
+- A fresh Pint registry costs a noticeable fraction of a second, so one is shared. A sheet that defines units gets a private copy (Pint cannot undefine a unit).
+- Display rounding is only ever applied when printing, in `Fmt`.

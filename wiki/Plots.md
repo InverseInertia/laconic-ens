@@ -1,0 +1,76 @@
+# Plots
+
+A `!plot` line draws one or more functions of one variable over a range. It is a command, so `plot` stays available as an ordinary name. Indented `key: value` lines under it set the details.
+
+```
+!plot M(x), V(x), x = 0'm .. L
+  title: Bending moment and shear
+  ylabel: M (kN·m)
+  xlim: 0'm .. 3.2'm
+  color 2: red
+  note: "max" at (L / 2, M(L / 2))
+```
+
+The expressions can use any variable and function above them. They are sampled point by point (`samples`, default 400), so units are checked at every point and a result in kN·m is shown in kN·m. Several expressions share one y axis and must have compatible units; give incompatible ones separate plots.
+
+Where an expression is undefined (`1/x` at 0, `sqrt` of a negative) the line breaks there. A line that jumps from beyond one limit to beyond the other (a pole) is not joined across the picture. `gaps: error` turns an undefined point into an error instead.
+
+## Options
+
+| Option | Meaning (default in brackets) |
+|---|---|
+| `title`, `xlabel`, `ylabel` | text. Axis labels are `name [unit]` unless set. `x_max` or `x_{max}` is a subscript. An empty value removes the label |
+| `xlim`, `ylim` | the view you choose: `low .. high`, with units or plain numbers in the axis's display unit. Either end can be `auto` (automatic, 5% headroom) |
+| `xview`, `yview` | same form, but written by the mouse. It sits over `xlim`/`ylim`; removing it goes back to them |
+| `xunit`, `yunit` | the unit the axis is shown in, e.g. `'kN * 'm` (default: the typed range's unit for x, the simplest SI unit for y) |
+| `xscale`, `yscale` | `lin` or `log` (`lin`) |
+| `xstep`, `ystep` | tick spacing in the display unit (automatic) |
+| `grid` | `on` or `off` (`on`) |
+| `legend` | `auto`, `off`, `top right`, `top left`, `bottom right`, `bottom left` (`auto`: top right when there are several series) |
+| `size` | `width x height` in pixels, each 200 to 2400 (`520 x 320`) |
+| `samples` | 10 to 5000 (`400`) |
+| `gaps` | `break` or `error` (`break`) |
+| `color`, `width`, `dash`, `marker`, `label` | per series. `color 2: red` is series 2; with no number it applies to every series. Colors are `#rrggbb`, `#rgb` or a name (`red`, `blue`, `green`, `orange`, `purple`, `sky`, `gray`, `black`, `navy`). `dash`: `solid`, `dashed`, `dotted`. `marker`: `none`, `circle`, `square` |
+| `note` | `"text" at (x, y)`: a dot and a label at a point in data coordinates. Repeat the line for more |
+
+Options are checked as they are read. A bad one is reported on its own line and the plot is drawn without it (a bad `xview` falls back to `xlim`, then to automatic). A plot is limited to 100,000 points (series times samples) because it is redrawn on every edit.
+
+## Defaults come in three layers
+
+Each overrides the one before: the built-in values above, then a `!plotspec key: value` line (applies to every plot below it), then the option lines under a plot.
+
+```
+!plotspec grid: off
+!plotspec size: 560 x 300
+!plotspec reset                 clears them
+```
+
+`!plotspec` accepts `grid xscale yscale legend gaps size samples width dash marker`.
+
+## The view and the mouse
+
+The picture is drawn on the server from the worksheet text, and the mouse only edits that text.
+
+- **Pan:** drag in the plot.
+- **Zoom:** Ctrl + wheel (or a trackpad pinch) about the pointer. A plain wheel still scrolls the results.
+- **One axis:** drag or zoom on the strip under or beside an axis.
+- **Reset:** double-click (a strip resets only its axis), or the **Reset view** button, which appears only while the mouse has a view to remove.
+- **Hover** reads off the nearest point.
+
+When a gesture ends, the new range is written under the plot as `xview:` and `yview:` lines, only for what moved and rounded to the precision on screen. Ctrl+Z undoes it like any other edit. Deleting or rewriting those lines by hand works the same way. Reset removes only those lines, so it returns to your `xlim`/`ylim` if you wrote any.
+
+An axis range has three layers: `xview` over `xlim` over automatic limits from the data. When a zoom narrows the view, the curve is sampled over the visible window again, so it stays smooth. The grid is hidden while you drag.
+
+The text of titles, labels and notes is edited in the editor with the math keys off on those lines.
+
+## Axis labels and the frame
+
+The margins hold room for six characters of tick label. While the numbers on an axis fit in six (`-0.4`, `100`, `5e-11`, `-50000`) the frame is fixed by the size, title and axis labels, however a pan or zoom changes the numbers. Each axis uses one notation: fixed point while every label fits, else scientific with as few digits as tell the ticks apart.
+
+A label needing more than six characters makes the margin grow, and the frame moves with it. That means the pointer can lose the axis strip when a zoom takes the labels back under six characters while the pointer is parked in the part of the strip that existed only to fit the wide ones. For a range that is tiny next to its position (`1e9 .. 1000000005`), telling ticks apart takes 13 characters and the margin grows to match; an axis offset note such as `+1e9` would avoid this and is not built.
+
+## Exporting
+
+- **SVG** and **PNG** buttons under the plot save the picture exactly as shown, with the font embedded (PNG at three times the size). `lens file.lens --plots DIR` writes the same SVGs without a browser.
+- **LaTeX.** Export LaTeX (and the LaTeX view) writes the plot as a `pgfplots` figure from the same data, limits, scales, labels, colors and dash styles, with units through siunitx. TeX draws it with the document's fonts and its own tick placement, so it is a close match, not the same picture. Use the SVG when you need the exact one.
+- **Save** keeps the units a plot uses with the sheet, like any other line.
