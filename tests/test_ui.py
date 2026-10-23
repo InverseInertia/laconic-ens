@@ -1,54 +1,9 @@
 """Drives the real page in Chromium (Playwright). Skipped when Playwright or a
 browser is not available."""
-import os
-import socket
-import threading
-import time
-
 import pytest
 
-playwright = pytest.importorskip("playwright.sync_api")
-uvicorn = pytest.importorskip("uvicorn")
-
-
-@pytest.fixture(scope="module")
-def server(tmp_path_factory):
-    os.environ["LENS_CONFIG_DIR"] = str(tmp_path_factory.mktemp("cfg"))
-    from laconic.server import app
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
-    threading.Thread(target=srv.run, daemon=True).start()
-    for _ in range(100):
-        if srv.started:
-            break
-        time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}"
-    srv.should_exit = True
-
-
-@pytest.fixture()
-def page(server):
-    with playwright.sync_playwright() as p:
-        try:
-            browser = p.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH") or None)
-        except Exception as e:  # no browser installed
-            pytest.skip(f"no Chromium: {e}")
-        pg = browser.new_page(viewport={"width": 1200, "height": 800})
-        pg.goto(server)
-        pg.wait_for_function("document.querySelector('#src').value.length > 0")
-        pg.evaluate("localStorage.clear()")
-        yield pg
-        browser.close()
-
-
-def reset(page, text):
-    page.evaluate("t => { const s = document.querySelector('#src'); s.value = t; s.focus(); s.setSelectionRange(t.length, t.length); }", text)
-
-
-def value(page):
-    return page.evaluate("document.querySelector('#src').value")
+pytest.importorskip("playwright.sync_api")
+from uihelpers import reset, value  # noqa: E402
 
 
 def select(page, a, b):

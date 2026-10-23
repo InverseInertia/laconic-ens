@@ -18,6 +18,7 @@ M_max = w * L^2 / 8 -> 'kN * 'm        # M_max = 30.38 kN·m
 | Work with matrices and tables | [Matrices](Matrices) |
 | Look up fluid or material data | [Material Properties](Material-Properties) |
 | Draw graphs | [Plots](Plots) |
+| Solve equations, minimize or maximize | [Solving and Optimizing](Solving-and-Optimizing) |
 | Control how results look, export LaTeX | [Output and Export](Output-and-Export) |
 | Type faster in the editor | [Editor Shortcuts](Editor-Shortcuts) |
 | Change settings or find the settings file | [Settings](Settings) |

@@ -7,6 +7,7 @@
 - [Matrices](Matrices)
 - [Material Properties](Material-Properties)
 - [Plots](Plots)
+- [Solving and Optimizing](Solving-and-Optimizing)
 - [Output and Export](Output-and-Export)
 - [Editor Shortcuts](Editor-Shortcuts)
 - [Settings](Settings)

@@ -1,0 +1,43 @@
+name: wiki
+
+# Publishes the wiki/ folder to the repository's GitHub wiki whenever it changes on main.
+# The wiki is a separate git repo (<repo>.wiki.git) that exists once its first page has been
+# created in the web UI. Edit the Markdown under wiki/ in a pull request, not in the wiki itself:
+# the wiki is overwritten to match this folder.
+
+on:
+  push:
+    branches: [main]
+    paths: ["wiki/**", ".github/workflows/wiki.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the wiki
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki-repo
+      - name: Copy wiki/ over it and push
+        run: |
+          rsync -a --delete --exclude '.git' wiki/ wiki-repo/
+          cd wiki-repo
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki already up to date"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Sync wiki from ${GITHUB_SHA::7}"
+          git push

@@ -4,7 +4,7 @@ Not built yet.
 
 ## Language and display
 
-- Symbolic math and solve blocks
+- Symbolic math
 - Line breaking inside a single stage of a long equation
 - Globals usable above their definition (units already are)
 - Custom units that define a new base dimension or an offset scale

@@ -1,5 +1,3 @@
-import pytest
-
 from laconic import document, evaluate, run, snippet
 from laconic.evaluator import check_units
 

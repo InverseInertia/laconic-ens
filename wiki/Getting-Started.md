@@ -5,15 +5,15 @@
 Windows and Linux programs are on the [releases page](https://github.com/inverseinertia/laconic-ens/releases). They need no Python install.
 
 - **Windows:** download `lens-windows-x64.exe` and double-click it.
-- **Linux:** download the installer script from the release and run it with `sh`. It fetches the program and icon from the latest release if they are not beside it, installs them for your user only (no root), adds LENS to your application menu, and removes any earlier install first.
-  - Remove it again with `sh <installer> --uninstall`.
+- **Linux:** download `lens-install-linux.sh` from the release and run it with `sh lens-install-linux.sh`. It fetches the program and icon from the latest release if they are not beside it, installs them for your user only (no root), adds LENS to your application menu, and removes any earlier install first.
+  - Remove it again with `sh lens-install-linux.sh --uninstall`.
   - To install a program you already downloaded, keep `lens-linux-x64` and `lens-icon.png` in the same folder as the script.
 
 Double-clicking the program opens the UI in an app window. It quits a few seconds after the window closes.
 
 ## From source
 
-Needs Python 3.10 or newer.
+Needs Python 3.10 or newer. The dependencies include CoolProp and scipy.
 
 ```
 pip install -e .[dev]
@@ -22,6 +22,7 @@ lens --serve --open                         # or in your default browser
 lens examples/beam.lens                     # print results in the terminal
 lens examples/beam.lens --tex beam.tex      # LaTeX document
 lens examples/plots.lens --plots figures    # each plot as an SVG file
+lens examples/solve.lens --solve            # run solver blocks that are out of date and store the results
 ```
 
 `python -m laconic` works too. `--port` changes the port (default 8765).

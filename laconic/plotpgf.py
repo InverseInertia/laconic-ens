@@ -5,11 +5,10 @@ colours and dash styles agree. TeX draws it with the document's own fonts and
 tick placement, so it is a close match and not the same picture. For the exact
 picture use the SVG export. The document needs `pgfplots` (the exported .tex
 loads it)."""
-import re
 
 from .latex import _GREEK_CHARS, escape
+from .plotsvg import SUB_RE
 
-_SUB = re.compile(r"_(\{[^}]*\}|[A-Za-z0-9]+)")
 _LEGEND = {"top right": "north east", "top left": "north west",
            "bottom right": "south east", "bottom left": "south west"}
 _MARK = {"circle": "*", "square": "square*"}
@@ -22,7 +21,7 @@ def tex_text(s):
     def plain(t):
         return "".join(f"${_GREEK_CHARS[c]}$" if c in _GREEK_CHARS and _GREEK_CHARS[c].startswith("\\") else escape(c)
                        for c in t)
-    for m in _SUB.finditer(s):
+    for m in SUB_RE.finditer(s):
         out.append(plain(s[pos:m.start()]))
         out.append(r"\textsubscript{" + plain(m.group(1).strip("{}")) + "}")
         pos = m.end()

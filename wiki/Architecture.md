@@ -38,6 +38,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `plotspec.py` | Samples a plot and resolves options into the spec |
 | `plotsvg.py` | Spec to SVG |
 | `plotpgf.py` | Spec to pgfplots |
+| `solver.py` | `!root` / `!minimize` / `!maximize`: block parsing, the input hash, the scipy calls, the stored `#@ result` line |
+| `solverjobs.py` | The worker process that runs a solve, so it can be interrupted |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Token-level rename of names and units in source text |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
@@ -55,6 +57,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `autocomplete.js` | What to suggest, as pure functions |
 | `paste.js` | Table paste to matrix, pure functions |
 | `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server |
+| `solverview.js` | The Run / Interrupt / Verify / Log strip under solver blocks |
 | `vendor/` | KaTeX, and d3-zoom with d3-scale and dependencies (see `vendor/d3/README.md`) |
 | `fonts/` | IBM Plex and OCR-A, self-hosted |
 | `example.lens` | The sheet the page opens with |
@@ -72,7 +75,9 @@ The pure-function JS files also load under Node, which is how they are tested wi
 | `POST /api/rename` | rename a name or unit; returns new text or a warning/error |
 | `POST /api/plotedit` | rewrite one plot's option lines for a pan, zoom or reset |
 | `POST /api/plotimage` | one plot as a standalone SVG |
-| `GET /api/settings`, `GET /api/vocab` | settings, editor vocabulary |
+| `POST /api/solve/start`, `GET /api/solve/{job}`, `POST /api/solve/{job}/interrupt` | start, poll and interrupt a solver job |
+| `POST /api/solvestore`, `POST /api/solveedit` | write a finished result into its block; toggle `autorun:` |
+| `GET /api/settings`, `GET /api/vocab`, `GET /api/vocab/props` | settings, editor vocabulary, props keys and fluids (loaded lazily because it imports CoolProp) |
 | `PUT /api/greek`, `PUT /api/units` | store settings (units only if all valid) |
 | `POST /api/ping`, `POST /api/bye` | page lifecycle for the packaged app |
 
@@ -81,3 +86,4 @@ The pure-function JS files also load under Node, which is how they are tested wi
 - Errors are per line: `sheet.py` turns any exception into an `error` result for that line and carries on.
 - A fresh Pint registry costs a noticeable fraction of a second, so one is shared. A sheet that defines units gets a private copy (Pint cannot undefine a unit).
 - Display rounding is only ever applied when printing, in `Fmt`.
+- Evaluating a sheet never runs a solver. It hashes the block's inputs and compares them with the stored `#@ result` line; running happens on request in a worker process and the answer is written back into the worksheet text.

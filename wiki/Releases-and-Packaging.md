@@ -12,10 +12,10 @@ PyInstaller does not cross-compile, so build on each target OS. The result needs
 | File | Role |
 |---|---|
 | `packaging/lens.spec` | PyInstaller spec |
-| `packaging/launcher.py` | entry point of the frozen build: with no arguments it starts the server on a free port in an app window and quits when the window closes; with arguments it is the normal CLI |
-| `packaging/smoke.py` | starts the built program and checks the page, vendored assets, an evaluation and a plot SVG |
+| `packaging/launcher.py` | entry point of the frozen build: with no arguments it starts the server on a free port in an app window and quits when the window closes; with arguments it is the normal CLI. It calls `multiprocessing.freeze_support()` because the solver worker is a spawned copy of the executable |
+| `packaging/smoke.py` | starts the built program and checks the page, vendored assets, an evaluation, a plot SVG and a solver run |
 | `packaging/icon.png` | executable icon on Windows and macOS (rendered from `laconic/static/logo.svg`) |
-| `packaging/install-linux.sh` | per-user Linux installer with menu entry and `--uninstall` |
+| `packaging/install-linux.sh` | per-user Linux installer with menu entry and `--uninstall`; attached to releases as `lens-install-linux.sh` |
 
 The logo source is `laconic/static/logo.svg` (header and browser tab).
 
