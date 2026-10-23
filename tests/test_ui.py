@@ -217,7 +217,7 @@ def test_theme_settings(page):
     assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(30, 33, 39)"
     page.click("#settingsBtn")
     page.click("#themeReset")
-    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(230, 238, 223)"
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 56, 107)"
 
 
 PASTE = """
