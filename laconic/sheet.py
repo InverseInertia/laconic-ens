@@ -204,7 +204,7 @@ def _run_command(i, raw, s, ev, fmt):
     `!assume` restores the default. `!trigdeg` and `!trigrad` set the angle unit
     that trig functions read bare numbers in and that inverse ones return. `!short`
     shows only each line's final result, without intermediate steps, until
-    `!long` restores the full display. `!sigfigs n` and `!decplace n` choose how results
+    `!long` restores the full display. `!sigfigs n`, `!sigfigsbig n` (keeps trailing zeros) and `!decplace n` choose how results
     are printed, by significant figures (4 by default) or by decimal places; the last one
     given wins. Only the display is rounded."""
     parts = s[1:].split()
@@ -213,7 +213,7 @@ def _run_command(i, raw, s, ev, fmt):
         return _plotspec_command(i, raw, s, ev)
     if name == "plot":     # a plot statement with something after it never gets here
         return LineResult(i, raw, "error", error="A plot reads `!plot f(x), x = low .. high`")
-    if name in ("sigfigs", "decplace"):
+    if name in ("sigfigs", "sigfigsbig", "decplace"):
         return _precision_command(i, raw, name, parts[1:], fmt)
     if name not in ("clear", "clearf", "assume", "noassume", "trigdeg", "trigrad",
                     "short", "long"):
@@ -252,13 +252,13 @@ def _run_command(i, raw, s, ev, fmt):
 
 def _precision_command(i, raw, name, args, fmt):
     """`!sigfigs 5` or `!decplace 2`: how many digits results are displayed with."""
-    lo, hi = (1, 15) if name == "sigfigs" else (0, 15)
+    lo, hi = (0, 15) if name == "decplace" else (1, 15)
     if len(args) != 1 or not re.fullmatch(r"\d+", args[0]) or not lo <= int(args[0]) <= hi:
         return LineResult(i, raw, "error", error=f"!{name} takes a whole number from {lo} to {hi}, e.g. `!{name} 3`")
     n = int(args[0])
-    if name == "sigfigs":
-        fmt.sig, fmt.places = n, None
-        text = f"Results show {n} significant figure{'s' * (n != 1)}"
+    if name != "decplace":
+        fmt.sig, fmt.places, fmt.keep_zeros = n, None, name == "sigfigsbig"
+        text = f"Results show {n} significant figure{'s' * (n != 1)}" + (", trailing zeros kept" if fmt.keep_zeros else "")
     else:
         fmt.places = n
         text = f"Results show {n} decimal place{'s' * (n != 1)}"

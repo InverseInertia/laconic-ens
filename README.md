@@ -36,7 +36,8 @@ The exported .tex needs siunitx v3 or newer.
     !trigdeg / !trigrad            bare numbers in trig functions are degrees / radians (default)
     x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
     !short / !long                 show only each line's final result, no steps / back to full
-    !sigfigs n / !decplace n       show n significant figures (default 4) / n decimal places
+    !sigfigs n / !sigfigsbig n     show n significant figures (default 4), without / with trailing zeros
+    !decplace n                    show n decimal places
     !plot M(x), x = 0'm .. L       plot a function (see Plots)
 
 Rename a variable, function or custom unit everywhere with the Rename button or F2 (the name at the

@@ -313,3 +313,9 @@ def test_sigfigs_and_decplace_change_only_the_display():
     assert [rs[i].kind for i in (3, 5, 9)] == ["command"] * 3
     assert run("!sigfigs 0")[0].kind == "error" and run("!decplace x")[0].kind == "error"
     assert run("!sigfigs")[0].kind == "error" and run("!decplace -1")[0].kind == "error"
+
+
+def test_sigfigsbig_keeps_trailing_zeros():
+    rs = run("a = 2.5\nb = 12345.678\nc = 0.00012\nd = 3e9\n!sigfigsbig 4\na\nb\nc\nd\n0\n!sigfigs 4\na")
+    shown = lambda r: r.text.split("= ")[-1]
+    assert [shown(rs[i]) for i in (5, 6, 7, 8, 9, 11)] == ["2.500", "12350", "0.0001200", "3.000e9", "0.000", "2.5"]

@@ -95,13 +95,15 @@ def _unit_macro(name):
 
 
 class Fmt:
-    def __init__(self, ureg, siunitx=False, sig=4, custom=(), places=None):
+    def __init__(self, ureg, siunitx=False, sig=4, custom=(), places=None, keep_zeros=False):
         """`custom` holds the names of user-defined units. In export mode each one
         gets a siunitx macro, collected in `macros` (name -> macro) for the preamble.
         Results show `sig` significant figures, or `places` decimal places when that is
-        set (!sigfigs and !decplace each replace the other). This only changes what is
+        set (!sigfigs, !sigfigsbig and !decplace each replace the others); `keep_zeros`
+        (!sigfigsbig) pads to exactly `sig` figures, 2.5 -> 2.500. This only changes what is
         printed: the evaluator never rounds."""
         self.ureg, self.siunitx, self.sig, self.places = ureg, siunitx, sig, places
+        self.keep_zeros = keep_zeros
         self.custom, self.macros = custom, {}
         self._dimless = ureg.Unit("dimensionless")
 
@@ -121,16 +123,25 @@ class Fmt:
         if sig is None and self.places is not None:
             s = f"{x:.{self.places}f}"
             return (s[1:] if s.startswith("-") and float(s) == 0 else s), None
+        keep = sig is None          # display setting: keep trailing zeros; typed numbers drop them
+        keep = self.keep_zeros and sig is None
         sig = sig or self.sig
         if x == 0:
-            return "0", None
-        s = f"{x:.{sig}g}"
-        if "e" not in s:
-            return s, None
-        mant, exp = s.split("e")
+            return ("0." + "0" * (sig - 1) if keep and sig > 1 else "0"), None
+        if keep:
+            e = f"{x:.{sig - 1}e}"
+            mant, exp = e.split("e")
+            exp = int(exp)
+            if -4 <= exp < 7:
+                return f"{float(e):.{max(0, sig - 1 - exp)}f}", None
+            return mant, exp
+        mant, exp = f"{x:.{sig - 1}e}".split("e")
         exp = int(exp)
         if -4 <= exp < 7:
-            return format(float(s), "f").rstrip("0").rstrip("."), None
+            s = f"{x:.{max(sig - 1 - exp, 0)}f}"
+            return (s if keep or "." not in s else s.rstrip("0").rstrip(".")), None
+        if not keep and "." in mant:
+            mant = mant.rstrip("0").rstrip(".")
         return mant, exp
 
     def number(self, x, sig=None):
