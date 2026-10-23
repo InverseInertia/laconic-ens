@@ -104,6 +104,8 @@ class Evaluator:
         self.Q = self.ureg.Quantity
         self.vars = {}
         self.funcs = {}
+        self.gvars = set()     # bare names defined global with ~; stored as ~name from then on
+        self.gfuncs = set()
         self.assume = True     # False after !noassume: results keep their typed units
         self.short = False     # True after !short: lines show only the final number, no steps or units
         self.plotdefs = {}     # set by `!plot key: value`, for the plots below it
@@ -113,7 +115,30 @@ class Evaluator:
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
-        return name in self.vars or name in local
+        return self.vkey(name) in self.vars or name in local
+
+    def vkey(self, name):
+        """The key a variable is stored under. `~` marks a definition as global; every
+        later use of that name, with or without the `~`, resolves to the global one."""
+        bare = name.lstrip("~")
+        return "~" + bare if name != bare or bare in self.gvars else bare
+
+    def fkey(self, name):
+        bare = name.lstrip("~")
+        return "~" + bare if name != bare or bare in self.gfuncs else bare
+
+    def bind_key(self, name, func=False):
+        """The key a definition of `name` stores under. A `~` definition makes the name
+        global; a name already in use without one cannot become global."""
+        bare = name.lstrip("~")
+        names, store = (self.gfuncs, self.funcs) if func else (self.gvars, self.vars)
+        if name != bare and bare not in names:
+            if bare in store:
+                kind = "function" if func else "variable"
+                raise EvalError(f"'{bare}' is already a non-global {kind}. "
+                                f"Define it with ~ the first time, or rename one of them")
+            names.add(bare)
+        return ("~" + bare) if bare in names else bare
 
     def is_unit(self, name):
         try:
@@ -167,6 +192,9 @@ class Evaluator:
     def ev_Name(self, n, scope):
         if n.name in scope:
             return scope[n.name]
+        key = self.vkey(n.name)
+        if key in scope:
+            return scope[key]
         if n.name in CONSTANTS:
             return self.Q(CONSTANTS[n.name])
         if n.name in self.cleared:
@@ -285,10 +313,11 @@ class Evaluator:
 
     def ev_Call(self, n, scope):
         args = [a.value if isinstance(a, Str) else self.eval(a, scope) for a in n.args]
-        if n.func in self.funcs:
+        fkey = self.fkey(n.func)
+        if fkey in self.funcs:
             if any(isinstance(a, str) for a in args):
                 raise EvalError(f"{n.func} is a user function and cannot take text")
-            params, body = self.funcs[n.func]
+            params, body = self.funcs[fkey]
             if len(args) != len(params):
                 raise EvalError(f"{n.func} takes {len(params)} argument(s), got {len(args)}")
             return self.eval(body, {**self.vars, **dict(zip(params, args))})

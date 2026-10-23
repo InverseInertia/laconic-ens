@@ -135,9 +135,12 @@ over the base letter: `F_x!` is `\vec{F}_{x}`. `x`, `x!` and `x@` are three diff
 
 ## Global variables and commands
 
-A name that starts with `~` is global: `~g = 9.81'm / 's^2`, used as `~g`. `!clear` on its own
+A `~` on a definition makes the name global: `~g = 9.81'm / 's^2`. Every later use of the name is
+the global one, so you write plain `g` from then on (the sheet adds the `~` itself, and `~g` still
+works). A global and an ordinary variable can never share a name: assigning `g` after `~g`
+changes the global, and defining `~g` for a name already used without one is an error. `!clear` on its own
 line removes every variable above it that is not global; user functions are kept. `!clearf` does
-the same for user functions, and a function whose name starts with `~` (`~f(x) = x^2`) is global
+the same for user functions, and a function defined with `~` (`~f(x) = x^2`, used as `f(2)`) is global
 and survives it. Evaluation is
 top to bottom, so a global is available only below its definition. Using a variable that was
 cleared says so: `'m' was removed by !clear`.

@@ -231,8 +231,8 @@ class Printer:
         if name in self.local:
             return name_latex(name), ATOM
         if self.ev.is_var(name):
-            if self.subst and (self.expand_matrices or np.ndim(self.ev.vars[name].magnitude) == 0):
-                return self.value(self.ev.vars[name])
+            if self.subst and (self.expand_matrices or np.ndim(self.ev.vars[self.ev.vkey(name)].magnitude) == 0):
+                return self.value(self.ev.vars[self.ev.vkey(name)])
             return name_latex(name), ATOM
         if name in CONSTANTS:
             return ("\\pi" if name == "pi" else "e"), ATOM
@@ -273,7 +273,7 @@ class Printer:
 
     def call(self, n):
         f, a = n.func, [self.tex(x) for x in n.args]
-        if f in self.ev.funcs:
+        if self.ev.fkey(f) in self.ev.funcs:
             return f"{name_latex(f)}\\left({', '.join(a)}\\right)", ATOM
         if f == "sqrt":
             return f"\\sqrt{{{a[0]}}}", ATOM

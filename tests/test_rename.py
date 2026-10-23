@@ -24,6 +24,8 @@ def test_function_names_parameters_and_decorated_names():
     assert out == "x` = 2\ny = 1\ng(y) = y + 1\n"
     out, _ = rename("~g = 9.81'm/'s^2\nF = 2 * ~g\n", "~g", "~grav")
     assert out == "~grav = 9.81'm/'s^2\nF = 2 * ~grav\n"
+    out, n = rename("~g = 9.81\nF = 2 * g\n", "g", "grav")
+    assert out == "~grav = 9.81\nF = 2 * grav\n" and n == 2
     out, _ = rename("σ_max = 3\nσ_max * 2\n", "σ_max", "s_y")
     assert out == "s_y = 3\ns_y * 2\n"
 

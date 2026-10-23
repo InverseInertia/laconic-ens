@@ -20,7 +20,7 @@ K_inv = inv(K)
 # Computed results reduce to simple SI. Use -> to pick a unit yourself.
 ~g = 9.81'm / 's^2
 mass = 80'kg
-W = mass * ~g
+W = mass * g
 v = 12'm / 's
 KE(m, v) = 1 / 2 * m * v^2
 E_k = KE(mass, v)
@@ -32,7 +32,7 @@ bridge = 364.4'smoot -> 'm
 walk = 2.5'km -> 'smoot
 
 ## Global variables and !clear
-# ~g survives !clear. Everything else above is removed.
+# ~ marks the definition of g as global, so g survives !clear. Everything else above is removed.
 !clear
 mass = 12'kg
-W = mass * ~g
+W = mass * g
