@@ -128,8 +128,8 @@ def test_alt_up_grows_and_alt_down_shrinks(page):
 def test_double_click_selects_the_whole_quantity(page):
     reset(page, "x = 12'kN + a")
     box = page.evaluate("(() => { const r = document.querySelector('#src').getBoundingClientRect(); return [r.left, r.top]; })()")
-    # 14px mono, 8.4px per character, 16px padding, 28px rows, 12px top padding
-    page.mouse.dblclick(box[0] + 16 + 8.4 * 5.5, box[1] + 12 + 14)
+    # 14px OCR-A, 10px per character (0.715em), 16px padding, 28px rows, 12px top padding
+    page.mouse.dblclick(box[0] + 16 + 10 * 5.5, box[1] + 12 + 14)
     assert page.evaluate("document.querySelector('#src').value.slice(document.querySelector('#src').selectionStart, document.querySelector('#src').selectionEnd)") == "12'kN"
 
 
