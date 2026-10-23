@@ -356,6 +356,15 @@ def snippet(r, wrap="inline"):
     if r.kind == "plot":
         from .plotpgf import pgfplots   # imported late: plotpgf uses this module's escape()
         return pgfplots(r.plot)
+    if r.kind == "solver":
+        info, vals = r.solver, r.solver["values"]
+        note = ""
+        if info["status"] != "valid" or info["tainted"]:
+            note = f"% line {r.n}: solver result is out of date or not run; values shown may be starting values\n"
+        if wrap == "align":
+            return note + "\\begin{align*}\n" + " \\\\\n".join(f"{v['lhs']} &= {v['rhs']}" for v in vals) + "\n\\end{align*}"
+        body = r",\; ".join(v["latex"] for v in vals)
+        return note + (f"\\[ {body} \\]" if wrap == "display" else body)
     if r.kind in ("assign", "expr", "funcdef", "unitdef"):
         if wrap == "align":
             rows = [f"{r.lhs} &= {r.stages[0]}" if r.lhs else f"&{r.stages[0]}"]

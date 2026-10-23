@@ -303,4 +303,9 @@ assert.deepStrictEqual(growTo("x = a -> b|", 9), ['b', 'x = a -> b'], 'conversio
 eq(E.keyAction('ArrowUp', { alt: true }, '# note', 3, 3, {}), null, 'comments are left alone');
 eq(E.keyAction('ArrowUp', { alt: true }, 'x = 1', 0, 5, {}).message, 'Nothing larger to select', 'whole line is the top');
 
+// Text in quotes (props keys and fluids) is not math
+eq(E.charAction('-', 'r = props("D", "T", T, "P", p, "1', 33, 33, {}), null, 'a hyphen in a fluid name stays a hyphen');
+eq(E.charAction('.', 'r = props("D", "T", T, "P", p, "INCOMP::MEG[0', 44, 44, {}), null, 'a dot stays a dot');
+eq(E.charAction('-', 'r = props("D", "T", T', 21, 21, {}) !== null, true, 'outside the quotes it is math again');
+
 console.log(`${n} editing checks passed`);

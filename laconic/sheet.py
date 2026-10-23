@@ -17,20 +17,24 @@ from .plotopts import (OPT_RE, PlotError, block_end, canon, is_plot_line,
                        parse_option, parse_plot)
 from .plotspec import Builder
 from .plotsvg import render_svg
+from . import solver
+from .solver import SolverError
 
 
 @dataclass
 class LineResult:
     n: int
     source: str
-    kind: str  # blank comment heading meta command assign expr funcdef unitdef plot plotopt error
+    kind: str  # blank comment heading meta command assign expr funcdef unitdef plot plotopt solver solveropt error
     lhs: str = ""
     stages: list = field(default_factory=list)
     text: str = ""
     error: str = ""
     svg: str = ""          # plot: the picture
     plot: dict = None      # plot: the data and settings it was drawn from (see plotspec.py)
-    end: int = 0           # plot: last line of its option lines
+    end: int = 0           # plot, solver: last line of its option lines
+    solver: dict = None    # solver: status, hash and values of the block (see _run_solver)
+    stale: bool = False    # reads a value from a solver whose result is out of date
 
     @property
     def latex(self):
@@ -117,10 +121,11 @@ def run(text, siunitx=False, global_units=None):
     return evaluate(text, siunitx, global_units).results
 
 
-def evaluate(text, siunitx=False, global_units=None):
+def evaluate(text, siunitx=False, global_units=None, solve=None):
     """`global_units` are the instance's (name, definition) pairs. Units are
     defined before any line is evaluated, so a definition applies to the whole
-    sheet, wherever it sits."""
+    sheet, wherever it sits. `solve` is a SolverRequest: the block it names is solved
+    instead of read, and `solver.StopSolve` ends the run once it is."""
     lines = text.splitlines()
     has_defs = any(s.startswith("'") and "=" in s for s in (l.strip() for l in lines))
     ev = Evaluator(global_units or (), fork=has_defs)
@@ -137,6 +142,9 @@ def evaluate(text, siunitx=False, global_units=None):
             results.append(defs[i])
         elif i in owned:
             results.append(owned.pop(i))
+        elif solver.is_solver_line(s):
+            r, owned = _run_solver(i, raw, lines, ev, fmt, used, solve)
+            results.append(r)
         elif is_plot_line(s):
             r, owned = _run_plot(i, raw, lines, ev, fmt, used)
             results.append(r)
@@ -219,7 +227,8 @@ def _run_command(i, raw, s, ev, fmt):
                     "short", "long"):
         return LineResult(i, raw, "error",
                           error=f"Unknown command '!{name}'. Available: !clear, !clearf, !assume, "
-                                "!noassume, !trigdeg, !trigrad, !short, !long, !sigfigs, !decplace, !plot, !plotspec")
+                                "!noassume, !trigdeg, !trigrad, !short, !long, !sigfigs, !decplace, !plot, !plotspec, "
+                                "!root, !minimize, !maximize")
     if len(parts) > 1:
         return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
     if name in ("assume", "noassume"):
@@ -246,6 +255,7 @@ def _run_command(i, raw, s, ev, fmt):
     for n in gone:
         del ev.vars[n]
     ev.cleared.update(gone)
+    ev.stale -= set(gone)
     text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
     return LineResult(i, raw, "command", text=text)
 
@@ -298,9 +308,12 @@ def _run_plot(i, raw, lines, ev, fmt, used):
         except PlotError as e:
             owned[n] = LineResult(n, lines[n - 1], "error", error=str(e))
 
+    nodes = []
+
     def parse(src):
         node = parse_expr(src)
         used.update(_unit_names(node))
+        nodes.append(node)
         return node
     try:
         series, var, lo, hi = parse_plot(raw)
@@ -311,7 +324,99 @@ def _run_plot(i, raw, lines, ev, fmt, used):
     for n, msg in b.errors:
         owned[n] = LineResult(n, lines[n - 1], "error", error=msg)
     text = spec["title"] or "plot " + ", ".join(s["label"] for s in spec["series"])
-    return LineResult(i, raw, "plot", text=text, svg=render_svg(spec, uid=i), plot=spec, end=end), owned
+    return LineResult(i, raw, "plot", text=text, svg=render_svg(spec, uid=i), plot=spec, end=end,
+                      stale=solver.tainted(ev, nodes)), owned
+
+
+def _run_solver(i, raw, lines, ev, fmt, used, solve):
+    """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here:
+    the stored result is compared by hash with the block's current inputs and, fitting or not, its
+    values are what the unknowns hold below (a result that no longer fits is marked out of date, as
+    is everything computed from it). Only a SolveRequest for this very line runs the solver."""
+    block = solver.parse_block(lines, i - 1)
+    owned = {}
+    for n in range(i + 1, block.end + 1):
+        msg = block.errors.get(n)
+        owned[n] = LineResult(n, lines[n - 1], "error" if msg else "solveropt", error=msg or "")
+    mine = solve is not None and solve.line == i
+
+    def fail(msg):
+        if mine:
+            solve.outcome = {"ok": False, "message": msg, "record": None}
+            raise solver.StopSolve
+        ev.stale |= {ev.vkey(n) for n in block.unknowns}   # what reads them below is not trustworthy either
+        return LineResult(i, raw, "error", error=msg, end=block.end), owned
+
+    if block.problem:
+        return fail(block.problem)
+    for node in block.nodes():
+        used |= _unit_names(node)
+    try:
+        prob = solver.prepare(block, ev, _describe)
+        h = prob.digest()
+    except Exception as e:
+        return fail(_describe(e, None, ev))
+    stored = block.stored
+    qs = prob.stored_quantities(stored) if stored is not None else None
+    status = "none" if qs is None else ("valid" if stored.get("hash") == h else "stale")
+    if mine or status != "valid":
+        try:
+            prob.probe()
+        except Exception as e:
+            return fail(_describe(e, None, ev))
+    if mine:
+        out = prob.solve(solve.log)
+        out["hash"] = h
+        if solve.mode == "verify" and out["record"] is not None:
+            if stored is None or stored.get("hash") != h:
+                out["verify"] = {"same": None, "diff": None,
+                                 "note": "There is no current stored result to compare with. Run it first."}
+            else:
+                same, diff = solver.compare(stored, out["record"])
+                out["verify"] = {"same": same, "diff": diff, "note": ""}
+        solve.outcome = out
+        raise solver.StopSolve
+    taint = solver.tainted(ev, block.nodes()) or any(u.key in ev.stale for u in prob.unknowns)
+    keys = {u.key for u in prob.unknowns}
+    if status != "valid" or taint:
+        ev.stale |= keys
+    else:
+        ev.stale -= keys
+    if qs is not None:
+        for u, q in zip(prob.unknowns, qs):
+            ev.vars[u.key] = q
+    values = [_value(u.name, name_latex(u.key), fmt.quantity(ev.vars[u.key])) for u in prob.unknowns]
+    plain = [f"{u.key} = {fmt.plain(ev.vars[u.key])}" for u in prob.unknowns]
+    obj = prob.stored_objective(stored) if qs is not None else None
+    if obj is not None:
+        word = "minimum" if block.kind == "minimize" else "maximum"
+        values.append(_value(word, rf"\text{{{word}}}", fmt.quantity(obj)))
+        plain.append(f"{word} = {fmt.plain(obj)}")
+    info = {"kind": block.kind, "unknowns": block.unknowns, "hash": h, "status": status, "tainted": taint,
+            "autorun": block.autorun, "method": prob.method, "timeout": block.timeout, "values": values,
+            "summary": solver.describe_record(stored) if qs is not None else "", "note": block.stored_note,
+            "record": stored if qs is not None else None}
+    return LineResult(i, raw, "solver", text="; ".join(plain), end=block.end, solver=info,
+                      stale=status != "valid" or taint), owned
+
+
+def _value(name, lhs, rhs):
+    return {"name": name, "lhs": lhs, "rhs": rhs, "latex": f"{lhs} = {rhs}"}
+
+
+def solve_block(text, line, global_units=None, log=print, mode="run"):
+    """Solve the block whose header is on `line` (1-based), in this process. Returns
+    {"ok", "message", "record", "hash", ...}; `record` is what write_result stores. The whole sheet
+    is evaluated up to that line, so upstream blocks use their stored results as they do on screen."""
+    lines = text.splitlines()
+    if not 1 <= line <= len(lines) or not solver.is_solver_line(lines[line - 1]):
+        return {"ok": False, "message": f"Line {line} is not a !root, !minimize or !maximize line", "record": None}
+    req = solver.SolveRequest(line, log, mode)
+    try:
+        evaluate(text, global_units=global_units, solve=req)
+    except solver.StopSolve:
+        pass
+    return req.outcome or {"ok": False, "message": f"Line {line} was not reached", "record": None}
 
 
 def _run_line(i, raw, s, ev, fmt, used):
@@ -335,6 +440,7 @@ def _run_line(i, raw, s, ev, fmt, used):
             value = reduce_si(value, ev.ureg)
             if ev.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
                 value = value.to("degree")
+        stale = solver.tainted(ev, [expr])
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
         res = fmt.quantity(value)
@@ -342,15 +448,16 @@ def _run_line(i, raw, s, ev, fmt, used):
         if isinstance(stmt, Assign):
             key = ev.bind_key(stmt.name)
             ev.vars[key] = value
+            (ev.stale.add if stale else ev.stale.discard)(key)
             return LineResult(i, raw, "assign", lhs=name_latex(key), stages=stages,
-                              text=f"{key} = {fmt.plain(value)}")
-        return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value))
+                              text=f"{key} = {fmt.plain(value)}", stale=stale)
+        return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value), stale=stale)
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e, stmt, ev))
 
 
 def _describe(e, stmt, ev):
-    if isinstance(e, (ParseError, EvalError, PlotError)):
+    if isinstance(e, (ParseError, EvalError, PlotError, SolverError)):
         return str(e)
     if isinstance(e, pint.errors.DimensionalityError):
         return f"Incompatible units: {e}"

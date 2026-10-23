@@ -34,6 +34,8 @@ def _quit_when_closed():
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()   # the solver worker is a spawned copy of this executable
     if sys.stdout is None or sys.stderr is None:  # windowed build has no console
         sys.stdout = sys.stderr = open(os.devnull, "w")
     from laconic.__main__ import main

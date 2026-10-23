@@ -1,0 +1,40 @@
+## Solving and optimizing
+# Solvers never run while you type. Press Run under a block, or tick Auto to re-solve after edits.
+# The answer is stored in the block as a `#@ result` line, with a hash of everything the solver
+# read. Change an input and the block, and every line computed from it, is marked out of date.
+# `lens examples/solve.lens --solve` fills them in from the terminal.
+
+## Root: the load that makes a simply supported beam deflect L/360
+L = 4.5'm
+E = 200'GPa
+I = 8.5e7'mm^4
+d_max = L / 360
+# The starting value of w also sets the unit it is solved in.
+w = 10'kN / 'm
+!root w
+  equation: 5 * w * L^4 / (384 * E * I) = d_max
+  #@ result {"hash":"702ea551ed33","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":39.79881115683585,"unit":"kilonewton / meter"}],"nfev":7,"message":"The solution converged.","resid":0.0}
+M_max = w * L^2 / 8 -> 'kN * 'm
+
+## Root: a pump meets its system curve (several unknowns work the same way)
+H_pump(Q) = 40'm - 0.05'm * (Q / ('L / 's))^2
+H_sys(Q) = 12'm + 0.02'm * (Q / ('L / 's))^2
+# On a single unknown, `bounds` bracket the root and select brentq.
+Q = 10'L / 's
+!root Q
+  equation: H_pump(Q) = H_sys(Q)
+  bounds: 0'L / 's .. 100'L / 's
+  #@ result {"hash":"1a1af010f877","kind":"root","method":"brentq","scipy":"1.18.1","values":[{"mag":20.0,"unit":"liter / second"}],"nfev":15,"message":"bracketed root found","resid":0.0}
+H_op = H_pump(Q)
+
+## Minimize: the lightest rectangular section that is strong enough
+S_req = 500'cm^3
+b = 100'mm
+h = 200'mm
+!minimize b, h
+  objective: b * h
+  constraint: b * h^2 / 6 >= S_req
+  constraint: h <= 3 * b
+  bounds b: 40'mm .. 300'mm
+  bounds h: 40'mm .. 600'mm
+  #@ result {"hash":"c3f9bbd74e5d","kind":"minimize","method":"SLSQP","scipy":"1.18.1","values":[{"mag":69.33612743397613,"unit":"millimeter"},{"mag":208.00838230487713,"unit":"millimeter"}],"nfev":54,"message":"Optimization terminated successfully","resid":9.35e-06,"obj":{"mag":14422.495702826187,"unit":"millimeter ** 2"}}
