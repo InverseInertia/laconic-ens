@@ -1,6 +1,6 @@
 # LENS: Laconic Engineering Notebook System
 
-LENS (package name `laconic`) is a units-aware worksheet built on [Pint](https://pint.readthedocs.io), taking heavy inspiration from the utility of SMath and Mathcad, but aiming to solve my main grievances with both: closed-source designs and poor-quality formatting options. In LENS, you type one expression per line and see typeset results update as you edit, making your back-of-the-napkin calculations into professional documentation in as few keystrokes as possible. You can copy LaTeX snippets or export a whole document.
+LENS (package name `laconic`) is a units-aware worksheet built on [Pint](https://pint.readthedocs.io), taking heavy inspiration from the utility of SMath and Mathcad, but aiming to solve my main grievances with both: closed-source designs that avoid integrating with other programs, and poor-quality formatting options. In LENS, you type one expression per line and see typeset results update as you edit, making your back-of-the-napkin calculations into professional documentation in as few keystrokes as possible. You can copy LaTeX snippets or export a whole document.
 
 ![Screenshot of LENS UI](image.png)
 
