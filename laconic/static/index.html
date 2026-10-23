@@ -21,7 +21,7 @@
     --hit: rgba(194, 222, 255, .08);
     --hdr: 50px;
     --row: 28px;
-    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --mono: "OCR-A", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; }
@@ -1015,6 +1015,7 @@ const FONTS_MONO = [
   ["System monospace", 'ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace'],
   ["Consolas / Menlo", 'Consolas, Menlo, "DejaVu Sans Mono", monospace'],
   ["Courier", '"Courier New", Courier, monospace'],
+  ["OCR-A", '"OCR-A", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'],
 ];
 const COLOR_FIELDS = [["paper", "Paper"], ["text", "Text"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"]];
 const PRESETS = {
@@ -1032,7 +1033,7 @@ function contrast(a, b) {  // WCAG contrast ratio of two #rrggbb colors
   const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
-const DEFAULT_THEME = {sans: 0, mono: 0, bg: "grid", colors: {...PRESETS["LENS blueprint"]}};
+const DEFAULT_THEME = {sans: 0, mono: 4, bg: "grid", colors: {...PRESETS["LENS blueprint"]}};
 let themeResetNote = "";  // set when a saved theme had to be replaced at load
 let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
 {

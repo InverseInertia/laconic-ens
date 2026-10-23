@@ -3,6 +3,19 @@
 Laconic (LENS for short) is a units-aware worksheet on top of Pint. Type one expression per
 line, see typeset results update as you edit, and copy LaTeX snippets or export a document.
 
+## Download and install
+
+Ready-made programs for Windows and Linux are on the
+[releases page](https://github.com/inverseinertia/laconic-ens/releases). They need no Python install.
+
+- **Windows:** download `lens-windows-x64.exe` and double-click it.
+- **Linux:** download `install-linux.sh` and run it (`sh install-linux.sh`). It fetches the program
+  and icon from the latest release if they are not beside it, installs them for your user only (no
+  root), adds LENS to your application menu, and removes any earlier install first. Run
+  `sh install-linux.sh --uninstall` to remove it. To install a program you already downloaded,
+  keep `lens-linux-x64` and `lens-icon.png` in the same folder as the script.
+- **From source:** the commands below, for the command-line tool and for development.
+
     pip install -e .[dev]
     lens --serve --app                # web UI in a Chromium app window
     lens --serve --open               # or in your default browser
@@ -506,7 +519,7 @@ exported document with plots and is skipped unless `pdflatex` (with pgfplots and
 
 ## Standalone builds
 
-`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. PyInstaller does not cross-compile, so build on each target OS. The logo is `laconic/static/logo.svg` (header and browser tab) and `packaging/icon.png` (executable icon on Windows and macOS, converted by PyInstaller, which needs Pillow). Double-click it to start the UI in an app window, and it quits a few seconds after the window is closed; pass arguments to use the CLI (which keeps running until you stop it). The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
+`pip install pyinstaller && pyinstaller packaging/lens.spec` produces a single `dist/lens` (`lens.exe` on Windows) that needs no Python install. PyInstaller does not cross-compile, so build on each target OS. The logo is `laconic/static/logo.svg` (header and browser tab) and `packaging/icon.png` (executable icon on Windows and macOS, converted by PyInstaller, which needs Pillow). The Linux installer is described under Download and install. Double-click it to start the UI in an app window, and it quits a few seconds after the window is closed; pass arguments to use the CLI (which keeps running until you stop it). The `build` GitHub Actions workflow builds both, smoke-tests them, and attaches them to a release when you push a `v*` tag.
 
 ## Not built yet
 
