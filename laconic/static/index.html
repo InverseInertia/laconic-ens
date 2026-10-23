@@ -10,14 +10,16 @@
 <script defer src="/static/vendor/katex/katex.min.js"></script>
 <style>
   :root {
-    --paper: #1f3a5f;
-    --paper-deep: #2b4569;
-    --grid: #335684;
-    --ink: #e8f1ff;
-    --ink-soft: #b6c3d7;
-    --rule: #5d82b3;
-    --err: #ff9a8f;
-    --hit: rgba(232, 241, 255, .08);
+    --paper: #00386b;
+    --paper-deep: #0b4274;
+    --grid: #0a4d88;
+    --text: #c2deff;
+    --text-soft: #94b2d0;
+    --ink: #348fff;
+    --rule: #1f6fc4;
+    --err: #ff8f00;
+    --hit: rgba(194, 222, 255, .08);
+    --hdr: 50px;
     --row: 28px;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -26,21 +28,22 @@
   html, body { height: 100%; margin: 0; }
   body {
     background: var(--paper);
-    color: var(--ink);
+    color: var(--text);
     font: 15px/1.4 var(--sans);
     display: grid;
     grid-template-rows: auto 1fr;
   }
   header {
     display: flex; align-items: center; gap: 8px;
-    padding: 6px 12px;
+    min-height: var(--hdr); padding: 0 12px 0 0;
     border-bottom: 1px solid var(--rule);
     background: var(--paper-deep);
   }
-  .logo { display: block; flex: none; }
+  svg.logo .grid { display: none; }  /* the header logo drops the grid; the favicon file keeps it */
+  .logo { display: block; flex: none; width: var(--hdr); height: var(--hdr); }
   .brand { font: 600 14px var(--sans); letter-spacing: .1em; padding-right: 10px; border-right: 1px solid var(--rule); }
   header input[type=text] {
-    font: 500 14px var(--sans); color: var(--ink);
+    font: 500 14px var(--sans); color: var(--text);
     background: transparent; border: 0; border-bottom: 1px dashed transparent;
     padding: 3px 0; width: 12ch;
   }
@@ -54,7 +57,7 @@
   .ico { width: 18px; height: 18px; display: block; margin: 0 auto; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
   .texLogo .katex { font-size: 1em; }
   button {
-    font: 500 14px var(--sans); color: var(--ink);
+    font: 500 14px var(--sans); color: var(--text);
     background: transparent; border: 1px solid var(--ink);
     padding: 5px 12px; cursor: pointer;
   }
@@ -83,7 +86,7 @@
   html[data-bg="plain"] .grid-paper { background-image: none; }
   #src {
     font: 400 14px/var(--row) var(--mono);
-    color: var(--ink);
+    color: var(--text);
     background-color: transparent;
     border: 0; resize: none; margin: 0;
     padding: 12px 16px;
@@ -94,46 +97,46 @@
   #src:focus { outline: none; }
   #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; }
   .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; min-height: var(--row); cursor: text; }
-  .row .no { font: 400 12px/var(--row) var(--mono); color: var(--ink-soft); text-align: right; padding-right: 12px; user-select: none; }
+  .row .no { font: 400 12px/var(--row) var(--mono); color: var(--text-soft); text-align: right; padding-right: 12px; user-select: none; }
   .row.active { background: var(--hit); }
   .row .body { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
   .row.blank { min-height: 14px; }
   .row.blank .no { line-height: 14px; }
   .row.heading .body { font: 600 17px/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
-  .row.comment .body { font: 400 14px/var(--row) var(--sans); color: var(--ink-soft); }
+  .row.comment .body { font: 400 14px/var(--row) var(--sans); color: var(--text-soft); }
   .row.error .body { font: 400 13px/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
-  .row.error .src { color: var(--ink-soft); display: block; }
+  .row.error .src { color: var(--text-soft); display: block; }
   .row .katex-display { margin: 0; text-align: left; }
   .row .katex-display > .katex { text-align: left; }
   .row .katex { font-size: 1.12em; }
 
   select {
-    font: 500 14px var(--sans); color: var(--ink); background: transparent;
+    font: 500 14px var(--sans); color: var(--text); background: transparent;
     border: 1px solid var(--ink); padding: 5px 8px; cursor: pointer;
   }
   select[hidden] { display: none; }
-  .row.command .body { font: 400 13px/1.4 var(--mono); color: var(--ink-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
+  .row.command .body { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
   .seg { display: flex; border: 1px solid var(--ink); }
   .seg button { border: 0; border-right: 1px solid var(--ink); }
   .seg button:last-child { border-right: 0; }
   .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
   .row.snip { grid-template-columns: 44px 1fr auto; }
   .row.snip .body { padding: 3px 0; }
-  .row.snip pre { margin: 0; font: 400 12.5px/1.5 var(--mono); white-space: pre; color: var(--ink); }
-  .row.snip .copy { align-self: start; margin: 3px 8px 0 12px; padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--ink-soft); }
+  .row.snip pre { margin: 0; font: 400 12.5px/1.5 var(--mono); white-space: pre; color: var(--text); }
+  .row.snip .copy { align-self: start; margin: 3px 8px 0 12px; padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
   .row.snip .copy:hover { color: var(--paper); border-color: var(--ink); }
   header label { display: flex; align-items: center; gap: 4px; font: 400 13px/1.15 var(--sans); cursor: pointer; }
   header input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
-  #status { font: 400 13px var(--sans); color: var(--ink-soft); min-height: 1em; }
+  #status { font: 400 13px var(--sans); color: var(--text-soft); min-height: 1em; }
 
-  dialog { background: var(--paper); color: var(--ink); border: 2px solid var(--ink); padding: 0; width: min(600px, 92vw); }
+  dialog { background: var(--paper); color: var(--text); border: 2px solid var(--ink); padding: 0; width: min(600px, 92vw); }
   dialog::backdrop { background: rgba(23, 37, 61, .35); }
   .dlg-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--paper-deep); border-bottom: 1px solid var(--rule); }
   .dlg-head h2 { margin: 0; font: 600 16px var(--sans); }
   .dlg-body { padding: 12px 16px; max-height: 62vh; overflow: auto; }
   .dlg-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--rule); background: var(--paper-deep); }
   .dlg-foot .spacer { flex: 1; }
-  .note { font: 400 13px/1.45 var(--sans); color: var(--ink-soft); margin: 0 0 10px; }
+  .note { font: 400 13px/1.45 var(--sans); color: var(--text-soft); margin: 0 0 10px; }
   .alert-btns { display: flex; gap: 8px; }
   .theme-msg { color: var(--err); font-weight: 500; }
   table.keys { border-collapse: collapse; width: 100%; font: 400 13.5px/1.4 var(--sans); }
@@ -143,60 +146,60 @@
   kbd { border: 1px solid var(--ink); padding: 0 4px; }
   #greekRows { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px 14px; }
   .g-row { display: flex; align-items: center; gap: 4px; }
-  .g-row input { font: 400 15px var(--mono); width: 2.6ch; text-align: center; padding: 3px 2px; color: var(--ink); background: transparent; border: 1px solid var(--rule); }
+  .g-row input { font: 400 15px var(--mono); width: 2.6ch; text-align: center; padding: 3px 2px; color: var(--text); background: transparent; border: 1px solid var(--rule); }
   .g-row input.val { width: 4.2ch; }
-  .g-row button { padding: 0 6px; border-color: var(--rule); color: var(--ink-soft); font-size: 14px; line-height: 22px; }
-  .g-row .arrow { color: var(--ink-soft); }
+  .g-row button { padding: 0 6px; border-color: var(--rule); color: var(--text-soft); font-size: 14px; line-height: 22px; }
+  .g-row .arrow { color: var(--text-soft); }
 
   .row.plot .body { padding: 6px 0 4px; }
   .plot-wrap svg { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); background: #fff; user-select: none; }
   .plot-tools { display: flex; gap: 6px; margin-top: 5px; }
-  .plot-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--ink-soft); }
+  .plot-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
   .plot-tools button:hover { color: var(--paper); border-color: var(--ink); }
-  .plot-tools .hint { font: 400 12px var(--sans); color: var(--ink-soft); align-self: center; margin-left: 6px; }
+  .plot-tools .hint { font: 400 12px var(--sans); color: var(--text-soft); align-self: center; margin-left: 6px; }
   .row { position: relative; }
-  .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 13px/1 var(--sans); color: var(--ink-soft); cursor: help; }
+  .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 13px/1 var(--sans); color: var(--text-soft); cursor: help; }
   .row.stale:not(.solver) .body { opacity: .72; }
   .row.solver .body { padding: 6px 0 4px; }
-  .solver-box .s-head { font: 400 13px/1.4 var(--mono); color: var(--ink-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
+  .solver-box .s-head { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
   .solver-box .s-values { margin: 2px 0 4px; }
   .solver-box.is-stale .s-values { opacity: .6; }
   .solver-box .s-val .katex-display { margin: 0; }
   .solver-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
-  .solver-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--ink-soft); }
+  .solver-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
   .solver-tools button:hover:not(:disabled) { color: var(--paper); border-color: var(--ink); }
   .solver-tools button:disabled { opacity: .45; cursor: default; }
-  .solver-tools button:disabled:hover { background: transparent; color: var(--ink-soft); }
-  .solver-tools .s-autolbl { display: flex; align-items: center; gap: 4px; font: 400 12.5px var(--sans); color: var(--ink-soft); cursor: pointer; }
+  .solver-tools button:disabled:hover { background: transparent; color: var(--text-soft); }
+  .solver-tools .s-autolbl { display: flex; align-items: center; gap: 4px; font: 400 12.5px var(--sans); color: var(--text-soft); cursor: pointer; }
   .solver-tools .s-autolbl input { accent-color: var(--ink); margin: 0; }
   .solver-tools .s-status { display: flex; align-items: baseline; gap: 6px; flex: 1 1 100%; font: 500 13px/1.35 var(--sans); }
   .solver-tools .s-sym { flex: none; width: 1.2em; text-align: center; }
   .solver-tools[data-state="run"] .s-sym { display: inline-block; animation: spin 1.1s linear infinite; }
   .solver-tools[data-state="fail"] .s-status { color: var(--err); }
-  .solver-tools[data-state="none"] .s-status, .solver-tools[data-state="warn"] .s-status { color: var(--ink); }
-  .solver-box .s-sub { font: 400 12px var(--sans); color: var(--ink-soft); margin-top: 3px; min-height: 1em; }
+  .solver-tools[data-state="none"] .s-status, .solver-tools[data-state="warn"] .s-status { color: var(--text); }
+  .solver-box .s-sub { font: 400 12px var(--sans); color: var(--text-soft); margin-top: 3px; min-height: 1em; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .solver-tools[data-state="run"] .s-sym { animation: none; } }
   #solverLogDlg { width: min(900px, 96vw); }
   #solverLogDlg .dlg-body { max-height: 70vh; padding: 0; }
   #solverLogText { margin: 0; padding: 10px 16px; font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 68vh; overflow: auto; }
-  .row.meta .body { font: 400 12px/1.4 var(--sans); color: var(--ink-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
+  .row.meta .body { font: 400 12px/1.4 var(--sans); color: var(--text-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
 
   #ac { position: fixed; z-index: 30; max-height: 60vh; overflow-y: auto; min-width: 230px; max-width: min(460px, 92vw); background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 rgba(23, 37, 61, .25); font: 400 13px/1.3 var(--mono); }
   #ac[hidden] { display: none; }
   .ac-item { display: flex; align-items: baseline; gap: 10px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
   .ac-item[aria-selected="true"] { background: var(--ink); color: var(--paper); }
-  .ac-item .kind { flex: none; min-width: 3.6em; font: 500 10.5px var(--sans); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); }
+  .ac-item .kind { flex: none; min-width: 3.6em; font: 500 10.5px var(--sans); letter-spacing: .05em; text-transform: uppercase; color: var(--text-soft); }
   .ac-item .lbl { font-weight: 500; }
-  .ac-item .det { margin-left: auto; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--sans); color: var(--ink-soft); }
+  .ac-item .det { margin-left: auto; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--sans); color: var(--text-soft); }
   .ac-item[aria-selected="true"] .kind, .ac-item[aria-selected="true"] .det { color: var(--paper); opacity: .85; }
-  .ac-hint { padding: 3px 8px; border-top: 1px solid var(--grid); font: 400 11.5px var(--sans); color: var(--ink-soft); }
+  .ac-hint { padding: 3px 8px; border-top: 1px solid var(--grid); font: 400 11.5px var(--sans); color: var(--text-soft); }
 
   .u-row { display: grid; grid-template-columns: 11ch auto 1fr auto; align-items: center; gap: 4px 8px; margin-bottom: 8px; }
-  .u-row input { font: 400 14px var(--mono); padding: 3px 6px; color: var(--ink); background: transparent; border: 1px solid var(--rule); min-width: 0; }
+  .u-row input { font: 400 14px var(--mono); padding: 3px 6px; color: var(--text); background: transparent; border: 1px solid var(--rule); min-width: 0; }
   .u-row input.bad { border-color: var(--err); }
-  .u-row .eq { color: var(--ink-soft); font: 400 14px var(--mono); }
-  .u-row button { padding: 0 8px; border-color: var(--rule); color: var(--ink-soft); line-height: 24px; }
+  .u-row .eq { color: var(--text-soft); font: 400 14px var(--mono); }
+  .u-row button { padding: 0 8px; border-color: var(--rule); color: var(--text-soft); line-height: 24px; }
   .u-row .err { grid-column: 1 / -1; color: var(--err); font: 400 12.5px var(--mono); }
   .set-sec + .set-sec { margin-top: 22px; }
   .set-sec h3 { margin: 0 0 8px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
@@ -204,7 +207,7 @@
   .set-acts { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
   .set-acts .spacer { flex: 1; }
   .set-grp { margin: 0 0 14px; padding: 8px 12px 10px; border: 1px solid var(--rule); }
-  .set-grp legend { font: 500 13px var(--sans); color: var(--ink-soft); padding: 0 6px; }
+  .set-grp legend { font: 500 13px var(--sans); color: var(--text-soft); padding: 0 6px; }
   .set-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; font: 400 14px var(--sans); }
   .set-row > span { flex: 0 0 9em; }
   .set-row select { flex: 1; min-width: 0; }
@@ -220,8 +223,8 @@
   .help p, .help li { font: 400 14px/1.5 var(--sans); margin: 0 0 8px; }
   .help ul { margin: 0 0 8px; padding-left: 20px; }
   .help pre { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--rule); background: var(--paper-deep); font: 400 13px/1.55 var(--mono); overflow-x: auto; }
-  .help pre i { color: var(--ink-soft); font-style: normal; }
-  .u-empty { color: var(--ink-soft); font-size: 13.5px; }
+  .help pre i { color: var(--text-soft); font-style: normal; }
+  .u-empty { color: var(--text-soft); font-size: 13.5px; }
 
   /* Narrow or vertical screens: results on top, editor at the bottom. */
   @media (max-width: 760px) {
@@ -232,7 +235,8 @@
     #split::before { inset: 3px 0; }
     #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 2px 0; }
     body.dragging { cursor: row-resize; }
-    header { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; }
+    header { flex-wrap: wrap; gap: 8px 12px; padding: 0 12px 8px 0; }
+    .logo { align-self: flex-start; }
     header .spacer { display: none; }
     .brand { border-right: 0; padding-right: 0; }
   }
@@ -240,7 +244,7 @@
 </head>
 <body>
 <header>
-  <img class="logo" src="/static/logo.svg" alt="" width="26" height="26">
+  <img class="logo" src="/static/logo.svg" alt="">
   <span class="brand" title="Laconic Engineering Notebook System">LENS</span>
   <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
   <span class="spacer"></span>
@@ -999,12 +1003,12 @@ const FONTS_MONO = [
   ["Consolas / Menlo", 'Consolas, Menlo, "DejaVu Sans Mono", monospace'],
   ["Courier", '"Courier New", Courier, monospace'],
 ];
-const COLOR_FIELDS = [["paper", "Paper"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"]];
+const COLOR_FIELDS = [["paper", "Paper"], ["text", "Text"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"]];
 const PRESETS = {
-  "LENS blueprint": {paper: "#1f3a5f", ink: "#e8f1ff", grid: "#335684", rule: "#5d82b3", err: "#ff9a8f"},
-  "Engineering paper": {paper: "#e6eedf", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b"},
-  "White paper": {paper: "#fbfbf8", ink: "#1b1b1b", grid: "#dcdcd4", rule: "#b5b5aa", err: "#b3261e"},
-  "Dark": {paper: "#1e2127", ink: "#d9dde3", grid: "#2c313a", rule: "#444b57", err: "#ff7b72"},
+  "LENS blueprint": {paper: "#00386b", text: "#c2deff", ink: "#348fff", grid: "#0a4d88", rule: "#1f6fc4", err: "#ff8f00"},
+  "Engineering paper": {paper: "#e6eedf", text: "#17253d", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b"},
+  "White paper": {paper: "#fbfbf8", text: "#1b1b1b", ink: "#1b1b1b", grid: "#dcdcd4", rule: "#b5b5aa", err: "#b3261e"},
+  "Dark": {paper: "#1e2127", text: "#d9dde3", ink: "#d9dde3", grid: "#2c313a", rule: "#444b57", err: "#ff7b72"},
 };
 function contrast(a, b) {  // WCAG contrast ratio of two #rrggbb colors
   const lum = (h) => {
@@ -1024,12 +1028,14 @@ let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
     if (Number.isInteger(saved.sans) && FONTS_SANS[saved.sans]) theme.sans = saved.sans;
     if (Number.isInteger(saved.mono) && FONTS_MONO[saved.mono]) theme.mono = saved.mono;
     if (["grid", "lines", "dots", "plain"].includes(saved.bg)) theme.bg = saved.bg;
+    // Themes saved before text and ink were separate colors only have an ink, which was both.
+    if (saved.colors && typeof saved.colors.text !== "string") saved.colors.text = saved.colors.ink;
     for (const [k] of COLOR_FIELDS) if (typeof saved.colors?.[k] === "string" && /^#[0-9a-f]{6}$/i.test(saved.colors[k])) theme.colors[k] = saved.colors[k];
-    // A saved palette whose ink can't be read on its paper (all black, say) would leave the page
+    // A saved palette whose text can't be read on its paper (all black, say) would leave the page
     // unusable and the Settings dialog unreachable by eye, so it falls back to the default colors.
-    if (contrast(theme.colors.paper, theme.colors.ink) < 3) {
+    if (contrast(theme.colors.paper, theme.colors.text) < 3) {
       theme.colors = {...DEFAULT_THEME.colors};
-      themeResetNote = "Your saved theme colors were unreadable (ink too close to paper), so they were reset to the default theme.";
+      themeResetNote = "Your saved theme colors were unreadable (text too close to paper), so they were reset to the default theme.";
     }
   }
 }
@@ -1039,9 +1045,14 @@ function applyTheme() {
   root.style.setProperty("--sans", FONTS_SANS[theme.sans][1]);
   root.style.setProperty("--mono", FONTS_MONO[theme.mono][1]);
   for (const [k] of COLOR_FIELDS) root.style.setProperty("--" + k, c[k]);
-  root.style.setProperty("--paper-deep", `color-mix(in srgb, ${c.paper} 94%, ${c.ink})`);
-  root.style.setProperty("--ink-soft", `color-mix(in srgb, ${c.ink} 75%, ${c.paper})`);
-  root.style.setProperty("--hit", `color-mix(in srgb, ${c.ink} 8%, transparent)`);
+  root.style.setProperty("--paper-deep", `color-mix(in srgb, ${c.paper} 94%, ${c.text})`);
+  root.style.setProperty("--text-soft", `color-mix(in srgb, ${c.text} 75%, ${c.paper})`);
+  root.style.setProperty("--hit", `color-mix(in srgb, ${c.text} 8%, transparent)`);
+  // The logo is recolored from the theme: its blues are ink, text and rule, its accent is the error color.
+  for (const [k, v] of Object.entries({
+    hi: `color-mix(in srgb, ${c.ink} 55%, ${c.text})`, lo: `color-mix(in srgb, ${c.paper} 94%, ${c.text})`, mid: c.ink, light: c.text, dark: c.rule,
+    acc: c.err, grey: `color-mix(in srgb, ${c.text} 75%, ${c.paper})`, line: `color-mix(in srgb, ${c.paper} 35%, black)`,
+  })) root.style.setProperty("--logo-" + k, v);
   root.dataset.bg = theme.bg;
   if (ac) acPaint();
 }
@@ -1052,9 +1063,9 @@ function syncThemeForm() {
   const match = Object.keys(PRESETS).find((n) => sameColors(PRESETS[n], theme.colors));
   $("#preset").value = match ?? "custom";
   for (const [k] of COLOR_FIELDS) $("#c-" + k).value = theme.colors[k];
-  const ratio = contrast(theme.colors.paper, theme.colors.ink), el = $("#themeMsg");
+  const ratio = contrast(theme.colors.paper, theme.colors.text), el = $("#themeMsg");
   el.textContent = ratio < 3
-    ? `Warning: ink and paper are hard to tell apart (contrast ${ratio.toFixed(1)}:1, at least 3:1 is needed). On reload this theme is replaced by the default colors.`
+    ? `Warning: text and paper are hard to tell apart (contrast ${ratio.toFixed(1)}:1, at least 3:1 is needed). On reload this theme is replaced by the default colors.`
     : "";
   el.hidden = !el.textContent;
 }
@@ -1079,6 +1090,13 @@ function buildThemeForm() {
 }
 buildThemeForm();
 applyTheme();
+// Inline the logo so it can read the theme's CSS variables; the <img> stays if this fails.
+fetch("/static/logo.svg").then((r) => r.text()).then((t) => {
+  const svg = new DOMParser().parseFromString(t, "image/svg+xml").documentElement;
+  if (svg.nodeName !== "svg") return;
+  svg.setAttribute("class", "logo"); svg.setAttribute("aria-hidden", "true");
+  document.querySelector("img.logo").replaceWith(document.importNode(svg, true));
+}).catch(() => {});
 $("#settingsBtn").onclick = async () => {
   syncThemeForm(); buildGreek();
   $("#settingsDlg").showModal();
