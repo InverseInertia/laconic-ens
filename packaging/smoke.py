@@ -20,7 +20,7 @@ try:
     else:
         sys.exit("server did not start")
     for path in ("/static/vendor/katex/katex.min.js", "/static/vendor/d3/d3.min.js", "/static/plotview.js",
-                 "/static/fonts/fonts.css", "/static/example.lens"):
+                 "/static/fonts/fonts.css", "/static/example.lens", "/api/examples/beam"):
         urllib.request.urlopen(base + path, timeout=5).read()
     req = urllib.request.Request(base + "/api/eval", data=json.dumps({"text": "a = 2'm\na * 3"}).encode(),
                                  headers={"Content-Type": "application/json"})

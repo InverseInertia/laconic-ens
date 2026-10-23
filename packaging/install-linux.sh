@@ -51,6 +51,8 @@ remove_existing
 mkdir -p "$APP_DIR" "$(dirname "$ICON")" "$(dirname "$DESKTOP")"
 install -m 755 "$STAGE/lens" "$BIN"
 install -m 644 "$STAGE/icon.png" "$ICON"
+# The example worksheets also ship inside the program; put plain copies in the install folder.
+"$BIN" --export-examples "$APP_DIR/examples" >/dev/null
 cat > "$DESKTOP" <<DESK
 [Desktop Entry]
 Type=Application
@@ -68,4 +70,5 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$
 command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t "$DATA/icons/hicolor" 2>/dev/null || true
 
 echo "LENS installed to $APP_DIR; find it in your application menu."
+echo "Example worksheets: $APP_DIR/examples"
 echo "Remove it with: $0 --uninstall"

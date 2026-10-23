@@ -68,4 +68,4 @@ lens sheet.lens              # print each block with its status
 
 A solver run is a worker process started with `multiprocessing` (spawn). A script that imports `laconic.server` itself needs the usual `if __name__ == "__main__":` guard. The standalone programs handle this themselves.
 
-`examples/solve.lens` is a worked sheet.
+`laconic/examples/solve.lens` is a worked sheet.

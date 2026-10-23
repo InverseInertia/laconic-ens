@@ -16,7 +16,7 @@ def put_units(*pairs):
 
 
 def test_defaults_when_nothing_is_stored():
-    assert server.get_settings() == {"greek": None, "units": []}
+    assert server.get_settings() == {"welcomed": False, "greek": None, "units": []}
 
 
 def test_greek_table_is_stored_and_can_be_reset():
@@ -53,7 +53,7 @@ def test_vocabulary_has_what_the_editor_completes():
 
 def test_settings_survive_a_broken_file(config):
     (config / "settings.json").write_text("{not json")
-    assert server.get_settings() == {"greek": None, "units": []}
+    assert server.get_settings() == {"welcomed": False, "greek": None, "units": []}
     assert settings.global_units() == []
 
 
@@ -82,3 +82,17 @@ def test_props_vocabulary_lists_keys_and_fluids():
     names = [f[0] for f in v["fluids"]]
     assert names[:2] == ["Water", "Air"] and "R134a" in names and "INCOMP::MEG[0.3]" in names
     assert "H2O" in dict(v["fluids"])["Water"]
+
+
+def test_examples_are_served_from_the_package(config):
+    names = [e["name"] for e in server.list_examples()]
+    assert {"beam", "plots", "solve"} <= set(names)
+    assert "L = 4.5'm" in server.get_example("beam").body.decode()
+    with pytest.raises(Exception):
+        server.get_example("../settings")
+
+
+def test_welcomed_flag_is_remembered(config):
+    assert server.get_settings()["welcomed"] is False
+    server.put_welcomed()
+    assert server.get_settings()["welcomed"] is True

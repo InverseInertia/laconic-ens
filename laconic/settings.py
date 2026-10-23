@@ -1,6 +1,6 @@
 """Per-user settings kept on the machine running the server, so they follow the
 user across browsers and are shared with the command line: the Greek table
-behind Ctrl+G and the global unit definitions.
+behind Ctrl+G, the global unit definitions and whether the welcome dialog has been shown.
 
 The file is JSON, written atomically. `LENS_CONFIG_DIR` overrides where it lives."""
 import json
@@ -28,7 +28,7 @@ def _path():
 
 
 def load():
-    """{"greek": dict or None, "units": [{"name", "definition"}]}. A missing or
+    """{"welcomed": bool, "greek": dict or None, "units": [{"name", "definition"}]}. A missing or
     unreadable file gives the defaults rather than an error."""
     try:
         data = json.loads(_path().read_text(encoding="utf-8"))
@@ -37,6 +37,7 @@ def load():
     greek = data.get("greek")
     units = data.get("units")
     return {
+        "welcomed": data.get("welcomed") is True,
         "greek": greek if isinstance(greek, dict) else None,
         "units": [u for u in units if isinstance(u, dict) and isinstance(u.get("name"), str)
                   and isinstance(u.get("definition"), str)] if isinstance(units, list) else [],
@@ -71,6 +72,14 @@ def save_units(units):
     with _lock:
         data = load()
         data["units"] = [{"name": n, "definition": d} for n, d in units]
+        _write(data)
+
+
+def save_welcomed():
+    """The welcome dialog has been shown once on this machine."""
+    with _lock:
+        data = load()
+        data["welcomed"] = True
         _write(data)
 
 
