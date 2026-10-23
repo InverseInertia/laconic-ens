@@ -17,6 +17,9 @@ COMMANDS = [
     ("decplace", "display n decimal places instead: !decplace 2"),
     ("plot", "plot functions: !plot f(x), x = 0 .. 1"),
     ("plotspec", "set a plot option for the plots below, e.g. !plotspec grid: off"),
+    ("root", "solve equations for unknowns: !root x, y, then indented equation: lines"),
+    ("minimize", "find the unknowns that minimize an objective: !minimize x"),
+    ("maximize", "find the unknowns that maximize an objective: !maximize x"),
 ]
 
 # Signature shown next to each function. Anything missing shows just its name.
