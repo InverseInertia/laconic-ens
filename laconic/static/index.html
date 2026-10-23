@@ -11,7 +11,7 @@
 <style>
   :root {
     --paper: #00386b;
-    --paper-deep: #003060;
+    --paper-deep: #0b4274;
     --grid: #0a4d88;
     --text: #c2deff;
     --text-soft: #94b2d0;
@@ -19,7 +19,7 @@
     --rule: #1f6fc4;
     --err: #ff8f00;
     --hit: rgba(194, 222, 255, .08);
-    --hdr: 44px;
+    --hdr: 50px;
     --row: 28px;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -987,7 +987,7 @@ function applyTheme() {
   root.style.setProperty("--hit", `color-mix(in srgb, ${c.text} 8%, transparent)`);
   // The logo is recolored from the theme: its blues are ink, text and rule, its accent is the error color.
   for (const [k, v] of Object.entries({
-    hi: `color-mix(in srgb, ${c.ink} 55%, ${c.text})`, lo: c.paper, mid: c.ink, light: c.text, dark: c.rule,
+    hi: `color-mix(in srgb, ${c.ink} 55%, ${c.text})`, lo: `color-mix(in srgb, ${c.paper} 94%, ${c.text})`, mid: c.ink, light: c.text, dark: c.rule,
     acc: c.err, grey: `color-mix(in srgb, ${c.text} 75%, ${c.paper})`, line: `color-mix(in srgb, ${c.paper} 35%, black)`,
   })) root.style.setProperty("--logo-" + k, v);
   root.dataset.bg = theme.bg;
