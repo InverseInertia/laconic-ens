@@ -10,14 +10,14 @@
 <script defer src="/static/vendor/katex/katex.min.js"></script>
 <style>
   :root {
-    --paper: #e6eedf;
-    --paper-deep: #dbe6d3;
-    --grid: #c3d2bd;
-    --ink: #17253d;
-    --ink-soft: #4b5a72;
-    --rule: #9db39a;
-    --err: #a8231b;
-    --hit: rgba(23, 37, 61, .07);
+    --paper: #1f3a5f;
+    --paper-deep: #2b4569;
+    --grid: #335684;
+    --ink: #e8f1ff;
+    --ink-soft: #b6c3d7;
+    --rule: #5d82b3;
+    --err: #ff9a8f;
+    --hit: rgba(232, 241, 255, .08);
     --row: 28px;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -134,6 +134,8 @@
   .dlg-foot { display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--rule); background: var(--paper-deep); }
   .dlg-foot .spacer { flex: 1; }
   .note { font: 400 13px/1.45 var(--sans); color: var(--ink-soft); margin: 0 0 10px; }
+  .alert-btns { display: flex; gap: 8px; }
+  .theme-msg { color: var(--err); font-weight: 500; }
   table.keys { border-collapse: collapse; width: 100%; font: 400 13.5px/1.4 var(--sans); }
   table.keys td { padding: 5px 10px 5px 0; vertical-align: top; border-bottom: 1px solid var(--grid); }
   table.keys td:first-child { white-space: nowrap; width: 1%; }
@@ -366,6 +368,12 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
   </form>
 </dialog>
 
+<dialog id="alertDlg" aria-labelledby="alertTitle" role="alertdialog">
+  <div class="dlg-head"><h2 id="alertTitle"></h2></div>
+  <div class="dlg-body"><p class="note" id="alertMsg"></p></div>
+  <div class="dlg-foot"><span class="spacer"></span><span id="alertBtns" class="alert-btns"></span></div>
+</dialog>
+
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
   <div class="dlg-body">
@@ -388,6 +396,7 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
     <section class="set-sec">
       <h3>Theme</h3>
       <p class="note">Changes apply immediately and are kept in this browser.</p>
+      <p class="note theme-msg" id="themeMsg" role="alert" hidden></p>
       <fieldset class="set-grp">
         <legend>Fonts</legend>
         <label class="set-row"><span>Interface and output</span><select id="fontSans"></select></label>
@@ -640,6 +649,26 @@ function say(msg) {
   clearTimeout(statusTimer); statusTimer = setTimeout(() => (el.textContent = ""), 2500);
 }
 const ctx = () => ({ enabled: mathKeys.checked, greek });
+
+// The standard popup for a major error that needs the user's attention. It stays up until one of
+// its buttons is pressed (Escape is ignored); the promise resolves with the label that was pressed.
+// Alerts raised while one is open wait their turn.
+let alertQueue = Promise.resolve();
+function alertDialog(title, message) {
+  const run = () => new Promise((resolve) => {
+    const dlg = $("#alertDlg");
+    $("#alertTitle").textContent = title;
+    $("#alertMsg").textContent = message;
+    const pick = (label) => { dlg.close(); resolve(label); };
+    $("#alertBtns").replaceChildren(...["Whoops", "Darn", "Shucks"].map((label) =>
+      Object.assign(document.createElement("button"), {type: "button", textContent: label, onclick: () => pick(label)})));
+    dlg.oncancel = (ev) => ev.preventDefault();
+    dlg.showModal();
+    $("#alertBtns").firstElementChild.focus();
+  });
+  alertQueue = alertQueue.then(run);
+  return alertQueue;
+}
 
 // execCommand keeps the browser's undo stack, so Ctrl+Z undoes a hotkey edit.
 function apply(r) {
@@ -909,12 +938,22 @@ const FONTS_MONO = [
 ];
 const COLOR_FIELDS = [["paper", "Paper"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"]];
 const PRESETS = {
-  "LENS green": {paper: "#e6eedf", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b"},
+  "LENS blueprint": {paper: "#1f3a5f", ink: "#e8f1ff", grid: "#335684", rule: "#5d82b3", err: "#ff9a8f"},
+  "Engineering paper": {paper: "#e6eedf", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b"},
   "White paper": {paper: "#fbfbf8", ink: "#1b1b1b", grid: "#dcdcd4", rule: "#b5b5aa", err: "#b3261e"},
-  "Blueprint": {paper: "#1f3a5f", ink: "#e8f1ff", grid: "#335684", rule: "#5d82b3", err: "#ff9a8f"},
   "Dark": {paper: "#1e2127", ink: "#d9dde3", grid: "#2c313a", rule: "#444b57", err: "#ff7b72"},
 };
-const DEFAULT_THEME = {sans: 0, mono: 0, bg: "grid", colors: {...PRESETS["LENS green"]}};
+function contrast(a, b) {  // WCAG contrast ratio of two #rrggbb colors
+  const lum = (h) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+const DEFAULT_THEME = {sans: 0, mono: 0, bg: "grid", colors: {...PRESETS["LENS blueprint"]}};
+let themeResetNote = "";  // set when a saved theme had to be replaced at load
 let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
 {
   const saved = store.get("theme", null);
@@ -923,8 +962,15 @@ let theme = {...DEFAULT_THEME, colors: {...DEFAULT_THEME.colors}};
     if (Number.isInteger(saved.mono) && FONTS_MONO[saved.mono]) theme.mono = saved.mono;
     if (["grid", "lines", "dots", "plain"].includes(saved.bg)) theme.bg = saved.bg;
     for (const [k] of COLOR_FIELDS) if (typeof saved.colors?.[k] === "string" && /^#[0-9a-f]{6}$/i.test(saved.colors[k])) theme.colors[k] = saved.colors[k];
+    // A saved palette whose ink can't be read on its paper (all black, say) would leave the page
+    // unusable and the Settings dialog unreachable by eye, so it falls back to the default colors.
+    if (contrast(theme.colors.paper, theme.colors.ink) < 3) {
+      theme.colors = {...DEFAULT_THEME.colors};
+      themeResetNote = "Your saved theme colors were unreadable (ink too close to paper), so they were reset to the default theme.";
+    }
   }
 }
+if (themeResetNote) alertDialog("Theme reset", themeResetNote);
 function applyTheme() {
   const root = document.documentElement, c = theme.colors;
   root.style.setProperty("--sans", FONTS_SANS[theme.sans][1]);
@@ -943,6 +989,11 @@ function syncThemeForm() {
   const match = Object.keys(PRESETS).find((n) => sameColors(PRESETS[n], theme.colors));
   $("#preset").value = match ?? "custom";
   for (const [k] of COLOR_FIELDS) $("#c-" + k).value = theme.colors[k];
+  const ratio = contrast(theme.colors.paper, theme.colors.ink), el = $("#themeMsg");
+  el.textContent = ratio < 3
+    ? `Warning: ink and paper are hard to tell apart (contrast ${ratio.toFixed(1)}:1, at least 3:1 is needed). On reload this theme is replaced by the default colors.`
+    : "";
+  el.hidden = !el.textContent;
 }
 function buildThemeForm() {
   const options = (list) => list.map(([name], i) => Object.assign(document.createElement("option"), {value: i, textContent: name}));
@@ -972,7 +1023,7 @@ $("#settingsBtn").onclick = async () => {
 };
 
 // ---- dialogs ---------------------------------------------------------------
-for (const d of document.querySelectorAll("dialog")) {
+for (const d of document.querySelectorAll("dialog:not(#alertDlg)")) {
   d.querySelector(".close").onclick = () => d.close();
   d.addEventListener("close", () => src.focus());
 }
