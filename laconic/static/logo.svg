@@ -20,8 +20,8 @@
   <rect class="ln l" stroke-width=".5" x="8.77" y="3.37" width="1.98" height="43.27"/>
   <rect class="ln m" stroke-width=".5" x="3.09" y="37.99" width="43.82" height="6.3"/>
   <rect class="ln l" stroke-width=".5" x="44.87" y="37.99" width="2.04" height="6.3"/>
-  <!-- shield: redrawn as a path, the source used the U+26E1 glyph of an installed font -->
-  <path class="ln l" stroke-width=".5" stroke-linejoin="round" d="M30 8 C35 11.5 40 12 44 12 V22 C44 29 38.5 34 30 37.5 C21.500 34 16 29 16 22 V12 C20 12 25 11.500 30 8 Z"/>
+  <!-- U+26E1, converted to a path so no font is needed -->
+  <path class="ln l" stroke-width=".5" stroke-linecap="square" stroke-linejoin="round" transform="scale(1.0002895,0.99971056)" d="M 17.660633,34.970047 V 4.8987792 l 9.24967,9.3283908 -7.675258,7.124214 v 12.044251 h 1.889294 l 9.367751,-8.659266 v 8.659266 h 12.831457 l -10.627281,-10.784722 1.29889,-1.180809 13.500583,13.539943 z"/>
   <g transform="translate(-6.4047635,8.1914873)" fill="#fff" stroke="var(--logo-acc,#ff8f00)" stroke-width=".2" stroke-linecap="round" stroke-linejoin="bevel">
     <path d="m 24.149944,21.921768 1.625249,-7.819559"/>
     <path d="m 24.149944,21.921768 4.31063,-7.819559"/>
