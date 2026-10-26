@@ -34,6 +34,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `si.py` | Reduces a result to simplest coherent SI with a familiar name |
 | `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`); `snippet` and `document` |
 | `sheet.py` | Runs a worksheet line by line: commands, unit definitions, plots, results, portable save text |
+| `commands.py` | The command registry (every `!` command: name, argument rule, summary, help row, effect) and the sheet mode the commands change. Suggestions, help rows and the unknown-command message are generated from it |
 | `plotopts.py` | Plot option parsing, defaults, and the writer that edits option lines in the source |
 | `plotspec.py` | Samples a plot and resolves options into the spec |
 | `plotsvg.py` | Spec to SVG |
@@ -70,7 +71,7 @@ The pure-function JS files also load under Node, which is how they are tested wi
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /` | the page |
+| `GET /` | the page, with the command help rows filled in from the registry |
 | `POST /api/eval` | run a sheet; `view: "latex"` adds a snippet per line |
 | `POST /api/export` | complete `.tex` document |
 | `POST /api/save` | source with needed unit definitions appended |
