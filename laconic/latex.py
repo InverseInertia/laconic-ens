@@ -136,6 +136,8 @@ class Fmt:
         return (mant if keep or "." not in mant else mant.rstrip("0").rstrip(".")), exp
 
     def number(self, x, sig=None):
+        if np.isinf(x):
+            return "\\infty" if x > 0 else "-\\infty"
         mant, exp = self._parts(x, sig)
         return mant if exp is None else f"{mant}\\times 10^{{{exp}}}"
 
@@ -165,8 +167,10 @@ class Fmt:
         u = self.unit(q.units)
         mag = np.asarray(q.magnitude)
         if mag.ndim == 0:
-            if self.siunitx and u:
+            if self.siunitx and u and np.isfinite(mag):   # \qty cannot parse \infty
                 return f"\\qty{{{self._si_number(mag)}}}{{{u}}}"
+            if self.siunitx and u:
+                return f"{self.number(mag)}\\,\\unit{{{u}}}"
             return self.number(mag) + (f"\\,{u}" if u else "")
         mag = np.atleast_2d(mag) if mag.ndim == 1 else mag
         mag = mag.T if np.ndim(q.magnitude) == 1 else mag  # 1-D arrays read as columns
@@ -185,6 +189,8 @@ class Fmt:
         return body + (f" {u}" if u else "")
 
     def _plain_number(self, x):
+        if np.isinf(x):
+            return "∞" if x > 0 else "-∞"
         mant, exp = self._parts(x, None)
         return mant if exp is None else f"{mant}e{exp}"
 
@@ -251,7 +257,7 @@ class Printer:
                 return self.value(self.ev.vars[self.ev.vkey(name)])
             return name_latex(name), ATOM
         if name in CONSTANTS:
-            return ("\\pi" if name == "pi" else "e"), ATOM
+            return {"pi": "\\pi", "e": "e", "∞": "\\infty"}[name], ATOM
         # Not defined yet (e.g. a function body that uses a later variable): keep it symbolic.
         return name_latex(name), ATOM
 

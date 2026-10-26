@@ -432,7 +432,7 @@ def _run_line(i, raw, s, ev, fmt, used):
             return LineResult(i, raw, "funcdef", lhs=head, stages=[sym], text=s)
 
         expr = stmt.expr
-        value = ev.check_finite(ev.eval(expr))
+        value = ev.check_finite(ev.eval(expr), expr)
         literal = _is_literal(expr, ev)
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.

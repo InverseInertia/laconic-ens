@@ -264,3 +264,13 @@ def test_save_writes_back_to_the_opened_file(page):
     page.click("#save")
     page.wait_for_function("window.written.length === 4")
     assert page.evaluate("window.picks") == 2
+
+
+def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
+    name = page.locator("#name")
+    short = name.bounding_box()["width"]
+    name.fill("Beam deflection under distributed load")
+    box = name.bounding_box()
+    assert box["width"] > short * 2
+    fits = page.evaluate("(() => { const n = document.querySelector('#name'); return n.scrollWidth <= n.clientWidth; })()")
+    assert fits
