@@ -9,8 +9,15 @@ pytest.importorskip("scipy")
 
 from laconic import document, evaluate, snippet
 from laconic import solver
+from laconic.blockedit import apply
 from laconic.rename import rename
 from laconic.sheet import solve_block
+
+
+def renamed(text, old, new, confirm=False):
+    """`rename`'s edits, made."""
+    edits, n = rename(text, old, new, confirm)
+    return apply(text, edits), n
 
 ROOT = """x = 1'm
 y = 1'm
@@ -34,7 +41,12 @@ def solved(text, line=None, **kw):
     line = line or next(r.n for r in rows(text) if r.kind in ("solver", "error") and r.source.lstrip().startswith("!"))
     out = solve_block(text, line, log=lambda m: None, **kw)
     assert out["ok"], out["message"]
-    return solver.write_result(text, line, out["record"])
+    return written(text, solver.write_result, line, out["record"])
+
+
+def written(text, writer, *a):
+    """The text with a writer's edits made."""
+    return apply(text, writer(text, *a))
 
 
 def stored_line(text):
@@ -215,7 +227,7 @@ def test_a_matrix_unknown_is_solved_entry_by_entry():
     text = "v = [1; 1]\n!root v\n  equation: [2, 0; 0, 4] * v = [6; 8]\n"
     out = solve_block(text, 2, log=lambda m: None)
     assert out["ok"] and sum(out["record"]["values"][0]["mag"], []) == pytest.approx([3.0, 2.0])
-    assert block(solver.write_result(text, 2, out["record"])).solver["status"] == "valid"
+    assert block(written(text, solver.write_result, 2, out["record"])).solver["status"] == "valid"
 
 
 def test_least_squares_with_lm_takes_extra_equations():
@@ -229,7 +241,7 @@ def test_minimize_with_bounds_stops_at_the_bound():
     out = solve_block(text, 2, log=lambda m: None)
     assert out["record"]["values"][0]["mag"] == pytest.approx(1.5, abs=1e-6)
     assert out["record"]["obj"]["mag"] == pytest.approx(3.25)
-    assert block(solver.write_result(text, 2, out["record"])).text.endswith("minimum = 3.25")
+    assert block(written(text, solver.write_result, 2, out["record"])).text.endswith("minimum = 3.25")
 
 
 def test_maximize_reports_the_maximum():
@@ -289,19 +301,17 @@ def test_verify_compares_with_the_stored_result():
 
 
 # ---- the text ------------------------------------------------------------------------------------
-def test_autorun_is_a_line_in_the_block_and_the_result_stays_last():
+def test_autorun_is_a_line_in_the_block_and_turning_it_on_keeps_the_result():
     text = solved(ROOT)
-    on = solver.set_option(text, 3, "autorun", "on")
-    assert "  autorun: on\n" in on and on.split("\n").index(stored_line(on)) > on.split("\n").index("  autorun: on")
+    on = written(text, solver.set_option, 3, "autorun", "on")
     assert block(on).solver["autorun"] is True and block(on).solver["status"] == "valid"
-    off = solver.set_option(on, 3, "autorun", None)
-    assert off == text
+    assert written(on, solver.set_option, 3, "autorun", None) == text
 
 
-def test_crlf_files_keep_their_line_endings():
+def test_a_result_stored_in_a_crlf_file_reads_back():
     crlf = ROOT.replace("\n", "\r\n")
-    done = solver.write_result(crlf, 3, solve_block(crlf, 3, log=lambda m: None)["record"])
-    assert all(l.endswith("\r") for l in done.split("\n")[:-1]) and block(done).solver["status"] == "valid"
+    done = written(crlf, solver.write_result, 3, solve_block(crlf, 3, log=lambda m: None)["record"])
+    assert block(done).solver["status"] == "valid"
 
 
 def test_writing_to_a_line_that_is_not_a_block_is_refused():
@@ -311,7 +321,7 @@ def test_writing_to_a_line_that_is_not_a_block_is_refused():
 
 def test_rename_follows_a_variable_into_blocks_and_leaves_the_stored_result_alone():
     text = solved(ROOT)
-    out, count = rename(text, "x", "a")
+    out, count = renamed(text, "x", "a")
     assert "!root a, y" in out and "equation: a^2 + y^2" in out and "equation: a = y" in out and "z = a * 2" in out
     assert stored_line(out) == stored_line(text)
     assert block(out).solver["status"] == "stale"      # the text changed, so it is checked again

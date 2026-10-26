@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from . import document, evaluate as evaluate_sheet, snippet
 from . import settings
+from .blockedit import to_json
 from .commands import help_rows
 from .evaluator import check_units
 from .lifecycle import lifecycle
@@ -125,14 +126,14 @@ def save(sheet: Sheet):
 
 @app.post("/api/rename")
 def rename_symbol(body: RenameBody):
-    """Every use of a variable or function name, renamed. Nothing changes on error."""
+    """Every use of a variable or function name, renamed: one edit per use. Nothing changes on error."""
     try:
-        text, count = rename(body.text, body.old, body.new, body.confirm)
+        edits, count = rename(body.text, body.old, body.new, body.confirm)
     except RenameWarning as e:
         return {"ok": False, "warning": str(e)}
     except RenameError as e:
         return {"ok": False, "error": str(e)}
-    return {"ok": True, "text": text, "count": count}
+    return {"ok": True, "edits": to_json(body.text, edits), "count": count}
 
 
 def _plot_at(text, line):
@@ -144,17 +145,17 @@ def _plot_at(text, line):
 @app.post("/api/plotedit")
 def plot_edit(body: PlotEditBody):
     """Option lines of one plot, rewritten to say what the mouse just did (a pan, a zoom,
-    a reset). Returns the new source text; the page applies it to the editor, and the
+    a reset). Returns the edits to the text; the page applies them to the editor, and the
     plot is then redrawn from the text like any other edit. Nothing changes on error."""
     r = _plot_at(body.text, body.line)
     if r is None:
         return {"ok": False, "error": f"Line {body.line} is not a plot that draws"}
     try:
-        text = apply_patch(body.text, body.line, body.patch,
-                           {"x": r.plot["x"], "y": r.plot["y"]}, r.plot["inherited"])
+        edits = apply_patch(body.text, body.line, body.patch,
+                            {"x": r.plot["x"], "y": r.plot["y"]}, r.plot["inherited"])
     except PlotError as e:
         return {"ok": False, "error": str(e)}
-    return {"ok": True, "text": text}
+    return {"ok": True, "edits": to_json(body.text, edits)}
 
 
 @app.post("/api/plotimage")
@@ -168,7 +169,7 @@ def plot_image(body: PlotImageBody):
 
 # ---- solver blocks ---------------------------------------------------------------------------------
 # Evaluating a sheet never runs a solver. The page starts a job, polls it, and when it has finished
-# asks for the result to be written into the block (/store), which returns the new text.
+# asks for the result to be written into the block (/store), which returns the edits to the text.
 @app.post("/api/solve/start")
 def solve_start(body: SolveStartBody):
     if body.mode not in ("run", "verify"):
@@ -207,17 +208,16 @@ def solve_store(body: SolveStoreBody):
     hits = [r.n for r in results if r.kind == "solver" and r.solver["hash"] == h]
     if not hits:
         return {"ok": False, "error": "The inputs changed while the solver was running, so its result was not stored"}
-    text = body.text
-    for n in reversed(hits):    # a block that gains a result line pushes the ones below it down
-        text = write_result(text, n, body.record)
-    return {"ok": True, "text": text, "lines": hits}
+    edits = [e for n in hits for e in write_result(body.text, n, body.record)]   # all against body.text
+    return {"ok": True, "edits": to_json(body.text, edits), "lines": hits}
 
 
 @app.post("/api/solveedit")
 def solve_edit(body: SolveEditBody):
-    """Turn a block's `autorun:` line on or off. Returns the new source text."""
+    """Turn a block's `autorun:` line on or off. Returns the edits to the text."""
     try:
-        return {"ok": True, "text": set_option(body.text, body.line, "autorun", "on" if body.autorun else None)}
+        edits = set_option(body.text, body.line, "autorun", "on" if body.autorun else None)
+        return {"ok": True, "edits": to_json(body.text, edits)}
     except SolverError as e:
         return {"ok": False, "error": str(e)}
 

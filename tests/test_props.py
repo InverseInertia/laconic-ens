@@ -1,8 +1,15 @@
 import pytest
 
 from laconic import props as P, run
+from laconic.blockedit import apply
 from laconic.latex import snippet
 from laconic.rename import rename
+
+
+def renamed(text, old, new, confirm=False):
+    """`rename`'s edits, made."""
+    edits, n = rename(text, old, new, confirm)
+    return apply(text, edits), n
 
 def last(text):
     return [r for r in run(text) if r.kind != "blank"][-1]
@@ -55,5 +62,5 @@ def test_latex_prints_text_arguments():
 
 
 def test_rename_leaves_text_alone():
-    out, n = rename('Water = 1\nprops("Tcrit", "Water") * Water', "Water", "w")
+    out, n = renamed('Water = 1\nprops("Tcrit", "Water") * Water', "Water", "w")
     assert n == 2 and '"Water"' in out

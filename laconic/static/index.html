@@ -685,44 +685,44 @@ document.addEventListener("keydown", (ev) => {
   else if (ev.code === "KeyO" && !ev.shiftKey) { ev.preventDefault(); openFile(); }
 });
 
-// ---- plots -----------------------------------------------------------------
-// The picture is drawn on the server from the worksheet text. Dragging or zooming it
-// asks the server for the option lines that say the same thing, and writes them into
-// the editor, so the worksheet alone redraws what you see.
-function replaceText(next) {
-  const old = src.value;
-  const m = Math.min(old.length, next.length);
-  let a = 0, b = 0;
-  while (a < m && old[a] === next[a]) a++;
-  while (b < m - a && old[old.length - 1 - b] === next[next.length - 1 - b]) b++;
-  const from = a, to = old.length - b, insert = next.slice(a, next.length - b);
-  if (from === to && insert === "") return;
-  let caret = src.selectionStart;
-  if (caret >= to) caret += insert.length - (to - from); else if (caret > from) caret = from;
+// ---- edits from the server -----------------------------------------------------
+// The plot, solver and rename endpoints answer with edits against the text they were sent
+// (laconic/blockedit.py). They go in here, as one edit, so one Ctrl+Z takes them back. If the text
+// changed while the server was working, the edits no longer fit: nothing is made and this says false.
+function applyEdits(base, edits) {
+  if (src.value !== base) return false;
+  const r = Editing.merge(base, edits, src.selectionStart);
+  if (!r) return true;
   // An edit made while the user is typing somewhere else (a dialog, the name box) must not take the
   // focus; it goes in without joining the editor's undo stack. Otherwise it joins that stack.
   const other = document.activeElement;
   if (other && other !== src && other !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(other.tagName)) {
-    src.setRangeText(insert, from, to, "preserve");
-    src.setSelectionRange(Math.min(caret, src.value.length), Math.min(caret, src.value.length));
+    src.setRangeText(r.insert, r.from, r.to, "preserve");
+    src.setSelectionRange(r.caret, r.caret);
     src.dispatchEvent(new Event("input", {bubbles: true}));
-    return;
+    return true;
   }
   src.focus({preventScroll: true});   // so the edit joins the editor's undo stack
   acSkip = true;
-  apply({from, to, insert, caret});
+  apply(r);
+  return true;
 }
 
+// ---- plots -----------------------------------------------------------------
+// The picture is drawn on the server from the worksheet text. Dragging or zooming it
+// asks the server for the option lines that say the same thing, and writes them into
+// the editor, so the worksheet alone redraws what you see.
 async function patchPlot(line, patch) {
+  const text = src.value;
   let res;
   try {
     res = await (await fetch("/api/plotedit", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({text: src.value, line, patch}),
+      body: JSON.stringify({text, line, patch}),
     })).json();
   } catch { say("Could not reach the server"); return false; }
   if (!res.ok) { say(res.error); return false; }
-  replaceText(res.text);
+  if (!applyEdits(text, res.edits)) { say("The sheet changed meanwhile, so the plot was not changed"); return false; }
   return true;
 }
 
@@ -1217,7 +1217,7 @@ $("#keysTable").innerHTML = Shortcuts.tableHtml($("#commandHelp").innerHTML);  /
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
 Solvers.init({
   text: () => src.value,
-  setText: (next) => replaceText(next),
+  edit: applyEdits,
   say,
   typeset,
 });
@@ -1313,11 +1313,12 @@ document.addEventListener("keydown", (ev) => {
 $("#renameForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const err = $("#renameErr");
+  const text = src.value;
   let res;
   try {
     res = await (await fetch("/api/rename", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({text: src.value, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value}),
+      body: JSON.stringify({text, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value}),
     })).json();
   } catch { err.textContent = "Could not reach the server"; err.hidden = false; return; }
   if (res.warning) {
@@ -1327,9 +1328,8 @@ $("#renameForm").addEventListener("submit", async (ev) => {
   }
   if (!res.ok) { err.textContent = res.error; err.hidden = false; return; }
   $("#renameDlg").close();
-  // Replace the whole text through the editing pipeline so Ctrl+Z undoes the rename.
-  const caret = Math.min(src.selectionStart, res.text.length);
-  apply({from: 0, to: src.value.length, insert: res.text, caret});
+  src.focus();   // so the rename joins the editor's undo stack and Ctrl+Z takes it back
+  if (!applyEdits(text, res.edits)) { say("The sheet changed meanwhile; rename again"); return; }
   say(`Renamed ${res.count} use${res.count === 1 ? "" : "s"}`);
 });
 

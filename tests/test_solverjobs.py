@@ -9,6 +9,7 @@ pytest.importorskip("scipy")
 from fastapi import HTTPException
 
 from laconic import evaluate, server, solverjobs
+from laconic.blockedit import apply, from_json
 from laconic.server import SolveEditBody, SolveStartBody, SolveStoreBody
 from laconic.solverjobs import Busy, Jobs
 
@@ -131,12 +132,17 @@ def run_via_api(api, text, line=2, mode="run"):
     raise AssertionError("job did not finish")
 
 
+def edited(text, out):
+    """`text` with an endpoint's edits made."""
+    return apply(text, from_json(text, out["edits"]))
+
+
 def test_run_then_store_writes_the_result_into_the_sheet(api):
     view = run_via_api(api, ROOT)
     assert view["state"] == "done"
     stored = api.solve_store(SolveStoreBody(text=ROOT, record=view["outcome"]["record"]))
-    assert stored["ok"] and stored["lines"] == [2] and "#@ result" in stored["text"]
-    assert next(r for r in evaluate(stored["text"]).results if r.kind == "solver").solver["status"] == "valid"
+    assert stored["ok"] and stored["lines"] == [2]
+    assert next(r for r in evaluate(edited(ROOT, stored)).results if r.kind == "solver").solver["status"] == "valid"
 
 
 def test_a_result_for_inputs_that_changed_meanwhile_is_not_stored(api):
@@ -155,7 +161,7 @@ def test_the_result_goes_to_the_block_even_after_lines_were_added_above_it(api):
 
 def test_verify_through_the_api(api):
     view = run_via_api(api, ROOT)
-    text = api.solve_store(SolveStoreBody(text=ROOT, record=view["outcome"]["record"]))["text"]
+    text = edited(ROOT, api.solve_store(SolveStoreBody(text=ROOT, record=view["outcome"]["record"])))
     again = run_via_api(api, text, mode="verify")
     assert again["outcome"]["verify"]["same"] is True
 
@@ -180,6 +186,6 @@ def test_busy_and_bad_requests_are_http_errors(api):
 
 def test_autorun_is_toggled_in_the_text(api):
     on = api.solve_edit(SolveEditBody(text=ROOT, line=2, autorun=True))
-    assert on["ok"] and "  autorun: on\n" in on["text"]
-    assert api.solve_edit(SolveEditBody(text=on["text"], line=2, autorun=False))["text"] == ROOT
+    assert on["ok"] and "  autorun: on\n" in edited(ROOT, on)
+    assert edited(edited(ROOT, on), api.solve_edit(SolveEditBody(text=edited(ROOT, on), line=2, autorun=False))) == ROOT
     assert api.solve_edit(SolveEditBody(text=ROOT, line=1, autorun=True))["ok"] is False

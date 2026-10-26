@@ -1,6 +1,6 @@
 """Plot options: the indented `key: value` lines under a `!plot` statement, the
-sheet-wide `!plotspec` command, and the writer that edits those lines in the source
-text. A change made by dragging in the UI is a few plain lines in the worksheet,
+sheet-wide `!plotspec` command, and the patch that rewrites those lines (through the
+block editor). A change made by dragging in the UI is a few plain lines in the worksheet,
 and the worksheet alone is enough to redraw the same graph.
 
     !plot M(x), x = 0'm .. L
@@ -12,7 +12,8 @@ notes) stay as source text until the plot is built."""
 import math
 import re
 
-from .sheettext import PLOT_LIMIT_KEYS, plot_option, scan
+from .blockedit import BlockEditor
+from .sheettext import PLOT_LIMIT_KEYS
 
 PALETTE = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9")
 
@@ -191,7 +192,7 @@ def split_key(k):
 
 
 def apply_patch(text, line, patch, axes, inherited):
-    """Rewrite the option lines of the plot on `line` (1-based) in `text`.
+    """The edits that rewrite the option lines of the plot on `line` (1-based) in `text`.
 
     `patch` maps an option name (`xview`, `color 2`) to None (remove the line), a
     string (written as typed, after checking it) or, for limits and views, `[low, high]`
@@ -199,13 +200,9 @@ def apply_patch(text, line, patch, axes, inherited):
     `inherited` is the text form of what each option would be without a line.
     A value equal to its inherited one removes the line instead, so the source
     only says what differs from the defaults."""
-    b = scan(text).block(line)
-    if b is None or b.kind != "plot":
+    ed = BlockEditor(text, line)
+    if ed.kind != "plot":
         raise PlotError(f"Line {line} is not a plot")
-    lines, i, j = text.split("\n"), line - 1, b.end
-    block = lines[i + 1:j]
-    indent = re.match(r"[ \t]*", block[0]).group() if block else "  "
-
     for name, value in patch.items():
         key, index = split_key(name)
         if key in LIMIT_KEYS and isinstance(value, (list, tuple)):
@@ -223,17 +220,9 @@ def apply_patch(text, line, patch, axes, inherited):
             if key != "note" and inherited.get((key if index is None else f"{key} {index}")) == \
                     canon(key, parse_value(key, value)):
                 value = None
-        same = [n for n, l in enumerate(block)
-                if (o := plot_option(l)) and o.key == key and (int(o.arg) if o.arg else None) == index]
-        label = key if index is None else f"{key} {index}"
+        arg = None if index is None else str(index)
         if value is None:
-            for n in reversed(same):
-                del block[n]
-        elif same:
-            block[same[0]] = f"{indent}{label}: {value}"
-            for n in reversed(same[1:]):
-                del block[n]
+            ed.remove(key, arg)
         else:
-            block.append(f"{indent}{label}: {value}")
-    lines[i + 1:j] = block
-    return "\n".join(lines)
+            ed.set(key, value, arg)
+    return ed.edits()

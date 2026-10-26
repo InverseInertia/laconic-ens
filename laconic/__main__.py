@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import document, evaluate, settings
 from .sheet import solve_block
+from .blockedit import apply
 from .solver import write_result
 from .plotsvg import render_svg
 
@@ -81,7 +82,7 @@ def _solve_all(path, text, units):
         if not out["ok"]:
             print(f"{r.n:>3}  FAILED  {out['message']}", file=sys.stderr)
             continue
-        text = write_result(text, r.n, out["record"])
+        text = apply(text, write_result(text, r.n, out["record"]))
         path.write_text(text, encoding="utf-8")
 
 
