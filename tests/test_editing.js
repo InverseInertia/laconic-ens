@@ -312,7 +312,9 @@ eq(E.charAction('.', 'r = props("D", "T", T, "P", p, "INCOMP::MEG[0', 44, 44, {}
 eq(E.charAction('-', 'r = props("D", "T", T', 21, 21, {}) !== null, true, 'outside the quotes it is math again');
 
 // A global typed without its ~ gets one when the name is finished
-const G = { globals: [['g', 1], ['f', 2], ['F!', 1]] };
+// the symbol table of the last evaluation (laconic/symbols.py): ~g and ~F! on line 1, ~f on line 2
+const glob = (id, name, line, kind = 'variable') => ({ id, name, kind, line, until: null, global: true, value: '', params: [] });
+const G = { symbols: [glob(0, 'g', 1), glob(1, 'F!', 1), glob(2, 'f', 2, 'function')] };
 eq(sim('~g = 5\nx = g|', ' ', G), '~g = 5\nx = ~g |', 'a space finishes the name');
 eq(sim('~g = 5\nx = g|', '*2', G), '~g = 5\nx = ~g * 2|', 'an operator does too, with its usual spacing');
 eq(sim('~g = 5\ng|', ' = 3', G), '~g = 5\n~g = 3|', 'assigning a global');

@@ -11,6 +11,7 @@
  */
 (function (root) {
   'use strict';
+  const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
 
   // Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
   // 8 -> ∞ rides along: it is the one non-Greek symbol worksheets need.
@@ -518,12 +519,12 @@
   // ---- globals -----------------------------------------------------------
   // A global is written with its ~ every time, so a plain one is a slip (the sheet warns when
   // one is assigned). When a name is finished, by typing something that cannot continue it, and
-  // it is a global from an earlier line, the ~ goes in front. ctx.globals is [[name, line], ...].
+  // it is a global the line can see, the ~ goes in front. ctx.symbols is the last symbol table (symbols.js).
   const MARKS = '`!@';
   const FUNC_HEAD = /^\s*~?[\p{L}_][\p{L}\p{N}_]*[`!@]*\s*\([^)]*$/u;
   function globalStart(t, s, ctx) {
-    const globals = ctx && ctx.globals;
-    if (!globals || !globals.length || isIdent(t[s]) || MARKS.includes(t[s] || ' ')) return -1;
+    const symbols = ctx && ctx.symbols;
+    if (!symbols || !symbols.length || isIdent(t[s]) || MARKS.includes(t[s] || ' ')) return -1;
     const ls = lineStartOf(t, s);
     let a = s;
     while (a > ls && MARKS.includes(t[a - 1])) a--;
@@ -533,7 +534,7 @@
     if (a > ls && "~'.!".includes(t[a - 1])) return -1;                // has its ~, a unit, after a point, a command
     if (FUNC_HEAD.test(t.slice(ls, a))) return -1;                      // a function's own parameters
     const name = t.slice(a, s), line = t.slice(0, s).split('\n').length;
-    return globals.some(([n, at]) => n === name && at < line) ? a : -1;
+    return Symbols.visible(symbols, line).some((g) => g.global && g.name === name) ? a : -1;
   }
   // Runs `base` on the text with the ~ added, then returns the whole change as one edit on `t`,
   // so a single Ctrl+Z takes back both. `typed` is what the browser would insert if `base` does nothing.
@@ -550,7 +551,7 @@
     while (b < t.length - a && t[t.length - 1 - b] === final[final.length - 1 - b]) b++;
     return edit(a, t.length - b, final.slice(a, final.length - b), caret);
   }
-  const plainCtx = (ctx) => ({ ...ctx, globals: null });
+  const plainCtx = (ctx) => ({ ...ctx, symbols: null });
 
   // Keys that wrap a highlighted region instead of replacing it.
   const WRAPPERS = new Set(['/', '\\', '^', '(', '[', '|']);

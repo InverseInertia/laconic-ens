@@ -5,7 +5,8 @@
  * Node for tests.
  *
  *   context(text, caret, {force})        what is being typed, or null for no popup
- *   candidates(ctx, vocab, text, extras) ranked suggestions
+ *   candidates(ctx, vocab, text, extras) ranked suggestions; your variables and functions
+ *                                        come from extras.symbols, the last symbol table
  *   accept(text, ctx, candidate)         the edit that inserts one
  *
  * Besides names, units and commands it completes, from vocab.solver: the option keys, `method:`
@@ -14,6 +15,7 @@
  */
 (function (root) {
   'use strict';
+  const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
 
   const WORD = /[\p{L}\p{N}_°]/u;
   const NAME_START = '[\\p{L}_][\\p{L}\\p{N}_]*';
@@ -37,28 +39,6 @@
 
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
-
-  // Variables and functions defined on the lines above `line` (1-based), following
-  // !clear the way the evaluator does.
-  function scan(text, line) {
-    const vars = new Map(), funcs = new Map(), gv = new Set(), gf = new Set();
-    // A ~ on a definition makes the name global; later definitions of it stay global.
-    const key = (name, globals) => { const bare = name.replace(/^~/, ''); if (name !== bare) globals.add(bare); return globals.has(bare) ? '~' + bare : bare; };
-    const lines = text.split('\n');
-    for (let i = 0; i < Math.min(line - 1, lines.length); i++) {
-      const s = lines[i].trim();
-      if (!s || s[0] === '#' || s[0] === "'") continue;
-      if (s[0] === '!') {
-        if (/^!clear\s*$/.test(s)) for (const n of [...vars.keys()]) if (n[0] !== '~') vars.delete(n);
-        if (/^!clearf\s*$/.test(s)) for (const n of [...funcs.keys()]) if (n[0] !== '~') funcs.delete(n);
-        continue;
-      }
-      const d = definition(s);
-      if (d && d.kind === 'funcdef') funcs.set(key(d.name, gf), { params: d.params, line: i + 1 });
-      else if (d) vars.set(key(d.name, gv), { line: i + 1 });
-    }
-    return { vars, funcs };
-  }
 
   // Units this sheet defines, wherever the definition sits (definitions apply to the whole sheet).
   function unitDefs(text) {
@@ -189,8 +169,8 @@
   const group = (c) => Math.max(c.tier, 2);
   const order = (a, b) => group(a) - group(b) || a.rank - b.rank || a.tier - b.tier || a.insert.length - b.insert.length || (a.insert < b.insert ? -1 : 1);
 
-  // extras: {values: {name: "4.5 m"}} shows the current value next to a variable;
-  // {max} raises the limit of eight and {kinds} keeps only some kinds.
+  // extras: {symbols} is the symbol table (symbols.js) the variables and functions come from, with
+  // the value shown next to a variable; {max} raises the limit of eight and {kinds} keeps only some kinds.
   function candidates(ctx, vocab, text, extras) {
     if (!ctx) return [];
     const q = ctx.query, found = [];
@@ -243,15 +223,14 @@
       }
     } else {
       const line = text.slice(0, ctx.start).split('\n').length;
-      const { vars, funcs } = scan(text, line);
-      const values = (extras && extras.values) || {};
-      for (const name of vars.keys()) {
-        if (ctx.tilde && name[0] !== '~') continue;
-        add({ kind: 'variable', insert: name, label: name, detail: values[name] || 'variable' }, 0, name.replace(/^~/, ''), '');
-      }
-      for (const [name, f] of funcs) {
-        if (ctx.tilde && name[0] !== '~') continue;
-        add({ kind: 'function', insert: name, label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name.replace(/^~/, ''), '');
+      const funcs = new Set();
+      for (const sym of Symbols.visible(extras && extras.symbols, line)) {
+        const name = (sym.global ? '~' : '') + sym.name;
+        if (ctx.tilde && !sym.global) continue;
+        if (sym.kind === 'function') {
+          funcs.add(name);
+          add({ kind: 'function', insert: name, label: name + '(' + sym.params.join(', ') + ')', detail: 'your function', call: true }, 1, sym.name, '');
+        } else add({ kind: 'variable', insert: name, label: name, detail: sym.value || 'variable' }, 0, sym.name, '');
       }
       for (const [name, sig] of vocab.functions || []) {
         if (ctx.tilde || funcs.has(name)) continue;
@@ -291,7 +270,7 @@
     return { from: ctx.start, to: ctx.end, insert: cand.insert, caret: ctx.start + cand.insert.length };
   }
 
-  const api = { scan, unitDefs, definition, solverBlock, context, candidates, accept };
+  const api = { unitDefs, definition, solverBlock, context, candidates, accept };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Autocomplete = api;
 })(typeof window !== 'undefined' ? window : globalThis);

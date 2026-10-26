@@ -493,6 +493,7 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
 </dialog>
 
 <script src="/static/vendor/d3/d3.min.js"></script>
+<script src="/static/symbols.js"></script>
 <script src="/static/editing.js"></script>
 <script src="/static/paste.js"></script>
 <script src="/static/plotview.js"></script>
@@ -519,6 +520,8 @@ const store = {
 };
 const src = $("#src"), out = $("#out"), nameEl = $("#name");
 let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
+let tableText = null;   // the text `last` was evaluated from
+let acWaiting = false;  // or {force}: suggestions were made from an older table, and how they were asked for
 
 const post = (path, extra = {}) => fetch(path, {
   method: "POST", headers: {"Content-Type": "application/json"},
@@ -581,9 +584,9 @@ function render(rows) {
 }
 
 async function evaluate() {
-  const mine = ++seq;
+  const mine = ++seq, text = src.value;
   const res = await post("/api/eval");
-  if (mine === seq) render(await res.json());
+  if (mine === seq) { render(await res.json()); tableText = text; acRetry(); }
 }
 
 function caretLine() { return src.value.slice(0, src.selectionStart).split("\n").length; }
@@ -775,12 +778,10 @@ const markGlobals = $("#markGlobals"), srcMarks = $("#srcMarks"), chip = $("#glo
 markGlobals.checked = store.get("markGlobals", true);
 markGlobals.onchange = () => { store.set("markGlobals", markGlobals.checked); render(last); };
 chip.onclick = () => { markGlobals.checked = true; markGlobals.onchange(); };
-// name -> {line, kind} for each global the last evaluation found, from the line that made it global.
-function globalDefs() {
-  const defs = new Map();
-  for (const r of last) if (r.gdef && !defs.has(r.gdef)) defs.set(r.gdef, {line: r.n, kind: r.kind === "funcdef" ? "function" : "variable"});
-  return defs;
-}
+// The symbol table of the last evaluation. Until the next one arrives, it is what the editor goes by.
+const symbols = () => Symbols.table(last);
+// name -> the symbol that made it global, for each global the last evaluation found.
+const globalDefs = () => Symbols.globals(symbols());
 function globalTitle(name) {
   const d = globalDefs().get(name);
   return d ? `Global ${d.kind} ~${name}, defined on line ${d.line}` : `Global ~${name}`;
@@ -796,15 +797,15 @@ function paintGlobals() {
 }
 // The marks come from the last evaluation, so a line edited since then is left unmarked until the next one.
 function paintSrcMarks() {
-  const rows = new Map(last.map((r) => [r.n, r]));
+  const rows = new Map(last.map((r) => [r.n, r])), table = symbols();
   const lines = src.value.split("\n").map((line, i) => {
-    const r = rows.get(i + 1);
-    if (!r || r.source !== line || !r.gspans || !r.gspans.length) return document.createTextNode(line + "\n");
+    const r = rows.get(i + 1), marks = r && r.source === line ? Symbols.marks(r, table) : [];
+    if (!marks.length) return document.createTextNode(line + "\n");
     const f = document.createDocumentFragment();
     let pos = 0;
-    for (const [c, len] of r.gspans) {
+    for (const [c, len, name] of marks) {
       f.append(line.slice(pos, c));
-      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len); m.dataset.global = line.slice(c, c + len).replace(/^~/, "");
+      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len); m.dataset.global = name;
       f.append(m); pos = c + len;
     }
     f.append(line.slice(pos) + "\n");
@@ -860,7 +861,7 @@ function say(msg) {
   const el = $("#status"); el.textContent = msg;
   clearTimeout(statusTimer); statusTimer = setTimeout(() => (el.textContent = ""), 2500);
 }
-const ctx = () => ({ enabled: mathKeys.checked, greek, globals: [...globalDefs()].map(([name, d]) => [name, d.line]) });
+const ctx = () => ({ enabled: mathKeys.checked, greek, symbols: symbols() });
 
 // The standard popup for a major error that needs the user's attention. It stays up until one of
 // its buttons is pressed (Escape is ignored); the promise resolves with the label that was pressed.
@@ -975,11 +976,6 @@ function loadProps() {
     .catch(() => { propsLoading = null; });
   return propsLoading;
 }
-function values() {
-  const out = {};
-  for (const r of last) if (r.kind === "assign") { const i = r.text.indexOf(" = "); out[r.text.slice(0, i)] = r.text.slice(i + 3); }
-  return out;
-}
 function caretXY(pos) {
   const cs = getComputedStyle(src), m = document.createElement("div");
   for (const p of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "tabSize", "paddingTop", "paddingLeft", "borderTopWidth", "borderLeftWidth"]) m.style[p] = cs[p];
@@ -995,6 +991,7 @@ function caretXY(pos) {
   return {x, y, h};
 }
 function acClose() {
+  acWaiting = false;
   ac = null; acEl.hidden = true; acEl.replaceChildren(); src.removeAttribute("aria-activedescendant");
 }
 function acPaint() {
@@ -1036,8 +1033,14 @@ function acUpdate(force = false) {
     loadProps().then(() => { if (vocab.props && src.value === text && document.activeElement === src) acUpdate(force); });
     return;
   }
-  const items = Autocomplete.candidates(ctx, vocab, text, {values: values()});
+  const items = Autocomplete.candidates(ctx, vocab, text, {symbols: symbols()});
   acShow({ctx, items, index: 0, moved: false, wrap: null, query: ""});
+  acWaiting = ctx.kind === "name" && tableText !== text && {force};
+}
+// Names come from the symbol table of the last evaluation. When that was of older text, the
+// suggestions are worked out again once the evaluation of this text arrives.
+function acRetry() {
+  if (acWaiting && src.value === tableText && document.activeElement === src) acUpdate(acWaiting.force);
 }
 // Ctrl+Space. With text highlighted, offer functions to wrap it in.
 function acOpenByHand() {
@@ -1051,7 +1054,7 @@ function acOpenByHand() {
 function wrapRefresh(st) {
   const ctx = {kind: "name", start: st.wrap[0], end: st.wrap[0], query: st.query, tilde: false};
   const items = Autocomplete.candidates(ctx, {functions: vocab.functions, constants: [], units: [], commands: []}, src.value,
-    {max: 24, kinds: ["function"]});
+    {max: 24, kinds: ["function"], symbols: symbols()});
   if (!items.length && st.query) return say("No function starts with that");
   acShow({ctx, items, index: Math.min(st.index, Math.max(items.length - 1, 0)), moved: true, wrap: st.wrap, query: st.query});
 }
