@@ -42,13 +42,31 @@ def _spawn(cmd):
         return False
 
 
+WM_CLASS = "lens"   # the StartupWMClass of the launcher install-linux.sh writes
+
+
+def _app_args(url):
+    """The browser arguments for an app window. On Linux the desktop matches a window to its
+    launcher, and so to the launcher's icon, by the window's WM_CLASS; a Chromium app window's is
+    ("127.0.0.1", "Google-chrome") or the like, which no LENS launcher names, so the panel showed the
+    browser's icon or none (#66). --class sets it, but only in a browser process of its own:
+    a window opened through an already running browser takes that browser's class. Hence a
+    profile of LENS's own, kept in the cache folder."""
+    args = [f"--app={url}"]
+    if sys.platform.startswith("linux"):
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+        args = [f"--class={WM_CLASS}", f"--user-data-dir={cache / 'laconic-lens' / 'browser'}",
+                "--no-first-run", "--no-default-browser-check"] + args
+    return args
+
+
 def _launch(url, app):
     """--app opens a Chromium-family window with no tabs or address bar, which
     gives the page more of the keyboard (Ctrl+T is a new tab in a normal tab)."""
     if app:
         for exe in _CHROMIUM:
             path = shutil.which(exe)
-            if path and _spawn([path, f"--app={url}"]):
+            if path and _spawn([path] + _app_args(url)):
                 return
         print("No Chromium-based browser found, opening the default browser instead")
     # GTK browsers print harmless messages to the terminal; _spawn keeps them out of it.

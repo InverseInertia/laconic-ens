@@ -116,7 +116,8 @@ def test_tokens_stay_inside_the_expressions_and_uses_skip_parameters():
     assert sheet.line(3).tokens() == [] and sheet.line(4).uses({"g"}) == [[13, 2]]
 
 
-@pytest.mark.parametrize("s,ok", [("x", True), ("~g", True), ("σ_max", True), ("x`!", True),
+@pytest.mark.parametrize("s,ok", [("x", True), ("~g", True), ("σ_max", True), ("x`!", True), ("v_∞", True), ("v_∞_0", True),
+                                  ("∞", False), ("x∞", False),
                                   ("1a", False), ("'m", False), ("a b", False), ("", False)])
 def test_is_name(s, ok):
     assert is_name(s) is ok

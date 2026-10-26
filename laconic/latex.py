@@ -46,6 +46,7 @@ def _accent(tex, marks):
 
 def name_latex(name):
     """sigma_max -> \\sigma_{\\mathrm{max}}, x1 -> x_{1}, width -> \\mathrm{width}.
+    A subscript that is ∞ or the whole word inf is infinity: T_inf -> T_{\\infty}.
     Marks after the name go over the base symbol, with subscripts outside:
     v` -> \\dot{v}, F_x! -> \\vec{F}_{x}, a@ -> \\hat{a}."""
     name = name.lstrip("~")  # the global marker is source-only
@@ -58,7 +59,7 @@ def name_latex(name):
         base, subs = m.group(1), [m.group(2)]
     out = _accent(_word(base), marks)
     if subs:
-        out += "_{" + ",".join(_word(s) for s in subs) + "}"
+        out += "_{" + ",".join("\\infty" if s == "inf" else _word(s) for s in subs) + "}"
     return out
 
 
@@ -81,7 +82,7 @@ _DECL_GLYPHS = {c: v + " " if v.startswith("\\") else v
 
 
 def _glyph(c):
-    return _GREEK_CHARS.get(c, c)
+    return "\\infty" if c == "∞" else _GREEK_CHARS.get(c, c)
 
 
 def _word(w):
