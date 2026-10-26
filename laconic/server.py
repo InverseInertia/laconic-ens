@@ -3,6 +3,7 @@ edit; for worksheet-sized documents that takes a few milliseconds. Settings
 (Greek table, global units, display preferences) live on the server, in `settings.py`."""
 import json
 import secrets
+import subprocess
 import threading
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import document, evaluate as evaluate_sheet, markdown, snippet
+from . import document, evaluate as evaluate_sheet, markdown, pdfdoc, snippet
 from .sheet import block_at, solver_blocks
 from . import settings
 from .blockedit import to_json
@@ -147,6 +148,23 @@ def export(sheet: Sheet):
 def export_md(sheet: Sheet):
     """The sheet as a Markdown note in Obsidian's style (see markdown.py)."""
     return markdown(_run(sheet, False).results, title=sheet.title)
+
+
+@app.post("/api/export/pdf")
+def export_pdf(sheet: Sheet):
+    """The sheet as a PDF, printed by a headless Chromium (see pdfdoc.py). 501 when there is no
+    such browser or it fails; the page then prints /api/export/print with the browser's own dialog."""
+    doc = pdfdoc.page(_run(sheet, False).results, title=sheet.title)
+    try:
+        return Response(pdfdoc.pdf(doc, timeout=30), media_type="application/pdf")
+    except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
+        raise HTTPException(501, str(e))
+
+
+@app.post("/api/export/print", response_class=HTMLResponse)
+def export_print(sheet: Sheet):
+    """The printable document, opening the print dialog by itself."""
+    return pdfdoc.page(_run(sheet, False).results, title=sheet.title, assets="/static", autoprint=True)
 
 
 @app.post("/api/save", response_class=PlainTextResponse)

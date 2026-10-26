@@ -36,8 +36,12 @@ Headings and comments become `\subsection*{}` and plain text, and commands such 
 | Save | the `.lens` source, with needed global unit definitions appended (see [Units](Units)) |
 | Export → LaTeX document | a complete `.tex` document with `align*` blocks, `\DeclareSIUnit` lines for custom units and for built-in units siunitx lacks (`ft`, `psi`, `g0`), and `pgfplots` when a sheet has plots |
 | Export → Markdown note | a `.md` note for Obsidian: headings stay headings, comments become plain text, each calculation becomes a `$$` block (one row per stage, aligned at the equals signs), plots are embedded as SVG images and errors as callouts. Commands such as `!clear` and plot or solver options are left out |
+| Export → PDF | a plain PDF of the results, broken into pages: headings, comments, each calculation with its line number, plots and errors, in one column. A calculation never splits across pages and a heading stays with what follows it. A calculation a little too wide for the page is shrunk; one much too wide is wrapped after `+` and `=`. It is a quick, readable printout, not a typeset document; use the LaTeX export for that |
 | Plot SVG / PNG | the picture exactly as drawn (see [Plots](Plots)) |
 | `lens file.lens --tex out.tex` | the same `.tex` from the command line |
 | `lens file.lens --md out.md` | the same Markdown note from the command line |
+| `lens file.lens --pdf out.pdf` | the same PDF from the command line |
 
 The LaTeX export needs siunitx v3 or newer for `\qty`, `\unit` and, for complex values, `\complexqty`. The Markdown export uses the live view's math (`\mathrm{kN}`), which Obsidian's MathJax renders without extra packages.
+
+The PDF is printed by Chrome, Chromium or Edge running headless, found on `PATH` (and in the usual install folders on Windows). Set `LENS_CHROMIUM` to a browser's path to pick one. Without one, **Export → PDF** in the app opens the printable page in a new tab with the browser's print dialog, where **Save as PDF** gives the same document; the command line stops with an error.
