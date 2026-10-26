@@ -47,5 +47,5 @@ Defined once per machine under **Settings → Units** and available in every she
 Save and Export carry the definitions a sheet depends on, so a copy opens correctly on another machine.
 
 - **Save (`.lens`)** appends the global units the sheet uses, and the units those are defined in terms of, in a marked block at the end (`#@ unit definitions ...` to `#@ end ...`). Units the sheet already defines are not repeated, so saving twice does not stack blocks.
-- **Export (`.tex`)** writes a `\DeclareSIUnit` line per custom unit in the preamble. Names that are not letters only get a letters-only macro (`psi_g` becomes `\psiUnderg`).
+- **Export (`.tex`)** writes a `\DeclareSIUnit` line per custom unit in the preamble. Names that are not letters only get a letters-only macro (`psi_g` becomes `\psiUnderg`). Built-in units that siunitx does not define, such as `'ft`, `'psi` and `'g0`, are declared the same way (`\foot`, `\poundForcePerSquareInch`, `\standardGravity`).
 - **Opening** a sheet on a machine with its own global of the same name is fine if the sizes agree. If they differ, the definition line shows an error naming the machine's value; rename the unit in the sheet or change the global.

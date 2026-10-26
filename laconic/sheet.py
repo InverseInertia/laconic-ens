@@ -170,6 +170,9 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
             todo += [m for m in _unit_names(parse_expr(ev.globals[n])) if m in ev.globals]
     ws.needed = [(n, d) for n, d in ev.globals.items() if n in need and n not in here]
     for name, macro in fmt.macros.items():
+        if name in fmt.builtin:
+            ws.declarations.append(rf"\DeclareSIUnit{{\{macro}}}{{\ensuremath{{{fmt.builtin[name]}}}}}  % {name}")
+            continue
         ws.declarations.append(f"% 1 {name} = {ev.custom.get(name) or '?'}".replace("\n", " "))
         ws.declarations.append(rf"\DeclareSIUnit{{\{macro}}}{{{escape(name)}}}")
     return ws
