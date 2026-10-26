@@ -41,11 +41,18 @@ fetch() {  # fetch <file name>: use the copy beside the script, else download it
     elif command -v wget >/dev/null 2>&1; then wget -q "$BASE/$1" -O "$2"
     else echo "Need $1 next to this script, or curl/wget to download it." >&2; exit 1; fi
 }
+is_png() {  # a proxy or captive portal can hand back an HTML page instead of the file
+    [ "$(head -c 4 "$1" | od -An -c | tr -d ' \n')" = "211PNG" ]
+}
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 fetch lens-linux-x64 "$STAGE/lens"
 fetch lens-icon.png "$STAGE/icon.png"
+if ! is_png "$STAGE/icon.png"; then
+    echo "lens-icon.png is not a PNG image (download failed?); not installing." >&2
+    exit 1
+fi
 
 remove_existing
 mkdir -p "$APP_DIR" "$(dirname "$ICON")" "$(dirname "$DESKTOP")"
@@ -53,6 +60,8 @@ install -m 755 "$STAGE/lens" "$BIN"
 install -m 644 "$STAGE/icon.png" "$ICON"
 # The example worksheets also ship inside the program; put plain copies in the install folder.
 "$BIN" --export-examples "$APP_DIR/examples" >/dev/null
+# Icon is the absolute path, not the theme name: a name has to be found through the user's
+# hicolor theme and its icon cache, which some desktops do not rescan, leaving a blank icon.
 cat > "$DESKTOP" <<DESK
 [Desktop Entry]
 Type=Application
@@ -60,7 +69,7 @@ Name=LENS
 GenericName=Engineering calculation worksheet
 Comment=Laconic engineering notation worksheet
 Exec="$BIN"
-Icon=laconic-lens
+Icon=$ICON
 Terminal=false
 Categories=Education;Science;Engineering;
 StartupWMClass=lens
