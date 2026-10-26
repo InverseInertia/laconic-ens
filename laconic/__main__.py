@@ -8,10 +8,9 @@ import webbrowser
 from pathlib import Path
 
 from . import document, evaluate, settings
-from .sheet import solve_block
+from .sheet import solve_block, solver_blocks
 from .blockedit import apply
 from .solver import write_result
-from .plotsvg import render_svg
 
 EXAMPLES = Path(__file__).parent / "examples"
 
@@ -71,12 +70,11 @@ def _solve_all(path, text, units):
     one's answer), and write each result into the file as it arrives."""
     done = set()
     while True:
-        todo = [r for r in evaluate(text, global_units=units).results
-                if r.kind == "solver" and r.solver["status"] != "valid" and r.solver["hash"] not in done]
+        todo = [r for r in solver_blocks(text, units) if r.solver.status != "valid" and r.solver.hash not in done]
         if not todo:
             return text
         r = todo[0]
-        done.add(r.solver["hash"])
+        done.add(r.solver.hash)
         print(f"{r.n:>3}  solving {r.source.strip()}", file=sys.stderr)
         out = solve_block(text, r.n, units, log=lambda m: print("       " + m, file=sys.stderr))
         if not out["ok"]:
@@ -134,17 +132,17 @@ def main():
         out = Path(a.plots)
         out.mkdir(parents=True, exist_ok=True)
         for r in results:
-            if r.kind == "plot":
+            if r.plot:
                 path = out / f"{Path(a.file).stem}-line{r.n}.svg"
-                path.write_text(render_svg(r.plot, uid=r.n, standalone=True), encoding="utf-8")
+                path.write_text(r.plot.image(uid=r.n), encoding="utf-8")
                 print(f"wrote {path}")
     for r in results:
         if r.kind == "error":
             print(f"{r.n:>3}  ERROR  {r.error}", file=sys.stderr)
         elif r.text and r.kind in ("assign", "expr"):
             print(f"{r.n:>3}  {r.text}" + ("   (out of date)" if r.stale else ""))
-        elif r.kind == "solver":
-            print(f"{r.n:>3}  {r.text}   ({_STATUS[r.solver['status']]})")
+        elif r.solver:
+            print(f"{r.n:>3}  {r.text}   ({_STATUS[r.solver.status]})")
 
 
 if __name__ == "__main__":

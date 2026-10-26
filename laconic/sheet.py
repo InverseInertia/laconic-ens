@@ -3,7 +3,7 @@ an error; an error never stops later lines (lines that depend on a failed
 variable fail on their own with 'x is not defined')."""
 import math
 import re
-from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 
 import pint
 
@@ -11,6 +11,7 @@ from . import catalogue
 from .blockedit import newline
 from .evaluator import EvalError, Evaluator
 from .latex import Fmt, Printer, name_latex
+from .lineresult import LineResult, PlotPayload, SolverPayload
 from .nodes import (Assign, BinOp, Convert, FuncDef, Implicit, Neg, Num,
                     UnitDef, UnitLit)
 from .si import reduce_si
@@ -23,34 +24,6 @@ from .plotsvg import render_svg
 from . import commands, solver
 from .commands import CommandError
 from .solver import SolverError
-
-
-@dataclass
-class LineResult:
-    n: int
-    source: str
-    kind: str  # blank comment heading meta command assign expr funcdef unitdef plot plotopt solver solveropt error
-    lhs: str = ""
-    stages: list = field(default_factory=list)
-    text: str = ""
-    error: str = ""
-    svg: str = ""          # plot: the picture
-    plot: dict = None      # plot: the data and settings it was drawn from (see plotspec.py)
-    end: int = 0           # plot, solver: last line of its option lines
-    solver: dict = None    # solver: status, hash and values of the block (see _run_solver)
-    stale: bool = False    # reads a value from a solver whose result is out of date
-    warning: str = ""      # shown under the result: the line works but may not do what was meant
-    symbols: dict = None   # this line's part of the symbol table (see _symbols)
-
-    @property
-    def latex(self):
-        parts = [p for p in ([self.lhs] if self.lhs else []) + self.stages if p]
-        return " = ".join(parts)
-
-    def to_dict(self):
-        d = asdict(self)
-        d["latex"] = self.latex
-        return d
 
 
 def _is_literal(n, ev):
@@ -112,6 +85,11 @@ class Worksheet:
     needed: list = field(default_factory=list)        # (name, definition) of instance units the sheet uses but does not define
     declarations: list = field(default_factory=list)  # \\DeclareSIUnit lines for the .tex export
 
+    def block(self, header):
+        """The result of the block whose header is on line `header`, or None."""
+        r = self.results[header - 1] if 1 <= header <= len(self.results) else None
+        return r if r is not None and r.block is not None and r.n == header else None
+
     def portable_text(self):
         """The source with the unit definitions it relies on appended, so a copy
         opened on another instance evaluates the same way. Units are hoisted, so
@@ -129,11 +107,13 @@ def run(text, siunitx=False, global_units=None):
     return evaluate(text, siunitx, global_units).results
 
 
-def evaluate(text, siunitx=False, global_units=None, solve=None):
+def evaluate(text, siunitx=False, global_units=None, solve=None, until=None):
     """`global_units` are the instance's (name, definition) pairs. Units are
     defined before any line is evaluated, so a definition applies to the whole
     sheet, wherever it sits. `solve` is a SolverRequest: the block it names is solved
-    instead of read, and `solver.StopSolve` ends the run once it is."""
+    instead of read, and `solver.StopSolve` ends the run once it is. With `until`, the run
+    stops after that line: nothing below a line changes its result, so this is enough to read
+    a block (its `needed` and `declarations` then cover only the lines that ran)."""
     sheet = scan(text)
     has_defs = any(l.kind == "unitdef" for l in sheet.lines)
     ev = Evaluator(global_units or (), fork=has_defs)
@@ -144,6 +124,8 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
             defs[l.n] = _define_unit(l.n, l.text, l.text.strip(), ev, fmt, here, used)
     results, owned = [], {}   # `owned`: option lines of a plot, handled when the plot ran
     for l in sheet.lines:
+        if until is not None and l.n > until:
+            break
         i, raw, s = l.n, l.text, l.text.strip()
         ev.symbols.line = i
         if i in defs:
@@ -223,7 +205,7 @@ def _run_plot(i, raw, block, ev, fmt, used):
     """A `!plot` line and the option lines under it. Returns the plot's result and the
     results for its option lines, keyed by line number. A bad option line is reported
     on that line and the plot is drawn without it."""
-    end, src = block.end, {l.n: l.text for l in block.members}
+    src = {l.n: l.text for l in block.members}
     owned, opts = {}, []
     for l in block.members:
         o = l.option
@@ -246,20 +228,20 @@ def _run_plot(i, raw, block, ev, fmt, used):
         b = Builder(ev, fmt, parse)
         spec = b.build(i, series, var, lo, hi, opts)
     except Exception as e:
-        return LineResult(i, raw, "error", error=_describe(e), end=end), owned
+        return LineResult(i, raw, "error", error=_describe(e), block=block), owned
     for n, msg in b.errors:
         owned[n] = LineResult(n, src[n], "error", error=msg)
     text = spec["title"] or "plot " + ", ".join(s["label"] for s in spec["series"])
-    return LineResult(i, raw, "plot", text=text, svg=render_svg(spec, uid=i), plot=spec, end=end,
+    return LineResult(i, raw, "plot", text=text, block=block, payload=PlotPayload(spec, render_svg(spec, uid=i)),
                       stale=solver.tainted(ev, nodes)), owned
 
 
-def _run_solver(i, raw, block, ev, fmt, used, solve):
+def _run_solver(i, raw, handle, ev, fmt, used, solve):
     """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here:
     the stored result is compared by hash with the block's current inputs and, fitting or not, its
     values are what the unknowns hold below (a result that no longer fits is marked out of date, as
     is everything computed from it). Only a SolveRequest for this very line runs the solver."""
-    members, block = block.members, solver.parse_block(block)
+    members, block = handle.members, solver.parse_block(handle)
     owned = {}
     for l in members:
         msg = block.errors.get(l.n)
@@ -271,7 +253,7 @@ def _run_solver(i, raw, block, ev, fmt, used, solve):
             solve.outcome = {"ok": False, "message": msg, "record": None}
             raise solver.StopSolve
         ev.stale |= {ev.vkey(n) for n in block.unknowns}   # what reads them below is not trustworthy either
-        return LineResult(i, raw, "error", error=msg, end=block.end), owned
+        return LineResult(i, raw, "error", error=msg, block=handle), owned
 
     if block.problem:
         return fail(block.problem)
@@ -320,11 +302,10 @@ def _run_solver(i, raw, block, ev, fmt, used, solve):
         word = "minimum" if block.kind == "minimize" else "maximum"
         values.append(_value(word, rf"\text{{{word}}}", fmt.quantity(obj)))
         plain.append(f"{word} = {fmt.plain(obj)}")
-    info = {"kind": block.kind, "unknowns": block.unknowns, "hash": h, "status": status, "tainted": taint,
-            "autorun": block.autorun, "method": prob.method, "timeout": block.timeout, "values": values,
-            "summary": solver.describe_record(stored) if qs is not None else "", "note": block.stored_note,
-            "record": stored if qs is not None else None}
-    return LineResult(i, raw, "solver", text="; ".join(plain), end=block.end, solver=info,
+    info = SolverPayload(block.kind, block.unknowns, h, status, taint, block.autorun, prob.method,
+                         block.timeout, values, summary=solver.describe_record(stored) if qs is not None else "",
+                         note=block.stored_note, record=stored if qs is not None else None)
+    return LineResult(i, raw, "solver", text="; ".join(plain), block=handle, payload=info,
                       stale=status != "valid" or taint), owned
 
 
@@ -345,6 +326,25 @@ def solve_block(text, line, global_units=None, log=print, mode="run"):
     except solver.StopSolve:
         pass
     return req.outcome or {"ok": False, "message": f"Line {line} was not reached", "record": None}
+
+
+def block_at(text, line, global_units=None):
+    """The result of the block whose header is on `line`, or None when no block starts there. The
+    text alone says where the block is, so the sheet runs only as far as its last line."""
+    b = scan(text).block(line)
+    if b is None:
+        return None
+    return evaluate(text, global_units=global_units, until=b.end).block(line)
+
+
+def solver_blocks(text, global_units=None):
+    """The results of the solver blocks that read (they carry a SolverPayload), top to bottom. The
+    sheet runs only as far as the last block, and not at all when there is none."""
+    ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver"]
+    if not ends:
+        return []
+    ws = evaluate(text, global_units=global_units, until=max(ends))
+    return [r for r in ws.results if r.solver]
 
 
 def _run_line(i, raw, s, ev, fmt, used):

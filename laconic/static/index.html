@@ -750,7 +750,7 @@ async function plotPng(line, scale = 3) {
 function plotBody(r) {
   const box = document.createElement("div");
   const wrap = document.createElement("div"); wrap.className = "plot-wrap";
-  wrap.innerHTML = r.svg;   // drawn by the server, which escapes every piece of text in it
+  wrap.innerHTML = r.plot.svg;   // drawn by the server, which escapes every piece of text in it
   // A drag should not also count as a click that jumps the editor to this line.
   wrap.addEventListener("click", (ev) => ev.stopPropagation());
   const tools = document.createElement("div"); tools.className = "plot-tools";
@@ -760,14 +760,14 @@ function plotBody(r) {
     b.onclick = async (ev) => { ev.stopPropagation(); try { await fn(); } catch (e) { say(e.message || "Failed"); } };
     tools.append(b);
   };
-  if (r.plot.x.view || r.plot.y.view) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(r.n, {xview: null, yview: null}));
+  if (r.plot.moved) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(r.n, {xview: null, yview: null}));
   btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${r.n}.svg`, await plotSvg(r.n), "image/svg+xml"));
   btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${r.n}.png`, await plotPng(r.n)));
   const hint = document.createElement("span"); hint.className = "hint";
   hint.textContent = "Drag to pan \u00b7 Ctrl+wheel to zoom \u00b7 double-click to reset";
   tools.append(hint);
   box.append(wrap, tools);
-  PlotView.attach(wrap, r.plot, (patch) => patchPlot(r.n, patch));
+  PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(r.n, patch));
   return box;
 }
 
