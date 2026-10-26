@@ -128,6 +128,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None, until=None):
             break
         i, raw, s = l.n, l.text, l.text.strip()
         ev.symbols.line = i
+        ev.notes.clear()
         if i in defs:
             results.append(defs[i])
         elif i in owned:
@@ -148,6 +149,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None, until=None):
             results.append(_run_command(i, raw, s, ev))
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
+        _add_notes(results[-1], ev.notes)
     for r, l in zip(results, sheet.lines):
         r.symbols = _symbols(ev.symbols, l)
     ws = Worksheet(text, results, ev.symbols)
@@ -267,11 +269,10 @@ def _run_solver(i, raw, handle, ev, fmt, used, solve):
     stored = block.stored
     qs = prob.stored_quantities(stored) if stored is not None else None
     status = "none" if qs is None else ("valid" if stored.get("hash") == h else "stale")
-    if mine or status != "valid":
-        try:
-            prob.probe()
-        except Exception as e:
-            return fail(_describe(e))
+    try:
+        prob.probe()   # also when the stored result is current: the line's notes come from this run
+    except Exception as e:
+        return fail(_describe(e))
     if mine:
         out = prob.solve(solve.log)
         out["hash"] = h
@@ -383,10 +384,18 @@ def _run_line(i, raw, s, ev, fmt, used):
             (ev.stale.add if stale else ev.stale.discard)(key)
             return LineResult(i, raw, "assign", lhs=fmt.var(key), stages=stages,
                               text=f"{key} = {fmt.plain(value)}", stale=stale,
-                              warning=_global_note(stmt.name, name, ev.symbols) or _imaginary_note(stmt.name, ev.mode))
+                              warning=". ".join(filter(None, [_global_note(stmt.name, name, ev.symbols),
+                                                       _imaginary_note(stmt.name, ev.mode)])))
         return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value), stale=stale)
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e))
+
+
+def _add_notes(r, notes):
+    """Join the evaluator's notes for a line to its own warnings (`_global_note`,
+    `_imaginary_note`). A line that failed shows its error alone."""
+    if notes and r.kind != "error":
+        r.warning = ". ".join(filter(None, [r.warning, *notes]))
 
 
 def _imaginary_note(name, mode):
