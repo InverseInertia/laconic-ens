@@ -306,6 +306,7 @@
     <button id="exportBtn" class="wide" aria-haspopup="menu" aria-expanded="false" aria-controls="exportList" title="Export the sheet">Export &#9662;</button>
     <div id="exportList" role="menu" hidden>
       <button id="export" role="menuitem" title="A complete LaTeX document">LaTeX document (.tex)</button>
+      <button id="exportPdf" role="menuitem" title="A plain PDF of the results, broken into pages">PDF (.pdf)</button>
       <button id="exportMd" role="menuitem" title="A Markdown note in Obsidian's style: $$ math, plots as images">Markdown note (.md)</button>
     </div>
   </div>
@@ -423,6 +424,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
     <ul>
       <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped: inline, <code>\[ \]</code> or <code>align*</code>.</li>
       <li><strong>Export &rarr; LaTeX document</strong> writes a complete <code>.tex</code> document (siunitx v3 or newer; <code>pgfplots</code> when a sheet has plots).</li>
+      <li><strong>Export &rarr; PDF</strong> writes a plain PDF of the results, broken into pages so no calculation is split. It needs Chrome, Chromium or Edge; without one, the print dialog opens instead.</li>
       <li><strong>Export &rarr; Markdown note</strong> writes a <code>.md</code> note for Obsidian: headings, comments as text, each calculation as a <code>$$</code> block and plots as images. Commands such as <code>!clear</code> are left out.</li>
       <li><code>!sigfigs n</code>, <code>!sigfigsbig n</code>, <code>!decplace n</code> and <code>!short</code> change how results are printed, never their values.</li>
       <li>From the command line, <code>lens sheet.lens --tex out.tex</code> and <code>--md out.md</code> write the same files, and <code>--plots DIR</code> writes each plot as SVG.</li>
@@ -723,6 +725,16 @@ async function exportAs(path, ext, type) {
 }
 $("#export").onclick = () => exportAs("/api/export", ".tex", "application/x-tex");
 $("#exportMd").onclick = () => exportAs("/api/export/md", ".md", "text/markdown");
+// PDF: printed on the server by a headless Chromium; failing that, the browser's own print dialog.
+$("#exportPdf").onclick = async () => {
+  showExports(false);
+  const r = await post("/api/export/pdf");
+  if (r.ok) return downloadBlob(stem() + ".pdf", await r.blob());
+  const w = window.open("", "_blank");
+  if (!w) return alert("Allow pop-ups for this page to print a PDF");
+  w.document.write(await (await post("/api/export/print")).text());
+  w.document.close();
+};
 async function openFile() {
   if (!window.showOpenFilePicker) return $("#file").click();
   let handle;
