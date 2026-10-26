@@ -11,20 +11,14 @@ import html
 import json
 import os
 import re
-import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
+from . import browser
 from .markdown import plain_math
 
 STATIC = Path(__file__).parent / "static"
-
-_CHROMIUM = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-             "microsoft-edge", "brave-browser", "msedge", "chrome")
-# Windows does not put the browsers on PATH; Edge is always there.
-_WINDOWS = (r"Microsoft\Edge\Application\msedge.exe", r"Google\Chrome\Application\chrome.exe")
 
 _STYLE = """
 @page { margin: 18mm 16mm 20mm;
@@ -169,17 +163,8 @@ def page(results, title=None, assets=None, autoprint=False):
 
 
 def find_chromium():
-    """A Chromium-family browser to print with, or None. LENS_CHROMIUM names one by hand."""
-    if (p := os.environ.get("LENS_CHROMIUM")) and Path(p).is_file():
-        return p
-    for exe in _CHROMIUM:
-        if p := shutil.which(exe):
-            return p
-    if sys.platform == "win32":
-        for root in filter(None, (os.environ.get(v) for v in ("PROGRAMFILES(X86)", "PROGRAMFILES", "LOCALAPPDATA"))):
-            if (p := Path(root) / _WINDOWS[0]).is_file() or (p := Path(root) / _WINDOWS[1]).is_file():
-                return str(p)
-    return None
+    """A Chromium-family browser to print with, or None (see browser.find)."""
+    return browser.find()
 
 
 class NoBrowser(RuntimeError):
@@ -191,7 +176,7 @@ def pdf(doc, timeout=60):
     from .__main__ import _browser_env
     exe = find_chromium()
     if not exe:
-        raise NoBrowser("PDF export needs Chrome, Chromium or Edge; none was found "
+        raise NoBrowser("PDF export needs a Chromium-based browser (Chrome, Edge, Brave...); none was found "
                         "(set LENS_CHROMIUM to the browser's path)")
     # On Windows the browser can still hold its profile for a moment after it exits.
     with tempfile.TemporaryDirectory(prefix="lens-pdf-", ignore_cleanup_errors=True) as tmp:
