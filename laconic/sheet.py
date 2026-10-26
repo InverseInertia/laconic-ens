@@ -13,10 +13,9 @@ from .nodes import (Assign, BinOp, Convert, FuncDef, Implicit, Neg, Num,
                     UnitDef, UnitLit)
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
-from .plotopts import (OPT_RE, PlotError, block_end, canon, is_plot_line,
-                       parse_option, parse_plot)
+from .plotopts import PlotError, canon, parse_option, parse_plot
 from .plotspec import Builder
-from .rename import global_spans
+from .sheettext import scan
 from .plotsvg import render_svg
 from . import solver
 from .solver import SolverError
@@ -130,42 +129,39 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
     defined before any line is evaluated, so a definition applies to the whole
     sheet, wherever it sits. `solve` is a SolverRequest: the block it names is solved
     instead of read, and `solver.StopSolve` ends the run once it is."""
-    lines = text.splitlines()
-    has_defs = any(s.startswith("'") and "=" in s for s in (l.strip() for l in lines))
+    sheet = scan(text)
+    has_defs = any(l.kind == "unitdef" for l in sheet.lines)
     ev = Evaluator(global_units or (), fork=has_defs)
     fmt = Fmt(ev.ureg, siunitx=siunitx, custom=ev.custom)
     defs, here, used = {}, {}, set()
-    for i, raw in enumerate(lines, 1):
-        s = raw.strip()
-        if s.startswith("'") and "=" in s:
-            defs[i] = _define_unit(i, raw, s, ev, fmt, here, used)
+    for l in sheet.lines:
+        if l.kind == "unitdef":
+            defs[l.n] = _define_unit(l.n, l.text, l.text.strip(), ev, fmt, here, used)
     results, owned = [], {}   # `owned`: option lines of a plot, handled when the plot ran
-    for i, raw in enumerate(lines, 1):
-        s = raw.strip()
+    for l in sheet.lines:
+        i, raw, s = l.n, l.text, l.text.strip()
         if i in defs:
             results.append(defs[i])
         elif i in owned:
             results.append(owned.pop(i))
-        elif solver.is_solver_line(s):
-            r, owned = _run_solver(i, raw, lines, ev, fmt, used, solve)
+        elif l.kind == "solver":
+            r, owned = _run_solver(i, raw, sheet.block(i), ev, fmt, used, solve)
             results.append(r)
-        elif is_plot_line(s):
-            r, owned = _run_plot(i, raw, lines, ev, fmt, used)
+        elif l.kind == "plot":
+            r, owned = _run_plot(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
-        elif not s:
+        elif l.kind == "blank":
             results.append(LineResult(i, raw, "blank"))
-        elif s.startswith("##"):
-            results.append(LineResult(i, raw, "heading", text=s[2:].strip()))
-        elif s.startswith("#@"):
-            results.append(LineResult(i, raw, "meta", text=s[2:].strip()))
-        elif s.startswith("#"):
+        elif l.kind in ("heading", "meta"):
+            results.append(LineResult(i, raw, l.kind, text=s[2:].strip()))
+        elif l.kind == "comment":
             results.append(LineResult(i, raw, "comment", text=s[1:].strip()))
-        elif s.startswith("!"):
+        elif l.kind == "command":
             results.append(_run_command(i, raw, s, ev, fmt))
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
-    for r, spans in zip(results, global_spans(text)):
-        r.gspans = spans(ev.gnames_at(r.n))
+    for r, l in zip(results, sheet.lines):
+        r.gspans = l.uses(ev.gnames_at(r.n))
     ws = Worksheet(text, results)
     # Instance units the sheet relies on, with the units those are defined in terms of.
     need, todo = set(), [n for n in used if n in ev.globals]
@@ -308,20 +304,20 @@ def _plotspec_command(i, raw, s, ev):
     return LineResult(i, raw, "command", text=f"Plots below: {key} {canon(key, value)}")
 
 
-def _run_plot(i, raw, lines, ev, fmt, used):
+def _run_plot(i, raw, block, ev, fmt, used):
     """A `!plot` line and the option lines under it. Returns the plot's result and the
     results for its option lines, keyed by line number. A bad option line is reported
     on that line and the plot is drawn without it."""
-    end = block_end(lines, i - 1)
+    end, src = block.end, {l.n: l.text for l in block.members}
     owned, opts = {}, []
-    for n in range(i + 1, end + 1):
-        m = OPT_RE.match(lines[n - 1])
+    for l in block.members:
+        o = l.option
         try:
-            key, idx, value = parse_option(m.group(1), m.group(2), m.group(3))
-            opts.append((n, key, idx, value))
-            owned[n] = LineResult(n, lines[n - 1], "plotopt")
+            key, idx, value = parse_option(o.key, o.arg, o.value)
+            opts.append((l.n, key, idx, value))
+            owned[l.n] = LineResult(l.n, l.text, "plotopt")
         except PlotError as e:
-            owned[n] = LineResult(n, lines[n - 1], "error", error=str(e))
+            owned[l.n] = LineResult(l.n, l.text, "error", error=str(e))
 
     nodes = []
 
@@ -331,28 +327,28 @@ def _run_plot(i, raw, lines, ev, fmt, used):
         nodes.append(node)
         return node
     try:
-        series, var, lo, hi = parse_plot(raw)
+        series, var, lo, hi = parse_plot(block.args)
         b = Builder(ev, fmt, parse)
         spec = b.build(i, series, var, lo, hi, opts)
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e), end=end), owned
     for n, msg in b.errors:
-        owned[n] = LineResult(n, lines[n - 1], "error", error=msg)
+        owned[n] = LineResult(n, src[n], "error", error=msg)
     text = spec["title"] or "plot " + ", ".join(s["label"] for s in spec["series"])
     return LineResult(i, raw, "plot", text=text, svg=render_svg(spec, uid=i), plot=spec, end=end,
                       stale=solver.tainted(ev, nodes)), owned
 
 
-def _run_solver(i, raw, lines, ev, fmt, used, solve):
+def _run_solver(i, raw, block, ev, fmt, used, solve):
     """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here:
     the stored result is compared by hash with the block's current inputs and, fitting or not, its
     values are what the unknowns hold below (a result that no longer fits is marked out of date, as
     is everything computed from it). Only a SolveRequest for this very line runs the solver."""
-    block = solver.parse_block(lines, i - 1)
+    members, block = block.members, solver.parse_block(block)
     owned = {}
-    for n in range(i + 1, block.end + 1):
-        msg = block.errors.get(n)
-        owned[n] = LineResult(n, lines[n - 1], "error" if msg else "solveropt", error=msg or "")
+    for l in members:
+        msg = block.errors.get(l.n)
+        owned[l.n] = LineResult(l.n, l.text, "error" if msg else "solveropt", error=msg or "")
     mine = solve is not None and solve.line == i
 
     def fail(msg):
@@ -423,8 +419,8 @@ def solve_block(text, line, global_units=None, log=print, mode="run"):
     """Solve the block whose header is on `line` (1-based), in this process. Returns
     {"ok", "message", "record", "hash", ...}; `record` is what write_result stores. The whole sheet
     is evaluated up to that line, so upstream blocks use their stored results as they do on screen."""
-    lines = text.splitlines()
-    if not 1 <= line <= len(lines) or not solver.is_solver_line(lines[line - 1]):
+    b = scan(text).block(line)
+    if b is None or b.kind != "solver":
         return {"ok": False, "message": f"Line {line} is not a !root, !minimize or !maximize line", "record": None}
     req = solver.SolveRequest(line, log, mode)
     try:

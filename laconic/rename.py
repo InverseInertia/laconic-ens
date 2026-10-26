@@ -2,19 +2,8 @@
 Works on the source text, token by token, so comments, commands and numbers like
 `1e5` are left alone. Names and units are separate: renaming `m` leaves `'m` (the
 metre) alone, and renaming `'smoot` leaves a variable `smoot` alone."""
-import re
-
 from .evaluator import CONSTANTS, UNIT_NAME_RE, Evaluator
-from . import solver
-from .plotopts import OPT_RE, expr_spans, is_plot_line
-
-NAME = r"~?[^\W\d]\w*[`!@]*"
-_TOKEN = re.compile(
-    r"(?P<text>\"[^\"\n]*\")"
-    r"|(?P<unit>'(?:[^\W\d]|°)[\w°]*)"
-    r"|(?P<num>(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)"
-    rf"|(?P<name>{NAME})")
-_VALID = re.compile(rf"^{NAME}$")
+from .sheettext import is_name, scan
 
 
 class RenameError(ValueError):
@@ -30,54 +19,20 @@ def _builtins():
     return {n[3:] for n in dir(Evaluator) if n.startswith("fn_")} | set(CONSTANTS)
 
 
-def _scan(text):
-    """(line, spans) for each line, where spans are the parts that hold expressions.
-    Under a `plot` only its limits, units and note positions are expressions; a title
-    is text and is never renamed. In a solver block the unknowns, equations, objective,
-    constraints and bounds are, and the stored result is not."""
-    in_plot = in_solver = False
-    for line in text.splitlines(keepends=True):
-        if solver.is_solver_line(line):
-            in_plot, in_solver = False, True
-            yield line, solver.expr_spans(line, False)
-        elif in_solver and solver.is_block_line(line):
-            yield line, solver.expr_spans(line, True)
-        else:
-            in_solver = False
-            yield line, expr_spans(line, in_plot)
-            in_plot = is_plot_line(line) or (in_plot and bool(OPT_RE.match(line)))
-
-
 def _tokens(text, kind):
-    for line, spans in _scan(text):
-        for a, b in spans:
-            for m in _TOKEN.finditer(line, a, b):
-                if m.lastgroup == kind:
-                    yield m.group()
+    """Every token of `kind` in the sheet's expressions. Under a `plot` only its limits and note
+    positions are expressions; a title is text and is never renamed. In a solver block the
+    unknowns, equations, objective, constraints and bounds are, and the stored result is not."""
+    return (t.text for line in scan(text).lines for t in line.tokens(kind))
 
 
 def _names(text):
     return _tokens(text, "name")
 
 
-_PARAMS = re.compile(rf"\s*{NAME}\s*\(([^)]*)\)\s*=(?!=)")
-
-
-def global_spans(text):
-    """For each line, a function from the names global there to the [column, length] of
-    each use of one on that line, its ~ included. The editor marks these. A function's
-    parameters are local to its line, so they are never marked."""
-    for line, spans in _scan(text):
-        m = _PARAMS.match(line)
-        local = {p.strip() for p in m.group(1).split(",")} if m else set()
-        toks = [(t.start(), t.group()) for a, b in spans for t in _TOKEN.finditer(line, a, b)
-                if t.lastgroup == "name" and t.group() not in local]
-        yield lambda names, toks=toks: [[c, len(t)] for c, t in toks if t.lstrip("~") in names]
-
-
 def _defined_in_sheet(text, name):
-    return any(re.match(rf"\s*'{re.escape(name)}\s*=", line[a:b])
-               for line, spans in _scan(text) for a, b in spans)
+    return any(line.block is None and line.definition and line.definition.kind == "unitdef"
+               and line.definition.name == name for line in scan(text).lines)
 
 
 def _rename_unit(text, old, new, confirm):
@@ -114,30 +69,18 @@ def _rename_unit(text, old, new, confirm):
 
 
 def _substitute(text, kind, old, new):
-    count = 0
-
-    def sub(m):
-        nonlocal count
-        if m.lastgroup != kind:
-            return m.group()
-        tok = m.group()
-        if kind == "name":   # the ~ marks a definition as global and stays where it is
-            if tok.lstrip("~") != old:
-                return tok
-            count += 1
-            return tok[:len(tok) - len(tok.lstrip("~"))] + new
-        if tok == old:
-            count += 1
-            return new
-        return tok
-
-    out = []
-    for line, spans in _scan(text):
+    count, out = 0, []
+    for line in scan(text).lines:
         pos = 0
-        for a, b in spans:
-            out += [line[pos:a], _TOKEN.sub(sub, line[a:b])]
-            pos = b
-        out.append(line[pos:])
+        for t in line.tokens(kind):
+            # the ~ marks a definition as global and stays where it is
+            if (t.bare if kind == "name" else t.text) != old:
+                continue
+            count += 1
+            a = t.end - len(t.bare) if kind == "name" else t.start
+            out += [line.text[pos:a], new]
+            pos = t.end
+        out += [line.text[pos:], line.eol]
     return "".join(out), count
 
 
@@ -151,9 +94,9 @@ def rename(text, old, new, confirm=False):
         old, new = old.lstrip("~"), new.lstrip("~")   # a global and its later uses are one name
     if old.startswith("'"):
         return _rename_unit(text, old[1:], new.removeprefix("'"), confirm)
-    if not _VALID.match(old):
+    if not is_name(old):
         raise RenameError(f"'{old}' is not a valid name")
-    if not _VALID.match(new):
+    if not is_name(new):
         raise RenameError(f"'{new}' is not a valid name")
     if old == new:
         raise RenameError("The new name is the same as the old one")

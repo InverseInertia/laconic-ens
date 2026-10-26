@@ -35,10 +35,10 @@ def kinds(text):
 # ---- syntax -----------------------------------------------------------------------
 
 def test_plot_statement_splits_series_and_range():
-    assert parse_plot("!plot M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L")
-    assert parse_plot("!plot f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2")
+    assert parse_plot("M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L")
+    assert parse_plot("f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2")
     with pytest.raises(PlotError):
-        parse_plot("!plot sin(x)")
+        parse_plot("sin(x)")
 
 
 def test_split_top_ignores_commas_inside_brackets():
