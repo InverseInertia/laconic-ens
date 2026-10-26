@@ -387,6 +387,30 @@ def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_pat
     assert page.get_attribute("#save", "title") == "Save to beam.lens (Ctrl+S)"
 
 
+def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(page, server, tmp_path, monkeypatch):
+    """A second launch hands its sheet to the running LENS, which opens it on the same port
+    (so the window has this browser's presets) and saves back to that sheet, not the first one."""
+    from laconic import server as app_module
+    first, second = tmp_path / "first.lens", tmp_path / "second.lens"
+    first.write_text("a = 1\n", encoding="utf-8")
+    second.write_text("b = 2\n", encoding="utf-8")
+    opened = []
+    monkeypatch.setattr(app_module, "OPENED", first)
+    monkeypatch.setattr(app_module, "OPEN_WINDOW", opened.append)
+    app_module.open_window(app_module.WindowBody(path=str(second)))
+    page.goto(server + opened[0])
+    page.wait_for_function("document.querySelector('#src').value.startsWith('b = 2')")
+    assert page.input_value("#name") == "second"
+    reset(page, "b = 3\n")
+    page.keyboard.press("Control+s")
+    for _ in range(50):
+        if second.read_bytes() != b"b = 2\n":
+            break
+        page.wait_for_timeout(100)
+    assert second.read_bytes() == b"b = 3\n"
+    assert first.read_bytes() == b"a = 1\n"
+
+
 def test_export_menu_downloads_latex_and_markdown(page):
     reset(page, "## Loads\nF = 2'kN")
     page.fill("#name", "loads")

@@ -689,7 +689,7 @@ async function save(as) {
     render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
     write: async (h, text) => {
       if (h.server) {
-        const r = await (await fetch("/api/opened/save", {method: "POST", headers: {"Content-Type": "application/json"},
+        const r = await (await fetch(openedApi("/api/opened/save"), {method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({text})})).json();
         if (!r.ok) throw new Error(r.error);
         return;
@@ -1472,11 +1472,18 @@ for (const el of document.querySelectorAll("[data-icon]")) {
   }).catch(() => {});
 }
 
+// A window another launch handed to this server says which sheet it opened on (?sheet=, empty
+// for none); a window without it opened on the sheet the program was started with.
+function openedApi(path) {
+  const sheet = new URLSearchParams(location.search).get("sheet");
+  return sheet === null ? path : `${path}?sheet=${encodeURIComponent(sheet)}`;
+}
+
 // A sheet the program was started with replaces the stored text, once: reloading the page keeps
 // the edits made since (they are in the stored text) and still saves to that file.
 async function openStartFile() {
   let o;
-  try { o = await (await fetch("/api/opened")).json(); } catch { return false; }
+  try { o = await (await fetch(openedApi("/api/opened"))).json(); } catch { return false; }
   if (!o.file) return false;
   if (o.error) { say(o.error); return false; }
   const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true} : null);

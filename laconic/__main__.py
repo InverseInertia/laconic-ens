@@ -134,10 +134,12 @@ def main():
 
     if a.serve:
         import uvicorn
+        from . import server
         if a.file:
-            from . import server
             server.OPENED = Path(a.file).resolve()
         url = f"http://127.0.0.1:{a.port}"
+        # Another launch of the packaged app hands its window to this server (instance.py).
+        server.OPEN_WINDOW = lambda path: threading.Thread(target=_launch, args=(url + path, a.app)).start()
         # Always printed: the browser may fail to start, or start without showing a window.
         print(f"laconic running at {url} (open it in a browser if no window appears)")
         if a.open or a.app:

@@ -155,3 +155,41 @@ def test_an_opened_txt_file_is_read_but_never_written(tmp_path, monkeypatch):
     with pytest.raises(server.HTTPException):
         server.save_opened(server.TextBody(text="y"))
     assert sheet.read_text() == "x = 2"
+
+
+def test_hello_names_the_program():
+    assert server.hello()["app"] == "lens"
+
+
+def test_a_handed_over_sheet_opens_in_a_window_of_its_own(tmp_path, monkeypatch):
+    """Another launch hands its sheet to this server: the new window reads and saves that sheet,
+    while a window without ?sheet= still has the one the program was started with."""
+    start, other = tmp_path / "start.lens", tmp_path / "other.lens"
+    start.write_text("a = 1\n", encoding="utf-8")
+    other.write_text("b = 2\n", encoding="utf-8")
+    opened = []
+    monkeypatch.setattr(server, "OPENED", start)
+    monkeypatch.setattr(server, "HANDED", {})
+    monkeypatch.setattr(server, "OPEN_WINDOW", opened.append)
+    assert server.open_window(server.WindowBody(path=str(other))) == {"ok": True}
+    token = opened[0].removeprefix("/?sheet=")
+    assert token and server.get_opened(token)["text"] == "b = 2\n"
+    server.save_opened(server.TextBody(text="b = 3\n"), token)
+    assert other.read_text(encoding="utf-8") == "b = 3\n"
+    assert server.get_opened()["file"] == "start.lens"
+    assert server.get_opened("not-a-token") == {}
+
+
+def test_a_handed_over_launch_without_a_sheet_opens_an_empty_window(monkeypatch, tmp_path):
+    opened = []
+    monkeypatch.setattr(server, "OPENED", tmp_path / "start.lens")
+    monkeypatch.setattr(server, "OPEN_WINDOW", opened.append)
+    server.open_window(server.WindowBody())
+    assert opened == ["/?sheet="]
+    assert server.get_opened("") == {}
+
+
+def test_a_server_that_opens_no_windows_says_so(monkeypatch):
+    monkeypatch.setattr(server, "OPEN_WINDOW", None)
+    with pytest.raises(server.HTTPException):
+        server.open_window(server.WindowBody())
