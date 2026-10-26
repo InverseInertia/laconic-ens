@@ -17,7 +17,7 @@ from .nodes import BinOp, Name, Str, UnitLit
 from . import props as _props
 from .parser import parse_expr
 
-CONSTANTS = {"pi": math.pi, "e": math.e}
+CONSTANTS = {"pi": math.pi, "e": math.e, "∞": math.inf}
 
 
 class EvalError(Exception):
@@ -28,13 +28,17 @@ class EvalError(Exception):
 def registry():
     # Building a registry takes a noticeable fraction of a second, so share one.
     # Pint's pound is `lb`, which reads as a force as easily as a mass. Name it `lbm`
-    # (matching `lbf`) and drop `lb`.
+    # (matching `lbf`) and drop `lb`. Pint's year symbol is `a` (annum), which nobody reads
+    # as a year; make `yr` the symbol and keep `a` as an alias.
     src = Path(pint.__file__).parent
     with tempfile.TemporaryDirectory() as tmp:
         shutil.copy(src / "constants_en.txt", tmp)
         text = (src / "default_en.txt").read_text(encoding="utf-8")
         renamed = text.replace("7e3 * grain = lb = avoirdupois_pound", "7e3 * grain = lbm = avoirdupois_pound")
         assert renamed != text, "pint's pound definition changed"
+        before = renamed
+        renamed = renamed.replace("year = 365.25 * day = a = yr = julian_year", "year = 365.25 * day = yr = a = julian_year")
+        assert renamed != before, "pint's year definition changed"
         (Path(tmp) / "default_en.txt").write_text(renamed, encoding="utf-8")
         return pint.UnitRegistry(str(Path(tmp) / "default_en.txt"), autoconvert_offset_to_baseunit=True)
 
@@ -550,7 +554,18 @@ class Evaluator:
         return _props.props(self.ureg, out, *args)
 
     # ---- checks -----------------------------------------------------------
-    def check_finite(self, q):
-        if not np.all(np.isfinite(np.asarray(q.magnitude, dtype=float))):
+    def check_finite(self, q, expr=None):
+        """NaN is always an error. Infinity is too, unless `expr` reaches a typed-in ∞
+        (directly or through a variable holding one), so 1/0 still reports a problem."""
+        mag = np.asarray(q.magnitude, dtype=float)
+        if np.any(np.isnan(mag)) or (np.any(np.isinf(mag)) and not self.uses_infinity(expr)):
             raise EvalError("Result is not finite (division by zero or domain error)")
         return q
+
+    def uses_infinity(self, expr):
+        for name in names_in(expr) if expr is not None else ():
+            if name == "∞":
+                return True
+            if self.is_var(name) and np.any(np.isinf(np.asarray(self.vars[self.vkey(name)].magnitude, dtype=float))):
+                return True
+        return False

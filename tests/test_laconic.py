@@ -288,6 +288,28 @@ def test_pound_mass_is_lbm_and_lb_is_gone():
     assert last("1'lbf -> 'N").text.startswith("4.448")
 
 
+def test_infinity_is_a_constant():
+    assert last("x = ∞").text == "x = ∞"
+    r = last("x = -∞*2'm")
+    assert r.text == "x = -∞ m" and r.latex.endswith(r"= -\infty\,\mathrm{m}")
+    assert last("x = 1/∞").text == "x = 0"
+    assert last("x = ∞\ny = x + 1").text == "y = ∞"
+    assert r"\infty\,\unit{\meter}" in run("x = ∞*3'm", siunitx=True)[-1].latex  # \qty cannot parse it
+
+
+def test_only_a_typed_in_infinity_may_give_an_infinite_result():
+    assert "not finite" in last("x = exp(1000)").error
+    assert "not finite" in last("x = ∞ - ∞").error
+    assert last("x = 1/0").error
+
+
+def test_a_year_shows_as_yr_and_a_still_reads_as_one():
+    r = last("t = 2.5'yr")
+    assert r.text == "t = 2.5 yr" and r"\mathrm{yr}" in r.latex
+    assert last("t = 3'a").text == "t = 3 yr"
+    assert last("t = 365.25'd -> 'year").text == "t = 1 yr"
+
+
 def test_index_functions_count_from_one_and_print_as_subscripts():
     r = last("A = [1,2,3;4,5,6]\nelem(A, 2, 3)")
     assert r.text == "6" and "{A}_{2,\\,3}" in r.latex

@@ -24,7 +24,7 @@ x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 - A bare name is always a variable, so `m` can be a mass while `'m` is the metre.
 - Only a number followed by units may be written without `*`. `3 x` is an error; write `3*x`.
 - Names may use Greek letters and subscripts (`σ_max`, `M_max`). A trailing digit becomes a subscript in the typeset view (`x1` is x₁).
-- Constants: `pi`, `e`.
+- Constants: `pi`, `e`, and `∞` (Ctrl+G after an `8`). A result may be infinite only when the line uses `∞`, so `1/0` is still an error; `∞ - ∞` and `0*∞` are too.
 
 ## Operators
 
