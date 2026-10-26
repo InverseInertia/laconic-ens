@@ -14,6 +14,7 @@ import pint
 from pathlib import Path
 
 from .commands import SheetMode
+from .symbols import FUNCTION, VARIABLE, SymbolTable
 from .nodes import BinOp, Name, Str, UnitLit
 from . import props as _props
 from . import catalogue
@@ -111,9 +112,7 @@ class Evaluator:
         self.Q = self.ureg.Quantity
         self.vars = {}
         self.funcs = {}
-        self.gvars = set()     # bare names defined global with ~; stored as ~name from then on
-        self.gfuncs = set()
-        self.gline = {}        # (is function, ~name) -> line that made it global; set by sheet.py
+        self.symbols = SymbolTable()  # which names each line sees; filled in by sheet.py
         self.stale = set()     # variable keys whose value comes from a solver result that is out of date
         self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
 
@@ -122,31 +121,11 @@ class Evaluator:
         return self.vkey(name) in self.vars or name in local
 
     def vkey(self, name):
-        """The key a variable is stored under. `~` marks a definition as global; every
-        later use of that name, with or without the `~`, resolves to the global one."""
-        bare = name.lstrip("~")
-        return "~" + bare if name != bare or bare in self.gvars else bare
+        """The key a variable is stored under at the current line (a global's has its ~)."""
+        return self.symbols.key(name, VARIABLE)
 
     def fkey(self, name):
-        bare = name.lstrip("~")
-        return "~" + bare if name != bare or bare in self.gfuncs else bare
-
-    def gnames_at(self, line):
-        """Bare names that are global on `line`: made global there or above it."""
-        return {key[1:] for (_, key), n in self.gline.items() if n <= line}
-
-    def bind_key(self, name, func=False):
-        """The key a definition of `name` stores under. A `~` definition makes the name
-        global; a name already in use without one cannot become global."""
-        bare = name.lstrip("~")
-        names, store = (self.gfuncs, self.funcs) if func else (self.gvars, self.vars)
-        if name != bare and bare not in names:
-            if bare in store:
-                kind = "function" if func else "variable"
-                raise EvalError(f"'{bare}' is already a non-global {kind}. "
-                                f"Define it with ~ the first time, or rename one of them")
-            names.add(bare)
-        return ("~" + bare) if bare in names else bare
+        return self.symbols.key(name, FUNCTION)
 
     def is_unit(self, name):
         try:

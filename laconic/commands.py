@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from .plotopts import PlotError, canon, parse_option
+from .symbols import FUNCTION, VARIABLE
 
 
 @dataclass
@@ -92,20 +93,20 @@ def _cleared(gone, kept):
 
 
 def _clear(mode, ev, _):
-    gone = [n for n in ev.vars if not n.startswith("~")]
+    gone, kept = ev.symbols.clear(VARIABLE)
     for n in gone:
         del ev.vars[n]
     mode.cleared.update(gone)
     ev.stale -= set(gone)
-    return _cleared(gone, [n for n in ev.vars if n.startswith("~")])
+    return _cleared(gone, kept)
 
 
 def _clearf(mode, ev, _):
-    gone = [n for n in ev.funcs if not n.startswith("~")]
+    gone, kept = ev.symbols.clear(FUNCTION)
     for n in gone:
         del ev.funcs[n]
     mode.cleared_funcs.update(gone)
-    return _cleared(gone, [n for n in ev.funcs if n.startswith("~")])
+    return _cleared(gone, kept)
 
 
 def _setter(attr, value, text):
