@@ -7,6 +7,8 @@ kg m^2/s^2 and come out as J; 1/s comes out as Hz. An explicit `->` conversion
 overrides all of this."""
 from functools import lru_cache
 
+from .evaluator import CURRENCIES
+
 _BASE = ("kilogram", "meter", "second", "ampere", "kelvin", "mole", "candela")
 
 # Priority order. Earlier entries claim a dimension first.
@@ -45,6 +47,15 @@ def reduce_si(q, ureg):
         return q.to("degC")
     if "degree_Celsius" in names:
         return q
+    if dict(q.unit_items()) == {"percent": 1}:   # 5'% + 2'% stays 7 %; '% * 'N or '%^2 drops it
+        return q
+    money = [n for n in names if n in CURRENCIES or n[-3:] in CURRENCIES]   # USD, kUSD
+    if money:
+        # A price keeps the units it was typed in: in base units 'USD/'kWh would be USD s²/(kg m²).
+        # Only units of one kind cancel ('USD/'kWh * 'MJ is USD).
+        r = q.to_reduced_units()
+        cash = ureg.Unit("*".join(f"{n}**{e}" for n, e in r.unit_items() if n in money))
+        return r.to(cash) if (r / ureg.Quantity(1, cash)).dimensionless else r
     r = q.to_base_units()
     items = dict(r.unit_items())
     if not items:                      # dimensionless, e.g. m/mm

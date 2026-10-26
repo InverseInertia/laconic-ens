@@ -32,4 +32,6 @@ lens laconic/examples/solve.lens --solve            # run solver blocks that are
 - The page serves KaTeX and the fonts from `laconic/static/`, so it works offline.
 - Exported `.tex` files need siunitx v3 or newer (and `pgfplots` when a sheet has plots).
 - Worksheets are UTF-8 text, conventionally `.lens`. The examples (`laconic/examples/`) are bundled with the program: open them from the Welcome dialog, or copy them out with `lens --export-examples DIR`. The Linux installer also puts them in its install folder.
+- **Save** (Ctrl+S) writes back to the file you opened or last saved, and **Save As** (Ctrl+Shift+S) asks for a new one. Renaming the sheet in the name box also makes the next Save ask. This needs the File System Access API (Chrome, Edge and other Chromium browsers); Firefox and Safari download a copy on every save instead. After a page reload the sheet text is restored but not its file, so the first Save asks again.
+- If no browser window appears after `--open`, `--app` or starting the packaged app, open the address printed in the terminal by hand.
 - In a normal browser tab Ctrl+T and Ctrl+N belong to the browser, so use Alt+T. `--app` opens a tab-less Chromium window, which may let Ctrl+T through (untested).

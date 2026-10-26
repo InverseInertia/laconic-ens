@@ -227,6 +227,45 @@ def test_help_opens_bundled_example(page):
     assert "Simply supported beam" in page.input_value("#src") or "beam" in page.input_value("#name")
 
 
+# Fake File System Access API: each handle records what was written to it in window.written.
+FAKE_FS = """() => {
+  window.written = []; window.picks = 0;
+  const handle = (name, text) => ({
+    name, getFile: async () => new File([text], name),
+    requestPermission: async () => "granted",
+    createWritable: async () => { let buf = ""; return {
+      write: async (t) => { buf += t; }, close: async () => { window.written.push([name, buf]); } }; },
+  });
+  window.showOpenFilePicker = async () => [handle("beam.lens", "x = 2")];
+  window.showSaveFilePicker = async () => { window.picks++; return handle("copy.lens", ""); };
+}"""
+
+
+def test_save_writes_back_to_the_opened_file(page):
+    """#39: after Open, Save overwrites that file; Save As asks once, then Save reuses the new file."""
+    page.evaluate(FAKE_FS)
+    page.click("#open")
+    page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
+    assert page.input_value("#name") == "beam"
+    reset(page, "x = 3")
+    page.keyboard.press("Control+s")
+    page.wait_for_function("window.written.length === 1")
+    assert page.evaluate("window.written[0]")[0] == "beam.lens" and "x = 3" in page.evaluate("window.written[0][1]")
+    assert page.evaluate("window.picks") == 0
+    page.click("#saveAs")
+    page.wait_for_function("window.written.length === 2")
+    assert page.evaluate("[window.picks, window.written[1][0]]") == [1, "copy.lens"]
+    assert page.input_value("#name") == "copy"
+    page.click("#save")
+    page.wait_for_function("window.written.length === 3")
+    assert page.evaluate("[window.picks, window.written[2][0]]") == [1, "copy.lens"]
+    # Renaming the sheet means a new file, so Save asks again.
+    page.fill("#name", "other")
+    page.click("#save")
+    page.wait_for_function("window.written.length === 4")
+    assert page.evaluate("window.picks") == 2
+
+
 def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
     name = page.locator("#name")
     short = name.bounding_box()["width"]
