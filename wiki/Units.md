@@ -21,6 +21,24 @@ Angles keep their radians (`asin(0.5)` gives `0.5236 rad`). degF becomes degC, a
 
 The pound is `'lbm` (mass) and `'lbf` (force). Pint's own `lb` is removed because it reads as either.
 
+## Percent and currencies
+
+`'%` is a dimensionless unit worth 0.01: `20'% * 50'N` is `10 N`, and `0.05 -> '%` is `5 %`. A result whose only unit is `'%` keeps it (`5'% + 2'%` is `7 %`). Anything else drops it (`50'% * 50'%` is `0.25`). `5%` without the apostrophe is an error that shows the right spelling. In the export it is siunitx's `\percent`.
+
+A currency is a unit named by its ISO 4217 code, such as `'USD`, `'EUR` or `'GBP`. Each currency is a dimension of its own. Exchange rates change, so LENS never converts between currencies: `3'USD + 2'EUR` is an error. Write the rate as a variable:
+
+```
+rate = 1.08'USD/'EUR
+cost = rate * 250'EUR          270 USD
+energy = 0.12'USD/'kWh * 3'MJ  0.1 USD
+```
+
+- A result with a currency keeps the units it was typed in, so `0.12'USD/'kWh * 2` is `0.24 USD/kWh`, not reduced to base units. Units of the same kind still cancel.
+- Prefixes work: `'kUSD` is a thousand dollars.
+- `$` and other currency symbols are not units, because several currencies share them.
+- The export declares each currency it uses with `\DeclareSIUnit`.
+- Codes: `USD` `EUR` `GBP` `JPY` `CNY` `CAD` `AUD` `NZD` `CHF` `HKD` `SGD` `SEK` `NOK` `DKK` `PLN` `CZK` `HUF` `KRW` `TWD` `INR` `BRL` `MXN` `ZAR` `TRY` `ILS` `AED` `SAR`. Other currencies are not built in yet, and a custom unit cannot add one, because a custom unit cannot create a new dimension. Open an issue to have one added.
+
 ## Custom units
 
 A line that starts with a unit and an equals sign defines that unit for the sheet:

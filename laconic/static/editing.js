@@ -23,9 +23,10 @@
   };
 
   const IDENT_RE = /[\p{L}\p{N}_°]/u;
-  const SIMPLE_RE = /^-?[\p{L}\p{N}_.'°][\p{L}\p{N}_.'°^]*$/u;
+  const SIMPLE_RE = /^-?[\p{L}\p{N}_.'°][\p{L}\p{N}_.'°%^]*$/u;
   const isIdent = (c) => c !== undefined && IDENT_RE.test(c);
-  const isTok = (c) => isIdent(c) || c === '.' || c === "'" || c === '~';
+  // % appears only in the unit '%, so it belongs to the term like a unit's letters.
+  const isTok = (c) => isIdent(c) || c === '.' || c === "'" || c === '~' || c === '%';
 
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };

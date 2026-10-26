@@ -2,7 +2,7 @@
 from functools import lru_cache
 
 from . import solver
-from .evaluator import CONSTANTS, Evaluator, registry
+from .evaluator import CONSTANTS, CURRENCIES, Evaluator, registry
 
 COMMANDS = [
     ("clear", "remove all non-global variables"),
@@ -43,7 +43,8 @@ _SIGNATURES = {
 
 # Offered first, and the ones that get SI prefixes spelled out (kN, mm, GPa).
 _COMMON = ("m s kg g A K mol cd N Pa J W Hz C V ohm F H S Wb T L Wh bar eV rad deg degC degF "
-           "mm cm km kN MN GPa MPa kPa kW MW kJ MJ mA mV kV us ms min h day in ft yd mi lbm lbf psi ksi").split()
+           "mm cm km kN MN GPa MPa kPa kW MW kJ MJ mA mV kV us ms min h day in ft yd mi lbm lbf psi ksi "
+           "% USD EUR GBP").split()
 _PREFIXABLE = "m g s A K mol N Pa J W Hz C V ohm F H S Wb T L Wh bar eV".split()
 _PREFIXES = "T G M k c m u n p".split()
 
@@ -61,7 +62,8 @@ def _units():
 
     for key in sorted(names, key=lambda k: (len(k), k)):
         try:
-            add(key, ureg.get_name(key), key in _COMMON)
+            detail = f"{CURRENCIES[key]} (currency)" if key in CURRENCIES else ureg.get_name(key)
+            add(key, detail, key in _COMMON)
         except Exception:
             continue
     for base in _PREFIXABLE:

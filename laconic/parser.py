@@ -55,7 +55,7 @@ row: expr ("," expr)*
 NAME: /~?[^\W\d]\w*[`!@]*/
 NUMBER: /(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?/
 STRING: /"[^"\n]*"/
-UNIT: /'(?:[^\W\d]|°)[\w°]*/
+UNIT: /'(?:(?:[^\W\d]|°)[\w°]*|%)/
 
 %import common.WS
 %ignore WS
@@ -102,7 +102,13 @@ def parse_expr(src):
         return _parser.parse(src)
     except UnexpectedInput as e:
         col = getattr(e, "column", 0)
-        raise ParseError(f"Syntax error at column {col}: {src[max(col - 1, 0):][:12]!r}") from None
+        bad = src[max(col - 1, 0):]
+        hint = ""
+        if bad.startswith("%"):
+            hint = ". Percent is a unit: write 5'%"
+        elif bad.startswith("$"):
+            hint = ". Currencies are units named by their ISO code: write 5'USD, 'EUR, 'GBP"
+        raise ParseError(f"Syntax error at column {col}: {bad[:12]!r}{hint}") from None
 
 
 def parse_line(src):

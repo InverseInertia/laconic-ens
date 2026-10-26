@@ -8,7 +8,7 @@ import re
 
 import numpy as np
 
-from .evaluator import CONSTANTS, EvalError
+from .evaluator import CONSTANTS, CURRENCIES, EvalError
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Str,
                     UnitLit)
 
@@ -158,7 +158,8 @@ class Fmt:
             if not m:
                 return ""
             return re.sub(r"\\([A-Za-z_][A-Za-z0-9_]*)",
-                          lambda t: "\\" + self._macro(t.group(1)) if t.group(1) in self.custom else t.group(0),
+                          lambda t: "\\" + self._macro(t.group(1)) if t.group(1) in self.custom or t.group(1) in CURRENCIES
+                          else t.group(0),
                           m.group(1))
         return format(units, "~L")
 

@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field, fields, is_dataclass
 
 import pint
 
-from .evaluator import EvalError, Evaluator
+from .evaluator import CURRENCIES, EvalError, Evaluator
 from .latex import Fmt, Printer, escape, name_latex
 from .nodes import (Assign, BinOp, Convert, FuncDef, Implicit, Neg, Num,
                     UnitDef, UnitLit)
@@ -170,7 +170,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
             todo += [m for m in _unit_names(parse_expr(ev.globals[n])) if m in ev.globals]
     ws.needed = [(n, d) for n, d in ev.globals.items() if n in need and n not in here]
     for name, macro in fmt.macros.items():
-        ws.declarations.append(f"% 1 {name} = {ev.custom.get(name) or '?'}".replace("\n", " "))
+        ws.declarations.append(f"% 1 {name} = {ev.custom.get(name) or CURRENCIES.get(name) or '?'}".replace("\n", " "))
         ws.declarations.append(rf"\DeclareSIUnit{{\{macro}}}{{{escape(name)}}}")
     return ws
 
@@ -460,6 +460,11 @@ def _describe(e):
     if isinstance(e, (ParseError, EvalError, PlotError, SolverError)):
         return str(e)
     if isinstance(e, pint.errors.DimensionalityError):
+        dims = [d for dim in (e.dim1, e.dim2) for d in re.findall(r"\[(\w+)\]", str(dim))]
+        money = list(dict.fromkeys(d for d in dims if d in CURRENCIES))
+        if len(money) > 1:
+            return (f"Incompatible units: {money[0]} and {money[1]} are different currencies. "
+                    f"Multiply by an exchange rate variable, e.g. rate = 1.08'{money[0]}/'{money[1]}")
         return f"Incompatible units: {e}"
     if isinstance(e, pint.errors.PintError):
         return str(e)

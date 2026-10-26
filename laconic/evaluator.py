@@ -40,7 +40,25 @@ def registry():
         renamed = renamed.replace("year = 365.25 * day = a = yr = julian_year", "year = 365.25 * day = yr = a = julian_year")
         assert renamed != before, "pint's year definition changed"
         (Path(tmp) / "default_en.txt").write_text(renamed, encoding="utf-8")
-        return pint.UnitRegistry(str(Path(tmp) / "default_en.txt"), autoconvert_offset_to_baseunit=True)
+        ureg = pint.UnitRegistry(str(Path(tmp) / "default_en.txt"), autoconvert_offset_to_baseunit=True)
+    for code in CURRENCIES:
+        ureg.define(f"{code} = [{code}]")
+    return ureg
+
+
+# ISO 4217 codes. Each is a dimension of its own: exchange rates change, so 'USD + 'EUR is an
+# error and a rate is an ordinary variable (rate = 1.08'USD/'EUR). Symbols such as $ are not
+# units, because several currencies share them.
+CURRENCIES = {
+    "USD": "US dollar", "EUR": "euro", "GBP": "pound sterling", "JPY": "Japanese yen",
+    "CNY": "Chinese yuan", "CAD": "Canadian dollar", "AUD": "Australian dollar",
+    "NZD": "New Zealand dollar", "CHF": "Swiss franc", "HKD": "Hong Kong dollar",
+    "SGD": "Singapore dollar", "SEK": "Swedish krona", "NOK": "Norwegian krone",
+    "DKK": "Danish krone", "PLN": "Polish zloty", "CZK": "Czech koruna", "HUF": "Hungarian forint",
+    "KRW": "South Korean won", "TWD": "New Taiwan dollar", "INR": "Indian rupee",
+    "BRL": "Brazilian real", "MXN": "Mexican peso", "ZAR": "South African rand",
+    "TRY": "Turkish lira", "ILS": "Israeli shekel", "AED": "UAE dirham", "SAR": "Saudi riyal",
+}
 
 
 def _ndim(q):
