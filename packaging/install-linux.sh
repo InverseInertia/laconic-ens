@@ -3,15 +3,23 @@
 # launcher entry (.desktop file) to the application menu, and makes .lens files open in LENS
 # with an icon of their own. Any earlier install is removed first.
 #
-#   sh lens-install-linux.sh        install from lens-linux-x64, lens-icon.png and lens-file-icon.png next to this script
-#   sh lens-install-linux.sh --uninstall  remove LENS and its launcher
+#   sh lens-<version>-install-linux.sh             install from lens-<version>-linux-x64,
+#                                                  lens-<version>-icon.png and lens-<version>-file-icon.png next to this script
+#   sh lens-<version>-install-linux.sh --uninstall remove LENS and its launcher
 #
 # Run it from the folder holding the files downloaded from the release page. Missing files are
-# fetched from the latest release. No root needed; XDG_DATA_HOME is honoured.
+# fetched from the same release. No root needed; XDG_DATA_HOME is honoured.
 set -eu
 
+VERSION=""  # the release job writes the release's version here (e.g. 0.2.0)
 REPO="inverseinertia/laconic-ens"
-BASE="https://github.com/$REPO/releases/latest/download"
+if [ -n "$VERSION" ]; then
+    PREFIX="lens-$VERSION"
+    BASE="https://github.com/$REPO/releases/download/v$VERSION"
+else  # a copy from the source tree: no release to download from, so the files must be beside it
+    PREFIX="lens"
+    BASE=""
+fi
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 APP_DIR="$DATA/laconic-lens"
 BIN="$APP_DIR/lens"
@@ -45,6 +53,7 @@ fi
 HERE="$(cd "$(dirname "$0")" && pwd)"
 fetch() {  # fetch <file name>: use the copy beside the script, else download it
     if [ -f "$HERE/$1" ]; then cp "$HERE/$1" "$2"; return; fi
+    if [ -z "$BASE" ]; then echo "Need $1 next to this script." >&2; exit 1; fi
     echo "Downloading $1 ..."
     if command -v curl >/dev/null 2>&1; then curl -fsSL "$BASE/$1" -o "$2"
     elif command -v wget >/dev/null 2>&1; then wget -q "$BASE/$1" -O "$2"
@@ -56,12 +65,12 @@ is_png() {  # a proxy or captive portal can hand back an HTML page instead of th
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-fetch lens-linux-x64 "$STAGE/lens"
-fetch lens-icon.png "$STAGE/icon.png"
-fetch lens-file-icon.png "$STAGE/file-icon.png"
+fetch "$PREFIX-linux-x64" "$STAGE/lens"
+fetch "$PREFIX-icon.png" "$STAGE/icon.png"
+fetch "$PREFIX-file-icon.png" "$STAGE/file-icon.png"
 for f in icon.png file-icon.png; do
     if ! is_png "$STAGE/$f"; then
-        echo "lens-$f is not a PNG image (download failed?); not installing." >&2
+        echo "$PREFIX-$f is not a PNG image (download failed?); not installing." >&2
         exit 1
     fi
 done
