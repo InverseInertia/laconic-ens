@@ -529,6 +529,7 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
 <script src="/static/solverview.js"></script>
 <script src="/static/autocomplete.js"></script>
 <script src="/static/theme.js"></script>
+<script src="/static/savefile.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 // Settings live under "lens:". Older builds used "calcsheet:" and "laconic:", read as a fallback.
@@ -647,7 +648,7 @@ function downloadBlob(name, blob) {
   a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
 const download = (name, text, type) => downloadBlob(name, new Blob([text], {type}));
-const stem = () => (nameEl.value.trim() || "sheet").replace(/\.\w+$/, "");
+const stem = () => SaveFile.stem(nameEl.value);
 // The name field grows with its text, so a long title is not clipped. Call after setting it from code.
 const measure = document.createElement("canvas").getContext("2d");
 function fitName() {
@@ -659,31 +660,30 @@ document.fonts.ready.then(fitName);
 
 // The file the sheet was opened from or last saved to, so Save writes back to it. Only browsers
 // with the File System Access API (Chromium) give one; elsewhere every save is a download.
+// Which file a save goes to is decided in savefile.js; this is its adapter onto the browser.
 let fileHandle = null;
 const LENS_TYPES = [{description: "LENS worksheet", accept: {"text/plain": [".lens"]}}];
 function setFile(handle) {
   fileHandle = handle;
-  $("#save").title = handle ? `Save to ${handle.name} (Ctrl+S)` : "Save the worksheet (Ctrl+S)";
+  $("#save").title = SaveFile.buttonTitle(handle);
 }
 
 async function save(as) {
-  // Get the handle and its permission first: both need the click's user activation, which the fetch could outlast.
-  let handle = as ? null : fileHandle;
-  if (handle && (await handle.requestPermission({mode: "readwrite"})) !== "granted") handle = null;
-  if (!handle && window.showSaveFilePicker) {
-    try {
-      handle = await showSaveFilePicker({suggestedName: stem() + ".lens", types: LENS_TYPES});
-    } catch (e) { if (e.name === "AbortError") return; }
-  }
-  let text = src.value;
-  try { const res = await post("/api/save"); if (res.ok) text = await res.text(); } catch {}
-  if (!handle) return download(stem() + ".lens", text, "text/plain");
-  try {
-    const w = await handle.createWritable(); await w.write(text); await w.close();
-  } catch (e) { say(`Could not save ${handle.name}: ${e.message}`); return; }
-  setFile(handle);
-  nameEl.value = handle.name.replace(/\.\w+$/, ""); fitName();
-  say(`Saved ${handle.name}`);
+  const r = await SaveFile.save(as, {
+    title: nameEl.value,
+    current: fileHandle,
+    source: src.value,
+    permission: (h) => h.requestPermission({mode: "readwrite"}),
+    pick: window.showSaveFilePicker && ((suggestedName) => showSaveFilePicker({suggestedName, types: LENS_TYPES})),
+    render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
+    write: async (h, text) => { const w = await h.createWritable(); await w.write(text); await w.close(); },
+    download: (name, text) => download(name, text, "text/plain"),
+  });
+  if (r.kind === "failed") say(r.message);
+  if (r.kind !== "saved") return;
+  setFile(r.handle);
+  nameEl.value = r.name; fitName();
+  say(r.message);
 }
 function load(text, name, handle = null) {
   src.value = text; nameEl.value = name; fitName(); setFile(handle); evaluate();
@@ -699,14 +699,13 @@ async function openFile() {
   try {
     [handle] = await showOpenFilePicker({types: [{description: "LENS worksheet", accept: {"text/plain": [".lens", ".cs", ".txt"]}}]});
   } catch (e) { return; }   // cancelled
-  const f = await handle.getFile();
-  // A .cs or .txt file is only read; saving it writes a new .lens file instead of overwriting it.
-  load(await f.text(), f.name.replace(/\.\w+$/, ""), /\.lens$/i.test(f.name) ? handle : null);
+  const f = await handle.getFile(), o = SaveFile.opened(f.name, handle);
+  load(await f.text(), o.name, o.handle);
 }
 $("#open").onclick = openFile;
 $("#file").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  load(await f.text(), f.name.replace(/\.\w+$/, ""));
+  load(await f.text(), SaveFile.opened(f.name).name);
   e.target.value = "";
 };
 document.addEventListener("keydown", (ev) => {

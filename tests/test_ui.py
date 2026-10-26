@@ -242,7 +242,8 @@ FAKE_FS = """() => {
 
 
 def test_save_writes_back_to_the_opened_file(page):
-    """#39: after Open, Save overwrites that file; Save As asks once, then Save reuses the new file."""
+    """#39, end to end: Open, Save writes back through the File System Access API, Save As
+    renames the sheet. Which file a save goes to is tested in test_savefile.js."""
     page.evaluate(FAKE_FS)
     page.click("#open")
     page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
@@ -256,14 +257,10 @@ def test_save_writes_back_to_the_opened_file(page):
     page.wait_for_function("window.written.length === 2")
     assert page.evaluate("[window.picks, window.written[1][0]]") == [1, "copy.lens"]
     assert page.input_value("#name") == "copy"
-    page.click("#save")
-    page.wait_for_function("window.written.length === 3")
-    assert page.evaluate("[window.picks, window.written[2][0]]") == [1, "copy.lens"]
-    # Renaming the sheet means a new file, so Save asks again.
+    assert page.get_attribute("#save", "title") == "Save to copy.lens (Ctrl+S)"
+    # Renaming the sheet means a new file.
     page.fill("#name", "other")
-    page.click("#save")
-    page.wait_for_function("window.written.length === 4")
-    assert page.evaluate("window.picks") == 2
+    assert page.get_attribute("#save", "title") == "Save the worksheet (Ctrl+S)"
 
 
 def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
