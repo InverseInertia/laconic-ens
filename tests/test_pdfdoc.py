@@ -95,11 +95,13 @@ def test_cli_without_a_browser(monkeypatch, tmp_path):
 
 
 def test_layout_in_chromium(tmp_path):
-    """The real layout: every formula fits the column, a very wide one is wrapped, and the
-    document prints to several pages."""
+    """The real layout: every formula fits the printed column, whatever the window's width (the
+    fallback prints from a full-size tab), a very wide one is wrapped, and the document prints
+    to several pages."""
     playwright = pytest.importorskip("playwright.sync_api")
     wide = "w = " + " + ".join(f"a * b / c * {i}" for i in range(1, 16))
-    text = "a = 1.5'm\nb = 2.25'm\nc = 3'm\n" + wide + "\n" + "\n".join(f"x_{i} = {i} * a^2 / b" for i in range(40))
+    medium = "v = " + " + ".join(f"a * b / c * {i}" for i in range(1, 6))   # wider than the column, not the window
+    text = "a = 1.5'm\nb = 2.25'm\nc = 3'm\n" + wide + "\n" + medium + "\n" + "\n".join(f"x_{i} = {i} * a^2 / b" for i in range(40))
     path = tmp_path / "s.html"
     path.write_text(doc(text, title="s"), encoding="utf-8")
     with playwright.sync_playwright() as p:
@@ -107,15 +109,17 @@ def test_layout_in_chromium(tmp_path):
             browser = p.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH") or None)
         except Exception as e:
             pytest.skip(f"no Chromium: {e}")
-        pg = browser.new_page()
-        pg.emulate_media(media="print")
+        pg = browser.new_page(viewport={"width": 1600, "height": 900})
         pg.goto(path.as_uri())
         pg.wait_for_function("document.querySelectorAll('.math .katex').length > 40")
+        column = pg.evaluate("document.querySelector('.math').getBoundingClientRect().width")
+        assert column < 178 / 25.4 * 96   # the printed column (178 mm), not the window
         pg.evaluate("document.fonts.ready")
         assert pg.evaluate("document.querySelectorAll('.math.wrapped').length") == 1
         over = pg.evaluate("""[...document.querySelectorAll('.math')].filter(el =>
             [...el.children].some(k => k.getBoundingClientRect().width > el.getBoundingClientRect().width + 1)).length""")
         assert over == 0
+        assert pg.evaluate("[...document.querySelectorAll('.math .katex-display')].some(k => k.style.zoom)")
         out = pg.pdf()
         browser.close()
     assert out.startswith(b"%PDF") and len(re.findall(rb"/Type\s*/Page[^s]", out)) > 1
