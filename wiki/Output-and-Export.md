@@ -17,7 +17,7 @@ Each calculation line shows up to three stages: the symbolic form, the form with
 
 ## Typeset and LaTeX views
 
-The **Typeset / LaTeX** switch in the header chooses how results are shown. Typeset renders the math. LaTeX shows the source for each line in the export flavor (siunitx units), with a Copy button per line.
+The **Typeset / LaTeX** switch in the header chooses how results are shown. Typeset renders the math, with global variables colored and underlined unless **Mark globals** is off (see [Worksheet Syntax](Worksheet-Syntax#global-variables)). LaTeX shows the source for each line in the export flavor (siunitx units), with a Copy button per line.
 
 The wrapper menu next to the switch chooses how a calculation is wrapped:
 

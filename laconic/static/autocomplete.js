@@ -236,11 +236,11 @@
       const values = (extras && extras.values) || {};
       for (const name of vars.keys()) {
         if (ctx.tilde && name[0] !== '~') continue;
-        add({ kind: 'variable', insert: name.replace(/^~/, ''), label: name, detail: values[name] || 'variable' }, 0, name.replace(/^~/, ''), '');
+        add({ kind: 'variable', insert: name, label: name, detail: values[name] || 'variable' }, 0, name.replace(/^~/, ''), '');
       }
       for (const [name, f] of funcs) {
         if (ctx.tilde && name[0] !== '~') continue;
-        add({ kind: 'function', insert: name.replace(/^~/, ''), label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name.replace(/^~/, ''), '');
+        add({ kind: 'function', insert: name, label: name + '(' + f.params.join(', ') + ')', detail: 'your function', call: true }, 1, name.replace(/^~/, ''), '');
       }
       for (const [name, sig] of vocab.functions || []) {
         if (ctx.tilde || funcs.has(name)) continue;

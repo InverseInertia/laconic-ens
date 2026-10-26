@@ -60,6 +60,21 @@ def _names(text):
     return _tokens(text, "name")
 
 
+_PARAMS = re.compile(rf"\s*{NAME}\s*\(([^)]*)\)\s*=(?!=)")
+
+
+def global_spans(text):
+    """For each line, a function from the names global there to the [column, length] of
+    each use of one on that line, its ~ included. The editor marks these. A function's
+    parameters are local to its line, so they are never marked."""
+    for line, spans in _scan(text):
+        m = _PARAMS.match(line)
+        local = {p.strip() for p in m.group(1).split(",")} if m else set()
+        toks = [(t.start(), t.group()) for a, b in spans for t in _TOKEN.finditer(line, a, b)
+                if t.lastgroup == "name" and t.group() not in local]
+        yield lambda names, toks=toks: [[c, len(t)] for c, t in toks if t.lstrip("~") in names]
+
+
 def _defined_in_sheet(text, name):
     return any(re.match(rf"\s*'{re.escape(name)}\s*=", line[a:b])
                for line, spans in _scan(text) for a, b in spans)

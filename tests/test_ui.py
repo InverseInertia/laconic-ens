@@ -235,3 +235,22 @@ def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
     assert box["width"] > short * 2
     fits = page.evaluate("(() => { const n = document.querySelector('#name'); return n.scrollWidth <= n.clientWidth; })()")
     assert fits
+
+
+def test_globals_are_marked_and_get_their_tilde(page):
+    reset(page, "~g = 5")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_function("last.length === 1 && last[0].gdef === 'g'")
+    page.keyboard.type("\ng = 12")
+    assert value(page) == "~g = 5\n~g = 12"      # the ~ is added when the name ends
+    assert page.get_attribute("#out [data-global]", "title") == "Global variable ~g, defined on line 1"
+    page.wait_for_selector("#srcMarks mark >> nth=1")
+    reset(page, "~g = 5\ng = 12")                # a deleted ~ shows a warning
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector(".row .g-warn")
+    assert "Changes the global ~g" in page.inner_text(".row .g-warn")
+    page.uncheck("#markGlobals")
+    assert page.inner_text("#globalsChip") == "~ 1 global not marked"
+    assert page.evaluate("getComputedStyle(document.querySelector('#out [data-global]')).borderBottomStyle") == "none"
+    page.click("#globalsChip")
+    assert page.is_checked("#markGlobals") and page.is_hidden("#globalsChip")

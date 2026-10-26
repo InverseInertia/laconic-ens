@@ -310,4 +310,23 @@ eq(E.charAction('-', 'r = props("D", "T", T, "P", p, "1', 33, 33, {}), null, 'a 
 eq(E.charAction('.', 'r = props("D", "T", T, "P", p, "INCOMP::MEG[0', 44, 44, {}), null, 'a dot stays a dot');
 eq(E.charAction('-', 'r = props("D", "T", T', 21, 21, {}) !== null, true, 'outside the quotes it is math again');
 
+// A global typed without its ~ gets one when the name is finished
+const G = { globals: [['g', 1], ['f', 2], ['F!', 1]] };
+eq(sim('~g = 5\nx = g|', ' ', G), '~g = 5\nx = ~g |', 'a space finishes the name');
+eq(sim('~g = 5\nx = g|', '*2', G), '~g = 5\nx = ~g * 2|', 'an operator does too, with its usual spacing');
+eq(sim('~g = 5\ng|', ' = 3', G), '~g = 5\n~g = 3|', 'assigning a global');
+eq(sim('~g = 5\nx = 2*g|', ['Enter'], G), '~g = 5\nx = 2*~g\n|', 'Enter finishes the name');
+eq(sim('~g = 5\n~f(x) = x\ny = f|', '(2)', G), '~g = 5\n~f(x) = x\ny = ~f(2)|', 'a global function');
+eq(sim('~F! = 1\nx = F!|', ' ', G), '~F! = 1\nx = ~F! |', 'a name with a mark');
+eq(sim('~g = 5\nx = gr|', ' ', G), '~g = 5\nx = gr |', 'a longer name is not the global');
+eq(sim('~g = 5\nx = g|', '.', G), '~g = 5\nx = g_|', 'a subscript continues the name');
+eq(sim('~g = 5\nx = ~g|', ' ', G), '~g = 5\nx = ~g |', 'one ~ is enough');
+eq(sim("~g = 5\nx = 2'g|", ' ', G), "~g = 5\nx = 2'g |", 'a unit is not a name');
+eq(sim('~g = 5\nh(g|', ')', G), '~g = 5\nh(g)|', 'a function parameter is local');
+eq(sim('g|\n~g = 5', ' ', G), 'g |\n~g = 5', 'only below the line that makes it global');
+eq(sim('# about g|', ' ', G), '# about g |', 'comments are left alone');
+eq(sim('~g = 5\nx = g|', ' ', { ...G, enabled: false }), '~g = 5\nx = g |', 'off with the Math keys');
+const r = E.charAction(' ', '~g = 5\nx = g', 12, 12, G);
+eq(`${r.from} ${r.to} ${r.insert}`, '11 12 ~g ', 'one edit, so one Ctrl+Z takes it back');
+
 console.log(`${n} editing checks passed`);

@@ -18,6 +18,7 @@
     --ink: #348fff;
     --rule: #1f6fc4;
     --err: #ff8f00;
+    --global: #7ee0c3;
     --hit: rgba(194, 222, 255, .08);
     --hdr: 50px;
     --row: 28px;
@@ -95,6 +96,22 @@
   }
   #src.wrapped { white-space: pre-wrap; overflow-wrap: break-word; overflow-x: hidden; }
   #src:focus { outline: none; }
+  /* Global names in the editor are marked on a copy of the text behind the transparent textarea. */
+  #srcBox { position: relative; min-width: 0; min-height: 0; display: grid; }
+  #srcBox > #src { grid-area: 1 / 1; position: relative; min-width: 0; min-height: 0; }
+  #srcMarks {
+    grid-area: 1 / 1; overflow: hidden; color: transparent; user-select: none;
+    font: 400 14px/var(--row) var(--mono); padding: 12px 16px; white-space: pre; tab-size: 2;
+  }
+  #srcMarks.wrapped { white-space: pre-wrap; overflow-wrap: break-word; }
+  #srcMarks mark { color: transparent; background: color-mix(in srgb, var(--global) 20%, transparent); border-bottom: 1.5px dotted var(--global); }
+  #out [data-global] { color: var(--global); border-bottom: 1.5px dotted var(--global); cursor: help; }
+  body.globals-off #out [data-global] { color: inherit; border-bottom: 0; cursor: inherit; }
+  .row .g-warn { font: 400 12.5px/1.35 var(--sans); color: var(--err); padding: 0 0 3px; }
+  /* Kept at the top of the results while scrolling; render() puts it back after replacing the rows. */
+  #out > #globalsChip { position: sticky; top: 0; z-index: 2; display: block; margin: 0 0 4px auto; padding: 1px 8px; font: 400 12px var(--sans); color: var(--text-soft); background: var(--paper); border: 1px dashed var(--rule); }
+  #out > #globalsChip[hidden] { display: none; }
+  #out > #globalsChip:hover { color: var(--paper); background: var(--ink); border-style: solid; }
   #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; }
   .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; min-height: var(--row); cursor: text; }
   .row .no { font: 400 12px/var(--row) var(--mono); color: var(--text-soft); text-align: right; padding-right: 12px; user-select: none; }
@@ -240,7 +257,7 @@
   @media (max-width: 760px) {
     main { --split: 40%; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(80px, 1fr) 8px minmax(80px, var(--split)); }
     #out { order: -1; padding-right: 12px; }
-    #src { order: 2; }
+    #srcBox { order: 2; }
     #split { cursor: row-resize; }
     #split::before { inset: 3px 0; }
     #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 2px 0; }
@@ -270,6 +287,7 @@
     <option value="align">\begin{align*}</option>
   </select>
   <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
+  <label title="Color and underline global variables in the results"><input type="checkbox" id="markGlobals" checked> Mark globals</label>
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
   <button id="renameBtn" data-icon="rename" class="sq" title="Rename a variable, function or custom unit everywhere (F2)" aria-label="Rename"></button>
   <button id="settingsBtn" data-icon="settings" class="sq" title="Settings" aria-label="Settings"></button>
@@ -279,9 +297,13 @@
   <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
 </header>
 <main>
-  <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source" aria-autocomplete="list" aria-controls="ac"></textarea>
+  <div id="srcBox">
+    <div id="srcMarks" aria-hidden="true"></div>
+    <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source" aria-autocomplete="list" aria-controls="ac"></textarea>
+  </div>
   <div id="split" role="separator" aria-orientation="vertical" aria-label="Resize editor and output" aria-valuemin="15" aria-valuemax="85" tabindex="0" title="Drag to resize (double-click to reset)"></div>
   <div id="out" aria-live="polite"></div>
+  <button id="globalsChip" title="Global variables are not marked in the results. Click to mark them again" hidden></button>
 </main>
 <div id="ac" role="listbox" aria-label="Suggestions" hidden></div>
 
@@ -305,7 +327,7 @@
       <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd><br><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Type a literal <code>/</code> or <code>\</code> with no fraction or radical slot</td></tr>
       <tr><td><kbd>=</kbd> <kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd></td><td>Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press</td></tr>
       <tr><td><kbd>`</kbd> <kbd>!</kbd> <kbd>@</kbd></td><td>After a variable name: <code>x`</code> puts a dot over it (<code>x``</code> two dots), <code>F!</code> an arrow, <code>a@</code> a hat. <code>F_x!</code> marks the F and keeps the subscript. Each marked name is a separate variable</td></tr>
-      <tr><td><kbd>~</kbd></td><td>A <code>~</code> on a variable or function definition makes the name global, and every later use of it (written without the <code>~</code>) is the global one. Globals survive <code>!clear</code> / <code>!clearf</code></td></tr>
+      <tr><td><kbd>~</kbd></td><td>A <code>~</code> on a variable or function definition makes the name global. Typing the name again on a later line adds its <code>~</code> as soon as the name is finished, so globals always read <code>~g</code>. Globals are tinted in the editor and colored and underlined in the results (the Mark globals box turns that off); hover one to see where it was defined. An assignment written without the <code>~</code> still changes the global, with a warning. Globals survive <code>!clear</code> / <code>!clearf</code></td></tr>
       <tr><td><kbd>!clearf</kbd></td><td>On its own line, removes every non-global function above it</td></tr>
       <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
       <tr><td><kbd>!noassume</kbd> <kbd>!assume</kbd></td><td>Below <code>!noassume</code>, results keep the units that come out of the arithmetic (<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. <code>!assume</code> returns to SI</td></tr>
@@ -528,9 +550,13 @@ const post = (path, extra = {}) => fetch(path, {
   body: JSON.stringify({text: src.value, title: nameEl.value, view, wrap, ...extra}),
 });
 
+// The server tags global names with \htmlData{global=name}; that is the only HTML command it emits.
+const KATEX_OPTS = {displayMode: true, throwOnError: false,
+  trust: (c) => c.command === "\\htmlData", strict: (code) => (code === "htmlExtension" ? "ignore" : "warn")};
 function typeset(el, tex) {
-  if (window.katex) katex.render(tex, el, {displayMode: true, throwOnError: false});
+  if (window.katex) katex.render(tex, el, KATEX_OPTS);
   else el.textContent = tex;  // KaTeX not loaded yet; render() runs again on load
+  for (const g of el.querySelectorAll("[data-global]")) g.title = globalTitle(g.dataset.global);
 }
 
 function render(rows) {
@@ -555,6 +581,10 @@ function render(rows) {
       body.append(s, r.error);
     } else if (r.kind === "plot") body.append(plotBody(r));
     else if (r.latex) typeset(body, r.latex);
+    if (r.warning) {
+      const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + r.warning;
+      body.append(w);
+    }
     row.append(no, body);
     if (r.stale) {
       const m = document.createElement("span"); m.className = "stale-mark"; m.textContent = "\u26a0";
@@ -572,6 +602,7 @@ function render(rows) {
   }));
   markActive();
   Solvers.after(rows);
+  paintGlobals();
 }
 
 async function evaluate() {
@@ -602,6 +633,7 @@ function focusLine(n) {
 src.addEventListener("input", () => {
   store.set("text", src.value);
   clearTimeout(timer); timer = setTimeout(evaluate, 120);
+  paintSrcMarks();
   if (!applying) acUpdate();
 });
 for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
@@ -727,6 +759,65 @@ function plotBody(r) {
   return box;
 }
 
+// ---- global variables ----------------------------------------------------
+// Globals are colored and underlined in the results (Mark globals turns that off, and a chip
+// then says how many are hidden) and always tinted in the editor. Hovering one names it.
+const markGlobals = $("#markGlobals"), srcMarks = $("#srcMarks"), chip = $("#globalsChip");
+markGlobals.checked = store.get("markGlobals", true);
+markGlobals.onchange = () => { store.set("markGlobals", markGlobals.checked); render(last); };
+chip.onclick = () => { markGlobals.checked = true; markGlobals.onchange(); };
+// name -> {line, kind} for each global the last evaluation found, from the line that made it global.
+function globalDefs() {
+  const defs = new Map();
+  for (const r of last) if (r.gdef && !defs.has(r.gdef)) defs.set(r.gdef, {line: r.n, kind: r.kind === "funcdef" ? "function" : "variable"});
+  return defs;
+}
+function globalTitle(name) {
+  const d = globalDefs().get(name);
+  return d ? `Global ${d.kind} ~${name}, defined on line ${d.line}` : `Global ~${name}`;
+}
+function paintGlobals() {
+  const n = globalDefs().size, off = !markGlobals.checked;
+  document.body.classList.toggle("globals-off", off);
+  out.prepend(chip);
+  chip.hidden = !(off && n);
+  chip.textContent = `~ ${n} global${n === 1 ? "" : "s"} not marked`;
+  if (off) for (const g of out.querySelectorAll("[data-global]")) g.removeAttribute("title");
+  paintSrcMarks();
+}
+// The marks come from the last evaluation, so a line edited since then is left unmarked until the next one.
+function paintSrcMarks() {
+  const rows = new Map(last.map((r) => [r.n, r]));
+  const lines = src.value.split("\n").map((line, i) => {
+    const r = rows.get(i + 1);
+    if (!r || r.source !== line || !r.gspans || !r.gspans.length) return document.createTextNode(line + "\n");
+    const f = document.createDocumentFragment();
+    let pos = 0;
+    for (const [c, len] of r.gspans) {
+      f.append(line.slice(pos, c));
+      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len); m.dataset.global = line.slice(c, c + len).replace(/^~/, "");
+      f.append(m); pos = c + len;
+    }
+    f.append(line.slice(pos) + "\n");
+    return f;
+  });
+  srcMarks.replaceChildren(...lines, " ");
+  srcMarks.classList.toggle("wrapped", wrapped);
+  syncSrcMarks();
+}
+function syncSrcMarks() {
+  srcMarks.style.paddingRight = `${16 + src.offsetWidth - src.clientWidth}px`;  // room for the textarea's scrollbar
+  srcMarks.scrollTop = src.scrollTop; srcMarks.scrollLeft = src.scrollLeft;
+}
+src.addEventListener("scroll", syncSrcMarks);
+new ResizeObserver(syncSrcMarks).observe(src);
+// The marks sit under the textarea, so the pointer never reaches them; look underneath it instead.
+src.addEventListener("mousemove", (ev) => {
+  const m = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.parentElement === srcMarks && el.tagName === "MARK");
+  const title = m ? globalTitle(m.dataset.global) : "";
+  if (src.title !== title) src.title = title;
+});
+
 // ---- output view ---------------------------------------------------------
 async function copyText(text, msg) {
   try { await navigator.clipboard.writeText(text); }
@@ -760,7 +851,7 @@ function say(msg) {
   const el = $("#status"); el.textContent = msg;
   clearTimeout(statusTimer); statusTimer = setTimeout(() => (el.textContent = ""), 2500);
 }
-const ctx = () => ({ enabled: mathKeys.checked, greek });
+const ctx = () => ({ enabled: mathKeys.checked, greek, globals: [...globalDefs()].map(([name, d]) => [name, d.line]) });
 
 // The standard popup for a major error that needs the user's attention. It stays up until one of
 // its buttons is pressed (Escape is ignored); the promise resolves with the label that was pressed.
@@ -995,6 +1086,7 @@ function setWrapped(on, save = true) {
   src.classList.toggle("wrapped", on);
   if (save) { store.set("wrapText", on); say(on ? "Text wrapping on" : "Text wrapping off"); }
   if (on) src.scrollLeft = 0;
+  paintSrcMarks();
 }
 setWrapped(store.get("wrapText", false) === true, false);
 
@@ -1062,12 +1154,12 @@ const FONTS_MONO = [
   ["Courier", '"Courier New", Courier, monospace'],
   ["OCR-A", '"OCR-A", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'],
 ];
-const COLOR_FIELDS = [["paper", "Paper"], ["text", "Text"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"]];
+const COLOR_FIELDS = [["paper", "Paper"], ["text", "Text"], ["ink", "Ink"], ["grid", "Grid lines"], ["rule", "Rules"], ["err", "Errors"], ["global", "Globals"]];
 const PRESETS = {
-  "LENS blueprint": {paper: "#00386b", text: "#c2deff", ink: "#348fff", grid: "#0a4d88", rule: "#1f6fc4", err: "#ff8f00"},
-  "Engineering paper": {paper: "#e6eedf", text: "#17253d", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b"},
-  "White paper": {paper: "#fbfbf8", text: "#1b1b1b", ink: "#1b1b1b", grid: "#dcdcd4", rule: "#b5b5aa", err: "#b3261e"},
-  "Dark": {paper: "#1e2127", text: "#d9dde3", ink: "#d9dde3", grid: "#2c313a", rule: "#444b57", err: "#ff7b72"},
+  "LENS blueprint": {paper: "#00386b", text: "#c2deff", ink: "#348fff", grid: "#0a4d88", rule: "#1f6fc4", err: "#ff8f00", global: "#7ee0c3"},
+  "Engineering paper": {paper: "#e6eedf", text: "#17253d", ink: "#17253d", grid: "#c3d2bd", rule: "#9db39a", err: "#a8231b", global: "#1d6b55"},
+  "White paper": {paper: "#fbfbf8", text: "#1b1b1b", ink: "#1b1b1b", grid: "#dcdcd4", rule: "#b5b5aa", err: "#b3261e", global: "#0f6e6a"},
+  "Dark": {paper: "#1e2127", text: "#d9dde3", ink: "#d9dde3", grid: "#2c313a", rule: "#444b57", err: "#ff7b72", global: "#6fd3b8"},
 };
 function contrast(a, b) {  // WCAG contrast ratio of two #rrggbb colors
   const lum = (h) => {
