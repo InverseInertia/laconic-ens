@@ -55,6 +55,11 @@
   header button.sq { width: 28px; height: 28px; padding: 0; }
   header button.help { font-weight: 600; }
   header button.wide { width: auto; padding: 3px 10px; }
+  .exportMenu { position: relative; }
+  #exportList { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column;
+    background: var(--paper-deep); border: 1px solid var(--ink); }
+  #exportList[hidden] { display: none; }
+  #exportList button { width: auto; border: 0; padding: 6px 12px; text-align: left; }
   .ico { width: 18px; height: 18px; display: block; margin: 0 auto; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
   .texLogo .katex { font-size: 1em; }
   button {
@@ -294,7 +299,13 @@
   <button id="open" data-icon="open" class="sq" title="Open a worksheet (Ctrl+O)" aria-label="Open"></button>
   <button id="save" data-icon="save" class="sq" title="Save the worksheet (Ctrl+S)" aria-label="Save"></button>
   <button id="saveAs" data-icon="saveas" class="sq" title="Save the worksheet as a new file (Ctrl+Shift+S)" aria-label="Save As"></button>
-  <button id="export" class="wide" title="Export a complete LaTeX document">Export <span class="texLogo">LaTeX</span></button>
+  <div class="exportMenu">
+    <button id="exportBtn" class="wide" aria-haspopup="menu" aria-expanded="false" aria-controls="exportList" title="Export the sheet">Export &#9662;</button>
+    <div id="exportList" role="menu" hidden>
+      <button id="export" role="menuitem" title="A complete LaTeX document">LaTeX document (.tex)</button>
+      <button id="exportMd" role="menuitem" title="A Markdown note in Obsidian's style: $$ math, plots as images">Markdown note (.md)</button>
+    </div>
+  </div>
   <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
 </header>
 <main>
@@ -396,7 +407,8 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
     <h3>Output and export <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Output-and-Export" target="_blank" rel="noopener">Output and Export</a></h3>
     <ul>
       <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped.</li>
-      <li><strong>Export LaTeX</strong> writes a complete <code>.tex</code> document (siunitx v3 or newer; <code>pgfplots</code> when a sheet has plots).</li>
+      <li><strong>Export &rarr; LaTeX document</strong> writes a complete <code>.tex</code> document (siunitx v3 or newer; <code>pgfplots</code> when a sheet has plots).</li>
+      <li><strong>Export &rarr; Markdown note</strong> writes a <code>.md</code> note for Obsidian: headings, comments as text, each calculation as a <code>$$</code> block and plots as images. Commands such as <code>!clear</code> are left out.</li>
       <li><code>!sigfigs n</code>, <code>!decplace n</code> and <code>!short</code> change how results are printed, not their values.</li>
     </ul>
 
@@ -642,6 +654,8 @@ document.fonts.ready.then(fitName);
 // The file the sheet was opened from or last saved to, so Save writes back to it. Only browsers
 // with the File System Access API (Chromium) give one; elsewhere every save is a download.
 // Which file a save goes to is decided in savefile.js; this is its adapter onto the browser.
+// A sheet the program was started with (a double-clicked .lens file) has a stand-in handle,
+// {name, server: true}, that the server writes through.
 let fileHandle = null;
 const LENS_TYPES = [{description: "LENS worksheet", accept: {"text/plain": [".lens"]}}];
 function setFile(handle) {
@@ -654,10 +668,18 @@ async function save(as) {
     title: nameEl.value,
     current: fileHandle,
     source: src.value,
-    permission: (h) => h.requestPermission({mode: "readwrite"}),
+    permission: (h) => (h.server ? "granted" : h.requestPermission({mode: "readwrite"})),
     pick: window.showSaveFilePicker && ((suggestedName) => showSaveFilePicker({suggestedName, types: LENS_TYPES})),
     render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
-    write: async (h, text) => { const w = await h.createWritable(); await w.write(text); await w.close(); },
+    write: async (h, text) => {
+      if (h.server) {
+        const r = await (await fetch("/api/opened/save", {method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({text})})).json();
+        if (!r.ok) throw new Error(r.error);
+        return;
+      }
+      const w = await h.createWritable(); await w.write(text); await w.close();
+    },
     download: (name, text) => download(name, text, "text/plain"),
   });
   if (r.kind === "failed") say(r.message);
@@ -673,7 +695,18 @@ $("#save").onclick = () => save(false);
 $("#saveAs").onclick = () => save(true);
 // Renaming the sheet means a new file: the next Save asks where, rather than overwriting the old one.
 nameEl.addEventListener("input", () => setFile(null));
-$("#export").onclick = async () => download(stem() + ".tex", await (await post("/api/export")).text(), "application/x-tex");
+// Export menu: one header button, a list of formats under it.
+const exportList = $("#exportList");
+function showExports(open) { exportList.hidden = !open; $("#exportBtn").setAttribute("aria-expanded", String(open)); }
+$("#exportBtn").onclick = () => showExports(exportList.hidden);
+document.addEventListener("click", (ev) => { if (!ev.target.closest(".exportMenu")) showExports(false); });
+exportList.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { showExports(false); $("#exportBtn").focus(); } });
+async function exportAs(path, ext, type) {
+  showExports(false);
+  download(stem() + ext, await (await post(path)).text(), type);
+}
+$("#export").onclick = () => exportAs("/api/export", ".tex", "application/x-tex");
+$("#exportMd").onclick = () => exportAs("/api/export/md", ".md", "text/markdown");
 async function openFile() {
   if (!window.showOpenFilePicker) return $("#file").click();
   let handle;
@@ -1423,10 +1456,28 @@ for (const el of document.querySelectorAll("[data-icon]")) {
   }).catch(() => {});
 }
 
+// A sheet the program was started with replaces the stored text, once: reloading the page keeps
+// the edits made since (they are in the stored text) and still saves to that file.
+async function openStartFile() {
+  let o;
+  try { o = await (await fetch("/api/opened")).json(); } catch { return false; }
+  if (!o.file) return false;
+  if (o.error) { say(o.error); return false; }
+  const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true} : null);
+  let seen = null;
+  try { seen = sessionStorage.getItem("lens:opened"); sessionStorage.setItem("lens:opened", o.path); } catch {}
+  if (seen === o.path && store.get("text", null) !== null) src.value = store.get("text", null);
+  else { src.value = o.text; store.set("text", o.text); }
+  nameEl.value = f.name; fitName(); setFile(f.handle);
+  return true;
+}
+
 (async () => {
   await Promise.all([loadSettings(), loadVocab()]);
-  const text = store.get("text", null);
-  src.value = text ?? await (await fetch("/static/example.lens")).text();
+  if (!(await openStartFile())) {
+    const text = store.get("text", null);
+    src.value = text ?? await (await fetch("/static/example.lens")).text();
+  }
   wrap = store.get("wrap", "inline");
   $("#wrap").value = wrap;
   setView(store.get("view", "typeset"), false);

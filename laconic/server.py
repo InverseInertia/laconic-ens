@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import document, evaluate as evaluate_sheet, snippet
+from . import document, evaluate as evaluate_sheet, markdown, snippet
 from .sheet import block_at, solver_blocks
 from . import settings
 from .blockedit import to_json
@@ -26,6 +26,7 @@ app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
 HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
+OPENED = None   # Path of the worksheet the program was started with (`lens --window FILE`), set by __main__
 
 
 class Client(BaseModel):
@@ -74,6 +75,10 @@ class SolveEditBody(BaseModel):
     autorun: bool
 
 
+class TextBody(BaseModel):
+    text: str
+
+
 class GreekBody(BaseModel):
     greek: dict[str, str] | None = None  # None: back to the built-in table
 
@@ -116,6 +121,12 @@ def evaluate(sheet: Sheet):
 def export(sheet: Sheet):
     ws = _run(sheet, True)
     return document(ws.results, title=sheet.title, declarations=ws.declarations)
+
+
+@app.post("/api/export/md", response_class=PlainTextResponse)
+def export_md(sheet: Sheet):
+    """The sheet as a Markdown note in Obsidian's style (see markdown.py)."""
+    return markdown(_run(sheet, False).results, title=sheet.title)
 
 
 @app.post("/api/save", response_class=PlainTextResponse)
@@ -228,6 +239,34 @@ def get_settings():
 @app.put("/api/welcomed")
 def put_welcomed():
     settings.save_welcomed()
+    return {"ok": True}
+
+
+@app.get("/api/opened")
+def get_opened():
+    """The worksheet the program was started with, or {} when there is none. `writable` is
+    False for a .cs or .txt file, which is read but never overwritten (as in savefile.js)."""
+    if OPENED is None:
+        return {}
+    try:
+        text = OPENED.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        return {"file": OPENED.name, "error": f"Could not open {OPENED.name}: {e}"}
+    return {"file": OPENED.name, "path": str(OPENED), "text": text,
+            "writable": OPENED.suffix.lower() == ".lens"}
+
+
+@app.post("/api/opened/save")
+def save_opened(body: TextBody):
+    """Writes the worksheet back to the file the program was started with: the only file on
+    disk the page can write to by name."""
+    if OPENED is None or OPENED.suffix.lower() != ".lens":
+        raise HTTPException(409, "no .lens file to save to")
+    try:
+        with open(OPENED, "w", encoding="utf-8", newline="") as f:   # keep the text's line endings
+            f.write(body.text)
+    except OSError as e:
+        return {"ok": False, "error": f"Could not save {OPENED.name}: {e}"}
     return {"ok": True}
 
 

@@ -34,8 +34,10 @@ Headings and comments become `\subsection*{}` and plain text, and commands such 
 | Action | Result |
 |---|---|
 | Save | the `.lens` source, with needed global unit definitions appended (see [Units](Units)) |
-| Export LaTeX | a complete `.tex` document with `align*` blocks, `\DeclareSIUnit` lines for custom units and for built-in units siunitx lacks (`ft`, `psi`, `g0`), and `pgfplots` when a sheet has plots |
+| Export → LaTeX document | a complete `.tex` document with `align*` blocks, `\DeclareSIUnit` lines for custom units and for built-in units siunitx lacks (`ft`, `psi`, `g0`), and `pgfplots` when a sheet has plots |
+| Export → Markdown note | a `.md` note for Obsidian: headings stay headings, comments become plain text, each calculation becomes a `$$` block (one row per stage, aligned at the equals signs), plots are embedded as SVG images and errors as callouts. Commands such as `!clear` and plot or solver options are left out |
 | Plot SVG / PNG | the picture exactly as drawn (see [Plots](Plots)) |
 | `lens file.lens --tex out.tex` | the same `.tex` from the command line |
+| `lens file.lens --md out.md` | the same Markdown note from the command line |
 
-The export needs siunitx v3 or newer for `\qty` and `\unit`.
+The LaTeX export needs siunitx v3 or newer for `\qty` and `\unit`. The Markdown export uses the live view's math (`\mathrm{kN}`), which Obsidian's MathJax renders without extra packages.

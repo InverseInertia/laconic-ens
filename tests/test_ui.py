@@ -344,3 +344,45 @@ def test_each_kind_of_line_shows_its_row(page):
     assert page.locator(".row.snip .solver-tools").count() == 1
     assert page.inner_text(".row[data-line='3'] pre").startswith("x =")
     page.click("#viewTypeset")
+
+
+def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, monkeypatch):
+    """#49: `lens --window sheet.lens` (a double-clicked file) opens that sheet, and Save writes it."""
+    from laconic import server
+    sheet = tmp_path / "beam.lens"
+    sheet.write_text("x = 2\n", encoding="utf-8")
+    monkeypatch.setattr(server, "OPENED", sheet)
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.startsWith('x = 2')")
+    assert page.input_value("#name") == "beam"
+    assert page.get_attribute("#save", "title") == "Save to beam.lens (Ctrl+S)"
+    reset(page, "x = 3\n")
+    page.keyboard.press("Control+s")
+    for _ in range(50):
+        if sheet.read_bytes() != b"x = 2\n":
+            break
+        page.wait_for_timeout(100)
+    assert sheet.read_bytes() == b"x = 3\n"
+    # A reload keeps the edits rather than reading the file again.
+    reset(page, "x = 4")
+    page.evaluate("localStorage.setItem('lens:text', JSON.stringify('x = 4'))")
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    assert page.input_value("#src") == "x = 4"
+    assert page.get_attribute("#save", "title") == "Save to beam.lens (Ctrl+S)"
+
+
+def test_export_menu_downloads_latex_and_markdown(page):
+    reset(page, "## Loads\nF = 2'kN")
+    page.fill("#name", "loads")
+    assert page.is_hidden("#exportList")
+    for item, name, part in (("#export", "loads.tex", "\\documentclass"), ("#exportMd", "loads.md", "## Loads")):
+        page.click("#exportBtn")
+        with page.expect_download() as d:
+            page.click(item)
+        assert d.value.suggested_filename == name
+        assert part in open(d.value.path(), encoding="utf-8").read()
+        assert page.is_hidden("#exportList")
+    page.click("#exportBtn")
+    page.click("#out")
+    assert page.is_hidden("#exportList")

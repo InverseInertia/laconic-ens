@@ -1,8 +1,10 @@
 """Entry point for the frozen (PyInstaller) build.
 
 Double-clicking the executable starts the server on a free port and opens the
-UI. Any command-line arguments are passed straight to the normal CLI, so the
-same binary also does `lens sheet.lens --tex out.tex`."""
+UI. `lens --window sheet.lens` does the same with that sheet open, saving back to
+it: that is what a double-clicked .lens file runs (see install-linux.sh and
+laconic/fileassoc.py). Any other arguments are passed straight to the normal CLI,
+so the same binary also does `lens sheet.lens --tex out.tex`."""
 import os
 import socket
 import sys
@@ -40,7 +42,8 @@ if __name__ == "__main__":
         sys.stdout = sys.stderr = open(os.devnull, "w")
     from laconic.__main__ import main
 
-    if len(sys.argv) == 1:
-        sys.argv += ["--serve", "--app", "--port", str(_free_port())]
+    if sys.argv[1:2] in ([], ["--window"]):
+        sheet = sys.argv[2:3]   # the sheet to open, if one was given
+        sys.argv[1:] = ["--serve", "--app", "--port", str(_free_port())] + sheet
         threading.Thread(target=_quit_when_closed, daemon=True).start()
     main()

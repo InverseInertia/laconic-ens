@@ -118,7 +118,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 ## Front end
 
-- **File handle**: the file a sheet was opened from or last saved to, as given by the browser's File System Access API. Only a `.lens` file gets one; a `.cs` or `.txt` file is read but never overwritten. Renaming the sheet drops it. See `laconic/static/savefile.js`.
+- **File handle**: the file a sheet was opened from or last saved to, as given by the browser's File System Access API. Only a `.lens` file gets one; a `.cs` or `.txt` file is read but never overwritten. Renaming the sheet drops it. See `laconic/static/savefile.js`. A sheet the program was started with (`lens --window FILE`, a double-clicked file) gets a stand-in handle that the server writes through (`/api/opened/save`).
 - **Save / Save As**: Save writes to the file handle when there is one and the browser grants permission, and otherwise asks for a file. Save As always asks. Without the File System Access API, both download a copy.
 - **Theme**: fonts, the color set and the editor paper style, kept in browser storage. See `laconic/static/theme.js`.
 - **Preset**: a named color set (LENS blueprint, Engineering paper, White paper, Dark). Colors that match none are "Custom".

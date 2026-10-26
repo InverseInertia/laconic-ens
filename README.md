@@ -19,10 +19,11 @@ plots, and equation solving and optimization (scipy).
 Ready-made programs for Windows and Linux are on the
 [releases page](https://github.com/inverseinertia/laconic-ens/releases). They need no Python install.
 
-- **Windows:** download `lens-windows-x64.exe` and double-click it.
+- **Windows:** download `lens-windows-x64.exe` and double-click it. To open `.lens` files by
+  double-clicking them, run `lens-windows-x64.exe --register-files` once (`--unregister-files` undoes it).
 - **Linux:** download `lens-install-linux.sh` and run it (`sh lens-install-linux.sh`). It installs LENS for
-  your user only (no root) and adds it to your application menu. `sh lens-install-linux.sh --uninstall`
-  removes it.
+  your user only (no root), adds it to your application menu and makes `.lens` files open in it.
+  `sh lens-install-linux.sh --uninstall` removes it.
 - **From source** (Python 3.10 or newer), for the command-line tool and for development:
 
       pip install -e .[dev]
@@ -30,6 +31,7 @@ Ready-made programs for Windows and Linux are on the
       lens --serve --open               # or in your default browser
       lens laconic/examples/beam.lens           # print results in the terminal
       lens laconic/examples/beam.lens --tex beam.tex
+      lens laconic/examples/beam.lens --md beam.md   # Markdown note for Obsidian
       lens laconic/examples/plots.lens --plots figures    # each plot as an SVG file
       lens laconic/examples/solve.lens --solve  # run solver blocks that are out of date
 

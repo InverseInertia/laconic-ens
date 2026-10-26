@@ -7,7 +7,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import document, evaluate, settings
+from . import document, evaluate, markdown, settings
 from .sheet import solve_block, solver_blocks
 from .blockedit import apply
 from .solver import write_result
@@ -86,8 +86,9 @@ def _solve_all(path, text, units):
 
 def main():
     ap = argparse.ArgumentParser(prog="lens", description="Laconic Engineering Notebook System")
-    ap.add_argument("file", nargs="?", help="worksheet file (.lens); omit with --serve")
+    ap.add_argument("file", nargs="?", help="worksheet file (.lens); with --serve, the sheet the page opens")
     ap.add_argument("--tex", metavar="OUT", help="write a LaTeX document to OUT")
+    ap.add_argument("--md", metavar="OUT", help="write a Markdown note (Obsidian style) to OUT")
     ap.add_argument("--plots", metavar="DIR", help="write each plot as an SVG file in DIR")
     ap.add_argument("--solve", action="store_true",
                     help="run every !root/!minimize/!maximize block that is not up to date and store the results in the file")
@@ -95,8 +96,15 @@ def main():
     ap.add_argument("--open", action="store_true", help="with --serve, open the default browser")
     ap.add_argument("--app", action="store_true", help="with --serve, open a Chromium app window")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--register-files", action="store_true",
+                    help="Windows build: open double-clicked .lens files in LENS, with their own icon")
+    ap.add_argument("--unregister-files", action="store_true", help="undo --register-files")
     ap.add_argument("--export-examples", metavar="DIR", help="copy the example worksheets into DIR and exit")
     a = ap.parse_args()
+
+    if a.register_files or a.unregister_files:
+        from .fileassoc import main as files
+        sys.exit(files(undo=a.unregister_files))
 
     if a.export_examples:
         out = Path(a.export_examples)
@@ -108,6 +116,9 @@ def main():
 
     if a.serve:
         import uvicorn
+        if a.file:
+            from . import server
+            server.OPENED = Path(a.file).resolve()
         url = f"http://127.0.0.1:{a.port}"
         # Always printed: the browser may fail to start, or start without showing a window.
         print(f"laconic running at {url} (open it in a browser if no window appears)")
@@ -128,6 +139,11 @@ def main():
         Path(a.tex).write_text(document(results, title=Path(a.file).stem, declarations=ws.declarations),
                                encoding="utf-8")
         print(f"wrote {a.tex}")
+    if a.md:
+        # The Markdown math is the live view's flavour, not siunitx, so it needs a run of its own.
+        md_results = evaluate(text, global_units=units).results if a.tex else results
+        Path(a.md).write_text(markdown(md_results, title=Path(a.file).stem), encoding="utf-8")
+        print(f"wrote {a.md}")
     if a.plots:
         out = Path(a.plots)
         out.mkdir(parents=True, exist_ok=True)
