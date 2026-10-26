@@ -202,6 +202,8 @@ eq(sim('x = a|', [ctrl('g'), ctrl('g')]), 'x = a|', 'second Ctrl+G reverts');
 eq(sim('x = D|', [ctrl('g')]), 'x = Δ|', 'capital delta');
 eq(sim('sigma = s|', [ctrl('g')]), 'sigma = σ|', 'only the preceding character');
 eq(sim('x = 5|', [ctrl('g')]), 'x = 5|', 'no mapping, no change');
+eq(sim('x = 8|', [ctrl('g')]), 'x = ∞|', '8 -> infinity');
+eq(sim('x = 8|', [ctrl('g'), ctrl('g')]), 'x = 8|', 'infinity reverts to 8');
 assert.ok(E.keyAction('g', { ctrl: true }, 'x = 5', 5, 5, {}).message.includes('5')); n++;
 eq(sim('x = a|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = ȧ|', 'custom table is used');
 eq(sim('x = b|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = b|', 'custom table replaces the default');

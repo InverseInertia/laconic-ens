@@ -13,11 +13,13 @@
   'use strict';
 
   // Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
+  // 8 -> ∞ rides along: it is the one non-Greek symbol worksheets need.
   const DEFAULT_GREEK = {
     a: 'α', b: 'β', g: 'γ', d: 'δ', e: 'ε', z: 'ζ', h: 'η', q: 'θ', i: 'ι', k: 'κ',
     l: 'λ', m: 'μ', n: 'ν', x: 'ξ', o: 'ο', p: 'π', r: 'ρ', s: 'σ', t: 'τ', u: 'υ',
     f: 'φ', c: 'χ', y: 'ψ', w: 'ω',
     G: 'Γ', D: 'Δ', Q: 'Θ', L: 'Λ', X: 'Ξ', P: 'Π', S: 'Σ', F: 'Φ', Y: 'Ψ', W: 'Ω',
+    8: '∞',
   };
 
   const IDENT_RE = /[\p{L}\p{N}_°]/u;

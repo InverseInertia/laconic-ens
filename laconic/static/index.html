@@ -45,7 +45,7 @@
   header input[type=text] {
     font: 500 14px var(--sans); color: var(--text);
     background: transparent; border: 0; border-bottom: 1px dashed transparent;
-    padding: 3px 0; width: 12ch;
+    padding: 3px 0; width: 12ch; min-width: 6ch; max-width: 40vw;  /* fitName() sets the width */
   }
   header input[type=text]:hover { border-bottom-color: var(--rule); }
   header .spacer { flex: 1; }
@@ -357,7 +357,7 @@ F` = 2   v! = 5   a@ = 1  <i>dot, arrow and hat accents</i>
 !clear                    <i>forget every non-global variable above</i></pre>
     <ul>
       <li>Operators: <code>+ - * / ^</code>, elementwise <code>.* ./</code>, and <code>-&gt;</code> to convert units. Only a number followed by units may skip the <code>*</code>.</li>
-      <li>Names may use Greek letters and subscripts (<code>&sigma;_max</code>). Constants are <code>pi</code> and <code>e</code>.</li>
+      <li>Names may use Greek letters and subscripts (<code>&sigma;_max</code>). Constants are <code>pi</code>, <code>e</code> and <code>&infin;</code> (<kbd>Ctrl</kbd>+<kbd>G</kbd> after an <code>8</code>).</li>
       <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more.</li>
       <li>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>.</li>
     </ul>
@@ -613,6 +613,14 @@ function downloadBlob(name, blob) {
 }
 const download = (name, text, type) => downloadBlob(name, new Blob([text], {type}));
 const stem = () => (nameEl.value.trim() || "sheet").replace(/\.\w+$/, "");
+// The name field grows with its text, so a long title is not clipped. Call after setting it from code.
+const measure = document.createElement("canvas").getContext("2d");
+function fitName() {
+  measure.font = getComputedStyle(nameEl).font;
+  nameEl.style.width = `${Math.ceil(measure.measureText(nameEl.value || "sheet").width) + 4}px`;
+}
+nameEl.addEventListener("input", fitName);
+document.fonts.ready.then(fitName);
 
 $("#save").onclick = async () => {
   // Ask for the location first: the picker needs the click's user activation, which the fetch could outlast.
@@ -626,13 +634,13 @@ $("#save").onclick = async () => {
   try { const res = await post("/api/save"); if (res.ok) text = await res.text(); } catch {}
   if (!handle) return download(stem() + ".lens", text, "text/plain");
   const w = await handle.createWritable(); await w.write(text); await w.close();
-  nameEl.value = handle.name.replace(/\.\w+$/, "");
+  nameEl.value = handle.name.replace(/\.\w+$/, ""); fitName();
 };
 $("#export").onclick = async () => download(stem() + ".tex", await (await post("/api/export")).text(), "application/x-tex");
 $("#open").onclick = () => $("#file").click();
 $("#file").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  src.value = await f.text(); nameEl.value = f.name.replace(/\.\w+$/, "");
+  src.value = await f.text(); nameEl.value = f.name.replace(/\.\w+$/, ""); fitName();
   evaluate(); e.target.value = "";
 };
 
@@ -1184,7 +1192,7 @@ fetch("/api/examples").then((r) => r.json()).then((list) => {
     b.onclick = async () => {
       if (src.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
       const text = await (await fetch(`/api/examples/${ex.name}`)).text();
-      src.value = text; nameEl.value = ex.name; evaluate();
+      src.value = text; nameEl.value = ex.name; fitName(); evaluate();
       $("#helpDlg").close();
     };
     li.append(b, `${ex.title} (${ex.name}.lens)`);

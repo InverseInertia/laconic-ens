@@ -44,6 +44,7 @@ GRAMMAR = r"""
 
 ?atom_nn: NAME                      -> name
         | UNIT                      -> unitlit
+        | "∞"                       -> infinity
         | "(" expr ")"
         | NAME "(" args ")"         -> call
         | "[" row (";" row)* "]"    -> matrix
@@ -66,6 +67,7 @@ class _ToAst(Transformer):
     def num(self, t): return Num(float(t))
     def string(self, t): return Str(str(t)[1:-1])
     def name(self, t): return Name(str(t))
+    def infinity(self): return Name("∞")
     def unitlit(self, t): return UnitLit(str(t)[1:])
     def neg(self, x): return Neg(x)
     def add(self, a, b): return BinOp("+", a, b)

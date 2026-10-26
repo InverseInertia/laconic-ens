@@ -225,3 +225,13 @@ def test_help_opens_bundled_example(page):
     page.click("#exampleList li button >> nth=0")
     page.wait_for_selector("#helpDlg", state="hidden")
     assert "Simply supported beam" in page.input_value("#src") or "beam" in page.input_value("#name")
+
+
+def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
+    name = page.locator("#name")
+    short = name.bounding_box()["width"]
+    name.fill("Beam deflection under distributed load")
+    box = name.bounding_box()
+    assert box["width"] > short * 2
+    fits = page.evaluate("(() => { const n = document.querySelector('#name'); return n.scrollWidth <= n.clientWidth; })()")
+    assert fits
