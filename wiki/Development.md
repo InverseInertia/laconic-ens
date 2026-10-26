@@ -17,12 +17,14 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_editing.js` | math keys and selections |
 | `node tests/test_autocomplete.js` | suggestions |
 | `node tests/test_paste.js` | table paste |
+| `node tests/test_sheettext.js` | the editor's lexer against the shared vectors |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 
 | File | Covers |
 |---|---|
 | `test_laconic.py`, `test_units.py` | evaluation, LaTeX, custom units |
 | `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py` | one module each |
+| `test_sheettext.py`, `sheettext_vectors.json` | line kinds, blocks, spans and tokens; the vectors are shared with `test_sheettext.js` |
 | `test_editing_node.py` | runs the Node suites from pytest |
 | `test_solver.py`, `test_solverjobs.py` | solver blocks and the worker process |
 | `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |

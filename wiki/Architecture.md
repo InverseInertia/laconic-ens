@@ -4,7 +4,8 @@
 
 ```
 worksheet text
-   │  sheet.py        splits into lines, runs each in order
+   │  sheettext.py    line kinds, blocks, expression spans, tokens
+   │  sheet.py        runs each line in order
    ▼
 parser.py ──► nodes.py (AST) ──► evaluator.py ──► Pint quantities ──► si.py (display units)
                     │
@@ -28,12 +29,13 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 
 | Module | Role |
 |---|---|
-| `parser.py` | Lark LALR grammar for expressions. Assignment, function and unit definitions are split off with regexes first, which avoids a grammar clash between `f(x) = ...` and the call `f(x)` |
+| `sheettext.py` | The shape of the worksheet text: each line's kind, the plot or solver block that owns it, its expression spans, and the name/unit/number tokens in them. One deep module behind `scan(text)`; the sheet, rename, plot and solver modules read lines and blocks through it. Its lexer patterns are the grammar's terminals too. Terms are defined in `CONTEXT.md` |
+| `parser.py` | Lark LALR grammar for expressions. Assignment, function and unit definitions are split off first (`sheettext.definition`), which avoids a grammar clash between `f(x) = ...` and the call `f(x)` |
 | `nodes.py` | Frozen dataclasses for the AST |
 | `evaluator.py` | AST to Pint quantities. Built-in functions are the `fn_*` methods; every value (scalar or matrix) is a Quantity |
 | `si.py` | Reduces a result to simplest coherent SI with a familiar name |
 | `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`); `snippet` and `document` |
-| `sheet.py` | Runs a worksheet line by line: commands, unit definitions, plots, results, portable save text |
+| `sheet.py` | Runs a worksheet line by line, dispatching on the line kinds from `sheettext`: commands, unit definitions, plots, results, portable save text |
 | `plotopts.py` | Plot option parsing, defaults, and the writer that edits option lines in the source |
 | `plotspec.py` | Samples a plot and resolves options into the spec |
 | `plotsvg.py` | Spec to SVG |
@@ -41,7 +43,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `solver.py` | `!root` / `!minimize` / `!maximize`: block parsing, the input hash, the scipy calls, the stored `#@ result` line |
 | `solverjobs.py` | The worker process that runs a solve, so it can be interrupted |
 | `props.py` | CoolProp lookup, imported on first use |
-| `rename.py` | Token-level rename of names and units in source text |
+| `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
 | `settings.py` | The per-user settings file (Greek table, global units) |
 | `server.py` | FastAPI app |
@@ -65,6 +67,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 The example worksheets live in `laconic/examples/` and are served by `/api/examples`.
 
 The pure-function JS files also load under Node, which is how they are tested without a browser.
+
+The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and solver-block readers (`Autocomplete.definition`, `solverBlock`), since it reads text as it is typed. They are adapters of `sheettext.py` across the HTTP seam: `tests/sheettext_vectors.json` is run by both `test_sheettext.py` and `test_sheettext.js`, so a change to one side that the other lacks fails a test.
 
 ## HTTP API
 
