@@ -312,7 +312,9 @@ eq(E.charAction('.', 'r = props("D", "T", T, "P", p, "INCOMP::MEG[0', 44, 44, {}
 eq(E.charAction('-', 'r = props("D", "T", T', 21, 21, {}) !== null, true, 'outside the quotes it is math again');
 
 // A global typed without its ~ gets one when the name is finished
-const G = { globals: [['g', 1], ['f', 2], ['F!', 1]] };
+// the symbol table of the last evaluation (laconic/symbols.py): ~g and ~F! on line 1, ~f on line 2
+const glob = (id, name, line, kind = 'variable') => ({ id, name, kind, line, until: null, global: true, value: '', params: [] });
+const G = { symbols: [glob(0, 'g', 1), glob(1, 'F!', 1), glob(2, 'f', 2, 'function')] };
 eq(sim('~g = 5\nx = g|', ' ', G), '~g = 5\nx = ~g |', 'a space finishes the name');
 eq(sim('~g = 5\nx = g|', '*2', G), '~g = 5\nx = ~g * 2|', 'an operator does too, with its usual spacing');
 eq(sim('~g = 5\ng|', ' = 3', G), '~g = 5\n~g = 3|', 'assigning a global');
@@ -329,5 +331,21 @@ eq(sim('# about g|', ' ', G), '# about g |', 'comments are left alone');
 eq(sim('~g = 5\nx = g|', ' ', { ...G, enabled: false }), '~g = 5\nx = g |', 'off with the Math keys');
 const r = E.charAction(' ', '~g = 5\nx = g', 12, 12, G);
 eq(`${r.from} ${r.to} ${r.insert}`, '11 12 ~g ', 'one edit, so one Ctrl+Z takes it back');
+
+// Edits from the server, all against one text, go in as one edit; the caret stays with its text
+function merged(src, edits) {
+  const st = start(src), r = E.merge(st.t, edits, st.s);
+  if (!r) return null;
+  const t = applyEdit(st, r);
+  return t.t.slice(0, t.s) + '|' + t.t.slice(t.s);
+}
+eq(merged('ab|cdef', [{ from: 4, to: 5, insert: 'XY' }]), 'ab|cdXYf', 'caret before the edit stays');
+eq(merged('abcd|ef', [{ from: 0, to: 1, insert: '' }, { from: 2, to: 2, insert: '+' }]), 'b+cd|ef', 'caret after edits moves with its text');
+eq(merged('abc|def', [{ from: 2, to: 5, insert: 'Z' }]), 'ab|Zf', 'caret inside a replaced part goes to its start');
+eq(merged('abc|def', [{ from: 5, to: 6, insert: '!' }, { from: 0, to: 0, insert: '>' }]), '>abc|de!', 'edits in any order');
+eq(merged('ab|c', []), null, 'no edits, no change');
+eq(merged('ab|c', [{ from: 1, to: 2, insert: 'b' }]), null, 'an edit that changes nothing');
+const m = E.merge('a = 1\nb = a\n', [{ from: 0, to: 1, insert: 'c' }, { from: 10, to: 11, insert: 'c' }], 0);
+eq(`${m.from} ${m.to} ${JSON.stringify(m.insert)}`, '0 11 "c = 1\\nb = c"', 'one edit over the span the edits cover');
 
 console.log(`${n} editing checks passed`);

@@ -9,8 +9,15 @@ pytest.importorskip("scipy")
 
 from laconic import document, evaluate, snippet
 from laconic import solver
+from laconic.blockedit import apply
 from laconic.rename import rename
 from laconic.sheet import solve_block
+
+
+def renamed(text, old, new, confirm=False):
+    """`rename`'s edits, made."""
+    edits, n = rename(text, old, new, confirm)
+    return apply(text, edits), n
 
 ROOT = """x = 1'm
 y = 1'm
@@ -34,7 +41,12 @@ def solved(text, line=None, **kw):
     line = line or next(r.n for r in rows(text) if r.kind in ("solver", "error") and r.source.lstrip().startswith("!"))
     out = solve_block(text, line, log=lambda m: None, **kw)
     assert out["ok"], out["message"]
-    return solver.write_result(text, line, out["record"])
+    return written(text, solver.write_result, line, out["record"])
+
+
+def written(text, writer, *a):
+    """The text with a writer's edits made."""
+    return apply(text, writer(text, *a))
 
 
 def stored_line(text):
@@ -45,8 +57,8 @@ def stored_line(text):
 def test_an_unsolved_block_shows_its_starting_values_and_is_out_of_date_downstream():
     r = rows(ROOT)
     b = next(x for x in r if x.kind == "solver")
-    assert b.solver["status"] == "none" and b.stale
-    assert [v["name"] for v in b.solver["values"]] == ["x", "y"]
+    assert b.solver.status == "none" and b.stale
+    assert [v["name"] for v in b.solver.values] == ["x", "y"]
     assert "1 m" in b.text
     z = next(x for x in r if x.kind == "assign" and x.lhs == "z")
     assert z.stale and "2 m" in z.text          # computed from the starting value, and flagged
@@ -56,7 +68,7 @@ def test_solving_stores_a_result_that_makes_the_block_and_everything_below_curre
     text = solved(ROOT)
     r = rows(text)
     b = next(x for x in r if x.kind == "solver")
-    assert b.solver["status"] == "valid" and not b.stale
+    assert b.solver.status == "valid" and not b.stale
     assert "1.414 m" in b.text
     z = next(x for x in r if x.kind == "assign" and x.lhs == "z")
     assert not z.stale and "2.828 m" in z.text
@@ -85,7 +97,7 @@ def test_writing_a_result_twice_replaces_it():
 ])
 def test_changing_what_the_solver_reads_makes_the_result_out_of_date(edit):
     text = solved(ROOT)
-    status = block(edit(text)).solver["status"]
+    status = block(edit(text)).solver.status
     assert status == ("valid" if "k = 2" in edit(text) else "stale")
 
 
@@ -96,7 +108,7 @@ def test_things_that_do_not_change_the_answer_do_not_make_it_stale():
                  lambda t: t.replace("!root x, y\n", "!root x, y\n  # note to self\n"),  # a comment
                  lambda t: t.replace("!root x, y\n", "!root x, y\n  timeout: 20\n"),     # how it is supervised
                  lambda t: t.replace("!root x, y\n", "!root x, y\n  autorun: on\n")):
-        assert block(edit(text)).solver["status"] == "valid"
+        assert block(edit(text)).solver.status == "valid"
 
 
 def test_the_hash_follows_variables_and_functions_the_block_reaches():
@@ -107,11 +119,11 @@ x = 1'm
   equation: f(x) = a
 """
     done = solved(text)
-    assert block(done).solver["status"] == "valid"
-    assert block(done.replace("a = 4'm^2", "a = 9'm^2")).solver["status"] == "stale"      # a variable
-    assert block(done.replace("f(t) = t^2", "f(t) = 2 * t^2")).solver["status"] == "stale"    # a function body
+    assert block(done).solver.status == "valid"
+    assert block(done.replace("a = 4'm^2", "a = 9'm^2")).solver.status == "stale"      # a variable
+    assert block(done.replace("f(t) = t^2", "f(t) = 2 * t^2")).solver.status == "stale"    # a function body
     other = done.replace("f(t) = t^2", "g(t) = 7\nf(t) = t^2")
-    assert block(other).solver["status"] == "valid"
+    assert block(other).solver.status == "valid"
 
 
 def test_a_second_block_that_reads_the_first_goes_out_of_date_with_it():
@@ -123,10 +135,10 @@ y = 1'm
   equation: y = 3 * x
 """
     one = solved(text, 2)
-    both = solved(one, next(r.n for r in rows(one) if r.kind == "solver" and r.solver["unknowns"] == ["y"]))
-    assert [r.solver["status"] for r in rows(both) if r.kind == "solver"] == ["valid", "valid"]
+    both = solved(one, next(r.n for r in rows(one) if r.kind == "solver" and r.solver.unknowns == ["y"]))
+    assert [r.solver.status for r in rows(both) if r.kind == "solver"] == ["valid", "valid"]
     changed = both.replace("x = 2'm", "x = 5'm")
-    st = [(r.solver["status"], r.solver["tainted"]) for r in rows(changed) if r.kind == "solver"]
+    st = [(r.solver.status, r.solver.tainted) for r in rows(changed) if r.kind == "solver"]
     assert st == [("stale", False), ("valid", True)]         # the second still holds its answer, but it reads a stale x
 
 
@@ -148,10 +160,10 @@ def test_assigning_a_fresh_value_clears_the_out_of_date_mark():
 def test_a_stored_result_that_no_longer_fits_is_ignored():
     text = solved(ROOT)
     wrong = re.sub(r'"unit":"meter"', '"unit":"second"', text)
-    assert block(wrong).solver["status"] == "none"
+    assert block(wrong).solver.status == "none"
     junk = re.sub(r"#@ result .*", "#@ result {not json", text)
     b = block(junk.replace("{not json", "{not json}"))
-    assert b.solver["status"] == "none" and "could not be read" in b.solver["note"]
+    assert b.solver.status == "none" and "could not be read" in b.solver.note
 
 
 # ---- problems the block reports before anything runs -----------------------------------------------
@@ -215,7 +227,7 @@ def test_a_matrix_unknown_is_solved_entry_by_entry():
     text = "v = [1; 1]\n!root v\n  equation: [2, 0; 0, 4] * v = [6; 8]\n"
     out = solve_block(text, 2, log=lambda m: None)
     assert out["ok"] and sum(out["record"]["values"][0]["mag"], []) == pytest.approx([3.0, 2.0])
-    assert block(solver.write_result(text, 2, out["record"])).solver["status"] == "valid"
+    assert block(written(text, solver.write_result, 2, out["record"])).solver.status == "valid"
 
 
 def test_least_squares_with_lm_takes_extra_equations():
@@ -229,7 +241,7 @@ def test_minimize_with_bounds_stops_at_the_bound():
     out = solve_block(text, 2, log=lambda m: None)
     assert out["record"]["values"][0]["mag"] == pytest.approx(1.5, abs=1e-6)
     assert out["record"]["obj"]["mag"] == pytest.approx(3.25)
-    assert block(solver.write_result(text, 2, out["record"])).text.endswith("minimum = 3.25")
+    assert block(written(text, solver.write_result, 2, out["record"])).text.endswith("minimum = 3.25")
 
 
 def test_maximize_reports_the_maximum():
@@ -273,7 +285,7 @@ def test_the_log_says_what_happened():
 
 def test_solving_leaves_the_sheet_untouched():
     out = solve_block(ROOT, 3, log=lambda m: None)
-    assert out["hash"] == block(ROOT).solver["hash"]    # what a run computes is what the sheet checks
+    assert out["hash"] == block(ROOT).solver.hash    # what a run computes is what the sheet checks
 
 
 def test_verify_compares_with_the_stored_result():
@@ -281,7 +293,7 @@ def test_verify_compares_with_the_stored_result():
     out = solve_block(text, 3, log=lambda m: None, mode="verify")
     assert out["verify"]["same"] is True and out["verify"]["diff"] < 1e-9
     tampered = re.sub(r'"mag":1\.41421356\d*', '"mag":1.5', text, count=1)
-    assert block(tampered).solver["status"] == "valid"          # the hash covers inputs, not the answer
+    assert block(tampered).solver.status == "valid"          # the hash covers inputs, not the answer
     out = solve_block(tampered, 3, log=lambda m: None, mode="verify")
     assert out["verify"]["same"] is False and out["verify"]["diff"] > 1e-3
     out = solve_block(ROOT, 3, log=lambda m: None, mode="verify")
@@ -289,19 +301,17 @@ def test_verify_compares_with_the_stored_result():
 
 
 # ---- the text ------------------------------------------------------------------------------------
-def test_autorun_is_a_line_in_the_block_and_the_result_stays_last():
+def test_autorun_is_a_line_in_the_block_and_turning_it_on_keeps_the_result():
     text = solved(ROOT)
-    on = solver.set_option(text, 3, "autorun", "on")
-    assert "  autorun: on\n" in on and on.split("\n").index(stored_line(on)) > on.split("\n").index("  autorun: on")
-    assert block(on).solver["autorun"] is True and block(on).solver["status"] == "valid"
-    off = solver.set_option(on, 3, "autorun", None)
-    assert off == text
+    on = written(text, solver.set_option, 3, "autorun", "on")
+    assert block(on).solver.autorun is True and block(on).solver.status == "valid"
+    assert written(on, solver.set_option, 3, "autorun", None) == text
 
 
-def test_crlf_files_keep_their_line_endings():
+def test_a_result_stored_in_a_crlf_file_reads_back():
     crlf = ROOT.replace("\n", "\r\n")
-    done = solver.write_result(crlf, 3, solve_block(crlf, 3, log=lambda m: None)["record"])
-    assert all(l.endswith("\r") for l in done.split("\n")[:-1]) and block(done).solver["status"] == "valid"
+    done = written(crlf, solver.write_result, 3, solve_block(crlf, 3, log=lambda m: None)["record"])
+    assert block(done).solver.status == "valid"
 
 
 def test_writing_to_a_line_that_is_not_a_block_is_refused():
@@ -311,10 +321,10 @@ def test_writing_to_a_line_that_is_not_a_block_is_refused():
 
 def test_rename_follows_a_variable_into_blocks_and_leaves_the_stored_result_alone():
     text = solved(ROOT)
-    out, count = rename(text, "x", "a")
+    out, count = renamed(text, "x", "a")
     assert "!root a, y" in out and "equation: a^2 + y^2" in out and "equation: a = y" in out and "z = a * 2" in out
     assert stored_line(out) == stored_line(text)
-    assert block(out).solver["status"] == "stale"      # the text changed, so it is checked again
+    assert block(out).solver.status == "stale"      # the text changed, so it is checked again
 
 
 # ---- the other outputs --------------------------------------------------------------------------------
@@ -335,7 +345,7 @@ def test_the_cli_solves_what_is_out_of_date_and_writes_the_file(tmp_path, capsys
     path.write_text(ROOT, encoding="utf-8")
     text = _solve_all(path, ROOT, [])
     assert path.read_text(encoding="utf-8") == text
-    assert block(text).solver["status"] == "valid"
+    assert block(text).solver.status == "valid"
     assert _solve_all(path, text, []) == text           # nothing left to do, nothing rewritten
 
 

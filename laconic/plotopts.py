@@ -1,6 +1,6 @@
 """Plot options: the indented `key: value` lines under a `!plot` statement, the
-sheet-wide `!plotspec` command, and the writer that edits those lines in the source
-text. A change made by dragging in the UI is a few plain lines in the worksheet,
+sheet-wide `!plotspec` command, and the patch that rewrites those lines (through the
+block editor). A change made by dragging in the UI is a few plain lines in the worksheet,
 and the worksheet alone is enough to redraw the same graph.
 
     !plot M(x), x = 0'm .. L
@@ -11,6 +11,9 @@ Nothing here evaluates anything; expression-valued options (limits, units,
 notes) stay as source text until the plot is built."""
 import math
 import re
+
+from .blockedit import BlockEditor
+from .sheettext import PLOT_LIMIT_KEYS
 
 PALETTE = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9")
 
@@ -36,14 +39,12 @@ SERIES_KEYS = ("color", "width", "dash", "marker", "label")
 SHEET_KEYS = ("grid", "xscale", "yscale", "legend", "gaps", "size", "samples", "width", "dash", "marker")
 KEYS = (set(CHOICES) | set(TEXT) | set(NUMBERS) | set(SERIES_KEYS)
         | {"size", "color", "xunit", "yunit", "xlim", "ylim", "xview", "yview", "note"})
-LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")   # `lim` is the view the author chose, `view` what the mouse set over it
+LIMIT_KEYS = PLOT_LIMIT_KEYS   # `lim` is the view the author chose, `view` what the mouse set over it
 
 COLORS = {"black": "#000000", "gray": "#7f7f7f", "grey": "#7f7f7f", "red": "#d55e00", "blue": "#0072b2",
           "green": "#009e73", "orange": "#e69f00", "purple": "#cc79a7", "sky": "#56b4e9",
           "navy": "#17253d"}
 
-PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
-OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RANGE_RE = re.compile(r"^(.*),\s*([^\W\d]\w*)\s*=\s*(.+?)\s*\.\.\s*(.+)$")
 _NOTE_RE = re.compile(r'^"(.*)"\s+at\s*\((.*)\)$')
 _SIZE_RE = re.compile(r"^(\d+)\s*[x×]\s*(\d+)$")
@@ -51,10 +52,6 @@ _SIZE_RE = re.compile(r"^(\d+)\s*[x×]\s*(\d+)$")
 
 class PlotError(Exception):
     pass
-
-
-def is_plot_line(line):
-    return bool(PLOT_RE.match(line.strip()))
 
 
 def split_top(s):
@@ -74,10 +71,9 @@ def split_top(s):
     return out
 
 
-def parse_plot(line):
-    """`!plot M(x), V(x), x = 0'm .. L` -> (series sources, variable, low, high)."""
-    m = PLOT_RE.match(line.strip())
-    m = m and _RANGE_RE.match(m.group(1))
+def parse_plot(args):
+    """`M(x), V(x), x = 0'm .. L`, what follows `!plot`, -> (series sources, variable, low, high)."""
+    m = _RANGE_RE.match(args)
     if not m:
         raise PlotError("A plot reads `!plot f(x), x = low .. high`")
     series = split_top(m.group(1))
@@ -169,32 +165,6 @@ def canon(key, value):
     return str(value)
 
 
-def block_end(lines, i):
-    """Index just past the option lines that belong to the plot on line `i` (0-based)."""
-    j = i + 1
-    while j < len(lines) and OPT_RE.match(lines[j]):
-        j += 1
-    return j
-
-
-def expr_spans(line, in_plot):
-    """Spans of `line` that hold expressions, for tools that rewrite names (Rename).
-    Plain lines are all code; under a plot only limits, units and note positions are."""
-    m = OPT_RE.match(line) if in_plot else None
-    if not m:
-        s = line.strip()
-        if is_plot_line(s):
-            return [(re.match(r"[ \t]*!plot", line).end(), len(line))]
-        return [] if not s or s.startswith(("#", "!")) else [(0, len(line))]
-    key = m.group(1)
-    if key in LIMIT_KEYS:
-        return [(m.start(3), m.end(3))]
-    if key == "note":
-        at = re.search(r'"\s+at\s*\(', line)
-        return [(at.end(), line.rfind(")"))] if at and line.rfind(")") > at.end() else []
-    return []
-
-
 def _round_for(lo, hi, scale):
     """Round to about four digits of the span, so a drag writes 3.2 and not 3.2000000001."""
     span = abs(hi - lo)
@@ -222,7 +192,7 @@ def split_key(k):
 
 
 def apply_patch(text, line, patch, axes, inherited):
-    """Rewrite the option lines of the plot on `line` (1-based) in `text`.
+    """The edits that rewrite the option lines of the plot on `line` (1-based) in `text`.
 
     `patch` maps an option name (`xview`, `color 2`) to None (remove the line), a
     string (written as typed, after checking it) or, for limits and views, `[low, high]`
@@ -230,14 +200,9 @@ def apply_patch(text, line, patch, axes, inherited):
     `inherited` is the text form of what each option would be without a line.
     A value equal to its inherited one removes the line instead, so the source
     only says what differs from the defaults."""
-    lines = text.split("\n")
-    i = line - 1
-    if not 0 <= i < len(lines) or not is_plot_line(lines[i]):
+    ed = BlockEditor(text, line)
+    if ed.kind != "plot":
         raise PlotError(f"Line {line} is not a plot")
-    j = block_end(lines, i)
-    block = lines[i + 1:j]
-    indent = re.match(r"[ \t]*", block[0]).group() if block else "  "
-
     for name, value in patch.items():
         key, index = split_key(name)
         if key in LIMIT_KEYS and isinstance(value, (list, tuple)):
@@ -255,17 +220,9 @@ def apply_patch(text, line, patch, axes, inherited):
             if key != "note" and inherited.get((key if index is None else f"{key} {index}")) == \
                     canon(key, parse_value(key, value)):
                 value = None
-        same = [n for n, l in enumerate(block)
-                if (m := OPT_RE.match(l)) and m.group(1) == key and (int(m.group(2)) if m.group(2) else None) == index]
-        label = key if index is None else f"{key} {index}"
+        arg = None if index is None else str(index)
         if value is None:
-            for n in reversed(same):
-                del block[n]
-        elif same:
-            block[same[0]] = f"{indent}{label}: {value}"
-            for n in reversed(same[1:]):
-                del block[n]
+            ed.remove(key, arg)
         else:
-            block.append(f"{indent}{label}: {value}")
-    lines[i + 1:j] = block
-    return "\n".join(lines)
+            ed.set(key, value, arg)
+    return ed.edits()

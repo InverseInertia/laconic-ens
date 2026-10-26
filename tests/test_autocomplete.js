@@ -12,6 +12,18 @@ const vocab = {
   constants: ['e', 'pi'],
   commands: [['clear', 'remove all non-global variables'], ['assume', 'back to SI'], ['noassume', 'keep typed units'], ['trigdeg', 'trig in degrees'], ['trigrad', 'trig in radians']],
 };
+// A symbol table as the server sends it (laconic/symbols.py); which names a line sees is tested there.
+const sym = (id, name, line, more) => ({ id, name, kind: 'variable', line, until: null, global: false, value: '', params: [], ...more });
+const TABLE = [
+  sym(0, 'delta_max', 1, { value: '3' }),
+  sym(1, 'grav', 2, { global: true, value: '9.81 m/s²' }),
+  sym(2, 'gx', 3),
+  sym(3, 'KE', 4, { kind: 'function', params: ['m', 'v'] }),
+  sym(4, 'Lmax', 5, { value: '4.5 m' }),
+  sym(5, 'L', 6, { value: '4.5 m' }),
+  sym(6, 'abc', 7, { until: 8 }),
+  sym(7, 'sin', 8, { kind: 'function', params: ['x'] }),
+];
 // "text|" with the caret marked
 function at(src, opts) {
   const pos = src.indexOf('|'), text = src.replace('|', '');
@@ -19,8 +31,10 @@ function at(src, opts) {
 }
 function pick(src, opts, extras) {
   const { text, ctx } = at(src, opts);
-  return A.candidates(ctx, vocab, text, extras).map((c) => c.insert);
+  return A.candidates(ctx, vocab, text, { symbols: TABLE, ...extras }).map((c) => c.insert);
 }
+// the caret on line `n` of a sheet the fixture table describes
+const below = (n, typed) => '\n'.repeat(n - 1) + typed;
 
 // --- no popup inside the text of a plot option -------------------------------------
 eq(at('!plot f(x), x = 0 .. 1\n  title: Mom|').ctx, null, 'no suggestions in a plot title');
@@ -68,30 +82,29 @@ eq(pick("w = 12'k|"), ['kN', 'kg', 'k'], 'common units before an exact match on 
 eq(pick("'zap = 3'm\nw = 12'za|"), ['zap'], 'a unit defined in this sheet');
 eq(pick("w = 12'za|\n'zap = 3'm"), ['zap'], 'even when it is defined below');
 
-eq(pick('delta_max = 3\nx = de|'), ['delta_max'], 'a variable defined above');
-eq(pick('x = de|\ndelta_max = 3'), [], 'not one defined below');
-eq(pick('~grav = 9.81\nx = gr|', { force: true }), ['~grav'], 'a global found without its tilde, inserted with it');
-eq(pick('~gg = 9.81\ngx = 1\nx = ~g|', { force: true }), ['~gg'], 'typing ~ shows only globals');
-eq(pick('abc = 1\n!clear\nx = ab|'), [], 'removed by !clear');
-eq(pick('~abc = 1\n!clear\nx = ab|'), ['~abc'], 'globals survive !clear');
-eq(pick('~abc = 1\nabc = 2\n!clear\nx = ab|'), ['~abc'], 'a later definition of a global stays global');
-eq(pick('KE(m, v) = m*v\nx = K|', { force: true }), ['KE'], 'your function');
+eq(pick(below(9, 'x = de|')), ['delta_max'], 'a variable from the table');
+eq(pick(below(1, 'x = de|')), [], 'only those the line sees');
+eq(pick(below(9, 'x = gr|'), { force: true }), ['~grav'], 'a global found without its tilde, inserted with it');
+eq(pick(below(9, 'x = ~g|'), { force: true }), ['~grav'], 'typing ~ shows only globals');
+eq(pick(below(9, 'x = ab|')), [], 'not one the table says was cleared');
+eq(pick(below(9, 'x = K|'), { force: true }), ['KE'], 'your function');
+eq(pick(below(9, 'x = si|')), ['sin'], 'your function hides the built-in of the same name');
+eq(pick('x = de|', {}, { symbols: undefined }), [], 'no table yet, no names of yours');
 eq(pick('x = so|'), ['solve'], 'built-in function');
 eq(pick('x = s|', { force: true }), ['sin', 'sqrt', 'solve'], 'functions ordered by length, then name');
 eq(pick('x = p|', { force: true }), ['pi'], 'constants');
-eq(pick('x = 3\nx2 = x|', { force: true }), [], 'a name that is already complete offers nothing');
 eq(pick('!cl|'), ['clear'], 'commands');
 eq(pick('!a|'), ['assume'], 'commands by prefix');
 eq(pick('!no|'), ['noassume'], 'commands');
-eq(A.candidates(at('L = 4.5\nx = L|', { force: true }).ctx, vocab, 'L = 4.5\nx = L', { values: { L: '4.5 m' } }), [], 'sole exact candidate');
-eq(pick('Lmax = 4.5\nx = L|', { force: true }, { values: { Lmax: '4.5 m' } }), ['Lmax'], 'with a value');
-eq(A.candidates(at('Lmax = 4.5\nx = L|', { force: true }).ctx, vocab, 'Lmax = 4.5\nx = L', { values: { Lmax: '4.5 m' } })[0].detail, '4.5 m', 'value shown');
+eq(pick(below(9, 'x = L|'), { force: true }), ['L', 'Lmax'], 'variables');
+eq(pick(below(9, 'x = Lmax|')), [], 'a name that is already complete offers nothing');
+eq(A.candidates(at(below(9, 'x = Lma|')).ctx, vocab, below(9, 'x = Lma'), { symbols: TABLE })[0].detail, '4.5 m', 'value shown');
 eq(A.candidates(at("w = 12'|").ctx, vocab, "w = 12'").length, 8, 'at most eight');
 
 // --- accepting ----------------------------------------------------------------
 function accepting(src, i = 0, opts) {
   const { text, ctx } = at(src, opts);
-  const c = A.candidates(ctx, vocab, text)[i];
+  const c = A.candidates(ctx, vocab, text, { symbols: TABLE })[i];
   const r = A.accept(text, ctx, c);
   const out = text.slice(0, r.from) + r.insert + text.slice(r.to);
   return out.slice(0, r.caret) + '|' + out.slice(r.caret);
@@ -100,15 +113,12 @@ eq(accepting("w = 12'k|"), "w = 12'kN|", 'a unit');
 eq(accepting('x = so|'), 'x = solve(|)', 'a function gets brackets with the caret inside');
 eq(accepting('x = so|(a, b)'), 'x = solve|(a, b)', 'unless it already has them');
 eq(accepting('x = so|lv(a)'), 'x = solve|(a)', 'the rest of the word is replaced');
-eq(accepting('delta = 1\nx = de|'), 'delta = 1\nx = delta|', 'a variable');
-eq(accepting('~gg = 1\nx = ~g|', 0, { force: true }), '~gg = 1\nx = ~gg|', 'a global is inserted with its ~');
-eq(accepting('~gg = 1\nx = g|', 0, { force: true }), '~gg = 1\nx = ~gg|', 'even when the ~ was not typed');
+eq(accepting(below(9, 'x = del|')), below(9, 'x = delta_max|'), 'a variable');
+eq(accepting(below(9, 'x = ~g|'), 0, { force: true }), below(9, 'x = ~grav|'), 'a global is inserted with its ~');
+eq(accepting(below(9, 'x = gr|'), 0, { force: true }), below(9, 'x = ~grav|'), 'even when the ~ was not typed');
 eq(accepting('!cl|'), '!clear|', 'a command');
 
-// --- scanning -----------------------------------------------------------------
-eq([...A.scan('a = 1\nb = 2\nf(x) = x\n', 4).vars.keys()], ['a', 'b'], 'scan variables');
-eq([...A.scan('a = 1\nb = 2\nf(x, y) = x\n', 4).funcs.get('f').params], ['x', 'y'], 'scan function params');
-eq([...A.scan('a = 1\nb = 2\n', 2).vars.keys()], ['a'], 'only the lines above');
+// --- unit definitions in the text ----------------------------------------------
 eq(A.unitDefs("# c\n'zap = 3'm\nx = 1\n  'a_b = 1/12").map((u) => u.name), ['zap', 'a_b'], 'unit definitions');
 
 // --- solver blocks -------------------------------------------------------------------------
@@ -136,10 +146,13 @@ eq(pick('d = 1\n!maximize d\n  method: l-|'), ['L-BFGS-B'], 'a method with a hyp
 eq(accepting('d = 1\n!minimize d\n  method: Nel|der'), 'd = 1\n!minimize d\n  method: Nelder-Mead|', 'the whole value is replaced');
 eq(pick(ROOT + '  autorun: |'), ['on', 'off'], 'autorun values');
 eq(at(ROOT + '  tol: 1|').ctx, null, 'nothing for a number option');
-eq(pick(ROOT + '  equation: x|1 = x2', { force: true }), ['x1', 'x2'], 'the left of an equation is an expression');
-eq(pick('x1 = 1\n!minimize x1\n  constraint: x| <= 3', { force: true }), ['x1'], 'and of a constraint');
-eq(pick('aa = 1\nab = 2\n!root a|', { force: true }), ['aa', 'ab'], 'variables in the header');
-eq(pick('aa = 1\nf(t) = t\n!root aa, f|', { force: true }), [], 'only variables: functions cannot be unknowns');
+// ROOT's table: the header defines its unknowns again
+const UNKNOWNS = { symbols: [sym(0, 'x1', 1, { until: 3 }), sym(1, 'x2', 2, { until: 3 }), sym(2, 'x1', 3), sym(3, 'x2', 3)] };
+eq(pick(ROOT + '  equation: x|1 = x2', { force: true }, UNKNOWNS), ['x1', 'x2'], 'the left of an equation is an expression');
+eq(pick('x1 = 1\n!minimize x1\n  constraint: x| <= 3', { force: true }, UNKNOWNS), ['x1', 'x2'], 'and of a constraint');
+const HEAD = { symbols: [sym(0, 'aa', 1), sym(1, 'ab', 2), sym(2, 'f', 2, { kind: 'function', params: ['t'] })] };
+eq(pick('aa = 1\nab = 2\n!root a|', { force: true }, HEAD), ['aa', 'ab'], 'variables in the header');
+eq(pick('aa = 1\nf(t) = t\n!root aa, f|', { force: true }, HEAD), [], 'only variables: functions cannot be unknowns');
 eq(at('!ro|').ctx.kind, 'command', 'the command word is still a command');
 eq(at('x = 1\n!root x\n  equation: x = 1\n  #@ result {"a|').ctx, null, 'nothing in the stored result');
 eq(at('x = 1\n!root x\n  equation: x = 1\ny = x|x', { force: true }).ctx.kind, 'name', 'after the block, back to normal lines');

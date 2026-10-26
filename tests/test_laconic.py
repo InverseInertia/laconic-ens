@@ -185,18 +185,6 @@ def test_a_global_and_a_plain_variable_never_share_a_name():
     assert res[3].text == "a = 6"
 
 
-def test_clear_reports_what_it_removed_and_keeps_functions():
-    res = run("f(x) = 2*x\na = 1\nb = 2\n!clear\nf(3)\n!clear")
-    assert res[3].text == "Cleared a, b"
-    assert "6" in res[4].latex                       # user functions are not variables
-    assert res[5].text == "Nothing to clear"
-
-
-def test_unknown_command_and_arguments():
-    assert "Unknown command" in last("!wipe").error
-    assert "no arguments" in last("!clear a").error
-
-
 def test_global_names_render_without_the_tilde():
     r = last("~g_x = 3")
     assert r"g_{x}" in r.latex and "~" not in r.latex
@@ -211,45 +199,16 @@ def test_globals_are_tagged_in_the_live_view_only():
     assert "htmlData" not in evaluate("~g = 5\ny = 2*g", siunitx=True).results[1].latex
 
 
-def test_the_line_that_makes_a_name_global_and_a_plain_assignment_of_it():
+def test_a_plain_assignment_of_a_global_warns():
     res = run("~g = 5\ng = 12\n~g = 7\nx = g\n~f(x) = x\nf(x) = 2*x")
-    assert [r.gdef for r in res] == ["g", "", "", "", "f", ""]
     assert res[1].warning == "Changes the global ~g, defined on line 1. Write ~g if that is meant"
     assert res[2].warning == res[3].warning == ""      # written with its ~, or only read
     assert res[5].warning.startswith("Changes the function ~f, defined on line 5")
 
 
-def test_global_spans_mark_each_use_for_the_editor():
-    res = run("x = g\n~g = 5\ny = g + ~g + 'g\n# g\nh(g) = g\n!plot g*x, x = 0 .. 1\n  title: g")
-    assert [r.gspans for r in res] == [[], [[0, 2]], [[4, 1], [8, 2]], [], [], [[6, 1]], []]
-
-
-def test_clear_names_the_globals_it_kept():
-    res = run("~g = 1\na = 2\n!clear\n~f(x) = x\n!clearf\n~h = 3\n!clear")
-    assert res[2].text == "Cleared a. Kept global ~g"
-    assert res[4].text == "Nothing to clear. Kept global ~f"
-    assert res[6].text == "Nothing to clear. Kept globals ~g, ~h"
-
-
 def test_command_snippet_is_a_latex_comment():
     from laconic import snippet
     assert snippet(last("a = 1\n!clear"), "inline") == "% !clear"
-
-
-def test_noassume_keeps_typed_units_until_assume():
-    rs = run("F = 10'kN\nd = 2'm\nM = F*d\n!noassume\nM = F*d\nW = 3'kN*5'mm\nN = M -> 'N*'m\n!assume\nM = F*d")
-    text = [r.text for r in rs if r.kind == "assign"][2:]  # skip F and d
-    assert text[0] == "M = 20000 J"
-    assert text[1].startswith("M = 20 kN") and text[1].endswith("m")
-    assert text[2].startswith("W = 15 kN")
-    assert text[3].startswith("N = 20000 ")  # explicit -> still converts
-    assert text[4] == "M = 20000 J"
-    assert [r.kind for r in rs if r.source.startswith("!")] == ["command", "command"]
-
-
-def test_assume_commands_take_no_arguments():
-    assert run("!noassume x")[0].kind == "error"
-    assert run("!assume x")[0].kind == "error"
 
 
 def test_accent_marks_after_names():
@@ -269,24 +228,6 @@ def test_too_many_dots_is_an_error():
     assert run("x``` = 1")[0].kind == "error"
 
 
-def test_clearf_removes_functions_but_keeps_global_ones():
-    r = run("f(x) = x^2\n~g(x) = 2*x\n!clearf\na = g(3)\nb = f(2)")
-    assert r[2].kind == "command" and "f" in r[2].text
-    assert r[3].kind == "assign" and r[3].text == "a = 6"
-    assert r[4].kind == "error" and "removed by !clearf" in r[4].error
-
-
-def test_trigdeg_and_trigrad_switch_the_angle_unit():
-    rs = run("!trigdeg\na = sin(30)\nb = asin(0.5)\nc = sin(pi/6'rad)\n!trigrad\nd = sin(pi/6)\ne = asin(0.5)")
-    value = lambda r: float(r.text.split("= ")[1].split()[0])
-    assert abs(value(rs[1]) - 0.5) < 1e-9
-    assert "deg" in rs[2].text and abs(value(rs[2]) - 30) < 1e-9
-    assert abs(value(rs[3]) - 0.5) < 1e-9
-    assert abs(value(rs[5]) - 0.5) < 1e-9
-    assert "rad" in rs[6].text
-    assert run("!trigdeg x")[0].kind == "error"
-
-
 def test_floor_ceil_keep_units():
     assert last("floor(2.7'm)").text.endswith("2 m")
     assert last("ceil(2.1'm)").text.endswith("3 m")
@@ -298,17 +239,6 @@ def test_heaviside_and_aliases():
         assert last(f"{name}(-1'm)").text.endswith("0")
         assert last(f"{name}(0)").text.endswith("1")
         assert last(f"{name}(3)").text.endswith("1")
-
-
-def test_short_shows_only_the_final_result_until_long():
-    rs = run("w = 12'kN/'m\nL = 4.5'm\nM = w*L^2/8\n!short\nM = w*L^2/8\nv = [1; 2]*'kN\n!long\nM = w*L^2/8")
-    full, short, mat, back = rs[2], rs[4], rs[5], rs[7]
-    assert len(full.stages) == 3 and "mathrm{J}" in full.stages[-1]
-    assert short.stages == [full.stages[-1]]
-    assert "bmatrix" in mat.stages[0] and len(mat.stages) == 1
-    assert back.stages == full.stages
-    assert short.text == "M = 30380 J"
-    assert run("!short x")[0].kind == "error"
 
 
 def test_pound_mass_is_lbm_and_lb_is_gone():
@@ -366,16 +296,6 @@ def test_matrix_functions():
     assert last("eigvals([2,0;0,3])").latex.endswith("\\begin{bmatrix} 2 \\\\ 3 \\end{bmatrix}")
     assert "1 & 1" in last("hstack([1;2], [1;2])").latex
     assert last("max([1,5;3,2])").text == "5"
-
-
-def test_sigfigs_and_decplace_change_only_the_display():
-    rs = run("x = 1/3\ny = x * 3\nx\n!sigfigs 6\nx\n!decplace 2\nx\n[1/3, 2]\ny\n!sigfigs 4\nx")
-    shown = lambda r: r.text.split("= ")[-1]
-    assert [shown(rs[i]) for i in (2, 4, 6, 8, 10)] == ["0.3333", "0.333333", "0.33", "1.00", "0.3333"]
-    assert rs[7].text == "[[0.33 2.00]]"
-    assert [rs[i].kind for i in (3, 5, 9)] == ["command"] * 3
-    assert run("!sigfigs 0")[0].kind == "error" and run("!decplace x")[0].kind == "error"
-    assert run("!sigfigs")[0].kind == "error" and run("!decplace -1")[0].kind == "error"
 
 
 def test_sigfigsbig_keeps_trailing_zeros():

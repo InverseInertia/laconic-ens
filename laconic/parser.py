@@ -1,13 +1,14 @@
-"""Line parser. Assignment and function definitions are split off with regexes
-so the Lark grammar only has to describe expressions (this avoids an
+"""Line parser. Assignment and function definitions are split off first (by
+sheettext.definition) so the Lark grammar only has to describe expressions (this avoids an
 LALR reduce/reduce clash between `f(x) = ...` and the call `f(x)`)."""
-import re
 
 from lark import Lark, Transformer, v_args
 from lark.exceptions import UnexpectedInput
 
+from . import catalogue
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
                     Matrix, Name, Neg, Num, Str, UnitDef, UnitLit)
+from .sheettext import NAME, NUMBER, STRING, UNIT, definition
 
 GRAMMAR = r"""
 ?start: expr
@@ -52,13 +53,13 @@ GRAMMAR = r"""
 args: expr ("," expr)*
 row: expr ("," expr)*
 
-NAME: /~?[^\W\d]\w*[`!@]*/
-NUMBER: /(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?/
-STRING: /"[^"\n]*"/
-UNIT: /'(?:(?:[^\W\d]|°)[\w°]*|%)/
-
 %import common.WS
 %ignore WS
+""" + f"""
+NAME: /{NAME}/
+NUMBER: /{NUMBER}/
+STRING: /{STRING}/
+UNIT: /{UNIT}/
 """
 
 
@@ -87,12 +88,6 @@ class _ToAst(Transformer):
 
 _parser = Lark(GRAMMAR, parser="lalr", start="start", transformer=_ToAst())
 
-_FUNC_RE = re.compile(
-    r"^(~?[^\W\d]\w*)\s*\(\s*([^\W\d]\w*(?:\s*,\s*[^\W\d]\w*)*)\s*\)\s*=(?!=)\s*(.+)$")
-_UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
-_ASSIGN_RE = re.compile(r"^(~?[^\W\d]\w*[`!@]*)\s*=(?!=)\s*(.+)$")
-
-
 class ParseError(Exception):
     pass
 
@@ -103,24 +98,16 @@ def parse_expr(src):
     except UnexpectedInput as e:
         col = getattr(e, "column", 0)
         bad = src[max(col - 1, 0):]
-        hint = ""
-        if bad.startswith("%"):
-            hint = ". Percent is a unit: write 5'%"
-        elif bad.startswith("$"):
-            hint = ". Currencies are units named by their ISO code: write 5'USD, 'EUR, 'GBP"
-        raise ParseError(f"Syntax error at column {col}: {bad[:12]!r}{hint}") from None
+        raise ParseError(f"Syntax error at column {col}: {bad[:12]!r}{catalogue.syntax_hint(bad)}") from None
 
 
 def parse_line(src):
     src = src.strip()
-    m = _UNITDEF_RE.match(src)
-    if m:
-        return UnitDef(m.group(1), parse_expr(m.group(2)), m.group(2).strip())
-    m = _FUNC_RE.match(src)
-    if m:
-        params = tuple(p.strip() for p in m.group(2).split(","))
-        return FuncDef(m.group(1), params, parse_expr(m.group(3)))
-    m = _ASSIGN_RE.match(src)
-    if m:
-        return Assign(m.group(1), parse_expr(m.group(2)))
-    return ExprStmt(parse_expr(src))
+    d = definition(src)
+    if d is None:
+        return ExprStmt(parse_expr(src))
+    if d.kind == "unitdef":
+        return UnitDef(d.name, parse_expr(d.body), d.body.strip())
+    if d.kind == "funcdef":
+        return FuncDef(d.name, d.params, parse_expr(d.body))
+    return Assign(d.name, parse_expr(d.body))

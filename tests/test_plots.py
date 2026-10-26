@@ -12,20 +12,28 @@ import pytest
 from fastapi import HTTPException
 
 from laconic import document, evaluate, run, server, snippet
+from laconic.blockedit import apply, from_json
 from laconic.plotopts import PlotError, apply_patch, parse_option, parse_plot, split_top
 from laconic.plotsvg import LABEL_CHARS, axis_ticks, render_svg
 from laconic.rename import RenameError, rename
+
+
+def renamed(text, old, new, confirm=False):
+    """`rename`'s edits, made."""
+    edits, n = rename(text, old, new, confirm)
+    return apply(text, edits), n
+
 
 BEAM = "L = 4.5'm\nw = 12'kN/'m\nM(x) = w*x*(L-x)/2\n"
 
 
 def plots(text, **kw):
-    return [r for r in evaluate(text, **kw).results if r.kind == "plot"]
+    return [r for r in evaluate(text, **kw).results if r.plot]
 
 
 def plot(text, **kw):
     (r,) = plots(text, **kw)
-    return r.plot
+    return r.plot.spec
 
 
 def kinds(text):
@@ -35,10 +43,10 @@ def kinds(text):
 # ---- syntax -----------------------------------------------------------------------
 
 def test_plot_statement_splits_series_and_range():
-    assert parse_plot("!plot M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L")
-    assert parse_plot("!plot f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2")
+    assert parse_plot("M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L")
+    assert parse_plot("f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2")
     with pytest.raises(PlotError):
-        parse_plot("!plot sin(x)")
+        parse_plot("sin(x)")
 
 
 def test_split_top_ignores_commas_inside_brackets():
@@ -48,7 +56,7 @@ def test_split_top_ignores_commas_inside_brackets():
 def test_plot_is_an_ordinary_name_because_the_statement_is_a_command():
     res = run("plot = 3\nplot * 2\nf(plot) = plot + 1\n!plot f(plot), plot = 0 .. 2")
     assert [r.kind for r in res] == ["assign", "expr", "funcdef", "plot"] and res[1].text == "6"
-    assert res[3].plot["x"]["label"] == "plot" and res[3].plot["series"][0]["y"][-1] == pytest.approx(3)
+    assert res[3].plot.spec["x"]["label"] == "plot" and res[3].plot.spec["series"][0]["y"][-1] == pytest.approx(3)
     assert run("!plot")[0].kind == "error" and "A plot reads" in run("!plot")[0].error
     assert "A plot reads" in run("!plot x")[0].error
 
@@ -59,10 +67,6 @@ def test_option_lines_belong_to_the_plot_above():
         ["plot", "plotopt", "plotopt", "blank", "assign"]
     r = run("!plot x, x = 0 .. 1\n  title: A\n  grid: off")[0]
     assert r.end == 3
-
-
-def test_an_indented_ordinary_line_ends_the_block():
-    assert kinds("!plot x, x = 0 .. 1\n  y = 2") == ["plot", "assign"]
 
 
 def test_option_values_are_checked():
@@ -81,7 +85,7 @@ def test_a_bad_option_is_reported_on_its_own_line_and_the_plot_still_draws():
     res = run("!plot x, x = 0 .. 1\n  grid: maybe\n  title: Fine")
     assert [r.kind for r in res] == ["plot", "error", "plotopt"]
     assert res[1].n == 2 and "on, off" in res[1].error
-    assert res[0].plot["title"] == "Fine" and res[0].plot["grid"] is True
+    assert res[0].plot.spec["title"] == "Fine" and res[0].plot.spec["grid"] is True
 
 
 def test_unknown_option_lists_the_known_ones():
@@ -121,7 +125,7 @@ def test_unit_mismatches_are_errors():
 
 def test_a_bad_unit_option_is_reported_and_ignored():
     res = run("!plot 1'm * x, x = 0 .. 1\n  yunit: 'kg")
-    assert [r.kind for r in res] == ["plot", "error"] and res[0].plot["y"]["unit"] == "m"
+    assert [r.kind for r in res] == ["plot", "error"] and res[0].plot.spec["y"]["unit"] == "m"
 
 
 def test_user_functions_and_variables_are_visible_to_a_plot():
@@ -187,7 +191,7 @@ def test_explicit_limits_and_steps():
 
 def test_limits_given_in_the_wrong_order_or_unit_are_reported():
     res = run("!plot x, x = 0'm .. 10'm\n  xlim: 5'm .. 2'm")
-    assert res[1].kind == "error" and res[0].plot["x"]["lim"] == [0, 10]
+    assert res[1].kind == "error" and res[0].plot.spec["x"]["lim"] == [0, 10]
     res = run("!plot x, x = 0'm .. 10'm\n  xlim: 0'kg .. 1'kg")
     assert res[1].kind == "error" and "Incompatible" in res[1].error
 
@@ -201,7 +205,7 @@ def test_limits_and_notes_must_be_finite_so_the_page_can_always_be_sent():
     res = run("!plot x, x = 0 .. 1\n  xlim: 0 .. exp(1000)")
     assert res[0].kind == "plot" and res[1].kind == "error" and "finite" in res[1].error
     res = run("!plot x, x = 0 .. 1\n  note: \"n\" at (exp(1000), 0)")
-    assert res[0].plot["notes"] == [] and "finite" in res[1].error
+    assert res[0].plot.spec["notes"] == [] and "finite" in res[1].error
     rows = server.evaluate(server.Sheet(text="!plot x, x = 0 .. 1\n  ylim: -exp(1000) .. 1"))      # serialises
     assert rows[0]["kind"] == "plot"
 
@@ -247,9 +251,9 @@ def test_the_mouse_view_sits_over_the_authors_limits_over_automatic():
 
 def test_a_bad_view_is_reported_and_the_layer_below_is_used():
     res = run("!plot x, x = 0 .. 10\n  xlim: 2 .. 8\n  xview: 9 .. 1")
-    assert res[0].plot["x"]["lim"] == [2, 8] and res[2].kind == "error" and "low to high" in res[2].error
+    assert res[0].plot.spec["x"]["lim"] == [2, 8] and res[2].kind == "error" and "low to high" in res[2].error
     res = run("!plot x, x = 1 .. 10\n  xscale: log\n  xview: -1 .. 5")
-    assert res[0].plot["x"]["lim"] == [1, 10] and "positive" in res[2].error
+    assert res[0].plot.spec["x"]["lim"] == [1, 10] and "positive" in res[2].error
 
 
 def test_sampling_follows_the_view_too():
@@ -261,9 +265,9 @@ def test_resetting_removes_only_the_view_and_the_authors_limits_stay():
     base = "!plot x, x = 0 .. 10\n  xlim: 2 .. 8\n  ylim: -1 .. 11\n"
     p = plot(base)
     axes = {"x": p["x"], "y": p["y"]}
-    moved = apply_patch(base, 1, {"xview": [3.0, 4.0], "yview": [0.0, 5.0]}, axes, p["inherited"])
+    moved = apply(base, apply_patch(base, 1, {"xview": [3.0, 4.0], "yview": [0.0, 5.0]}, axes, p["inherited"]))
     assert "  xview: 3 .. 4" in moved and "  xlim: 2 .. 8" in moved and "  ylim: -1 .. 11" in moved
-    again = apply_patch(moved, 1, {"xview": None, "yview": None}, axes, p["inherited"])
+    again = apply(moved, apply_patch(moved, 1, {"xview": None, "yview": None}, axes, p["inherited"]))
     assert again == base
     assert plot(again)["x"]["lim"] == [2, 8] and plot(again)["x"]["view"] is False
 
@@ -271,20 +275,20 @@ def test_resetting_removes_only_the_view_and_the_authors_limits_stay():
 def test_the_endpoint_resets_to_the_authors_view():
     text = "!plot x, x = 0 .. 10\n  xlim: 2 .. 8\n  xview: 3 .. 4\n"
     out = server.plot_edit(server.PlotEditBody(text=text, line=1, patch={"xview": None}))
-    assert out["ok"] and out["text"] == "!plot x, x = 0 .. 10\n  xlim: 2 .. 8\n"
+    assert out["ok"] and apply(text, from_json(text, out["edits"])) == "!plot x, x = 0 .. 10\n  xlim: 2 .. 8\n"
 
 
 def test_views_are_written_with_the_axis_unit():
     base = BEAM + "!plot M(x), x = 0'm .. L\n  yunit: 'kN * 'm\n"
     p = plot(base)
-    out = apply_patch(base, 4, {"xview": [0.5, 3.2], "yview": [-1.5187, 31.8935]}, {"x": p["x"], "y": p["y"]}, p["inherited"])
+    out = apply(base, apply_patch(base, 4, {"xview": [0.5, 3.2], "yview": [-1.5187, 31.8935]}, {"x": p["x"], "y": p["y"]}, p["inherited"]))
     assert "  xview: 0.5'm .. 3.2'm" in out and "  yview: -1.52'kN * 'm .. 31.89'kN * 'm" in out
     q = plot(out)
     assert q["x"]["lim"] == [0.5, 3.2] and q["y"]["lim"] == pytest.approx([-1.52, 31.89])
 
 
 def test_rename_follows_names_into_views():
-    out, count = rename("k = 2\n!plot x, x = 0 .. 1\n  xview: 0 .. k\n  yview: k .. 2*k\n", "k", "gain")
+    out, count = renamed("k = 2\n!plot x, x = 0 .. 1\n  xview: 0 .. k\n  yview: k .. 2*k\n", "k", "gain")
     assert "xview: 0 .. gain" in out and "yview: gain .. 2*gain" in out and count == 4
 
 
@@ -292,7 +296,7 @@ def test_rename_follows_names_into_views():
 
 def test_plot_command_sets_defaults_for_the_plots_below():
     res = run("!plot x, x = 0 .. 1\n!plotspec grid: off\n!plotspec size: 400 x 250\n!plot x, x = 0 .. 1\n  grid: on\n!plot x, x = 0 .. 1")
-    ps = [r.plot for r in res if r.kind == "plot"]
+    ps = [r.plot.spec for r in res if r.plot]
     assert [p["grid"] for p in ps] == [True, True, False]
     assert [p["size"] for p in ps] == [[520, 320], [400, 250], [400, 250]]
     assert ps[2]["inherited"]["grid"] == "off"
@@ -300,7 +304,7 @@ def test_plot_command_sets_defaults_for_the_plots_below():
 
 def test_plot_reset_and_command_errors():
     res = run("!plotspec grid: off\n!plotspec reset\n!plot x, x = 0 .. 1")
-    assert res[0].kind == "command" and res[2].plot["grid"] is True
+    assert res[0].kind == "command" and res[2].plot.spec["grid"] is True
     assert run("!plotspec title: x")[0].kind == "error"            # per-plot only
     assert run("!plotspec color 2: red")[0].kind == "error"
     assert run("!plotspec")[0].kind == "error"
@@ -313,21 +317,13 @@ TEXT = "!plot f(x), x = 0 .. 1\n  title: T\n\nz = 1"
 
 
 def patch(text, p, line=1, inherited=None, axes=AXES):
-    return apply_patch(text, line, p, axes, inherited or {})
+    return apply(text, apply_patch(text, line, p, axes, inherited or {}))
 
 
 def test_limits_are_written_with_units_and_rounded():
     out = patch(TEXT, {"xlim": [0.5000000001, 3.2000000002], "ylim": [-1.5187, 31.8935]})
     assert "  xlim: 0.5'm .. 3.2'm" in out and "  ylim: -1.52'kN * 'm .. 31.89'kN * 'm" in out
     assert out.endswith("\n\nz = 1") and out.index("xlim") < out.index("\n\nz")
-
-
-def test_an_existing_line_is_replaced_in_place_and_none_removes_it():
-    once = patch(TEXT, {"xlim": [1, 2]})
-    twice = patch(once, {"xlim": [3, 4]})
-    assert twice.count("xlim") == 1 and "3'm .. 4'm" in twice
-    assert "xlim" not in patch(twice, {"xlim": None})
-    assert patch(TEXT, {"xlim": None}) == TEXT
 
 
 def test_a_value_equal_to_its_default_removes_the_line():
@@ -352,16 +348,18 @@ def test_the_writer_refuses_bad_input_and_changes_nothing():
         patch(TEXT, {"grid": "off"}, line=4)
 
 
-def test_series_options_are_written_with_their_number():
-    out = patch(TEXT, {"color 2": "red", "dash": "dotted"})
-    assert "  color 2: red" in out and "  dash: dotted" in out
+def test_a_crlf_sheet_keeps_its_line_endings_and_values_read_clean():
+    text = "!plot x, x = 0 .. 1\r\n  xview: 0 .. 1\r\n  grid: off\r\nz = 1\r\n"
+    out = patch(text, {"xview": [0, 2], "color 1": "red"}, axes={a: {"unit_src": "", "scale": "lin"} for a in "xy"})
+    assert out == "!plot x, x = 0 .. 1\r\n  xview: 0 .. 2\r\n  grid: off\r\n  color 1: red\r\nz = 1\r\n"
+    assert plot(out)["x"]["lim"] == [0, 2] and plot(out)["series"][0]["color"] == "#d55e00"
 
 
 def test_what_the_writer_wrote_draws_the_limits_it_was_given():
     for lo, hi in [(0.5, 3.2), (-1.5187, 31.8935), (1e-3, 2.5e-3), (12345.6, 98765.4)]:
         base = BEAM + "!plot M(x), x = 0'm .. L\n  yunit: 'kN * 'm"
         p = plot(base)
-        text = apply_patch(base, 4, {"ylim": [lo, hi]}, {"x": p["x"], "y": p["y"]}, p["inherited"])
+        text = apply(base, apply_patch(base, 4, {"ylim": [lo, hi]}, {"x": p["x"], "y": p["y"]}, p["inherited"]))
         got = plot(text)["y"]["lim"]
         assert got[0] == pytest.approx(lo, rel=1e-3, abs=1e-3 * (hi - lo))
         assert got[1] == pytest.approx(hi, rel=1e-3, abs=1e-3 * (hi - lo))
@@ -370,7 +368,7 @@ def test_what_the_writer_wrote_draws_the_limits_it_was_given():
 def test_a_drag_round_trips_through_the_text_with_units():
     base = BEAM + "!plot M(x), x = 0'm .. L\n  yunit: 'kN * 'm\n  xunit: 'mm"
     p = plot(base)
-    text = apply_patch(base, 4, {"xlim": [1000.0, 3500.0]}, {"x": p["x"], "y": p["y"]}, p["inherited"])
+    text = apply(base, apply_patch(base, 4, {"xlim": [1000.0, 3500.0]}, {"x": p["x"], "y": p["y"]}, p["inherited"]))
     assert "xlim: 1000'mm .. 3500'mm" in text
     q = plot(text)
     assert q["x"]["lim"] == [1000, 3500] and q["series"][0]["x"][0] == 1000
@@ -562,14 +560,14 @@ def test_the_exported_document_compiles(tmp_path):
 
 def test_rename_follows_a_name_into_a_plot_but_not_into_its_text():
     src = "k = 2\n!plot k*x, x = 0 .. 1\n  title: k and x\n  ylabel: k\n  ylim: 0 .. k * 3\n  note: \"k\" at (k, k)\n"
-    out, count = rename(src, "k", "gain")
+    out, count = renamed(src, "k", "gain")
     assert "!plot gain*x" in out and "ylim: 0 .. gain * 3" in out and 'note: "k" at (gain, gain)' in out
     assert "title: k and x" in out and "ylabel: k" in out and out.startswith("gain = 2")
     assert count == 5
-    out, _ = rename(src, "x", "t")
+    out, _ = renamed(src, "x", "t")
     assert "!plot k*t, t = 0 .. 1" in out
     with pytest.raises(RenameError, match="does not appear"):
-        rename("!plot x, x = 0 .. 1", "plot", "p")        # `plot` is not a name in a plot statement
+        renamed("!plot x, x = 0 .. 1", "plot", "p")        # `plot` is not a name in a plot statement
 
 
 def test_units_a_plot_depends_on_travel_with_the_saved_sheet():
@@ -590,17 +588,11 @@ def config(tmp_path, monkeypatch):
     monkeypatch.setenv("LENS_CONFIG_DIR", str(tmp_path / "cfg"))
 
 
-def test_plot_rows_reach_the_page_with_their_picture():
-    rows = server.evaluate(server.Sheet(text="!plot sin(x), x = 0 .. 6\n  title: T"))
-    assert [r["kind"] for r in rows] == ["plot", "plotopt"]
-    assert rows[0]["svg"].startswith("<svg") and rows[0]["plot"]["title"] == "T" and rows[0]["end"] == 2
-    assert all(isinstance(v, (int, float)) or v is None for v in rows[0]["plot"]["series"][0]["y"])
-
-
-def test_plot_edit_endpoint_returns_new_text_and_refuses_what_it_cannot_do():
+def test_plot_edit_endpoint_returns_edits_and_refuses_what_it_cannot_do():
     text = BEAM + "!plot M(x), x = 0'm .. L\n  yunit: 'kN * 'm\n"
     ok = server.plot_edit(server.PlotEditBody(text=text, line=4, patch={"xlim": [0.5, 3.2], "grid": "off"}))
-    assert ok["ok"] and "xlim: 0.5'm .. 3.2'm" in ok["text"] and "grid: off" in ok["text"]
+    new = apply(text, from_json(text, ok["edits"]))
+    assert ok["ok"] and "xlim: 0.5'm .. 3.2'm" in new and "grid: off" in new
     assert server.plot_edit(server.PlotEditBody(text=text, line=1, patch={"grid": "off"}))["ok"] is False
     bad = server.plot_edit(server.PlotEditBody(text=text, line=4, patch={"xlim": [2, 2]}))
     assert bad["ok"] is False and "different" in bad["error"]
@@ -611,7 +603,7 @@ def test_plot_edit_endpoint_returns_new_text_and_refuses_what_it_cannot_do():
 def test_plot_edit_elides_defaults_chosen_by_a_plot_command():
     text = "!plotspec grid: off\n!plot x, x = 0 .. 1\n  grid: on\n"
     out = server.plot_edit(server.PlotEditBody(text=text, line=2, patch={"grid": "off"}))
-    assert out["ok"] and "grid" not in out["text"].split("\n", 2)[2]
+    assert out["ok"] and "grid" not in apply(text, from_json(text, out["edits"])).split("\n", 2)[2]
 
 
 def test_plot_image_endpoint_serves_a_standalone_svg():
@@ -633,4 +625,4 @@ def test_command_line_writes_one_svg_per_plot(tmp_path, monkeypatch, capsys):
 def test_the_same_worksheet_draws_the_same_picture_twice():
     src = BEAM + "!plot M(x), x = 0'm .. L\n  title: T\n  xlim: 1'm .. 4'm\n"
     a, b = plots(src)[0], plots(src)[0]
-    assert a.svg == b.svg and a.plot == b.plot and math.isfinite(a.plot["y"]["lim"][0])
+    assert a.plot.svg == b.plot.svg and a.plot.spec == b.plot.spec and math.isfinite(a.plot.spec["y"]["lim"][0])

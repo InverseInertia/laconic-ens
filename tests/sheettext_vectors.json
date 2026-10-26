@@ -1,0 +1,36 @@
+{
+  "about": "Shared test vectors for the worksheet lexer and line shapes. tests/test_sheettext.py checks laconic/sheettext.py against them and tests/test_sheettext.js checks the editor's copies in static/ (editing.js tokens and isTok, autocomplete.js definition and solverBlock), so the two sides cannot drift apart. A token is [kind, column, text].",
+  "tokens": [
+    {"line": "x = 1", "tokens": [["name", 0, "x"], ["num", 4, "1"]]},
+    {"line": "F = 12'kN * 2.5e-3'm", "tokens": [["name", 0, "F"], ["num", 4, "12"], ["unit", 6, "'kN"], ["num", 12, "2.5e-3"], ["unit", 18, "'m"]]},
+    {"line": "p = 5'%", "tokens": [["name", 0, "p"], ["num", 4, "5"], ["unit", 5, "'%"]]},
+    {"line": "r = 3'% * x", "tokens": [["name", 0, "r"], ["num", 4, "3"], ["unit", 5, "'%"], ["name", 10, "x"]]},
+    {"line": "T = 20'°C", "tokens": [["name", 0, "T"], ["num", 4, "20"], ["unit", 6, "'°C"]]},
+    {"line": "~g = 9.81'm/'s^2", "tokens": [["name", 0, "~g"], ["num", 5, "9.81"], ["unit", 9, "'m"], ["unit", 12, "'s"], ["num", 15, "2"]]},
+    {"line": "σ_max = 2*τ", "tokens": [["name", 0, "σ_max"], ["num", 8, "2"], ["name", 10, "τ"]]},
+    {"line": "x` + y! + z@", "tokens": [["name", 0, "x`"], ["name", 5, "y!"], ["name", 10, "z@"]]},
+    {"line": "e5 = 1e5 + .5", "tokens": [["name", 0, "e5"], ["num", 5, "1e5"], ["num", 11, ".5"]]},
+    {"line": "props(\"D\", \"T\", 300'K, \"Water\")", "tokens": [["name", 0, "props"], ["text", 6, "\"D\""], ["text", 11, "\"T\""], ["num", 16, "300"], ["unit", 19, "'K"], ["text", 23, "\"Water\""]]},
+    {"line": "'smoot = 1.7018'm", "tokens": [["unit", 0, "'smoot"], ["num", 9, "1.7018"], ["unit", 15, "'m"]]},
+    {"line": "A = [1, 2; 3, 4] -> 'mm", "tokens": [["name", 0, "A"], ["num", 5, "1"], ["num", 8, "2"], ["num", 11, "3"], ["num", 14, "4"], ["unit", 20, "'mm"]]}
+  ],
+  "definitions": [
+    {"line": "x = 1", "def": ["assign", "x", []]},
+    {"line": "~g = 9.81'm/'s^2", "def": ["assign", "~g", []]},
+    {"line": "x` = 2", "def": ["assign", "x`", []]},
+    {"line": "σ_max = 3", "def": ["assign", "σ_max", []]},
+    {"line": "f(x) = x^2", "def": ["funcdef", "f", ["x"]]},
+    {"line": "~h(a, b) = a*b", "def": ["funcdef", "~h", ["a", "b"]]},
+    {"line": "'smoot = 1.7018'm", "def": ["unitdef", "smoot", []]},
+    {"line": "x == 1", "def": null},
+    {"line": "f(2)", "def": null},
+    {"line": "2*x", "def": null}
+  ],
+  "solver_blocks": [
+    {"text": "x = 1\n!root x, y\n  equation: x = y\n  equation: x + y = 2", "line": 3, "block": {"kind": "root", "unknowns": ["x", "y"]}},
+    {"text": "!minimize d\n  objective: d^2\n  # a note\n  bounds d: 0 .. 1", "line": 4, "block": {"kind": "minimize", "unknowns": ["d"]}},
+    {"text": "!maximize q\n  objective: q\n\n  equation: q", "line": 4, "block": null},
+    {"text": "!root x\n  equation: x = 1\ny = 2", "line": 3, "block": null},
+    {"text": "!plot f(x), x = 0 .. 1\n  xlim: 0 .. 1", "line": 2, "block": null}
+  ]
+}

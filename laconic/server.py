@@ -5,16 +5,18 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import document, evaluate as evaluate_sheet, snippet
+from .sheet import block_at, solver_blocks
 from . import settings
+from .blockedit import to_json
+from .commands import help_rows
 from .evaluator import check_units
 from .lifecycle import lifecycle
 from .plotopts import PlotError, apply_patch
-from .plotsvg import render_svg
 from .rename import RenameError, RenameWarning, rename
 from .solver import SolverError, set_option, write_result
 from .solverjobs import Busy, jobs
@@ -22,6 +24,7 @@ from .vocab import props_vocabulary, vocabulary
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
+HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
 
 
@@ -89,7 +92,8 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    page = (STATIC / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(page.replace(HELP_MARKER, help_rows()))
 
 
 def _run(sheet, siunitx):
@@ -99,13 +103,13 @@ def _run(sheet, siunitx):
 @app.post("/api/eval")
 def evaluate(sheet: Sheet):
     results = _run(sheet, sheet.view == "latex").results
-    if any(r.kind == "solver" for r in results):
+    if any(r.solver for r in results):
         threading.Thread(target=jobs.warm, daemon=True).start()   # so the first Run does not wait for imports
     if sheet.view == "latex":
         # Export flavour (siunitx), so the snippets paste straight into a document.
         # The exported .tex file always uses align* blocks.
-        return [{**r.to_dict(), "snippet": snippet(r, sheet.wrap)} for r in results]
-    return [r.to_dict() for r in results]
+        return [{**r.to_json(), "snippet": snippet(r, sheet.wrap)} for r in results]
+    return [r.to_json() for r in results]
 
 
 @app.post("/api/export", response_class=PlainTextResponse)
@@ -122,50 +126,49 @@ def save(sheet: Sheet):
 
 @app.post("/api/rename")
 def rename_symbol(body: RenameBody):
-    """Every use of a variable or function name, renamed. Nothing changes on error."""
+    """Every use of a variable or function name, renamed: one edit per use. Nothing changes on error."""
     try:
-        text, count = rename(body.text, body.old, body.new, body.confirm)
+        edits, count = rename(body.text, body.old, body.new, body.confirm)
     except RenameWarning as e:
         return {"ok": False, "warning": str(e)}
     except RenameError as e:
         return {"ok": False, "error": str(e)}
-    return {"ok": True, "text": text, "count": count}
+    return {"ok": True, "edits": to_json(body.text, edits), "count": count}
 
 
 def _plot_at(text, line):
-    results = evaluate_sheet(text, global_units=settings.global_units()).results
-    r = results[line - 1] if 1 <= line <= len(results) else None
-    return r if r is not None and r.kind == "plot" else None
+    """The PlotPayload of the plot on `line`, or None when no plot draws there."""
+    r = block_at(text, line, settings.global_units())
+    return r and r.plot
 
 
 @app.post("/api/plotedit")
 def plot_edit(body: PlotEditBody):
     """Option lines of one plot, rewritten to say what the mouse just did (a pan, a zoom,
-    a reset). Returns the new source text; the page applies it to the editor, and the
+    a reset). Returns the edits to the text; the page applies them to the editor, and the
     plot is then redrawn from the text like any other edit. Nothing changes on error."""
-    r = _plot_at(body.text, body.line)
-    if r is None:
+    plot = _plot_at(body.text, body.line)
+    if plot is None:
         return {"ok": False, "error": f"Line {body.line} is not a plot that draws"}
     try:
-        text = apply_patch(body.text, body.line, body.patch,
-                           {"x": r.plot["x"], "y": r.plot["y"]}, r.plot["inherited"])
+        edits = apply_patch(body.text, body.line, body.patch, plot.axes, plot.inherited)
     except PlotError as e:
         return {"ok": False, "error": str(e)}
-    return {"ok": True, "text": text}
+    return {"ok": True, "edits": to_json(body.text, edits)}
 
 
 @app.post("/api/plotimage")
 def plot_image(body: PlotImageBody):
     """The plot as a complete SVG file, exactly as the page draws it."""
-    r = _plot_at(body.text, body.line)
-    if r is None:
+    plot = _plot_at(body.text, body.line)
+    if plot is None:
         raise HTTPException(404, f"Line {body.line} is not a plot that draws")
-    return Response(render_svg(r.plot, uid=body.line, standalone=True), media_type="image/svg+xml")
+    return Response(plot.image(uid=body.line), media_type="image/svg+xml")
 
 
 # ---- solver blocks ---------------------------------------------------------------------------------
 # Evaluating a sheet never runs a solver. The page starts a job, polls it, and when it has finished
-# asks for the result to be written into the block (/store), which returns the new text.
+# asks for the result to be written into the block (/store), which returns the edits to the text.
 @app.post("/api/solve/start")
 def solve_start(body: SolveStartBody):
     if body.mode not in ("run", "verify"):
@@ -200,21 +203,19 @@ def solve_store(body: SolveStoreBody):
     """Write a finished result into every block whose inputs hash to the record's hash. If the
     sheet was edited while the job ran, no block matches and nothing is written."""
     h = body.record.get("hash")
-    results = evaluate_sheet(body.text, global_units=settings.global_units()).results
-    hits = [r.n for r in results if r.kind == "solver" and r.solver["hash"] == h]
+    hits = [r.n for r in solver_blocks(body.text, settings.global_units()) if r.solver.hash == h]
     if not hits:
         return {"ok": False, "error": "The inputs changed while the solver was running, so its result was not stored"}
-    text = body.text
-    for n in reversed(hits):    # a block that gains a result line pushes the ones below it down
-        text = write_result(text, n, body.record)
-    return {"ok": True, "text": text, "lines": hits}
+    edits = [e for n in hits for e in write_result(body.text, n, body.record)]   # all against body.text
+    return {"ok": True, "edits": to_json(body.text, edits), "lines": hits}
 
 
 @app.post("/api/solveedit")
 def solve_edit(body: SolveEditBody):
-    """Turn a block's `autorun:` line on or off. Returns the new source text."""
+    """Turn a block's `autorun:` line on or off. Returns the edits to the text."""
     try:
-        return {"ok": True, "text": set_option(body.text, body.line, "autorun", "on" if body.autorun else None)}
+        edits = set_option(body.text, body.line, "autorun", "on" if body.autorun else None)
+        return {"ok": True, "edits": to_json(body.text, edits)}
     except SolverError as e:
         return {"ok": False, "error": str(e)}
 

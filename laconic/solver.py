@@ -21,15 +21,16 @@ the worksheet file alone carries it."""
 import hashlib
 import json
 import math
-import re
 import time
 import warnings
 from dataclasses import dataclass, field, fields, is_dataclass
 
 import numpy as np
 
+from .blockedit import BlockEditor
 from .nodes import BinOp, Call, Name, UnitLit
 from .parser import ParseError, parse_expr
+from .sheettext import is_name
 
 KINDS = ("root", "minimize", "maximize")
 ROOT_METHODS = ("hybr", "lm", "broyden1", "broyden2", "krylov", "brentq")
@@ -72,10 +73,6 @@ DEFAULT_TIMEOUT = 300.0
 RECORD_VERSION = 1
 LOG_TRACE_LINES = 120                      # evaluations written to the log before it goes quiet
 
-HEAD_RE = re.compile(r"^!(root|minimize|maximize)(?:[ \t]+(.*\S))?[ \t]*$")
-OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(~?[^\W\d]\w*[`!@]*))?[ \t]*:[ \t]*(.*?)[ \t]*$")
-RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
-NAME_RE = re.compile(r"^~?[^\W\d]\w*[`!@]*$")
 
 
 class SolverError(Exception):
@@ -84,41 +81,6 @@ class SolverError(Exception):
 
 class StopSolve(Exception):
     """Raised inside a sheet run once the requested block has been solved, to skip the rest."""
-
-
-# ---- finding blocks in the text ---------------------------------------------------------------
-def is_solver_line(line):
-    return bool(HEAD_RE.match(line.strip()))
-
-
-def is_block_line(line):
-    """An indented, non-blank line: part of the block above it."""
-    return bool(line) and line[0] in " \t" and bool(line.strip())
-
-
-def block_end(lines, i):
-    """Index just past the lines that belong to the solver block whose header is `lines[i]`."""
-    j = i + 1
-    while j < len(lines) and is_block_line(lines[j]):
-        j += 1
-    return j
-
-
-def expr_spans(line, in_block):
-    """Spans of `line` that hold expressions, for tools that rewrite names (Rename).
-    `in_block` is False for the header itself."""
-    if not in_block:
-        m = re.match(r"[ \t]*!(?:root|minimize|maximize)", line)
-        return [(m.end(), len(line))]
-    m = OPT_RE.match(line)
-    if not m or RESULT_RE.match(line):
-        return []
-    key = m.group(1)
-    if key in ("equation", "objective", "constraint"):
-        return [(m.start(3), m.end(3))]
-    if key == "bounds":
-        return ([(m.start(2), m.end(2))] if m.group(2) else []) + [(m.start(3), m.end(3))]
-    return []
 
 
 # ---- parsing a block --------------------------------------------------------------------------
@@ -242,24 +204,22 @@ def _number(value, key, whole=False, lo=0.0):
     return int(n) if whole else n
 
 
-def parse_block(lines, i):
-    """The block whose header is `lines[i]` (0-based). Problems with single option lines go in
+def parse_block(block):
+    """The solver block `block` (a sheettext.Block). Problems with single option lines go in
     `errors`, keyed by line number; a problem with the whole block is `problem`."""
-    head = HEAD_RE.match(lines[i].strip())
-    end = block_end(lines, i)
-    b = Block(kind=head.group(1), line=i + 1, end=end)
-    names = [s.strip() for s in _split_top(head.group(2) or "")] if head.group(2) else []
-    if not names or not all(NAME_RE.match(n) for n in names):
+    b = Block(kind=block.command, line=block.header, end=block.end)
+    names = [s.strip() for s in _split_top(block.args)] if block.args else []
+    if not names or not all(is_name(n) for n in names):
         b.problem = f"!{b.kind} reads `!{b.kind} x, y`: the variables to solve for, each started above the block"
         return b
     b.unknowns = names
     seen = set()
-    for j in range(i + 1, end):
-        n, raw = j + 1, lines[j].rstrip("\r")
-        if RESULT_RE.match(raw):
+    for line in block.members:
+        n, raw, o = line.n, line.text, line.option
+        if line.result is not None:
             b.result_lines.append(n)
             try:
-                rec = json.loads(RESULT_RE.match(raw).group(1))
+                rec = json.loads(line.result)
                 if not isinstance(rec, dict) or not isinstance(rec.get("hash"), str):
                     raise ValueError
                 b.stored, b.stored_note = rec, ""
@@ -268,11 +228,10 @@ def parse_block(lines, i):
             continue
         if raw.strip().startswith("#"):
             continue
-        m = OPT_RE.match(raw)
         try:
-            if not m:
+            if not o:
                 raise SolverError("Option lines read `key: value`")
-            key, target, value = m.group(1), m.group(2), m.group(3)
+            key, target, value = o.key, o.arg, o.value
             if key not in KEYS[b.kind]:
                 raise SolverError(f"Unknown option '{key}'. Under !{b.kind}: " + ", ".join(KEYS[b.kind]))
             if target and key != "bounds":
@@ -413,7 +372,7 @@ def digest(block, ev, unknowns):
                 units[key] = str(ev.Q(1, ev.ureg.parse_units(key)).to_base_units())
             except Exception:
                 units[key] = key
-    parts = {"v": RECORD_VERSION, "kind": block.kind, "unknowns": block.unknowns, "angle": ev.angle,
+    parts = {"v": RECORD_VERSION, "kind": block.kind, "unknowns": block.unknowns, "angle": ev.mode.angle,
              "lines": block.canon, "start": [_qdigest(ev.vars[u.key]) for u in unknowns],
              "vars": deps, "funcs": funcs, "units": units}
     blob = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()
@@ -813,39 +772,28 @@ def describe_record(rec):
 
 
 # ---- editing the text ----------------------------------------------------------------------------
-def _span(lines, header):
-    i = header - 1
-    if not 0 <= i < len(lines) or not is_solver_line(lines[i]):
+def _editor(text, header):
+    ed = BlockEditor(text, header)
+    if ed.kind != "solver":
         raise SolverError(f"Line {header} is not a solver block")
-    return i, block_end(lines, i)
-
-
-def _eol(line):
-    return "\r" if line.endswith("\r") else ""
+    return ed
 
 
 def write_result(text, header, record):
-    """The text with `record` stored as the block's last line, replacing any earlier result."""
-    lines = text.split("\n")
-    i, end = _span(lines, header)
-    eol = _eol(lines[i])
-    body = [l for l in lines[i + 1:end] if not RESULT_RE.match(l.rstrip("\r"))]
-    new = "  #@ result " + json.dumps(record, separators=(",", ":")) + eol
-    return "\n".join(lines[:i + 1] + body + [new] + lines[end:])
+    """The edits that store `record` as the block's last line, replacing any earlier result."""
+    ed = _editor(text, header)
+    ed.store_result(record)
+    return ed.edits()
 
 
 def set_option(text, header, key, value):
-    """Set (or with value None, remove) one `key: value` line of the block. The result line stays last."""
-    lines = text.split("\n")
-    i, end = _span(lines, header)
-    eol = _eol(lines[i])
-    body = lines[i + 1:end]
-    keep = [l for l in body if not (OPT_RE.match(l.rstrip("\r")) and OPT_RE.match(l.rstrip("\r")).group(1) == key)]
-    results = [l for l in keep if RESULT_RE.match(l.rstrip("\r"))]
-    others = [l for l in keep if l not in results]
-    if value is not None:
-        others.append(f"  {key}: {value}{eol}")
-    return "\n".join(lines[:i + 1] + others + results + lines[end:])
+    """The edits that set (or with value None, remove) one `key: value` line of the block."""
+    ed = _editor(text, header)
+    if value is None:
+        ed.remove(key)
+    else:
+        ed.set(key, value)
+    return ed.edits()
 
 
 # ---- one run request, threaded through a sheet evaluation -------------------------------------------

@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from laconic import evaluate, solverjobs
+from laconic.blockedit import apply
 from laconic.solver import write_result
 
 def main():
@@ -36,7 +37,7 @@ def main():
             try: good, note = c["check"](rec)
             except Exception as e: good, note = False, f"check crashed {e}"
             # stored result must read back as valid
-            txt = write_result(c["text"], c["line"], rec)
+            txt = apply(c["text"], write_result(c["text"], c["line"], rec))
             st = evaluate(txt).results[c["line"] - 1].solver["status"]
             verdict = ("PASS" if good else "WRONG") + ("" if st == "valid" else f" (reload status {st})")
         else:

@@ -7,10 +7,14 @@
  * {caretOnly} moves the caret, {select: [from, to]} changes the selection and
  * {message} reports something without editing.
  *
+ * `merge` turns the edits the server sends (a plot view, a stored solver result, a rename)
+ * into one such edit.
+ *
  * The page applies edits; the same functions run under Node for tests.
  */
 (function (root) {
   'use strict';
+  const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
 
   // Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
   // 8 -> ∞ rides along: it is the one non-Greek symbol worksheets need.
@@ -28,6 +32,18 @@
   // % appears only in the unit '%, so it belongs to the term like a unit's letters.
   const isTok = (c) => isIdent(c) || c === '.' || c === "'" || c === '~' || c === '%';
 
+  // The worksheet lexer, the same as laconic/sheettext.py (tests/sheettext_vectors.json holds
+  // them together): quoted text, units, numbers and names. Python's \w is Unicode, so the
+  // classes are spelled out here.
+  const W = '[\\p{L}\\p{N}_]', W0 = '[\\p{L}\\p{Nl}\\p{No}_]';
+  const TOKEN_RE = new RegExp('("[^"\\n]*")' + `|('(?:(?:${W0}|°)(?:${W}|°)*|%))`
+    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?)' + `|(~?${W0}${W}*[\`!@]*)`, 'gu');
+  const KINDS = ['text', 'unit', 'num', 'name'];
+  // The tokens of one line: [{kind, start, text}], left to right.
+  function tokens(line) {
+    return [...line.matchAll(TOKEN_RE)].map((m) => ({ kind: KINDS[m.slice(1).findIndex((g) => g !== undefined)], start: m.index, text: m[0] }));
+  }
+
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
   // Lines that hold text and not math: comments, and the title, label and note text under a plot.
@@ -37,6 +53,34 @@
     return line.trimStart().startsWith('#') || TEXT_OPTION.test(line);
   };
   const edit = (from, to, insert, caret) => ({ from, to, insert, caret });
+
+  // Two edits, `b` made on the text `a` left, as one edit on `t`, with b's caret.
+  function chain(t, a, b) {
+    const grow = a.insert.length - (a.to - a.from);
+    const from = Math.min(a.from, b.from), end = Math.max(a.from + a.insert.length, b.to);
+    const t2 = t.slice(0, a.from) + a.insert + t.slice(a.to);
+    const t3 = t2.slice(0, b.from) + b.insert + t2.slice(b.to);
+    return edit(from, end - grow, t3.slice(from, end + b.insert.length - (b.to - b.from)), b.caret);
+  }
+
+  // The server's edits (laconic/blockedit.py), all against `t` and not overlapping, as one edit
+  // over the span they cover, so one Ctrl+Z takes back all of them. The caret stays with the text
+  // it was in; inside text an edit replaced, it goes to where that edit starts. Null if nothing changes.
+  function merge(t, edits, caret) {
+    const es = [...edits].sort((a, b) => a.from - b.from);
+    if (!es.length) return null;
+    const from = es[0].from, to = es[es.length - 1].to;
+    let insert = '', pos = from, moved = caret, grow = 0;
+    for (const e of es) {
+      insert += t.slice(pos, e.from) + e.insert;
+      pos = e.to;
+      if (caret >= e.to) moved = caret + grow + e.insert.length - (e.to - e.from);
+      else if (caret > e.from) moved = e.from + grow;
+      grow += e.insert.length - (e.to - e.from);
+    }
+    if (insert === t.slice(from, to)) return null;
+    return edit(from, to, insert, moved);
+  }
 
   // ---- bracket helpers (always limited to one line) -----------------------
   function matchBack(t, i, ls) {
@@ -506,12 +550,12 @@
   // ---- globals -----------------------------------------------------------
   // A global is written with its ~ every time, so a plain one is a slip (the sheet warns when
   // one is assigned). When a name is finished, by typing something that cannot continue it, and
-  // it is a global from an earlier line, the ~ goes in front. ctx.globals is [[name, line], ...].
+  // it is a global the line can see, the ~ goes in front. ctx.symbols is the last symbol table (symbols.js).
   const MARKS = '`!@';
   const FUNC_HEAD = /^\s*~?[\p{L}_][\p{L}\p{N}_]*[`!@]*\s*\([^)]*$/u;
   function globalStart(t, s, ctx) {
-    const globals = ctx && ctx.globals;
-    if (!globals || !globals.length || isIdent(t[s]) || MARKS.includes(t[s] || ' ')) return -1;
+    const symbols = ctx && ctx.symbols;
+    if (!symbols || !symbols.length || isIdent(t[s]) || MARKS.includes(t[s] || ' ')) return -1;
     const ls = lineStartOf(t, s);
     let a = s;
     while (a > ls && MARKS.includes(t[a - 1])) a--;
@@ -521,24 +565,17 @@
     if (a > ls && "~'.!".includes(t[a - 1])) return -1;                // has its ~, a unit, after a point, a command
     if (FUNC_HEAD.test(t.slice(ls, a))) return -1;                      // a function's own parameters
     const name = t.slice(a, s), line = t.slice(0, s).split('\n').length;
-    return globals.some(([n, at]) => n === name && at < line) ? a : -1;
+    return Symbols.visible(symbols, line).some((g) => g.global && g.name === name) ? a : -1;
   }
   // Runs `base` on the text with the ~ added, then returns the whole change as one edit on `t`,
   // so a single Ctrl+Z takes back both. `typed` is what the browser would insert if `base` does nothing.
   function withTilde(t, s, g, typed, base) {
-    const t2 = t.slice(0, g) + '~' + t.slice(g), r = base(t2, s + 1);
-    let final = t2, caret = s + 1;
-    if (!r || (r.insert === undefined && r.caretOnly === undefined)) {
-      final = t2.slice(0, s + 1) + typed + t2.slice(s + 1); caret = s + 1 + typed.length;
-    } else if (r.insert !== undefined) {
-      final = t2.slice(0, r.from) + r.insert + t2.slice(r.to); caret = r.caret;
-    } else caret = r.caretOnly;
-    let a = 0, b = 0;
-    while (a < t.length && t[a] === final[a]) a++;
-    while (b < t.length - a && t[t.length - 1 - b] === final[final.length - 1 - b]) b++;
-    return edit(a, t.length - b, final.slice(a, final.length - b), caret);
+    const tilde = edit(g, g, '~', s + 1), r = base(t.slice(0, g) + '~' + t.slice(g), s + 1);
+    if (!r || (r.insert === undefined && r.caretOnly === undefined)) return chain(t, tilde, edit(s + 1, s + 1, typed, s + 1 + typed.length));
+    if (r.insert !== undefined) return chain(t, tilde, r);
+    return chain(t, tilde, edit(r.caretOnly, r.caretOnly, '', r.caretOnly));
   }
-  const plainCtx = (ctx) => ({ ...ctx, globals: null });
+  const plainCtx = (ctx) => ({ ...ctx, symbols: null });
 
   // Keys that wrap a highlighted region instead of replacing it.
   const WRAPPERS = new Set(['/', '\\', '^', '(', '[', '|']);
@@ -646,9 +683,9 @@
   }
 
   const api = {
-    DEFAULT_GREEK, charAction, keyAction,
+    DEFAULT_GREEK, charAction, keyAction, merge,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
-    snap, grow, wrapWithCall,
+    snap, grow, wrapWithCall, tokens, isTok,
     isTextLine: isComment,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -124,6 +124,31 @@ def test_f2_renames_the_name_at_the_caret(page):
     page.keyboard.press("Enter")
     page.wait_for_selector("#renameDlg", state="hidden")
     assert value(page) == "span = 4.5'm\nA = span * 2"
+    page.keyboard.press("Control+z")                     # one step takes the whole rename back
+    assert value(page) == "L = 4.5'm\nA = L * 2"
+
+
+def test_server_edits_for_a_text_that_has_changed_are_not_made(page):
+    reset(page, "x = 1")
+    assert page.evaluate("applyEdits('x = 2', [{from: 4, to: 5, insert: '3'}])") is False
+    assert value(page) == "x = 1"
+    assert page.evaluate("applyEdits('x = 1', [{from: 4, to: 5, insert: '3'}])") is True
+    assert value(page) == "x = 3"
+
+
+@pytest.mark.parametrize("text,caret,name", [
+    ("σ_max = 3", 2, "σ_max"),          # the page reads names with the server's lexer, Greek included
+    ("p = 5'%", 7, "'%"),
+    ("F = 12'kN", 6, "'kN"),             # between the number and its unit, the unit is the name
+    ('t = "L"', 6, ""),                  # text is not a name
+])
+def test_f2_reads_the_name_at_the_caret_like_the_server(page, text, caret, name):
+    reset(page, text)
+    select(page, caret, caret)
+    page.keyboard.press("F2")
+    page.wait_for_selector("#renameDlg[open]")
+    assert page.input_value("#renameOld") == name
+    page.keyboard.press("Escape")
 
 
 def test_alt_z_toggles_wrapping(page):
@@ -242,7 +267,8 @@ FAKE_FS = """() => {
 
 
 def test_save_writes_back_to_the_opened_file(page):
-    """#39: after Open, Save overwrites that file; Save As asks once, then Save reuses the new file."""
+    """#39, end to end: Open, Save writes back through the File System Access API, Save As
+    renames the sheet. Which file a save goes to is tested in test_savefile.js."""
     page.evaluate(FAKE_FS)
     page.click("#open")
     page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
@@ -256,14 +282,10 @@ def test_save_writes_back_to_the_opened_file(page):
     page.wait_for_function("window.written.length === 2")
     assert page.evaluate("[window.picks, window.written[1][0]]") == [1, "copy.lens"]
     assert page.input_value("#name") == "copy"
-    page.click("#save")
-    page.wait_for_function("window.written.length === 3")
-    assert page.evaluate("[window.picks, window.written[2][0]]") == [1, "copy.lens"]
-    # Renaming the sheet means a new file, so Save asks again.
+    assert page.get_attribute("#save", "title") == "Save to copy.lens (Ctrl+S)"
+    # Renaming the sheet means a new file.
     page.fill("#name", "other")
-    page.click("#save")
-    page.wait_for_function("window.written.length === 4")
-    assert page.evaluate("window.picks") == 2
+    assert page.get_attribute("#save", "title") == "Save the worksheet (Ctrl+S)"
 
 
 def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
@@ -279,7 +301,7 @@ def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
 def test_globals_are_marked_and_get_their_tilde(page):
     reset(page, "~g = 5")
     page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
-    page.wait_for_function("last.length === 1 && last[0].gdef === 'g'")
+    page.wait_for_selector("#out .row[data-line='1'] [data-global='g']")   # the evaluation is on screen
     page.keyboard.type("\ng = 12")
     assert value(page) == "~g = 5\n~g = 12"      # the ~ is added when the name ends
     assert page.get_attribute("#out [data-global]", "title") == "Global variable ~g, defined on line 1"
@@ -293,3 +315,32 @@ def test_globals_are_marked_and_get_their_tilde(page):
     assert page.evaluate("getComputedStyle(document.querySelector('#out [data-global]')).borderBottomStyle") == "none"
     page.click("#globalsChip")
     assert page.is_checked("#markGlobals") and page.is_hidden("#globalsChip")
+
+
+def test_each_kind_of_line_shows_its_row(page):
+    """What the results pane shows for each kind of line (static/rows.js, drawn by index.html)."""
+    text = "## Loads\n!sigfigs 3\nx = 2'm\nnope +\n!plot x, x = 0 .. 1\n  grid: off\n  bad: 1\ny = 1\n!root y\n  equation: y^2 = 2"
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector(".row.solver .solver-tools")
+    rows = page.eval_on_selector_all("#out .row", "rs => rs.map((r) => [+r.dataset.line, r.className.replace(' active', '')])")
+    assert rows == [[1, "row heading"], [2, "row command"], [3, "row assign"], [4, "row error"], [5, "row plot"],
+                    [7, "row error"], [8, "row assign"], [9, "row solver stale"]]
+    assert page.inner_text(".row[data-line='1'] .body") == "Loads"
+    assert page.text_content(".row[data-line='2'] .body") == "!sigfigs 3  →  Results show 3 significant figures"
+    assert page.inner_text(".row[data-line='4'] .body .src") == "nope +"
+    assert page.locator(".row[data-line='3'] .katex").count() == 1
+    assert page.locator(".row[data-line='9'] .stale-mark").count() == 1
+    at = text.index("  grid")
+    select(page, at, at)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('click'))")
+    assert page.get_attribute(".row.active", "data-line") == "5"     # an option line: its plot's row
+    select(page, len(text), len(text))
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('click'))")
+    assert page.get_attribute(".row.active", "data-line") == "9"
+    page.click("#viewLatex")
+    page.wait_for_selector(".row.snip pre")
+    assert page.locator(".row.snip .copy").count() == 6 and page.locator(".row.error .copy").count() == 0
+    assert page.locator(".row.snip .solver-tools").count() == 1
+    assert page.inner_text(".row[data-line='3'] pre").startswith("x =")
+    page.click("#viewTypeset")

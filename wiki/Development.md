@@ -17,12 +17,19 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_editing.js` | math keys and selections |
 | `node tests/test_autocomplete.js` | suggestions |
 | `node tests/test_paste.js` | table paste |
+| `node tests/test_sheettext.js` | the editor's lexer against the shared vectors |
+| `node tests/test_savefile.js` | which file Save and Save As write, and the download fallback |
+| `node tests/test_theme.js` | theme loading, contrast check, presets |
+| `node tests/test_shortcuts.js` | the shortcut table, and that the wiki lists its Ctrl/Alt keys |
+| `node tests/test_rows.js` | the row model: what the results pane shows for each kind of line |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 
 | File | Covers |
 |---|---|
 | `test_laconic.py`, `test_units.py` | evaluation, LaTeX, custom units |
 | `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py` | one module each |
+| `test_sheettext.py`, `sheettext_vectors.json` | line kinds, blocks, spans and tokens; the vectors are shared with `test_sheettext.js` |
+| `test_lineresult.py` | the line result interface, the block lookups, and the contract on the `/api/eval` row shape (it also runs `rows.js` over real rows) |
 | `test_editing_node.py` | runs the Node suites from pytest |
 | `test_solver.py`, `test_solverjobs.py` | solver blocks and the worker process |
 | `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
@@ -42,6 +49,8 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 - **A built-in function:** add an `fn_name` method to `Evaluator` (it is picked up by suggestions and Rename's reserved-name list automatically). Add a signature to `_SIGNATURES` in `vocab.py`, LaTeX in `Printer.call` if it should typeset specially, and a row to [Matrices](Matrices) or [Worksheet Syntax](Worksheet-Syntax).
 - **A command:** handle it in `_run_command` in `sheet.py` and list it in `COMMANDS` in `vocab.py`.
 - **A plot option:** add it to the tables at the top of `plotopts.py`, resolve it in `plotspec.py`, and draw it in `plotsvg.py` and `plotpgf.py`.
+- **A field on the eval rows:** add it to `LineResult` (or to a payload, if only one kind has it) and to `to_json`, update the expected shape in `test_lineresult.py`, and read it in `rows.js` (or the payload's own reader: `plotview.js`, `solverview.js`).
+- **A unit that needs special handling** (its own dimension, a reduction rule, an export spelling, an error or hint): add it to the unit catalogue, `catalogue.py`. A currency is one entry in `CURRENCIES`.
 
 ## CI
 

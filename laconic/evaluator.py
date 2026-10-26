@@ -13,8 +13,11 @@ import numpy as np
 import pint
 from pathlib import Path
 
+from .commands import SheetMode
+from .symbols import FUNCTION, VARIABLE, SymbolTable
 from .nodes import BinOp, Name, Str, UnitLit
 from . import props as _props
+from . import catalogue
 from .parser import parse_expr
 
 CONSTANTS = {"pi": math.pi, "e": math.e, "∞": math.inf}
@@ -41,24 +44,8 @@ def registry():
         assert renamed != before, "pint's year definition changed"
         (Path(tmp) / "default_en.txt").write_text(renamed, encoding="utf-8")
         ureg = pint.UnitRegistry(str(Path(tmp) / "default_en.txt"), autoconvert_offset_to_baseunit=True)
-    for code in CURRENCIES:
-        ureg.define(f"{code} = [{code}]")
+    catalogue.define(ureg)
     return ureg
-
-
-# ISO 4217 codes. Each is a dimension of its own: exchange rates change, so 'USD + 'EUR is an
-# error and a rate is an ordinary variable (rate = 1.08'USD/'EUR). Symbols such as $ are not
-# units, because several currencies share them.
-CURRENCIES = {
-    "USD": "US dollar", "EUR": "euro", "GBP": "pound sterling", "JPY": "Japanese yen",
-    "CNY": "Chinese yuan", "CAD": "Canadian dollar", "AUD": "Australian dollar",
-    "NZD": "New Zealand dollar", "CHF": "Swiss franc", "HKD": "Hong Kong dollar",
-    "SGD": "Singapore dollar", "SEK": "Swedish krona", "NOK": "Norwegian krone",
-    "DKK": "Danish krone", "PLN": "Polish zloty", "CZK": "Czech koruna", "HUF": "Hungarian forint",
-    "KRW": "South Korean won", "TWD": "New Taiwan dollar", "INR": "Indian rupee",
-    "BRL": "Brazilian real", "MXN": "Mexican peso", "ZAR": "South African rand",
-    "TRY": "Turkish lira", "ILS": "Israeli shekel", "AED": "UAE dirham", "SAR": "Saudi riyal",
-}
 
 
 def _ndim(q):
@@ -125,47 +112,20 @@ class Evaluator:
         self.Q = self.ureg.Quantity
         self.vars = {}
         self.funcs = {}
-        self.gvars = set()     # bare names defined global with ~; stored as ~name from then on
-        self.gfuncs = set()
-        self.gline = {}        # (is function, ~name) -> line that made it global; set by sheet.py
-        self.assume = True     # False after !noassume: results keep their typed units
-        self.short = False     # True after !short: lines show only the final number, no steps or units
-        self.plotdefs = {}     # set by `!plot key: value`, for the plots below it
-        self.cleared = set()   # names removed by !clear, for a clearer error
-        self.cleared_funcs = set()  # functions removed by !clearf
+        self.symbols = SymbolTable()  # which names each line sees; filled in by sheet.py
         self.stale = set()     # variable keys whose value comes from a solver result that is out of date
-        self.angle = "radian"  # "degree" after !trigdeg: bare numbers in trig calls are degrees
+        self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
         return self.vkey(name) in self.vars or name in local
 
     def vkey(self, name):
-        """The key a variable is stored under. `~` marks a definition as global; every
-        later use of that name, with or without the `~`, resolves to the global one."""
-        bare = name.lstrip("~")
-        return "~" + bare if name != bare or bare in self.gvars else bare
+        """The key a variable is stored under at the current line (a global's has its ~)."""
+        return self.symbols.key(name, VARIABLE)
 
     def fkey(self, name):
-        bare = name.lstrip("~")
-        return "~" + bare if name != bare or bare in self.gfuncs else bare
-
-    def gnames_at(self, line):
-        """Bare names that are global on `line`: made global there or above it."""
-        return {key[1:] for (_, key), n in self.gline.items() if n <= line}
-
-    def bind_key(self, name, func=False):
-        """The key a definition of `name` stores under. A `~` definition makes the name
-        global; a name already in use without one cannot become global."""
-        bare = name.lstrip("~")
-        names, store = (self.gfuncs, self.funcs) if func else (self.gvars, self.vars)
-        if name != bare and bare not in names:
-            if bare in store:
-                kind = "function" if func else "variable"
-                raise EvalError(f"'{bare}' is already a non-global {kind}. "
-                                f"Define it with ~ the first time, or rename one of them")
-            names.add(bare)
-        return ("~" + bare) if bare in names else bare
+        return self.symbols.key(name, FUNCTION)
 
     def is_unit(self, name):
         try:
@@ -224,7 +184,7 @@ class Evaluator:
             return scope[key]
         if n.name in CONSTANTS:
             return self.Q(CONSTANTS[n.name])
-        if n.name in self.cleared:
+        if n.name in self.mode.cleared:
             raise EvalError(f"'{n.name}' was removed by !clear")
         hint = f". Units need an apostrophe: '{n.name}" if self.is_unit(n.name) else ""
         raise EvalError(f"'{n.name}' is not defined{hint}")
@@ -350,7 +310,7 @@ class Evaluator:
             return self.eval(body, {**self.vars, **dict(zip(params, args))})
         fn = getattr(self, "fn_" + n.func, None)
         if fn is None:
-            if n.func in self.cleared_funcs:
+            if n.func in self.mode.cleared_funcs:
                 raise EvalError(f"'{n.func}' was removed by !clearf")
             raise EvalError(f"Unknown function '{n.func}'")
         try:
@@ -388,15 +348,15 @@ class Evaluator:
     def _radians(self, x):
         """Magnitude of x in radians; a bare number is read in the current angle unit."""
         if not x.unit_items():
-            x = self.Q(x.magnitude, self.angle)
+            x = self.Q(x.magnitude, self.mode.angle)
         return x.to("radian").magnitude
 
     def fn_sin(self, x): return self.Q(np.sin(self._radians(x)))
     def fn_cos(self, x): return self.Q(np.cos(self._radians(x)))
     def fn_tan(self, x): return self.Q(np.tan(self._radians(x)))
-    def fn_asin(self, x): return self.Q(np.arcsin(self._dimless(x, "asin")), "radian").to(self.angle)
-    def fn_acos(self, x): return self.Q(np.arccos(self._dimless(x, "acos")), "radian").to(self.angle)
-    def fn_atan(self, x): return self.Q(np.arctan(self._dimless(x, "atan")), "radian").to(self.angle)
+    def fn_asin(self, x): return self.Q(np.arcsin(self._dimless(x, "asin")), "radian").to(self.mode.angle)
+    def fn_acos(self, x): return self.Q(np.arccos(self._dimless(x, "acos")), "radian").to(self.mode.angle)
+    def fn_atan(self, x): return self.Q(np.arctan(self._dimless(x, "atan")), "radian").to(self.mode.angle)
     def fn_exp(self, x): return self.Q(np.exp(self._dimless(x, "exp")))
     def fn_ln(self, x): return self.Q(np.log(self._dimless(x, "ln")))
     def fn_log10(self, x): return self.Q(np.log10(self._dimless(x, "log10")))
