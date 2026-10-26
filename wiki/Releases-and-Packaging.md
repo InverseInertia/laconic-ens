@@ -19,6 +19,8 @@ PyInstaller does not cross-compile, so build on each target OS. The result needs
 
 The logo source is `laconic/static/logo.svg` (header and browser tab).
 
+On Linux the frozen program puts its bundled libraries on `LD_LIBRARY_PATH`. A browser that inherits that variable can fail to start (Firefox, issue #37), so `_launch` in `laconic/__main__.py` starts the browser with the user's original value, which the bootloader saves in `LD_LIBRARY_PATH_ORIG`. Any other program the frozen build starts needs the same environment (`_browser_env`).
+
 ## The `build` workflow
 
 | Job | When | Does |

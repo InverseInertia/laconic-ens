@@ -1,4 +1,5 @@
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -17,22 +18,48 @@ _CHROMIUM = ("google-chrome", "google-chrome-stable", "chromium", "chromium-brow
              "microsoft-edge", "brave-browser")
 
 
+def _browser_env():
+    """The environment for a browser we start. A PyInstaller build on Linux puts its own
+    libraries first on LD_LIBRARY_PATH; a browser that inherits that loads the bundle's copies
+    of libstdc++, libssl and friends instead of the system ones, and Firefox in particular
+    fails to start. The bootloader keeps the user's value in LD_LIBRARY_PATH_ORIG."""
+    env = dict(os.environ)
+    if getattr(sys, "frozen", False):
+        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        if orig is None:
+            env.pop("LD_LIBRARY_PATH", None)
+        else:
+            env["LD_LIBRARY_PATH"] = orig
+    return env
+
+
+def _spawn(cmd):
+    try:
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         env=_browser_env(), start_new_session=True)
+        return True
+    except OSError:
+        return False
+
+
 def _launch(url, app):
     """--app opens a Chromium-family window with no tabs or address bar, which
     gives the page more of the keyboard (Ctrl+T is a new tab in a normal tab)."""
     if app:
         for exe in _CHROMIUM:
             path = shutil.which(exe)
-            if path:
-                subprocess.Popen([path, f"--app={url}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if path and _spawn([path, f"--app={url}"]):
                 return
         print("No Chromium-based browser found, opening the default browser instead")
-    if sys.platform.startswith("linux") and shutil.which("xdg-open"):
-        # GTK browsers print harmless messages to the terminal; keep them out of it.
-        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         start_new_session=True)
+    # GTK browsers print harmless messages to the terminal; _spawn keeps them out of it.
+    if sys.platform.startswith("linux") and shutil.which("xdg-open") and _spawn(["xdg-open", url]):
         return
-    webbrowser.open(url)
+    try:
+        if webbrowser.open(url):
+            return
+    except Exception:
+        pass
+    print(f"Could not open a browser; open {url} by hand")
 
 
 _STATUS = {"valid": "solved", "stale": "OUT OF DATE: run with --solve", "none": "NOT SOLVED: run with --solve"}
@@ -83,7 +110,8 @@ def main():
     if a.serve:
         import uvicorn
         url = f"http://127.0.0.1:{a.port}"
-        print(f"laconic running at {url}")
+        # Always printed: the browser may fail to start, or start without showing a window.
+        print(f"laconic running at {url} (open it in a browser if no window appears)")
         if a.open or a.app:
             threading.Timer(1.0, _launch, args=(url, a.app)).start()
         uvicorn.run("laconic.server:app", host="127.0.0.1", port=a.port, log_level="warning")

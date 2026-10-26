@@ -273,8 +273,9 @@
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
   <button id="renameBtn" data-icon="rename" class="sq" title="Rename a variable, function or custom unit everywhere (F2)" aria-label="Rename"></button>
   <button id="settingsBtn" data-icon="settings" class="sq" title="Settings" aria-label="Settings"></button>
-  <button id="open" data-icon="open" class="sq" title="Open a worksheet" aria-label="Open"></button>
-  <button id="save" data-icon="save" class="sq" title="Save the worksheet" aria-label="Save"></button>
+  <button id="open" data-icon="open" class="sq" title="Open a worksheet (Ctrl+O)" aria-label="Open"></button>
+  <button id="save" data-icon="save" class="sq" title="Save the worksheet (Ctrl+S)" aria-label="Save"></button>
+  <button id="saveAs" data-icon="saveas" class="sq" title="Save the worksheet as a new file (Ctrl+Shift+S)" aria-label="Save As"></button>
   <button id="export" class="wide" title="Export a complete LaTeX document">Export <span class="texLogo">LaTeX</span></button>
   <input type="file" id="file" accept=".lens,.cs,.txt" hidden>
 </header>
@@ -343,7 +344,7 @@
 L = 4.5'm
 w = 12'kN / 'm
 M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i></pre>
-    <p>One statement per line. An error on a line never stops the lines after it. Evaluation runs top to bottom, so define things before you use them. <strong>Save</strong> and <strong>Open</strong> use plain-text <code>.lens</code> files.</p>
+    <p>One statement per line. An error on a line never stops the lines after it. Evaluation runs top to bottom, so define things before you use them. <strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) and <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) use plain-text <code>.lens</code> files. In Chrome or Edge, Save writes back to the file you opened; <strong>Save As</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) picks a new one. Other browsers download a copy each time.</p>
     <div id="exampleBox" hidden>
       <p>Worked examples ship with the program, so they are always here. Opening one replaces the sheet in the editor:</p>
       <ul id="exampleList" class="examples"></ul>
@@ -368,6 +369,7 @@ F` = 2   v! = 5   a@ = 1  <i>dot, arrow and hat accents</i>
       <li>Results come out in the simplest SI unit (N, J, Pa, &hellip;). Use <code>-&gt;</code> to choose another, or <code>!noassume</code> to keep the units your arithmetic produced.</li>
       <li>Define your own with <code>'smoot = 1.7018'm</code>. Units you use in every sheet can be stored under Settings. Saving a sheet carries the definitions it needs.</li>
       <li>The pound is <code>'lbm</code> (mass) or <code>'lbf</code> (force).</li>
+      <li>Percent is <code>5'%</code> (0.05). Currencies use ISO codes, such as <code>'USD</code>, <code>'EUR</code> and <code>'GBP</code>, and are never converted into each other. Write an exchange rate as a variable: <code>rate = 1.08'USD/'EUR</code>.</li>
     </ul>
 
     <h3>Matrices <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Matrices" target="_blank" rel="noopener">Matrices</a></h3>
@@ -622,27 +624,63 @@ function fitName() {
 nameEl.addEventListener("input", fitName);
 document.fonts.ready.then(fitName);
 
-$("#save").onclick = async () => {
-  // Ask for the location first: the picker needs the click's user activation, which the fetch could outlast.
-  let handle = null;
-  if (window.showSaveFilePicker) {
+// The file the sheet was opened from or last saved to, so Save writes back to it. Only browsers
+// with the File System Access API (Chromium) give one; elsewhere every save is a download.
+let fileHandle = null;
+const LENS_TYPES = [{description: "LENS worksheet", accept: {"text/plain": [".lens"]}}];
+function setFile(handle) {
+  fileHandle = handle;
+  $("#save").title = handle ? `Save to ${handle.name} (Ctrl+S)` : "Save the worksheet (Ctrl+S)";
+}
+
+async function save(as) {
+  // Get the handle and its permission first: both need the click's user activation, which the fetch could outlast.
+  let handle = as ? null : fileHandle;
+  if (handle && (await handle.requestPermission({mode: "readwrite"})) !== "granted") handle = null;
+  if (!handle && window.showSaveFilePicker) {
     try {
-      handle = await showSaveFilePicker({suggestedName: stem() + ".lens", types: [{description: "LENS worksheet", accept: {"text/plain": [".lens"]}}]});
+      handle = await showSaveFilePicker({suggestedName: stem() + ".lens", types: LENS_TYPES});
     } catch (e) { if (e.name === "AbortError") return; }
   }
   let text = src.value;
   try { const res = await post("/api/save"); if (res.ok) text = await res.text(); } catch {}
   if (!handle) return download(stem() + ".lens", text, "text/plain");
-  const w = await handle.createWritable(); await w.write(text); await w.close();
+  try {
+    const w = await handle.createWritable(); await w.write(text); await w.close();
+  } catch (e) { say(`Could not save ${handle.name}: ${e.message}`); return; }
+  setFile(handle);
   nameEl.value = handle.name.replace(/\.\w+$/, ""); fitName();
-};
+  say(`Saved ${handle.name}`);
+}
+function load(text, name, handle = null) {
+  src.value = text; nameEl.value = name; fitName(); setFile(handle); evaluate();
+}
+$("#save").onclick = () => save(false);
+$("#saveAs").onclick = () => save(true);
+// Renaming the sheet means a new file: the next Save asks where, rather than overwriting the old one.
+nameEl.addEventListener("input", () => setFile(null));
 $("#export").onclick = async () => download(stem() + ".tex", await (await post("/api/export")).text(), "application/x-tex");
-$("#open").onclick = () => $("#file").click();
+async function openFile() {
+  if (!window.showOpenFilePicker) return $("#file").click();
+  let handle;
+  try {
+    [handle] = await showOpenFilePicker({types: [{description: "LENS worksheet", accept: {"text/plain": [".lens", ".cs", ".txt"]}}]});
+  } catch (e) { return; }   // cancelled
+  const f = await handle.getFile();
+  // A .cs or .txt file is only read; saving it writes a new .lens file instead of overwriting it.
+  load(await f.text(), f.name.replace(/\.\w+$/, ""), /\.lens$/i.test(f.name) ? handle : null);
+}
+$("#open").onclick = openFile;
 $("#file").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
-  src.value = await f.text(); nameEl.value = f.name.replace(/\.\w+$/, ""); fitName();
-  evaluate(); e.target.value = "";
+  load(await f.text(), f.name.replace(/\.\w+$/, ""));
+  e.target.value = "";
 };
+document.addEventListener("keydown", (ev) => {
+  if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || document.querySelector("dialog[open]")) return;
+  if (ev.code === "KeyS") { ev.preventDefault(); save(ev.shiftKey); }
+  else if (ev.code === "KeyO" && !ev.shiftKey) { ev.preventDefault(); openFile(); }
+});
 
 // ---- plots -----------------------------------------------------------------
 // The picture is drawn on the server from the worksheet text. Dragging or zooming it
@@ -1192,7 +1230,7 @@ fetch("/api/examples").then((r) => r.json()).then((list) => {
     b.onclick = async () => {
       if (src.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
       const text = await (await fetch(`/api/examples/${ex.name}`)).text();
-      src.value = text; nameEl.value = ex.name; fitName(); evaluate();
+      load(text, ex.name);
       $("#helpDlg").close();
     };
     li.append(b, `${ex.title} (${ex.name}.lens)`);

@@ -51,6 +51,7 @@ eq(sim('x = f(a, b)|', '/'), 'x = f(a, b) / (|)', 'call is one term');
 eq(sim('x = a^2|', '/'), 'x = a^2 / (|)', 'numerator includes its exponent');
 eq(sim("x = 12 'kN|", '/'), "x = 12 'kN / (|)", 'number plus unit with a space');
 eq(sim("w = 12'kN|", ['/', "'", 'm', 'ArrowRight']), "w = 12'kN / 'm|", 'unit fraction');
+eq(sim("r = 5'%|", ['/', '2', 'ArrowRight']), "r = 5'% / 2|", "'% belongs to the numerator (#41)");
 eq(sim('x = a|b', '/'), 'x = a / b|', 'term on the right becomes the denominator');
 eq(sim('x = a|(b+c)', '/'), 'x = a / (b+c)|', 'bracketed term on the right');
 eq(sim('x = |', '/'), 'x = (|) / ()', 'no left term');

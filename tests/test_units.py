@@ -187,3 +187,45 @@ def test_preview_uses_plain_names():
 def test_unit_definition_snippet():
     r = run("'smoot = 1.7018'm", siunitx=True)[0]
     assert snippet(r, "inline").startswith(r"1\,\unit{\smoot} = \qty{1.702}{\meter}")
+
+
+# ---- percent and currencies (#41) ---------------------------------------------------
+def test_percent_is_a_unit_worth_a_hundredth():
+    assert last("x = 20'% * 50'N").text == "x = 10 N"
+    assert last("x = 0.05 -> '%").text == "x = 5 %"
+    assert last("x = 5'% + 2'%").text == "x = 7 %"      # a lone percent stays percent
+    assert last("x = 50'% * 50'%").text == "x = 0.25"   # percent squared does not
+    assert r"\%" in last("x = 5'%").latex
+
+
+def test_percent_and_dollar_without_a_unit_mark_say_how_to_write_them():
+    assert "5'%" in last("x = 5%").error
+    assert "'USD" in last("x = $5").error
+
+
+def test_currencies_are_units_that_never_convert_into_each_other():
+    assert last("c = 0.12'USD/'kWh * 500'kWh").text == "c = 60 USD"
+    assert last("c = 1.08'USD/'EUR * 100'EUR").text == "c = 108 USD"
+    assert "rate = 1.08'USD/'EUR" in last("c = 3'USD + 2'EUR").error
+    assert last("c = 3'USD -> 'm").kind == "error"
+
+
+def test_a_price_keeps_the_units_it_was_typed_in():
+    assert last("p = 0.12'USD/'kWh * 2").text == "p = 0.24 USD/kWh"
+    assert last("p = 12'USD/'h * 3").text == "p = 36 USD/h"
+    assert last("p = 0.12'USD/'kWh * 3'MJ").text == "p = 0.1 USD"
+    assert last("p = 2'kUSD * 3").text == "p = 6 kUSD"
+
+
+def test_export_uses_percent_and_declares_currencies():
+    ws = evaluate("x = 5'%\nc = 2'kUSD / 'EUR", siunitx=True)
+    assert r"\qty{5}{\percent}" in ws.results[0].latex
+    decl = "\n".join(ws.declarations)
+    assert r"\DeclareSIUnit{\USD}" in decl and r"\DeclareSIUnit{\EUR}" in decl
+    assert not any("percent" in d for d in ws.declarations)
+
+
+def test_percent_and_currencies_are_suggested():
+    from laconic.vocab import vocabulary
+    units = {u[0]: u for u in vocabulary()["units"]}
+    assert units["%"][2] and units["USD"][1] == "US dollar (currency)"
