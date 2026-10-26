@@ -62,6 +62,33 @@ def test_the_page_carries_the_command_help_rows():
     assert help_rows() in page and "<!-- command help" not in page
 
 
+def test_the_page_shows_the_version_in_the_header_and_help(monkeypatch):
+    page = server.index().body.decode()
+    assert "{{version}}" not in page
+    assert '<span class="version" id="version">dev</span>' in page   # a source checkout
+    assert '<p class="version" id="helpVersion">LENS dev &middot;' in page
+    monkeypatch.setattr(server, "version_label", lambda: "v0.2.0")
+    assert 'id="version">v0.2.0</span>' in server.index().body.decode()
+
+
+def test_version_label():
+    from laconic._version import label
+    assert label("0+dev") == "dev" and label("0.2.0") == "v0.2.0"
+
+
+def test_the_package_version_is_read_from_the_version_module():
+    # The release build stamps laconic/_version.py; pyproject.toml must take the version from it.
+    import re
+    tomllib = pytest.importorskip("tomllib")  # Python 3.11+
+    from pathlib import Path
+    root = Path(__file__).parent.parent
+    project = tomllib.loads((root / "pyproject.toml").read_text())
+    assert "version" not in project["project"] and "version" in project["project"]["dynamic"]
+    assert project["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "laconic._version.__version__"}
+    # The workflow's sed rewrites exactly this line.
+    assert re.search(r'^__version__ = "[^"]*"$', (root / "laconic" / "_version.py").read_text(), re.M)
+
+
 def test_settings_survive_a_broken_file(config):
     (config / "settings.json").write_text("{not json")
     assert server.get_settings() == {"welcomed": False, "greek": None, "units": []}

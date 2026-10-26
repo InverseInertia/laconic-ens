@@ -42,7 +42,8 @@
   }
   svg.logo .grid { display: none; }  /* the header logo drops the grid; the favicon file keeps it */
   .logo { display: block; flex: none; width: var(--hdr); height: var(--hdr); }
-  .brand { font: 600 14px var(--sans); letter-spacing: .1em; padding-right: 10px; border-right: 1px solid var(--rule); }
+  .brand { font: 600 14px var(--sans); letter-spacing: .1em; padding-right: 10px; border-right: 1px solid var(--rule); white-space: nowrap; }
+  .brand .version { font: 400 11px var(--sans); letter-spacing: 0; color: var(--text-soft); }
   header input[type=text] {
     font: 500 14px var(--sans); color: var(--text);
     background: transparent; border: 0; border-bottom: 1px dashed transparent;
@@ -249,6 +250,7 @@
   .help .welcome { display: flex; align-items: center; gap: 24px; margin: 0 0 8px; padding-bottom: 16px; border-bottom: 1px solid var(--rule); }
   .help .welcome h1 { margin: 0 0 6px; font: 600 28px var(--sans); }
   .help .welcome p { margin: 0 0 6px; }
+  .help .welcome p.version { margin: 0 0 10px; font-size: 13px; color: var(--text-soft); }
   #helpLogo { flex: none; width: 150px; height: 150px; }
   #helpLogo img, #helpLogo svg { display: block; width: 100%; height: 100%; }
   .help a { color: var(--text); }
@@ -272,12 +274,13 @@
     header .spacer { display: none; }
     .brand { border-right: 0; padding-right: 0; }
   }
+  @media (max-width: 480px) { .brand .version { display: none; } }  /* Help still shows it */
 </style>
 </head>
 <body>
 <header>
   <img class="logo" src="/static/logo.svg" alt="">
-  <span class="brand" title="Laconic Engineering Notebook System">LENS</span>
+  <span class="brand" title="Laconic Engineering Notebook System">LENS <span class="version" id="version">{{version}}</span></span>
   <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
   <span class="spacer"></span>
   <span id="status" role="status"></span>
@@ -337,7 +340,9 @@
       <div id="helpLogo"><img src="/static/logo.svg" alt=""></div>
       <div>
         <h1 id="helpTitle">Welcome to LENS</h1>
-        <p>The Laconic Engineering Notebook System: a units-aware worksheet. Type one expression per line on the left and the typeset result appears on the right as you type.</p>
+        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a></p>
+        <p>The Laconic Engineering Notebook System: a units-aware worksheet. Type one expression per line on the left and the typeset result appears on the right as you type. Copy LaTeX line by line, or export a whole document.</p>
+        <p>Worksheets are plain-text <code>.lens</code> files, so they diff and merge in git. Units are marked with an apostrophe (<code>'kN</code>), so a bare name is always a variable.</p>
         <p><a href="https://github.com/inverseinertia/laconic-ens/wiki" target="_blank" rel="noopener">Read the full documentation on the wiki &rarr;</a></p>
       </div>
     </div>
@@ -347,7 +352,8 @@
 L = 4.5'm
 w = 12'kN / 'm
 M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i></pre>
-    <p>One statement per line. An error on a line never stops the lines after it. Evaluation runs top to bottom, so define things before you use them. <strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) and <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) use plain-text <code>.lens</code> files. In Chrome or Edge, Save writes back to the file you opened; <strong>Save As</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) picks a new one. Other browsers download a copy each time.</p>
+    <p>One statement per line. An error on a line never stops the lines after it. Evaluation runs top to bottom, so define things before you use them.</p>
+    <p><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) and <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) use plain-text <code>.lens</code> files. In Chrome or Edge, Save writes back to the file you opened; <strong>Save As</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) picks a new one, and renaming the sheet makes the next Save ask. Firefox and Safari download a copy each time.</p>
     <div id="exampleBox" hidden>
       <p>Worked examples ship with the program, so they are always here. Opening one replaces the sheet in the editor:</p>
       <ul id="exampleList" class="examples"></ul>
@@ -355,76 +361,86 @@ M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i><
 
     <h3>Worksheet syntax <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Worksheet-Syntax" target="_blank" rel="noopener">Worksheet Syntax</a></h3>
     <pre>f(x, y) = x^2 + y         <i>your own function</i>
-~g = 9.81'm / 's^2        <i>~ makes g global, so !clear keeps it; use plain g after</i>
-T = 20'degC -> 'degF
-F` = 2   v! = 5   a@ = 1  <i>dot, arrow and hat accents</i>
+T = 20'degC -> 'degF      <i>offset units work</i>
+σ_max = 3                 <i>Greek letters and subscripts in names</i>
+~g = 9.81'm / 's^2        <i>~ makes g global: !clear keeps it</i>
+v` = 2                    <i>a mark after a name is an accent: ` dot, ! arrow, @ hat</i>
 !clear                    <i>forget every non-global variable above</i></pre>
     <ul>
-      <li>Operators: <code>+ - * / ^</code>, elementwise <code>.* ./</code>, and <code>-&gt;</code> to convert units. Only a number followed by units may skip the <code>*</code>.</li>
-      <li>Names may use Greek letters and subscripts (<code>&sigma;_max</code>). Constants are <code>pi</code>, <code>e</code> and <code>&infin;</code> (<kbd>Ctrl</kbd>+<kbd>G</kbd> after an <code>8</code>).</li>
-      <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more.</li>
-      <li>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>.</li>
+      <li>Operators: <code>+ - * / ^</code>, elementwise <code>.* ./</code>, and <code>-&gt;</code> to convert units. Only a number followed by units may skip the <code>*</code>: write <code>3*x</code>, not <code>3 x</code>.</li>
+      <li>Constants are <code>pi</code>, <code>e</code> and <code>&infin;</code> (<kbd>Ctrl</kbd>+<kbd>G</kbd> after an <code>8</code>). Functions include <code>sqrt abs sin cos tan exp ln log10</code> and <code>heaviside</code>.</li>
+      <li>Every later use of a global is written <code>~g</code>; with Math keys on, the editor adds the <code>~</code> once you finish typing the name. Globals are colored and underlined in the results unless <strong>Mark globals</strong> is off.</li>
+      <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!clearf</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more. Settings &rarr; Reference lists them all.</li>
+      <li>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>. Comments and plot titles are left alone.</li>
     </ul>
 
     <h3>Units <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Units" target="_blank" rel="noopener">Units</a></h3>
     <ul>
-      <li>A unit starts with an apostrophe: <code>4.5'm</code>, <code>200'GPa</code>. Every unit in a compound gets its own: <code>12'kN / 'm</code>. A bare name is always a variable.</li>
-      <li>Results come out in the simplest SI unit (N, J, Pa, &hellip;). Use <code>-&gt;</code> to choose another, or <code>!noassume</code> to keep the units your arithmetic produced.</li>
-      <li>Define your own with <code>'smoot = 1.7018'm</code>. Units you use in every sheet can be stored under Settings. Saving a sheet carries the definitions it needs.</li>
+      <li>A unit starts with an apostrophe: <code>4.5'm</code>, <code>200'GPa</code>. Every unit in a compound gets its own: <code>12'kN / 'm</code>. A bare name is always a variable, so <code>m</code> can be a mass while <code>'m</code> is the metre.</li>
+      <li>Calculated results come out in the simplest SI unit (N, J, Pa, &hellip;); a line that is one typed-in quantity stays as typed. Use <code>-&gt;</code> to choose another unit, or <code>!noassume</code> to keep the units your arithmetic produced.</li>
+      <li>Define your own with <code>'smoot = 1.7018'm</code>. A definition applies to the whole sheet, above or below it. Units you use in every sheet go under Settings &rarr; Global units, and Save carries the definitions a sheet needs.</li>
       <li>The pound is <code>'lbm</code> (mass) or <code>'lbf</code> (force).</li>
       <li>Percent is <code>5'%</code> (0.05). Currencies use ISO codes, such as <code>'USD</code>, <code>'EUR</code> and <code>'GBP</code>, and are never converted into each other. Write an exchange rate as a variable: <code>rate = 1.08'USD/'EUR</code>.</li>
     </ul>
 
     <h3>Matrices <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Matrices" target="_blank" rel="noopener">Matrices</a></h3>
     <pre>A = [2, -1; -1, 2]        <i>commas across, semicolons down</i>
-F = [10; 5] * 'kN
+F = [10; 5] * 'kN         <i>a unit on its own is 1 of that unit</i>
 u = solve(A, F)
+idx(u, 1)   elem(A, 1, 2) <i>indexes count from 1</i>
 A * B    A .* B           <i>matrix product, elementwise product</i></pre>
-    <p>There are also <code>inv</code>, <code>det</code>, <code>transpose</code>, <code>eigvals</code> and more; the suggestion list shows them all. Paste cells from Excel or a Markdown table and they become a matrix.</p>
+    <p>There are also <code>inv</code>, <code>det</code>, <code>transpose</code>, <code>eigvals</code>, <code>lstsq</code> and more; the suggestion list shows them all. Every entry of a matrix shares one dimension. Paste cells from Excel or a Markdown table and they become a matrix (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> pastes plain text).</p>
 
     <h3>Material properties <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Material-Properties" target="_blank" rel="noopener">Material Properties</a></h3>
-    <pre>rho = props("D", "T", 20'degC, "P", 1'atm, "Water")</pre>
-    <p><code>props</code> looks up fluids and materials (density, viscosity, enthalpy, saturation temperatures, &hellip;) from CoolProp.</p>
+    <pre>rho  = props("D", "T", 20'degC, "P", 1'atm, "Water")
+Tsat = props("T", "P", 5'bar, "Q", 0, "Water") -> 'degC
+Tc   = props("Tcrit", "Water")       <i>fixed properties need no state</i></pre>
+    <p><code>props</code> looks up about 130 fluids, mixtures, humid air and brines from CoolProp, the way CoolProp's <code>PropsSI</code> does: the output key, up to two state inputs, then the fluid. Inputs take any compatible unit; the result is in SI, so convert it with <code>-&gt;</code>. Type <code>"</code> inside <code>props(</code> for the keys and fluids.</p>
 
     <h3>Plots <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Plots" target="_blank" rel="noopener">Plots</a></h3>
-    <pre>!plot M(x), x = 0'm .. L
+    <pre>!plot M(x), V(x), x = 0'm .. L
   title: Bending moment
-  ylabel: M (kN&middot;m)</pre>
-    <p>Indented <code>key: value</code> lines set the details. Drag the plot to pan, Ctrl + wheel to zoom, double-click to reset. The new view is written back into the sheet as text, so Ctrl+Z undoes it. Each plot can be saved as SVG or PNG.</p>
+  ylabel: M (kN&middot;m)
+  color 2: red</pre>
+    <p>Indented <code>key: value</code> lines set the details; <code>!plotspec key: value</code> sets a default for every plot below it. Drag the plot to pan, <kbd>Ctrl</kbd> + wheel to zoom, double-click to reset. The new view is written back into the sheet as <code>xview:</code> and <code>yview:</code> lines, so <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes it. Each plot saves as SVG or PNG, and the LaTeX export draws it with <code>pgfplots</code>.</p>
 
     <h3>Solving and optimizing <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Solving-and-Optimizing" target="_blank" rel="noopener">Solving and Optimizing</a></h3>
-    <pre>x = 1'm   y = 1'm         <i>starting values come from ordinary variables</i>
+    <pre>x = 1'm                   <i>starting values come from ordinary variables</i>
+y = 1'm
 !root x, y
   equation: x^2 + y^2 = 4'm^2
   equation: x = y
+z = x * 2                 <i>below the block, x and y hold the solution</i>
 
 !minimize d                <i>or !maximize</i>
   objective: cost(d)
   constraint: d >= 0.5'm
   bounds d: 0'm .. 3'm</pre>
-    <p>Solvers can be slow, so they never run while you type. Under the block, <strong>Run</strong> solves it, <strong>Interrupt</strong> stops a stuck one, <strong>Auto</strong> re-solves a moment after its inputs change, <strong>Verify</strong> solves again and compares, and <strong>Log</strong> shows what happened. The answer is stored in the block as a <code>#@ result</code> line. If an input changes, the block and every line computed from it show <strong>&#9888; out of date</strong>.</p>
+    <p>Solvers can be slow, so they never run while you type. Under the block, <strong>Run</strong> solves it, <strong>Interrupt</strong> stops a stuck one, <strong>Auto</strong> re-solves a moment after its inputs change, <strong>Verify</strong> solves again and compares, and <strong>Log</strong> shows what happened. The answer is stored in the block as a <code>#@ result</code> line, so a saved sheet opens with its answers.</p>
+    <p>The status under the block is &#10003; up to date, &#9888; out of date, &#9675; not run yet, &#10227; running, or &#10005; failed. Every line computed from an out-of-date block gets a &#9888; too.</p>
 
     <h3>Output and export <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Output-and-Export" target="_blank" rel="noopener">Output and Export</a></h3>
     <ul>
-      <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped.</li>
+      <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped: inline, <code>\[ \]</code> or <code>align*</code>.</li>
       <li><strong>Export &rarr; LaTeX document</strong> writes a complete <code>.tex</code> document (siunitx v3 or newer; <code>pgfplots</code> when a sheet has plots).</li>
       <li><strong>Export &rarr; Markdown note</strong> writes a <code>.md</code> note for Obsidian: headings, comments as text, each calculation as a <code>$$</code> block and plots as images. Commands such as <code>!clear</code> are left out.</li>
-      <li><code>!sigfigs n</code>, <code>!decplace n</code> and <code>!short</code> change how results are printed, not their values.</li>
+      <li><code>!sigfigs n</code>, <code>!sigfigsbig n</code>, <code>!decplace n</code> and <code>!short</code> change how results are printed, never their values.</li>
+      <li>From the command line, <code>lens sheet.lens --tex out.tex</code> and <code>--md out.md</code> write the same files, and <code>--plots DIR</code> writes each plot as SVG.</li>
     </ul>
 
     <h3>Editor shortcuts <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Editor-Shortcuts" target="_blank" rel="noopener">Editor Shortcuts</a></h3>
-    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines.</p>
+    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines and on the text lines under a plot.</p>
     <ul>
-      <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot.</li>
+      <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot. With text highlighted, they apply to the whole terms it touches.</li>
       <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
-      <li><kbd>Ctrl</kbd>+<kbd>G</kbd> turns the letter before the caret into Greek (<code>s</code> to <code>&sigma;</code>). Press it again to undo.</li>
+      <li><kbd>Ctrl</kbd>+<kbd>G</kbd> turns the letter before the caret into Greek (<code>s</code> to <code>&sigma;</code>). Press it again to undo. <kbd>Ctrl</kbd>+<kbd>M</kbd> makes an array and <kbd>Alt</kbd>+<kbd>T</kbd> transposes.</li>
       <li>Double-click selects a whole term, and <kbd>Alt</kbd>+<kbd>&uarr;</kbd> widens the selection step by step.</li>
-      <li>Suggestions pop up after <code>'</code> (units), <code>!</code> (commands) and two letters of a name. <kbd>Tab</kbd> accepts.</li>
+      <li>Suggestions pop up after <code>'</code> (units), <code>!</code> (commands) and two letters of a name, or by hand with <kbd>Ctrl</kbd>+<kbd>Space</kbd>. <kbd>Tab</kbd> accepts.</li>
     </ul>
     <p><button id="helpKeys">All keyboard shortcuts</button></p>
 
     <h3>Settings <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Settings" target="_blank" rel="noopener">Settings</a></h3>
-    <p>Settings holds the colors, fonts and paper style, the Greek letter table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>, and your global units. Press <kbd>F1</kbd> any time to bring this window back.</p>
+    <p>Settings has four parts: <strong>Reference</strong> (every key and command), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). The Greek table and global units are stored on this machine, for every browser and the command line; the theme is kept per browser. Press <kbd>F1</kbd> any time to bring this window back.</p>
   </div>
 </dialog>
 

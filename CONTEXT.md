@@ -133,4 +133,5 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 - **Theme**: fonts, the color set and the editor paper style, kept in browser storage. See `laconic/static/theme.js`.
 - **Preset**: a named color set (LENS blueprint, Engineering paper, White paper, Dark, Canoe Dark). Colors that match none are "Custom".
 - **Readable theme**: one whose text and paper colors have a WCAG contrast ratio of at least 3:1. A stored theme that is not readable is replaced by the default colors on load, with a note.
+- **Version** (`laconic/_version.py`): the program's version, written there and nowhere else. `0+dev` in the repository, shown as `dev`; a release build stamps it with the tag's version, shown as `v0.2.0` beside the title and in Help.
 - **Shortcut table**: the list of editor keys under Settings → Reference, kept as data in `laconic/static/shortcuts.js`, except the worksheet-command rows, which come from the command registry. `wiki/Editor-Shortcuts.md` describes the same keys at more length; a test checks it mentions every Ctrl and Alt shortcut.
