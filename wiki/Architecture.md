@@ -52,10 +52,13 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 
 | File | Role |
 |---|---|
-| `index.html` | The page: layout, styles, theme, dialogs, and the glue script |
+| `index.html` | The page: layout, styles, dialogs, and the glue script that wires the modules below to the DOM and browser APIs |
 | `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits) |
 | `autocomplete.js` | What to suggest, as pure functions |
 | `paste.js` | Table paste to matrix, pure functions |
+| `savefile.js` | Save file policy: reuse the open file or ask, the file name, the download fallback. The page passes an adapter over the File System Access API |
+| `theme.js` | Theme data (fonts, presets), the contrast check, loading a stored theme, the CSS variables to set |
+| `shortcuts.js` | The keyboard shortcut table, as data; the page renders it under Settings → Reference |
 | `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server |
 | `solverview.js` | The Run / Interrupt / Verify / Log strip under solver blocks |
 | `vendor/` | KaTeX, and d3-zoom with d3-scale and dependencies (see `vendor/d3/README.md`) |
