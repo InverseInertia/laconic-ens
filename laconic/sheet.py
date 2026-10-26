@@ -17,6 +17,7 @@ from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
 from .plotspec import Builder
 from .sheettext import scan
+from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
 from . import commands, solver
 from .commands import CommandError
@@ -38,8 +39,7 @@ class LineResult:
     solver: dict = None    # solver: status, hash and values of the block (see _run_solver)
     stale: bool = False    # reads a value from a solver whose result is out of date
     warning: str = ""      # shown under the result: the line works but may not do what was meant
-    gdef: str = ""         # assign, funcdef: the name this line makes global, without its ~
-    gspans: list = field(default_factory=list)  # [column, length] of each global name in the source line
+    symbols: dict = None   # this line's part of the symbol table (see _symbols)
 
     @property
     def latex(self):
@@ -107,6 +107,7 @@ class Worksheet:
     portable copy of it needs to carry along."""
     text: str
     results: list
+    symbols: SymbolTable = None   # which names each line sees
     needed: list = field(default_factory=list)        # (name, definition) of instance units the sheet uses but does not define
     declarations: list = field(default_factory=list)  # \\DeclareSIUnit lines for the .tex export
 
@@ -142,6 +143,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
     results, owned = [], {}   # `owned`: option lines of a plot, handled when the plot ran
     for l in sheet.lines:
         i, raw, s = l.n, l.text, l.text.strip()
+        ev.symbols.line = i
         if i in defs:
             results.append(defs[i])
         elif i in owned:
@@ -163,8 +165,8 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
     for r, l in zip(results, sheet.lines):
-        r.gspans = l.uses(ev.gnames_at(r.n))
-    ws = Worksheet(text, results)
+        r.symbols = _symbols(ev.symbols, l)
+    ws = Worksheet(text, results, ev.symbols)
     # Instance units the sheet relies on, with the units those are defined in terms of.
     need, todo = set(), [n for n in used if n in ev.globals]
     while todo:
@@ -307,6 +309,8 @@ def _run_solver(i, raw, block, ev, fmt, used, solve):
     if qs is not None:
         for u, q in zip(prob.unknowns, qs):
             ev.vars[u.key] = q
+    for u in prob.unknowns:     # below the block, an unknown holds what the block says
+        ev.symbols.bind(u.key, value=fmt.plain(ev.vars[u.key]))
     values = [_value(u.name, fmt.var(u.key), fmt.quantity(ev.vars[u.key])) for u in prob.unknowns]
     plain = [f"{u.key} = {fmt.plain(ev.vars[u.key])}" for u in prob.unknowns]
     obj = prob.stored_objective(stored) if qs is not None else None
@@ -349,11 +353,12 @@ def _run_line(i, raw, s, ev, fmt, used):
         if isinstance(stmt, FuncDef):
             printer = Printer(ev, fmt, local=stmt.params)
             sym = printer.tex(stmt.body)
-            key = ev.bind_key(stmt.name, func=True)
+            name = ev.symbols.bind(stmt.name, FUNCTION, params=stmt.params)
+            key = name.key
             ev.funcs[key] = (stmt.params, stmt.body)
             head = f"{fmt.var(key)}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
             return LineResult(i, raw, "funcdef", lhs=head, stages=[sym], text=s,
-                              **_global_note(i, stmt.name, key, ev, func=True))
+                              warning=_global_note(stmt.name, name, ev.symbols))
 
         expr = stmt.expr
         value = ev.check_finite(ev.eval(expr), expr)
@@ -370,34 +375,36 @@ def _run_line(i, raw, s, ev, fmt, used):
         res = fmt.quantity(value)
         stages = [res] if literal or ev.mode.short else _dedupe([sym, sub, res])
         if isinstance(stmt, Assign):
-            key = ev.bind_key(stmt.name)
+            name = ev.symbols.bind(stmt.name, value=fmt.plain(value))
+            key = name.key
             ev.vars[key] = value
             (ev.stale.add if stale else ev.stale.discard)(key)
             return LineResult(i, raw, "assign", lhs=fmt.var(key), stages=stages,
                               text=f"{key} = {fmt.plain(value)}", stale=stale,
-                              **_global_note(i, stmt.name, key, ev))
+                              warning=_global_note(stmt.name, name, ev.symbols))
         return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value), stale=stale)
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e))
 
 
-def _global_note(i, name, key, ev, func=False):
-    """What a definition of a global puts on its row: the name, on the line that first makes
-    it global, or a warning when it is assigned without its ~. The editor adds the ~ as a
-    global is typed, so a plain name here usually means the ~ was deleted by accident."""
-    if not key.startswith("~"):
-        return {}
-    first = ev.gline.setdefault((func, key), i)
-    if first == i:
-        return {"gdef": key[1:]}
-    if name.startswith("~"):
-        return {}
-    kind = "function" if func else "global"
-    return {"warning": f"Changes the {kind} {key}, defined on line {first}. Write {key} if that is meant"}
+def _global_note(name, sym, table):
+    """The warning on a definition of a global written without its ~. The editor adds the ~ as
+    a global is typed, so a plain name here usually means the ~ was deleted by accident."""
+    first = table.first_global(sym)
+    if first is None or first is sym or name.startswith("~"):
+        return ""
+    kind = "function" if sym.kind == FUNCTION else "global"
+    return f"Changes the {kind} {sym.key}, defined on line {first.line}. Write {sym.key} if that is meant"
+
+
+def _symbols(table, line):
+    """A row's part of the symbol table: the symbols its line defines (each with the last line
+    it is visible on) and [column, length, symbol id] of each name on it that means one."""
+    return {"defines": [s.to_dict() for s in table.defined_on(line.n)], "uses": table.uses(line)}
 
 
 def _describe(e):
-    if isinstance(e, (ParseError, EvalError, PlotError, SolverError)):
+    if isinstance(e, (ParseError, EvalError, PlotError, SolverError, ScopeError)):
         return str(e)
     if isinstance(e, pint.errors.DimensionalityError):
         dims = [d for dim in (e.dim1, e.dim2) for d in re.findall(r"\[(\w+)\]", str(dim))]

@@ -199,17 +199,11 @@ def test_globals_are_tagged_in_the_live_view_only():
     assert "htmlData" not in evaluate("~g = 5\ny = 2*g", siunitx=True).results[1].latex
 
 
-def test_the_line_that_makes_a_name_global_and_a_plain_assignment_of_it():
+def test_a_plain_assignment_of_a_global_warns():
     res = run("~g = 5\ng = 12\n~g = 7\nx = g\n~f(x) = x\nf(x) = 2*x")
-    assert [r.gdef for r in res] == ["g", "", "", "", "f", ""]
     assert res[1].warning == "Changes the global ~g, defined on line 1. Write ~g if that is meant"
     assert res[2].warning == res[3].warning == ""      # written with its ~, or only read
     assert res[5].warning.startswith("Changes the function ~f, defined on line 5")
-
-
-def test_global_spans_mark_each_use_for_the_editor():
-    res = run("x = g\n~g = 5\ny = g + ~g + 'g\n# g\nh(g) = g\n!plot g*x, x = 0 .. 1\n  title: g")
-    assert [r.gspans for r in res] == [[], [[0, 2]], [[4, 1], [8, 2]], [], [], [[6, 1]], []]
 
 
 def test_command_snippet_is_a_latex_comment():

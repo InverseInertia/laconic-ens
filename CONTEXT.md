@@ -37,6 +37,23 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Global**
 : A name defined with a leading `~`. It survives `!clear`, and the editor marks each use of it.
 
+## Name scope (`symbols.py`)
+
+**Symbol table**
+: Which variables and functions each line of a sheet can see. Built once in `sheet.evaluate` as the sheet runs, and the one place the scope rules are applied: the `~` global marker, `!clear` / `!clearf`, local parameters, solver unknowns, and a failed line defining nothing. The evaluator only asks it for a name's key. Each eval row carries its line's part of it (`symbols`); `static/symbols.js` reads it there for the editor.
+
+**Symbol**
+: One successful definition of a name: its kind (variable or function), whether it is global, the line that defines it, the last line it is **visible** on, a variable's **value** as the sheet prints it and a function's parameters.
+
+**Visible**
+: A symbol is visible on the lines below its definition, up to and including the line that defines the name again or clears it (that line still reads the old one: `x = x + 1`).
+
+**Key**
+: The name a symbol's value is stored under: the bare name, or `~name` for a global. Once a name is global, every use of it, with or without the `~`, resolves to the global key.
+
+**Use**
+: A name on a line that means a symbol: the one its line defines, else the visible one. A function's parameters are local and mean none. The editor marks the uses of globals.
+
 ## Commands
 
 **Command**: a line starting with `!` that changes how the lines below it run or are shown (`!clear`, `!trigdeg`, `!sigfigs 5`, `!plotspec grid: off`). Each is one entry in the command registry.

@@ -291,7 +291,7 @@ def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
 def test_globals_are_marked_and_get_their_tilde(page):
     reset(page, "~g = 5")
     page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
-    page.wait_for_function("last.length === 1 && last[0].gdef === 'g'")
+    page.wait_for_function("last.length === 1 && Symbols.globals(Symbols.table(last)).has('g')")
     page.keyboard.type("\ng = 12")
     assert value(page) == "~g = 5\n~g = 12"      # the ~ is added when the name ends
     assert page.get_attribute("#out [data-global]", "title") == "Global variable ~g, defined on line 1"
