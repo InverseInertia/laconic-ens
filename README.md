@@ -32,6 +32,7 @@ Ready-made programs for Windows and Linux are on the
       lens laconic/examples/beam.lens           # print results in the terminal
       lens laconic/examples/beam.lens --tex beam.tex
       lens laconic/examples/beam.lens --md beam.md   # Markdown note for Obsidian
+      lens laconic/examples/beam.lens --pdf beam.pdf # plain PDF (needs Chrome, Chromium or Edge)
       lens laconic/examples/plots.lens --plots figures    # each plot as an SVG file
       lens laconic/examples/solve.lens --solve  # run solver blocks that are out of date
 

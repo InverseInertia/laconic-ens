@@ -89,6 +89,7 @@ def main():
     ap.add_argument("file", nargs="?", help="worksheet file (.lens); with --serve, the sheet the page opens")
     ap.add_argument("--tex", metavar="OUT", help="write a LaTeX document to OUT")
     ap.add_argument("--md", metavar="OUT", help="write a Markdown note (Obsidian style) to OUT")
+    ap.add_argument("--pdf", metavar="OUT", help="write a PDF to OUT (needs Chrome, Chromium or Edge)")
     ap.add_argument("--plots", metavar="DIR", help="write each plot as an SVG file in DIR")
     ap.add_argument("--solve", action="store_true",
                     help="run every !root/!minimize/!maximize block that is not up to date and store the results in the file")
@@ -139,11 +140,18 @@ def main():
         Path(a.tex).write_text(document(results, title=Path(a.file).stem, declarations=ws.declarations),
                                encoding="utf-8")
         print(f"wrote {a.tex}")
+    # The Markdown and PDF math is the live view's flavour, not siunitx, so it needs a run of its own.
+    live = evaluate(text, global_units=units).results if a.tex and (a.md or a.pdf) else results
     if a.md:
-        # The Markdown math is the live view's flavour, not siunitx, so it needs a run of its own.
-        md_results = evaluate(text, global_units=units).results if a.tex else results
-        Path(a.md).write_text(markdown(md_results, title=Path(a.file).stem), encoding="utf-8")
+        Path(a.md).write_text(markdown(live, title=Path(a.file).stem), encoding="utf-8")
         print(f"wrote {a.md}")
+    if a.pdf:
+        from . import pdfdoc
+        try:
+            Path(a.pdf).write_bytes(pdfdoc.pdf(pdfdoc.page(live, title=Path(a.file).stem)))
+        except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
+            sys.exit(f"PDF export failed: {e}")
+        print(f"wrote {a.pdf}")
     if a.plots:
         out = Path(a.plots)
         out.mkdir(parents=True, exist_ok=True)
