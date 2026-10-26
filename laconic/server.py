@@ -1,9 +1,11 @@
 """Local web UI. One page, a few endpoints. The whole sheet is re-run on each
 edit; for worksheet-sized documents that takes a few milliseconds. Settings
-(Greek table, global units) live on the server, in `settings.py`."""
+(Greek table, global units, display preferences) live on the server, in `settings.py`."""
+import json
 import secrets
 import threading
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
@@ -28,6 +30,7 @@ app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
 HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 VERSION_MARKER = "{{version}}"  # in index.html; replaced with the program's version (_version.py)
+PREFS_MARKER = "{{prefs}}"      # in index.html; replaced with the stored display preferences (settings.py)
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
 OPENED = None   # Path of the worksheet the program was started with (`lens --window FILE`), set by __main__
 OPEN_WINDOW = None  # set by __main__ when serving: opens a window on a path of this server ("/?sheet=...")
@@ -92,6 +95,10 @@ class GreekBody(BaseModel):
     greek: dict[str, str] | None = None  # None: back to the built-in table
 
 
+class PrefsBody(BaseModel):
+    prefs: dict[str, Any]   # key -> new value; None removes it
+
+
 class UnitRow(BaseModel):
     name: str
     definition: str
@@ -107,7 +114,11 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 @app.get("/")
 def index():
     page = (STATIC / "index.html").read_text(encoding="utf-8")
-    return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label()))
+    # In the page, not fetched, so the theme and the rest are there before the page first draws.
+    # "<" escaped, so no value can close the script element it sits in.
+    prefs = json.dumps(settings.load()["prefs"]).replace("<", "\\u003c")
+    return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
+                        .replace(PREFS_MARKER, prefs))
 
 
 def _run(sheet, siunitx):
@@ -243,6 +254,12 @@ def solve_edit(body: SolveEditBody):
 @app.get("/api/settings")
 def get_settings():
     return settings.load()
+
+
+@app.put("/api/prefs")
+def put_prefs(body: PrefsBody):
+    settings.save_prefs(body.prefs)
+    return {"ok": True}
 
 
 @app.put("/api/welcomed")
