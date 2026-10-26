@@ -1,8 +1,8 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
-from . import solver
-from .evaluator import CONSTANTS, CURRENCIES, Evaluator, registry
+from . import catalogue, solver
+from .evaluator import CONSTANTS, Evaluator, registry
 
 COMMANDS = [
     ("clear", "remove all non-global variables"),
@@ -62,7 +62,7 @@ def _units():
 
     for key in sorted(names, key=lambda k: (len(k), k)):
         try:
-            detail = f"{CURRENCIES[key]} (currency)" if key in CURRENCIES else ureg.get_name(key)
+            detail = catalogue.detail(key) or ureg.get_name(key)
             add(key, detail, key in _COMMON)
         except Exception:
             continue

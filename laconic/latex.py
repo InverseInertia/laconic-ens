@@ -8,6 +8,7 @@ import re
 
 import numpy as np
 
+from . import catalogue
 from .evaluator import CONSTANTS, EvalError
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Str,
                     UnitLit)
@@ -99,33 +100,20 @@ def _unit_macro(name):
     return "".join("Under" if c == "_" else _DIGIT_WORDS[int(c)] if c.isdigit() else c for c in name)
 
 
-# What siunitx v3 defines itself, of the macro names Pint's siunitx format emits.
-# Any other Pint unit (foot, standard_gravity, ...) needs a \DeclareSIUnit of its own.
-_SIUNITX = set("""
-    quecto ronto yocto zepto atto femto pico nano micro milli centi deci deca hecto kilo
-    mega giga tera peta exa zetta yotta ronna quetta kibi mebi gibi tebi pebi exbi zebi yobi
-    ampere candela kelvin kilogram gram meter metre mole second becquerel degreeCelsius
-    coulomb farad gray hertz henry joule katal lumen lux newton ohm pascal radian siemens
-    sievert steradian tesla volt watt weber day hour minute hectare liter litre tonne
-    arcminute arcsecond degree electronvolt dalton neper bel decibel astronomicalunit percent
-    per square squared cubic cubed tothe raiseto""".split())
-# Pint names whose siunitx macro is spelt differently.
-_SIUNITX_ALIASES = {"electron_volt": "electronvolt", "astronomical_unit": "astronomicalunit",
-                    "metric_ton": "tonne"}
-
-
 class Fmt:
     def __init__(self, ureg, siunitx=False, sig=4, custom=(), places=None, keep_zeros=False):
-        """`custom` holds the names of user-defined units. In export mode each one
-        gets a siunitx macro, collected in `macros` (name -> macro) for the preamble.
+        """`custom` maps the names of user-defined units to their definitions. In export
+        mode each one, and each Pint unit siunitx lacks, gets a macro that `declarations`
+        writes into the preamble.
         Results show `sig` significant figures, or `places` decimal places when that is
         set (!sigfigs, !sigfigsbig and !decplace each replace the others); `keep_zeros`
         (!sigfigsbig) pads to exactly `sig` figures, 2.5 -> 2.500. This only changes what is
         printed: the evaluator never rounds."""
         self.ureg, self.siunitx, self.sig, self.places = ureg, siunitx, sig, places
         self.keep_zeros = keep_zeros
-        self.custom, self.macros = custom, {}
-        self.builtin = {}   # Pint units siunitx lacks, given macros too: name -> how they print
+        self.custom = custom
+        self._macros = {}     # units this document declares: name -> macro
+        self._builtin = {}    # the Pint units among them: name -> how they print
         self._dimless = ureg.Unit("dimensionless")
 
     def var(self, key):
@@ -137,12 +125,23 @@ class Fmt:
         return f"\\htmlData{{global={key[1:]}}}{{{tex}}}"
 
     def _macro(self, name, spelling=None):
-        if name not in self.macros:
+        if name not in self._macros:
             macro = _unit_macro(spelling or name)
-            while macro in self.macros.values():
+            while macro in self._macros.values():
                 macro += "X"
-            self.macros[name] = macro
-        return self.macros[name]
+            self._macros[name] = macro
+        return self._macros[name]
+
+    def declarations(self):
+        """The preamble's \\DeclareSIUnit lines for the units printed so far."""
+        out = []
+        for name, macro in self._macros.items():
+            if name in self._builtin:
+                out.append(rf"\DeclareSIUnit{{\{macro}}}{{\ensuremath{{{self._builtin[name]}}}}}  % {name}")
+                continue
+            out.append(f"% 1 {name} = {self.custom.get(name) or '?'}".replace("\n", " "))
+            out.append(rf"\DeclareSIUnit{{\{macro}}}{{{escape(name)}}}")
+        return out
 
     def _parts(self, x, sig):
         """(mantissa, exponent or None). Plain notation between 1e-4 and 1e7.
@@ -187,40 +186,21 @@ class Fmt:
             if not m:
                 return ""
             return re.sub(r"\\([A-Za-z_][A-Za-z0-9_]*)", lambda t: "\\" + self._si_macro(t.group(1)), m.group(1))
-        return self._subscripts(format(units, "~L"), units)
+        return catalogue.subscripted(format(units, "~L"), units, self.ureg)
 
     def _si_macro(self, name):
         if name in self.custom:
             return self._macro(name)
-        if name in _SIUNITX_ALIASES:
-            return _SIUNITX_ALIASES[name]
-        if name in _SIUNITX:
-            return name
-        if name not in self.builtin:
+        known = catalogue.siunitx_macro(name)
+        if known:
+            return known
+        if name not in self._builtin:
             try:
-                tex = self._subscripts(format(self.ureg.Unit(name), "~L"), self.ureg.Unit(name))
+                tex = catalogue.subscripted(format(self.ureg.Unit(name), "~L"), self.ureg.Unit(name), self.ureg)
             except Exception:   # Pint's prefix split can leave a fragment that is no unit
                 tex = "\\mathrm{" + escape(name) + "}"
-            self.builtin[name] = "".join(_DECL_GLYPHS.get(c, c) for c in tex)
-        # camelCase reads better than psiUnderg for a name the user did not choose
-        return self._macro(name, re.sub(r"_(.)", lambda t: t.group(1).upper(), name))
-
-    def _subscripts(self, tex, units):
-        """Pint prints the symbol g_0 as \\mathrm{g\\_0}, a literal underscore. A
-        one-letter symbol with a short tail (g_0, m_e, N_A, µ_0) is a subscripted
-        constant, so print it as one; sq_ft and the like keep their underscore."""
-        for name in units._units:
-            try:
-                base = self.ureg.parse_unit_name(name)[0][1]
-                bsym, sym = self.ureg.get_symbol(base), self.ureg.get_symbol(name)
-            except Exception:
-                continue
-            m = re.fullmatch(r"(.)_(.{1,3})", bsym)
-            if m:
-                psym = sym[:len(sym) - len(bsym)]
-                tex = tex.replace(f"\\mathrm{{{psym}{m.group(1)}\\_{m.group(2)}}}",
-                                  f"\\mathrm{{{psym}{m.group(1)}}}_{{\\mathrm{{{m.group(2)}}}}}")
-        return tex
+            self._builtin[name] = "".join(_DECL_GLYPHS.get(c, c) for c in tex)
+        return self._macro(name, catalogue.declared_macro(name))
 
     def quantity(self, q):
         """Latex for a scalar or matrix Quantity."""
@@ -445,7 +425,7 @@ def snippet(r, wrap="inline"):
 def document(results, title=None, declarations=()):
     """Full .tex document. Each calculation becomes an align* block with one
     row per stage, so long lines break at the equals signs instead of overflowing.
-    `declarations` are the \\DeclareSIUnit lines for user-defined units."""
+    `declarations` are the \\DeclareSIUnit lines from `Fmt.declarations`."""
     out = [r"\documentclass[11pt]{article}",
            r"\usepackage[margin=2.5cm]{geometry}",
            r"\usepackage{amsmath,amssymb}",
