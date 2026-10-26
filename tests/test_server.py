@@ -2,6 +2,7 @@
 import pytest
 
 from laconic import server, settings
+from laconic.commands import COMMANDS, help_rows
 from laconic.server import GreekBody, Sheet, UnitRow, UnitsBody
 
 
@@ -48,7 +49,12 @@ def test_vocabulary_has_what_the_editor_completes():
     units = {u[0]: u for u in v["units"]}
     assert units["kN"][1] == "kilonewton" and units["kN"][2] == 1 and "mm" in units and "GPa" in units
     assert ["sqrt", "sqrt(x)"] in v["functions"] and "pi" in v["constants"]
-    assert [c[0] for c in v["commands"]] == ["clear", "clearf", "noassume", "assume", "trigdeg", "trigrad", "short", "long", "sigfigs", "sigfigsbig", "decplace", "plot", "plotspec", "root", "minimize", "maximize"]
+    assert v["commands"] == [[c.name, c.summary] for c in COMMANDS]
+
+
+def test_the_page_carries_the_command_help_rows():
+    page = server.index().body.decode()
+    assert help_rows() in page and "<!-- command help" not in page
 
 
 def test_settings_survive_a_broken_file(config):
