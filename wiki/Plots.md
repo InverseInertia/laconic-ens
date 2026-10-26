@@ -72,5 +72,5 @@ A label needing more than six characters makes the margin grow, and the frame mo
 ## Exporting
 
 - **SVG** and **PNG** buttons under the plot save the picture exactly as shown, with the font embedded (PNG at three times the size). `lens file.lens --plots DIR` writes the same SVGs without a browser.
-- **LaTeX.** Export LaTeX (and the LaTeX view) writes the plot as a `pgfplots` figure from the same data, limits, scales, labels, colors and dash styles, with units through siunitx. TeX draws it with the document's fonts and its own tick placement, so it is a close match, not the same picture. Use the SVG when you need the exact one.
+- **LaTeX.** Export → LaTeX document (and the LaTeX view) writes the plot as a `pgfplots` figure from the same data, limits, scales, labels, colors and dash styles, with units through siunitx. TeX draws it with the document's fonts and its own tick placement, so it is a close match, not the same picture. Use the SVG when you need the exact one.
 - **Save** keeps the units a plot uses with the sheet, like any other line.

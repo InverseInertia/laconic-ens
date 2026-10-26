@@ -59,10 +59,11 @@ jobs:
           chmod +x release/lens-linux-x64  # upload-artifact drops the executable bit
       - uses: actions/checkout@v4
         with: { path: src }
-      - name: Add the Linux installer and its icon
+      - name: Add the Linux installer and its icons
         run: |
           cp src/packaging/install-linux.sh release/lens-install-linux.sh
           cp src/packaging/icon.png release/lens-icon.png
+          cp src/packaging/file-icon.png release/lens-file-icon.png
           chmod +x release/lens-install-linux.sh
       - uses: softprops/action-gh-release@v2
         with:

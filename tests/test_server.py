@@ -44,6 +44,11 @@ def test_stored_units_reach_every_endpoint():
     assert server.vocab()["globalUnits"] == [["smoot", "1.7018'm"]]
 
 
+def test_markdown_export_uses_the_live_math_flavour():
+    out = server.export_md(Sheet(text="## Loads\nF = 2'kN", title="t"))
+    assert out.startswith("# t\n\n## Loads\n\n$$\nF = 2\\,\\mathrm{kN}\n$$")
+
+
 def test_vocabulary_has_what_the_editor_completes():
     v = server.vocab()
     units = {u[0]: u for u in v["units"]}
@@ -102,3 +107,24 @@ def test_welcomed_flag_is_remembered(config):
     assert server.get_settings()["welcomed"] is False
     server.put_welcomed()
     assert server.get_settings()["welcomed"] is True
+
+
+def test_opened_sheet_is_served_and_saved_back(tmp_path, monkeypatch):
+    assert server.get_opened() == {}
+    sheet = tmp_path / "beam.lens"
+    sheet.write_text("x = 2\n", encoding="utf-8")
+    monkeypatch.setattr(server, "OPENED", sheet)
+    got = server.get_opened()
+    assert got["file"] == "beam.lens" and got["text"] == "x = 2\n" and got["writable"] is True
+    assert server.save_opened(server.TextBody(text="x = 3\r\n")) == {"ok": True}
+    assert sheet.read_bytes() == b"x = 3\r\n"
+
+
+def test_an_opened_txt_file_is_read_but_never_written(tmp_path, monkeypatch):
+    sheet = tmp_path / "old.txt"
+    sheet.write_text("x = 2", encoding="utf-8")
+    monkeypatch.setattr(server, "OPENED", sheet)
+    assert server.get_opened()["writable"] is False
+    with pytest.raises(server.HTTPException):
+        server.save_opened(server.TextBody(text="y"))
+    assert sheet.read_text() == "x = 2"

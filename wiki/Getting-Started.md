@@ -5,11 +5,12 @@
 Windows and Linux programs are on the [releases page](https://github.com/inverseinertia/laconic-ens/releases). They need no Python install.
 
 - **Windows:** download `lens-windows-x64.exe` and double-click it.
-- **Linux:** download `lens-install-linux.sh` from the release and run it with `sh lens-install-linux.sh`. It fetches the program and icon from the latest release if they are not beside it, installs them for your user only (no root), adds LENS to your application menu, and removes any earlier install first.
+  - To open `.lens` files by double-clicking them, with a file icon of their own, run `lens-windows-x64.exe --register-files` once from a command prompt. It changes settings for your user only (no administrator) and names the program by where it is, so run it again after moving the program. `--unregister-files` undoes it.
+- **Linux:** download `lens-install-linux.sh` from the release and run it with `sh lens-install-linux.sh`. It fetches the program and icons from the latest release if they are not beside it, installs them for your user only (no root), adds LENS to your application menu, makes `.lens` files open in LENS with an icon of their own, and removes any earlier install first.
   - Remove it again with `sh lens-install-linux.sh --uninstall`.
-  - To install a program you already downloaded, keep `lens-linux-x64` and `lens-icon.png` in the same folder as the script.
+  - To install a program you already downloaded, keep `lens-linux-x64`, `lens-icon.png` and `lens-file-icon.png` in the same folder as the script.
 
-Double-clicking the program opens the UI in an app window. It quits a few seconds after the window closes.
+Double-clicking the program opens the UI in an app window. It quits a few seconds after the window closes. Double-clicking a `.lens` file (once set up as above) opens that sheet, and **Save** writes back to it.
 
 ## From source
 

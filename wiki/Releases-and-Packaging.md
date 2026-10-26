@@ -12,10 +12,11 @@ PyInstaller does not cross-compile, so build on each target OS. The result needs
 | File | Role |
 |---|---|
 | `packaging/lens.spec` | PyInstaller spec |
-| `packaging/launcher.py` | entry point of the frozen build: with no arguments it starts the server on a free port in an app window and quits when the window closes; with arguments it is the normal CLI. It calls `multiprocessing.freeze_support()` because the solver worker is a spawned copy of the executable |
+| `packaging/launcher.py` | entry point of the frozen build: with no arguments, or `--window [FILE]`, it starts the server on a free port in an app window (with FILE open) and quits when the window closes; with other arguments it is the normal CLI. It calls `multiprocessing.freeze_support()` because the solver worker is a spawned copy of the executable |
 | `packaging/smoke.py` | starts the built program and checks the page, vendored assets, an evaluation, a plot SVG and a solver run |
 | `packaging/icon.png` | executable icon on Windows and macOS (rendered from `laconic/static/logo.svg`) |
-| `packaging/install-linux.sh` | per-user Linux installer with menu entry and `--uninstall`; attached to releases as `lens-install-linux.sh` |
+| `packaging/file-icon.png`, `file-icon.ico` | icon of a `.lens` file, drawn by `packaging/make_file_icon.py` from `icon.png`; the PNG is attached to releases as `lens-file-icon.png`, the ICO is bundled into the Windows build for `--register-files` (`laconic/fileassoc.py`) |
+| `packaging/install-linux.sh` | per-user Linux installer with menu entry, the `application/x-laconic-lens` file type for `.lens` files, and `--uninstall`; attached to releases as `lens-install-linux.sh` |
 
 The logo source is `laconic/static/logo.svg` (header and browser tab).
 
@@ -27,7 +28,7 @@ On Linux the frozen program puts its bundled libraries on `LD_LIBRARY_PATH`. A b
 |---|---|---|
 | `test` | every push and PR | `pytest` on Ubuntu, Python 3.12 |
 | `binary` | after `test` | builds Windows and Linux (Ubuntu 22.04, for older glibc) programs and smoke-tests them |
-| `release` | on a `v*` tag | attaches the programs, the installer and the icon to a GitHub release |
+| `release` | on a `v*` tag | attaches the programs, the installer and the two icons to a GitHub release |
 
 ## Cutting a release
 
