@@ -37,6 +37,23 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Global**
 : A name defined with a leading `~`. It survives `!clear`, and the editor marks each use of it.
 
+## Editing the text (`blockedit.py`)
+
+**Edit**
+: Replace `text[from:to]` with `insert`. The server answers every change to the sheet text with a short list of edits against the text it was sent, never a whole new text. On the wire, offsets count UTF-16 code units, as the page's strings do.
+
+**Block editor** (`BlockEditor`)
+: The one writer of the lines a block owns. It sets, removes or replaces an option line, stores a result (always last), and appends other block-owned lines, keeping the block's **indent** and the file's **line ending**, and returns at most one minimal edit.
+
+**Block indent**
+: The indent of a block's first owned line, or two spaces for a block with none. New lines take it; a rewritten line keeps its own.
+
+**File line ending**
+: The ending of the file's first line (`\r\n` or `\n`). A line the server adds ends that way, so a CRLF file stays CRLF.
+
+**Stale edit**
+: An edit for a text the editor no longer holds (the user typed while the server worked). The page does not make it: a plot or rename says so, and a solver store asks again, since it finds its block by hash.
+
 ## Commands
 
 **Command**: a line starting with `!` that changes how the lines below it run or are shown (`!clear`, `!trigdeg`, `!sigfigs 5`, `!plotspec grid: off`). Each is one entry in the command registry.
