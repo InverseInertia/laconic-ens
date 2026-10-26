@@ -1,3 +1,5 @@
+import re
+
 from laconic import document, evaluate, run, snippet
 from laconic.evaluator import check_units
 
@@ -142,6 +144,40 @@ def test_export_declares_custom_units_for_siunitx():
 def test_export_without_custom_units_has_no_declarations():
     ws = evaluate("x = 3'kN", siunitx=True)
     assert ws.declarations == [] and r"\DeclareSIUnit" not in document(ws.results, declarations=ws.declarations)
+
+
+def test_export_declares_pint_units_siunitx_lacks():
+    # #38: 'g0 came out as \standard_gravity, which is not a macro name at all
+    ws = evaluate("a = 11.76'm/'s^2 -> 'g0\nb = 2'psi\nc = 3'mg0*'ft", siunitx=True)
+    tex = document(ws.results, declarations=ws.declarations)
+    assert r"\qty{1.199}{\standardGravity}" in tex and r"\qty{2}{\poundForcePerSquareInch}" in tex
+    assert r"\milli\standardGravity" in tex
+    assert r"\DeclareSIUnit{\standardGravity}{\ensuremath{\mathrm{g}_{\mathrm{0}}}}" in tex
+    assert r"\DeclareSIUnit{\foot}{\ensuremath{\mathrm{ft}}}" in tex
+    assert tex.count(r"\DeclareSIUnit{\standardGravity}") == 1
+
+
+def test_export_uses_siunitx_spellings_and_declares_nothing_it_knows():
+    ws = evaluate("a = 2'eV\nb = 3'au\nc = 4't\nd = 5'km/'h\ne = 6'degC\nf = 7'percent", siunitx=True)
+    tex = "\n".join(r.latex for r in ws.results)
+    assert all(m in tex for m in (r"\electronvolt", r"\astronomicalunit", r"\tonne", r"\kilo\meter\per\hour",
+                                  r"\degreeCelsius", r"\percent"))
+    assert ws.declarations == []
+
+
+def test_every_exported_unit_macro_is_a_name_latex_accepts():
+    units = "g0 psi ksi ft inch lbf Btu kWh atm mmHg rpm m_e N_A mu_0 sq_ft Phi_0 R_inf hp"
+    ws = evaluate("\n".join(f"x{i} = 1'{u}" for i, u in enumerate(units.split())), siunitx=True)
+    for r in ws.results:
+        assert r.kind == "assign", r.error
+        assert re.fullmatch(r"(\\[A-Za-z]+)+", re.search(r"\\qty\{1\}\{(.*)\}", r.latex).group(1))
+
+
+def test_preview_subscripts_constant_symbols():
+    assert last("a = 1'g0").latex.endswith(r"1\,\mathrm{g}_{\mathrm{0}}")
+    assert r"\frac{\mathrm{N}_{\mathrm{A}}}{\mathrm{m}_{\mathrm{e}}^{2}}" in last("a = 1'N_A/'m_e^2").latex
+    assert r"\mathrm{mg}_{\mathrm{0}}" in last("a = 1'mg0").latex
+    assert r"\mathrm{sq\_ft}" in last("a = 1'sq_ft").latex    # a word, not a subscript
 
 
 def test_preview_uses_plain_names():

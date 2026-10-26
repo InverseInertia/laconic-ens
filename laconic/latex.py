@@ -73,6 +73,11 @@ _GREEK_CHARS = {
 }
 
 
+# Unit symbols in the .tex preamble go through pdflatex, which wants macros for these.
+_DECL_GLYPHS = {c: v + " " if v.startswith("\\") else v
+                for c, v in {**_GREEK_CHARS, "µ": "\\mu", "∞": "\\infty"}.items()}
+
+
 def _glyph(c):
     return _GREEK_CHARS.get(c, c)
 
@@ -94,6 +99,21 @@ def _unit_macro(name):
     return "".join("Under" if c == "_" else _DIGIT_WORDS[int(c)] if c.isdigit() else c for c in name)
 
 
+# What siunitx v3 defines itself, of the macro names Pint's siunitx format emits.
+# Any other Pint unit (foot, standard_gravity, ...) needs a \DeclareSIUnit of its own.
+_SIUNITX = set("""
+    quecto ronto yocto zepto atto femto pico nano micro milli centi deci deca hecto kilo
+    mega giga tera peta exa zetta yotta ronna quetta kibi mebi gibi tebi pebi exbi zebi yobi
+    ampere candela kelvin kilogram gram meter metre mole second becquerel degreeCelsius
+    coulomb farad gray hertz henry joule katal lumen lux newton ohm pascal radian siemens
+    sievert steradian tesla volt watt weber day hour minute hectare liter litre tonne
+    arcminute arcsecond degree electronvolt dalton neper bel decibel astronomicalunit percent
+    per square squared cubic cubed tothe raiseto""".split())
+# Pint names whose siunitx macro is spelt differently.
+_SIUNITX_ALIASES = {"electron_volt": "electronvolt", "astronomical_unit": "astronomicalunit",
+                    "metric_ton": "tonne"}
+
+
 class Fmt:
     def __init__(self, ureg, siunitx=False, sig=4, custom=(), places=None, keep_zeros=False):
         """`custom` holds the names of user-defined units. In export mode each one
@@ -105,11 +125,12 @@ class Fmt:
         self.ureg, self.siunitx, self.sig, self.places = ureg, siunitx, sig, places
         self.keep_zeros = keep_zeros
         self.custom, self.macros = custom, {}
+        self.builtin = {}   # Pint units siunitx lacks, given macros too: name -> how they print
         self._dimless = ureg.Unit("dimensionless")
 
-    def _macro(self, name):
+    def _macro(self, name, spelling=None):
         if name not in self.macros:
-            macro = _unit_macro(name)
+            macro = _unit_macro(spelling or name)
             while macro in self.macros.values():
                 macro += "X"
             self.macros[name] = macro
@@ -155,10 +176,41 @@ class Fmt:
             m = re.fullmatch(r"\\si\[\]\{(.*)\}", format(units, "Lx"))
             if not m:
                 return ""
-            return re.sub(r"\\([A-Za-z_][A-Za-z0-9_]*)",
-                          lambda t: "\\" + self._macro(t.group(1)) if t.group(1) in self.custom else t.group(0),
-                          m.group(1))
-        return format(units, "~L")
+            return re.sub(r"\\([A-Za-z_][A-Za-z0-9_]*)", lambda t: "\\" + self._si_macro(t.group(1)), m.group(1))
+        return self._subscripts(format(units, "~L"), units)
+
+    def _si_macro(self, name):
+        if name in self.custom:
+            return self._macro(name)
+        if name in _SIUNITX_ALIASES:
+            return _SIUNITX_ALIASES[name]
+        if name in _SIUNITX:
+            return name
+        if name not in self.builtin:
+            try:
+                tex = self._subscripts(format(self.ureg.Unit(name), "~L"), self.ureg.Unit(name))
+            except Exception:   # Pint's prefix split can leave a fragment that is no unit
+                tex = "\\mathrm{" + escape(name) + "}"
+            self.builtin[name] = "".join(_DECL_GLYPHS.get(c, c) for c in tex)
+        # camelCase reads better than psiUnderg for a name the user did not choose
+        return self._macro(name, re.sub(r"_(.)", lambda t: t.group(1).upper(), name))
+
+    def _subscripts(self, tex, units):
+        """Pint prints the symbol g_0 as \\mathrm{g\\_0}, a literal underscore. A
+        one-letter symbol with a short tail (g_0, m_e, N_A, µ_0) is a subscripted
+        constant, so print it as one; sq_ft and the like keep their underscore."""
+        for name in units._units:
+            try:
+                base = self.ureg.parse_unit_name(name)[0][1]
+                bsym, sym = self.ureg.get_symbol(base), self.ureg.get_symbol(name)
+            except Exception:
+                continue
+            m = re.fullmatch(r"(.)_(.{1,3})", bsym)
+            if m:
+                psym = sym[:len(sym) - len(bsym)]
+                tex = tex.replace(f"\\mathrm{{{psym}{m.group(1)}\\_{m.group(2)}}}",
+                                  f"\\mathrm{{{psym}{m.group(1)}}}_{{\\mathrm{{{m.group(2)}}}}}")
+        return tex
 
     def quantity(self, q):
         """Latex for a scalar or matrix Quantity."""
