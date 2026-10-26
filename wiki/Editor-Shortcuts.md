@@ -1,6 +1,6 @@
 # Editor Shortcuts
 
-The editor is a plain text box with extra keys that edit the source. **Settings → Reference** lists the keys inside the app.
+The editor is a plain text box with extra keys that edit the source. **Settings → Reference** lists the keys inside the app; that list comes from `laconic/static/shortcuts.js`, and a test checks that every Ctrl and Alt shortcut in it is also described here.
 
 ## Math keys
 
@@ -26,6 +26,7 @@ These are off on comment lines and on the text lines under a plot (title, labels
 | `g` then space, operator, `(`, `)` or `Enter` | When `g` is a global from an earlier line, adds its `~`: `~g`. Not in a unit (`'g`), a function's own parameters or a comment |
 | `Ctrl+Space` | Opens suggestions by hand. With text highlighted: pick a function to wrap it in |
 | `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
+| `Alt+Z` | Turn text wrapping in the editor on or off |
 | `F2` | Rename the name at the caret everywhere |
 | `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+O` | Save, Save As, Open |
 

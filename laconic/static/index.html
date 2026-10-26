@@ -312,40 +312,7 @@
   <div class="dlg-head"><h2 id="keysTitle">Math keys</h2><button class="close">Close</button></div>
   <div class="dlg-body">
     <p class="note">These keys edit the source text. The result column shows the typeset math. They are inactive on comment lines (starting with <code>#</code>) and can be switched off with the Math keys box.</p>
-    <table class="keys">
-      <tr><td><kbd>/</kbd></td><td>Fraction. Takes the term on the left as numerator and the term on the right, if any, as denominator. <code>a/</code> gives <code>a/(&nbsp;)</code>. After <code>A.</code> it gives <code>A./</code></td></tr>
-      <tr><td><kbd>\</kbd></td><td>Radical. <code>sqrt(&nbsp;)</code>, or wraps the selection</td></tr>
-      <tr><td><kbd>.</kbd></td><td>Subscript after a name. <code>M.max</code> gives <code>M_max</code>. After a number it stays a decimal point</td></tr>
-      <tr><td><kbd>^</kbd></td><td>Exponent slot. <code>x^(&nbsp;)</code></td></tr>
-      <tr><td><kbd>→</kbd> or <kbd>)</kbd></td><td>Leave a slot. If it holds one simple term the parentheses go away: <code>x^(2)</code> becomes <code>x^2</code></td></tr>
-      <tr><td><kbd>Enter</kbd></td><td>With only closing brackets left on the line, finishes the line instead of splitting it</td></tr>
-      <tr><td><kbd>Backspace</kbd></td><td>In an empty slot, removes the slot and its <code>^</code>, <code>/</code> or <code>sqrt</code>. After <code>, </code> or <code>; </code>, removes the separator and its space together</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td>Array. <code>[&nbsp;]</code>, or wraps the selection</td></tr>
-      <tr><td><kbd>,</kbd> <kbd>;</kbd></td><td>A space is added after them automatically. In an array, <code>,</code> separates columns and <code>;</code> separates rows</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>T</kbd><br><kbd>Alt</kbd>+<kbd>T</kbd></td><td>Transpose the term on the left or the selection. Press again to undo. Browsers reserve Ctrl+T for a new tab, so use Alt+T in a normal tab</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>[</kbd><br><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd></td><td>Index the term on the left or the selection. Ctrl+[ gives <code>idx(A, i)</code>, typeset <code>A<sub>i</sub></code>: one element of a vector, or one row of a matrix. Ctrl+Shift+[ gives <code>elem(A, i, j)</code>, typeset <code>A<sub>i,j</sub></code>: row and column. The caret lands in the index slot. Counting starts at 1. Indexes can be indexed too: <code>idx(elem(A, 1, 2), 3)</code></td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>G</kbd></td><td>Greek letter for the character before the caret. Press again to go back. Edit the mapping under Greek</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>/</kbd><br><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Type a literal <code>/</code> or <code>\</code> with no fraction or radical slot</td></tr>
-      <tr><td><kbd>=</kbd> <kbd>+</kbd> <kbd>-</kbd> <kbd>*</kbd></td><td>Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press</td></tr>
-      <tr><td><kbd>`</kbd> <kbd>!</kbd> <kbd>@</kbd></td><td>After a variable name: <code>x`</code> puts a dot over it (<code>x``</code> two dots), <code>F!</code> an arrow, <code>a@</code> a hat. <code>F_x!</code> marks the F and keeps the subscript. Each marked name is a separate variable</td></tr>
-      <tr><td><kbd>~</kbd></td><td>A <code>~</code> on a variable or function definition makes the name global. Typing the name again on a later line adds its <code>~</code> as soon as the name is finished, so globals always read <code>~g</code>. Globals are tinted in the editor and colored and underlined in the results (the Mark globals box turns that off); hover one to see where it was defined. An assignment written without the <code>~</code> still changes the global, with a warning. Globals survive <code>!clear</code> / <code>!clearf</code></td></tr>
-      <tr><td><kbd>!clearf</kbd></td><td>On its own line, removes every non-global function above it</td></tr>
-      <tr><td><kbd>!clear</kbd></td><td>On its own line, removes every non-global variable above it</td></tr>
-      <tr><td><kbd>!noassume</kbd> <kbd>!assume</kbd></td><td>Below <code>!noassume</code>, results keep the units that come out of the arithmetic (<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. <code>!assume</code> returns to SI</td></tr>
-      <tr><td><kbd>!short</kbd> <kbd>!long</kbd></td><td>Below <code>!short</code>, each line shows only its final result, with its unit but no intermediate steps. <code>!long</code> restores the full display</td></tr>
-      <tr><td><kbd>!sigfigs n</kbd> <kbd>!sigfigsbig n</kbd> <kbd>!decplace n</kbd></td><td>Choose how many significant figures (4 by default; <code>!sigfigsbig</code> keeps trailing zeros, <code>2.500</code>) or decimal places results are displayed with. The last one given wins. Only the display is rounded; every calculation uses the full value</td></tr>
-      <tr><td><kbd>!trigdeg</kbd> <kbd>!trigrad</kbd></td><td>Set the angle unit for <code>sin</code>, <code>cos</code>, <code>tan</code> on bare numbers, and for <code>asin</code>, <code>acos</code>, <code>atan</code> results. Radians by default; explicit units such as <code>30'deg</code> always work</td></tr>
-      <tr><td><kbd>'</kbd></td><td>Starts a unit: <code>12'kN/'m</code>. Bare names are always variables</td></tr>
-      <tr><td><code>'smoot = 1.7018'm</code></td><td>Defines a unit for this sheet. It works on every line, above or below. Units used by many sheets can be defined under Units, and are then copied into any file you save or export that uses them</td></tr>
-      <tr><td colspan="2"><strong>Highlighted text</strong></td></tr>
-      <tr><td><kbd>/</kbd> <kbd>^</kbd> <kbd>\</kbd> <kbd>(</kbd> <kbd>[</kbd> <kbd>|</kbd></td><td>Apply to the highlighted region: fraction numerator, base of a power, square root, brackets, array brackets, <code>abs()</code>. A highlight that cuts through a term is widened to the whole term first: <code>1</code> inside <code>12'kN</code> means the whole quantity, <code>x</code> in <code>x^2</code> means <code>x^2</code>, half a bracket pair means the pair</td></tr>
-      <tr><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td>With text highlighted: pick a function to wrap it in (<code>sin(&hellip;)</code>). Type to filter, <kbd>Enter</kbd> or <kbd>Tab</kbd> to apply. With nothing highlighted: opens suggestions by hand</td></tr>
-      <tr><td>Double-click</td><td>Selects the whole term under the pointer</td></tr>
-      <tr><td><kbd>Alt</kbd>+<kbd>Z</kbd></td><td>Turn text wrapping in the editor on or off</td></tr>
-      <tr><td><kbd>Alt</kbd>+<kbd>&uarr;</kbd><br><kbd>Alt</kbd>+<kbd>&darr;</kbd></td><td>Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back</td></tr>
-      <tr><td colspan="2"><strong>Suggestions</strong></td></tr>
-      <tr><td><kbd>Tab</kbd></td><td>Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name</td></tr>
-    </table>
+    <table class="keys" id="keysTable"></table>
   </div>
 </dialog>
 
@@ -530,6 +497,7 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
 <script src="/static/autocomplete.js"></script>
 <script src="/static/theme.js"></script>
 <script src="/static/savefile.js"></script>
+<script src="/static/shortcuts.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 // Settings live under "lens:". Older builds used "calcsheet:" and "laconic:", read as a fallback.
@@ -1242,6 +1210,7 @@ for (const d of document.querySelectorAll("dialog:not(#alertDlg)")) {
   d.querySelector(".close").onclick = () => d.close();
   d.addEventListener("close", () => src.focus());
 }
+$("#keysTable").innerHTML = Shortcuts.tableHtml();  // static text from shortcuts.js
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
 Solvers.init({
   text: () => src.value,
