@@ -54,6 +54,9 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Payload**
 : The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) or `r.solver` (`SolverPayload`: status, hash, values, stored record). On every other line both are None, a failed block header included.
 
+**Note**
+: A warning the evaluator raises while it runs a line (`Evaluator.note`): the line works but may not do what was meant, such as `*` with an offset unit. Notes are cleared before each line, kept once each, and name the user function they come from; `sheet.py` joins them to the line's own **warning** (a block's go on its header). A failed line shows its error alone.
+
 **Row**
 : A line result as `/api/eval` sends it (`to_json()`): the common fields, plus `plot` or `solver` for those kinds and `snippet` in the LaTeX view. `tests/test_lineresult.py` pins its shape.
 

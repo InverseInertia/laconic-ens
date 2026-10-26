@@ -110,6 +110,7 @@ Endpoints that change the text return `{"ok": true, "edits": [{"from", "to", "in
 ## Conventions
 
 - Errors are per line: `sheet.py` turns any exception into an `error` result for that line and carries on.
+- Warnings are per line too: the evaluator collects **notes** for the line being run (`Evaluator.note`), and `sheet.py` clears them before each line and joins them to that line's `warning`. A line that failed shows only its error.
 - A fresh Pint registry costs a noticeable fraction of a second, so one is shared. A sheet that defines units gets a private copy (Pint cannot undefine a unit).
 - Display rounding is only ever applied when printing, in `Fmt`.
 - Evaluating a sheet never runs a solver. It hashes the block's inputs and compares them with the stored `#@ result` line; running happens on request in a worker process and the answer is written back into the worksheet text.

@@ -234,3 +234,61 @@ def test_percent_and_currencies_are_suggested():
     from laconic.vocab import vocabulary
     units = {u[0]: u for u in vocabulary()["units"]}
     assert units["%"][2] and units["USD"][1] == "US dollar (currency)"
+
+
+# ---- offset temperatures -------------------------------------------------------------
+def test_a_number_before_an_offset_unit_is_a_temperature_without_a_warning():
+    r = last("t = 35'degF")
+    assert r.text == "t = 35 °F" and r.warning == ""
+
+
+def test_multiplying_or_dividing_by_an_offset_unit_works_but_warns():
+    for line in ("35 * 'degF", "x = 20'degC\nx / 2", "10'W / 'degC", "[1, 2] .* 'degC", "-'degC * 3"):
+        r = last(line)
+        assert r.kind in ("expr", "assign") and r.error == "", line
+        assert "absolute temperature" in r.warning and "'delta_deg" in r.warning, line
+    w = last("35 * 'degF").warning
+    assert "35'degF" in w and "'delta_degF" in w and "255.93 K" in w
+
+
+def test_conversions_and_differences_do_not_warn():
+    for line in ("35'degF -> 'degC", "300'K -> 'degF", "5'K/'s -> 'degF/'s", "35'delta_degF * 2",
+                 "x = 20'degC\nx + 5'delta_degC", "3'm * 2'kN"):
+        assert last(line).warning == "", line
+
+
+def test_the_warning_stays_on_its_line_and_is_not_repeated():
+    res = run("a = 2 * 'degC * 'degC / 'degC\nb = 2'm * 3")
+    assert res[0].warning.count("absolute temperature") == 1
+    assert res[1].warning == ""
+    assert run("x = 1'm * 'degC + 1'm")[0].kind == "error" and run("x = 1'm * 'degC + 1'm")[0].warning == ""
+
+
+def test_the_warning_names_the_user_function_it_comes_from():
+    res = [r for r in run("f(t) = t * 'degC\nf(3)\ng(t) = 2 * f(t)\ng(1)") if r.kind != "blank"]
+    assert res[0].warning == ""   # the body runs when f is called
+    assert res[1].warning.startswith("In f(): * and / read 'degC")
+    assert res[3].warning.startswith("In f(): ")
+
+
+def test_plots_and_solver_blocks_warn_once_on_their_header():
+    from laconic.blockedit import apply
+    from laconic.sheet import solve_block
+    from laconic.solver import write_result
+    plot = run("!plot x * 'degC, x = 0 .. 1")[0]
+    assert plot.kind == "plot" and plot.warning.count("absolute temperature") == 1
+    text = "x = 1\n!root x\n  equation: x * 'degC = 300'K\ny = x"
+    assert run(text)[1].warning.count("absolute temperature") == 1
+    out = solve_block(text, 2, log=lambda *a: None)
+    solved = run(apply(text, write_result(text, 2, out["record"])))
+    assert solved[1].kind == "solver" and "absolute temperature" in solved[1].warning   # still shown once stored
+    assert solved[-1].warning == ""
+
+
+def test_the_catalogue_lists_every_offset_unit():
+    from laconic.catalogue import OFFSET_TEMPERATURES
+    from laconic.evaluator import registry
+    ureg = registry()
+    temps = [n for n in ureg._units if ureg.Quantity(1, n).dimensionality == {"[temperature]": 1}]
+    offset = {n for n in temps if ureg.Quantity(0, n).to_base_units().magnitude != 0}
+    assert {str(ureg.parse_units(n)) for n in offset} == set(OFFSET_TEMPERATURES)

@@ -109,6 +109,8 @@ def test_the_display_parts_of_a_row():
     assert cmd["text"] and cmd["source"] == "!sigfigs 3"
     g = rows("~g = 1\ng = 2")[1]
     assert g["warning"].startswith("Changes the global ~g")
+    both = rows("~g = 1\ng = 2 * 'degC")[1]["warning"]   # the evaluator's notes join the line's own
+    assert both.startswith("Changes the global ~g") and "'delta_degC" in both
 
 
 def test_a_plot_row_carries_its_picture_and_spec():

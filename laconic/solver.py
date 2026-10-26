@@ -485,8 +485,8 @@ class Problem:
 
     def probe(self):
         """Evaluate everything once at the starting values: catches undefined names, unit
-        mismatches and a wrong number of equations now, while the sheet is being edited. A block
-        whose stored result is current skips this, since the same inputs already ran."""
+        mismatches and a wrong number of equations now, while the sheet is being edited, and
+        raises the evaluator's notes (an offset unit after `*`) for the block's header."""
         if self._probed:
             return
         self._probed = True

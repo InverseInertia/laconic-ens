@@ -115,6 +115,8 @@ class Evaluator:
         self.symbols = SymbolTable()  # which names each line sees; filled in by sheet.py
         self.stale = set()     # variable keys whose value comes from a solver result that is out of date
         self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
+        self.notes = []        # warnings for the line being run; sheet.py clears them per line and shows them
+        self._calls = []       # the user functions being evaluated, innermost last, to name in a note
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
@@ -167,6 +169,16 @@ class Evaluator:
         if isinstance(node, UnitLit):
             return True
         return isinstance(node, BinOp) and node.op == "^" and self.is_unit_node(node.left)
+
+    def note(self, msg):
+        """Warn about the line being run: it works but may not do what was meant. A note
+        raised inside a user function names it, and each note is kept once per line."""
+        if not msg:
+            return
+        if self._calls:
+            msg = f"In {self._calls[-1]}(): {msg}"
+        if msg not in self.notes:
+            self.notes.append(msg)
 
     # ---- evaluation -------------------------------------------------------
     def eval(self, node, scope=None):
@@ -225,6 +237,8 @@ class Evaluator:
     def ev_BinOp(self, n, scope):
         a, b = self.eval(n.left, scope), self.eval(n.right, scope)
         op = n.op
+        if op in ("*", "/", ".*", "./"):
+            self.note(catalogue.offset_note(self.ureg, a, b))
         if op == "+":
             return self._shape_guard(lambda: a + b, a, b, "+")
         if op == "-":
@@ -295,7 +309,9 @@ class Evaluator:
         return self.Q(np.array(data), unit0)
 
     def ev_Convert(self, n, scope):
-        v, target = self.eval(n.expr, scope), self.eval(n.target, scope)
+        v, mark = self.eval(n.expr, scope), len(self.notes)
+        target = self.eval(n.target, scope)
+        del self.notes[mark:]   # a target such as 'degF/'s only names units
         return v.to(target.units)
 
     def ev_Call(self, n, scope):
@@ -307,7 +323,11 @@ class Evaluator:
             params, body = self.funcs[fkey]
             if len(args) != len(params):
                 raise EvalError(f"{n.func} takes {len(params)} argument(s), got {len(args)}")
-            return self.eval(body, {**self.vars, **dict(zip(params, args))})
+            self._calls.append(n.func)
+            try:
+                return self.eval(body, {**self.vars, **dict(zip(params, args))})
+            finally:
+                self._calls.pop()
         fn = getattr(self, "fn_" + n.func, None)
         if fn is None:
             if n.func in self.mode.cleared_funcs:

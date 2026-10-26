@@ -9,7 +9,8 @@ The families:
 - currencies: ISO 4217 codes, each a dimension of its own
 - percent: Pint's dimensionless `percent`, kept on a result that is only percent
 - constants with subscripted symbols (g_0, m_e, N_A, µ_0)
-- Pint units siunitx lacks, which the export declares itself"""
+- Pint units siunitx lacks, which the export declares itself
+- offset temperatures ('degC, 'degF, 'degRe), which mean something else after * or /"""
 import re
 
 # ISO 4217 codes. Each is a dimension of its own: exchange rates change, so 'USD + 'EUR is an
@@ -39,6 +40,11 @@ _SIUNITX = set("""
 # Pint names whose siunitx macro is spelt differently.
 _SIUNITX_ALIASES = {"electron_volt": "electronvolt", "astronomical_unit": "astronomicalunit",
                     "metric_ton": "tonne"}
+
+
+# Offset temperature units by Pint name, with the spelling a sheet types. `35'degF` builds a
+# temperature of 35 °F, but `*` and `/` read 'degF as an absolute temperature, 1 °F = 255.9 K.
+OFFSET_TEMPERATURES = {"degree_Celsius": "degC", "degree_Fahrenheit": "degF", "degree_Reaumur": "degRe"}
 
 
 def define(ureg):
@@ -88,6 +94,20 @@ def mismatch(dims):
         return (f"Incompatible units: {money[0]} and {money[1]} are different currencies. "
                 f"Multiply by an exchange rate variable, e.g. rate = 1.08'{money[0]}/'{money[1]}")
     return None
+
+
+def offset_note(ureg, *qs):
+    """The warning on `*` or `/` with an operand in an offset temperature unit, or "" when
+    neither has one. The arithmetic still runs (Pint converts to kelvin first)."""
+    for q in qs:
+        for name, _ in q.unit_items():
+            typed = OFFSET_TEMPERATURES.get(name)
+            if typed:
+                k = ureg.Quantity(1, name).to("kelvin").magnitude
+                return (f"* and / read '{typed} as an absolute temperature, 1 '{typed} = {k:.5g} K. "
+                        f"For a temperature, put the number before the unit: 35'{typed}. "
+                        f"For a temperature difference, use 'delta_{typed}")
+    return ""
 
 
 def siunitx_macro(name):

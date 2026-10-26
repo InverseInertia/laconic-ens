@@ -21,6 +21,12 @@ Angles keep their radians (`asin(0.5)` gives `0.5236 rad`). degF becomes degC, a
 
 The pound is `'lbm` (mass) and `'lbf` (force). Pint's own `lb` is removed because it reads as either.
 
+## Temperatures
+
+`'degC`, `'degF` and `'degRe` are offset units: 0 °C is 273.15 K, not 0 K. A number written right before one is a temperature: `T = 35'degF` is 35 °F, and `T -> 'degC` is 1.667 °C. A temperature difference has a unit of its own, `'delta_degC` or `'delta_degF`, and adding one to a temperature gives a temperature (`20'degC + 5'delta_degC` is `25 °C`).
+
+`*` and `/` (and `.*`, `./`) read an offset unit as an absolute temperature in kelvin, so `35 * 'degF` is 35 × 255.93 K = 8957 K, not 35 °F, and `10'W/'degC` is per 274.15 K, not per degree. The line still runs, with a warning that says so and suggests `35'degF` for a temperature or `'delta_degF` for a difference (write `10'W/'delta_degC`). The same goes for a variable holding a temperature (`T * 2`). The warning appears on the line that runs the arithmetic: a function's definition shows none, and a line that calls it shows the warning with the function's name (`In f(): ...`). A plot or solver block shows it once on its header. A conversion such as `-> 'degF` never warns.
+
 ## Percent and currencies
 
 `'%` is a dimensionless unit worth 0.01: `20'% * 50'N` is `10 N`, and `0.05 -> '%` is `5 %`. A result whose only unit is `'%` keeps it (`5'% + 2'%` is `7 %`). Anything else drops it (`50'% * 50'%` is `0.25`). `5%` without the apostrophe is an error that shows the right spelling. In the export it is siunitx's `\percent`.
