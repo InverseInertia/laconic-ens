@@ -13,6 +13,7 @@ import numpy as np
 import pint
 from pathlib import Path
 
+from .commands import SheetMode
 from .nodes import BinOp, Name, Str, UnitLit
 from . import props as _props
 from .parser import parse_expr
@@ -128,13 +129,8 @@ class Evaluator:
         self.gvars = set()     # bare names defined global with ~; stored as ~name from then on
         self.gfuncs = set()
         self.gline = {}        # (is function, ~name) -> line that made it global; set by sheet.py
-        self.assume = True     # False after !noassume: results keep their typed units
-        self.short = False     # True after !short: lines show only the final number, no steps or units
-        self.plotdefs = {}     # set by `!plot key: value`, for the plots below it
-        self.cleared = set()   # names removed by !clear, for a clearer error
-        self.cleared_funcs = set()  # functions removed by !clearf
         self.stale = set()     # variable keys whose value comes from a solver result that is out of date
-        self.angle = "radian"  # "degree" after !trigdeg: bare numbers in trig calls are degrees
+        self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
@@ -224,7 +220,7 @@ class Evaluator:
             return scope[key]
         if n.name in CONSTANTS:
             return self.Q(CONSTANTS[n.name])
-        if n.name in self.cleared:
+        if n.name in self.mode.cleared:
             raise EvalError(f"'{n.name}' was removed by !clear")
         hint = f". Units need an apostrophe: '{n.name}" if self.is_unit(n.name) else ""
         raise EvalError(f"'{n.name}' is not defined{hint}")
@@ -350,7 +346,7 @@ class Evaluator:
             return self.eval(body, {**self.vars, **dict(zip(params, args))})
         fn = getattr(self, "fn_" + n.func, None)
         if fn is None:
-            if n.func in self.cleared_funcs:
+            if n.func in self.mode.cleared_funcs:
                 raise EvalError(f"'{n.func}' was removed by !clearf")
             raise EvalError(f"Unknown function '{n.func}'")
         try:
@@ -388,15 +384,15 @@ class Evaluator:
     def _radians(self, x):
         """Magnitude of x in radians; a bare number is read in the current angle unit."""
         if not x.unit_items():
-            x = self.Q(x.magnitude, self.angle)
+            x = self.Q(x.magnitude, self.mode.angle)
         return x.to("radian").magnitude
 
     def fn_sin(self, x): return self.Q(np.sin(self._radians(x)))
     def fn_cos(self, x): return self.Q(np.cos(self._radians(x)))
     def fn_tan(self, x): return self.Q(np.tan(self._radians(x)))
-    def fn_asin(self, x): return self.Q(np.arcsin(self._dimless(x, "asin")), "radian").to(self.angle)
-    def fn_acos(self, x): return self.Q(np.arccos(self._dimless(x, "acos")), "radian").to(self.angle)
-    def fn_atan(self, x): return self.Q(np.arctan(self._dimless(x, "atan")), "radian").to(self.angle)
+    def fn_asin(self, x): return self.Q(np.arcsin(self._dimless(x, "asin")), "radian").to(self.mode.angle)
+    def fn_acos(self, x): return self.Q(np.arccos(self._dimless(x, "acos")), "radian").to(self.mode.angle)
+    def fn_atan(self, x): return self.Q(np.arctan(self._dimless(x, "atan")), "radian").to(self.mode.angle)
     def fn_exp(self, x): return self.Q(np.exp(self._dimless(x, "exp")))
     def fn_ln(self, x): return self.Q(np.log(self._dimless(x, "ln")))
     def fn_log10(self, x): return self.Q(np.log10(self._dimless(x, "log10")))

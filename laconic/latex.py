@@ -8,6 +8,7 @@ import re
 
 import numpy as np
 
+from .commands import SheetMode
 from .evaluator import CONSTANTS, EvalError
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Str,
                     UnitLit)
@@ -115,15 +116,14 @@ _SIUNITX_ALIASES = {"electron_volt": "electronvolt", "astronomical_unit": "astro
 
 
 class Fmt:
-    def __init__(self, ureg, siunitx=False, sig=4, custom=(), places=None, keep_zeros=False):
+    def __init__(self, ureg, siunitx=False, custom=(), mode=None):
         """`custom` holds the names of user-defined units. In export mode each one
         gets a siunitx macro, collected in `macros` (name -> macro) for the preamble.
-        Results show `sig` significant figures, or `places` decimal places when that is
-        set (!sigfigs, !sigfigsbig and !decplace each replace the others); `keep_zeros`
-        (!sigfigsbig) pads to exactly `sig` figures, 2.5 -> 2.500. This only changes what is
-        printed: the evaluator never rounds."""
-        self.ureg, self.siunitx, self.sig, self.places = ureg, siunitx, sig, places
-        self.keep_zeros = keep_zeros
+        Results are rounded as the sheet `mode` says at the time they are printed
+        (significant figures, decimal places, trailing zeros; see commands.SheetMode).
+        This only changes what is printed: the evaluator never rounds."""
+        self.ureg, self.siunitx = ureg, siunitx
+        self.mode = mode or SheetMode()
         self.custom, self.macros = custom, {}
         self.builtin = {}   # Pint units siunitx lacks, given macros too: name -> how they print
         self._dimless = ureg.Unit("dimensionless")
@@ -149,11 +149,12 @@ class Fmt:
         An explicit `sig` (typed-in numbers are shown with 12) always counts significant
         figures; with sig=None the display setting applies, which may be decimal places."""
         x = float(x)
-        if sig is None and self.places is not None:
-            s = f"{x:.{self.places}f}"
+        mode = self.mode
+        if sig is None and mode.places is not None:
+            s = f"{x:.{mode.places}f}"
             return (s[1:] if s.startswith("-") and float(s) == 0 else s), None
-        keep = self.keep_zeros and sig is None   # typed-in numbers never get padded
-        sig = sig or self.sig
+        keep = mode.keep_zeros and sig is None   # typed-in numbers never get padded
+        sig = sig or mode.sig
         if x == 0:
             return ("0." + "0" * (sig - 1) if keep and sig > 1 else "0"), None
         e = f"{x:.{sig - 1}e}"                   # rounded to sig figures
