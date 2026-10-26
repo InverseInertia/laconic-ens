@@ -32,6 +32,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `test_lineresult.py` | the line result interface, the block lookups, and the contract on the `/api/eval` row shape (it also runs `rows.js` over real rows) |
 | `test_editing_node.py` | runs the Node suites from pytest |
 | `test_solver.py`, `test_solverjobs.py` | solver blocks and the worker process |
+| `test_install_linux.py` | `packaging/install-linux.sh` run in a throwaway home folder with a stand-in program: the launcher it writes and what `--uninstall` removes |
 | `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
 
 Browser tests are skipped unless `playwright` is installed (`pip install playwright`; set `CHROMIUM_PATH` to use an existing browser). One test compiles an exported document with plots and is skipped unless `pdflatex` (with pgfplots and siunitx v3) is installed.
