@@ -228,6 +228,21 @@ def test_help_dialog_opens_and_links_to_keys(page):
     page.wait_for_selector("#helpDlg[open]")
 
 
+def test_version_is_shown_next_to_the_title_and_in_help(page):
+    from laconic._version import label
+    assert page.inner_text("#version") == label()
+    page.click("#helpBtn")
+    page.wait_for_selector("#helpDlg[open]")
+    assert page.inner_text("#helpVersion").startswith(f"LENS {label()} ")
+    assert page.get_attribute("#helpVersion a", "href").endswith("/releases")
+    page.click("#helpDlg .close")
+    # On a phone the header drops it to keep the toolbar room; Help still has it.
+    page.set_viewport_size({"width": 400, "height": 800})
+    assert not page.is_visible("#version")
+    page.set_viewport_size({"width": 1200, "height": 800})
+    assert page.is_visible("#version")
+
+
 def test_help_shows_on_first_open_only(page, server):
     import json
     from laconic import settings

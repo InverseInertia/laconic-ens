@@ -13,6 +13,7 @@ from . import document, evaluate as evaluate_sheet, markdown, snippet
 from .sheet import block_at, solver_blocks
 from . import settings
 from .blockedit import to_json
+from ._version import label as version_label
 from .commands import help_rows
 from .evaluator import check_units
 from .lifecycle import lifecycle
@@ -25,6 +26,7 @@ from .vocab import props_vocabulary, vocabulary
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
 HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
+VERSION_MARKER = "{{version}}"  # in index.html; replaced with the program's version (_version.py)
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
 OPENED = None   # Path of the worksheet the program was started with (`lens --window FILE`), set by __main__
 
@@ -98,7 +100,7 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 @app.get("/")
 def index():
     page = (STATIC / "index.html").read_text(encoding="utf-8")
-    return HTMLResponse(page.replace(HELP_MARKER, help_rows()))
+    return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label()))
 
 
 def _run(sheet, siunitx):

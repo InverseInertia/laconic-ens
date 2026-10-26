@@ -1,4 +1,6 @@
-"""Run the frozen binary, check it serves the UI and the vendored assets."""
+"""Run the frozen binary, check it serves the UI and the vendored assets.
+
+Usage: smoke.py EXE [VERSION]; with VERSION ("v0.2.0" or "dev"), the page must show it."""
 import glob
 import json
 import subprocess
@@ -13,12 +15,15 @@ try:
     base = f"http://127.0.0.1:{port}"
     for _ in range(60):
         try:
-            urllib.request.urlopen(base + "/", timeout=2)
+            page = urllib.request.urlopen(base + "/", timeout=2).read().decode()
             break
         except OSError:
             time.sleep(0.5)
     else:
         sys.exit("server did not start")
+    assert "{{version}}" not in page, "version marker left in the page"
+    if len(sys.argv) > 2:
+        assert f'id="version">{sys.argv[2]}<' in page, f"page does not show version {sys.argv[2]}"
     for path in ("/static/vendor/katex/katex.min.js", "/static/vendor/d3/d3.min.js", "/static/plotview.js",
                  "/static/fonts/fonts.css", "/static/example.lens", "/api/examples/beam"):
         urllib.request.urlopen(base + path, timeout=5).read()
