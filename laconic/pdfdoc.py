@@ -32,6 +32,12 @@ _STYLE = """
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt "IBM Plex Sans", sans-serif; color: #777; } }
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 body { margin: 0; font: 10.5pt/1.45 "IBM Plex Sans", sans-serif; color: #111; background: #fff; }
+/* On screen, a sheet as wide as the printed column (A4 less the margins; Letter is a little wider),
+   so the formulas are fitted to the width they print at, and the tab shows the page's margins. */
+@media screen {
+  html { background: #e4e4e4; }
+  body { width: 178mm; margin: 8mm auto; padding: 18mm 16mm 20mm; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+}
 h1 { font-size: 17pt; font-weight: 500; margin: 0 0 4mm; padding-bottom: 2mm; border-bottom: 1px solid #999; }
 h2 { font-size: 13pt; font-weight: 500; margin: 6mm 0 2mm; break-after: avoid; page-break-after: avoid; }
 p { margin: 1.5mm 0; }
