@@ -5,6 +5,7 @@ LALR reduce/reduce clash between `f(x) = ...` and the call `f(x)`)."""
 from lark import Lark, Transformer, v_args
 from lark.exceptions import UnexpectedInput
 
+from . import catalogue
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
                     Matrix, Name, Neg, Num, Str, UnitDef, UnitLit)
 from .sheettext import NAME, NUMBER, STRING, UNIT, definition
@@ -97,12 +98,7 @@ def parse_expr(src):
     except UnexpectedInput as e:
         col = getattr(e, "column", 0)
         bad = src[max(col - 1, 0):]
-        hint = ""
-        if bad.startswith("%"):
-            hint = ". Percent is a unit: write 5'%"
-        elif bad.startswith("$"):
-            hint = ". Currencies are units named by their ISO code: write 5'USD, 'EUR, 'GBP"
-        raise ParseError(f"Syntax error at column {col}: {bad[:12]!r}{hint}") from None
+        raise ParseError(f"Syntax error at column {col}: {bad[:12]!r}{catalogue.syntax_hint(bad)}") from None
 
 
 def parse_line(src):

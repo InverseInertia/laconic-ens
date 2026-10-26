@@ -1,9 +1,9 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
-from . import solver
+from . import catalogue, solver
 from .commands import COMMANDS
-from .evaluator import CONSTANTS, CURRENCIES, Evaluator, registry
+from .evaluator import CONSTANTS, Evaluator, registry
 
 # Signature shown next to each function. Anything missing shows just its name.
 _SIGNATURES = {
@@ -44,7 +44,7 @@ def _units():
 
     for key in sorted(names, key=lambda k: (len(k), k)):
         try:
-            detail = f"{CURRENCIES[key]} (currency)" if key in CURRENCIES else ureg.get_name(key)
+            detail = catalogue.detail(key) or ureg.get_name(key)
             add(key, detail, key in _COMMON)
         except Exception:
             continue
