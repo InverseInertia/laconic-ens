@@ -42,6 +42,7 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 - **A built-in function:** add an `fn_name` method to `Evaluator` (it is picked up by suggestions and Rename's reserved-name list automatically). Add a signature to `_SIGNATURES` in `vocab.py`, LaTeX in `Printer.call` if it should typeset specially, and a row to [Matrices](Matrices) or [Worksheet Syntax](Worksheet-Syntax).
 - **A command:** handle it in `_run_command` in `sheet.py` and list it in `COMMANDS` in `vocab.py`.
 - **A plot option:** add it to the tables at the top of `plotopts.py`, resolve it in `plotspec.py`, and draw it in `plotsvg.py` and `plotpgf.py`.
+- **A unit that needs special handling** (its own dimension, a reduction rule, an export spelling, an error or hint): add it to the unit catalogue, `catalogue.py`. A currency is one entry in `CURRENCIES`.
 
 ## CI
 

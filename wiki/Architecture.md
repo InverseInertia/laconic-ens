@@ -32,7 +32,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `nodes.py` | Frozen dataclasses for the AST |
 | `evaluator.py` | AST to Pint quantities. Built-in functions are the `fn_*` methods; every value (scalar or matrix) is a Quantity |
 | `si.py` | Reduces a result to simplest coherent SI with a familiar name |
-| `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`); `snippet` and `document` |
+| `catalogue.py` | The unit catalogue: currencies, percent, subscripted constant symbols and the siunitx spellings, with each family's dimension, reduction, export macro, editor text and error hint |
+| `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`, which also hands back the `\DeclareSIUnit` lines for the units a document printed); `snippet` and `document` |
 | `sheet.py` | Runs a worksheet line by line: commands, unit definitions, plots, results, portable save text |
 | `plotopts.py` | Plot option parsing, defaults, and the writer that edits option lines in the source |
 | `plotspec.py` | Samples a plot and resolves options into the spec |
