@@ -6,6 +6,8 @@
 worksheet text
    │  sheettext.py    line kinds, blocks, expression spans, tokens
    │  sheet.py        runs each line in order
+   │  lineresult.py   one LineResult per line: owned lines, display parts, block handle,
+   │                  symbols, and a plot or solver payload
    ▼
 parser.py ──► nodes.py (AST) ──► evaluator.py ──► Pint quantities ──► si.py (display units)
                     │
@@ -22,6 +24,8 @@ Two ideas hold it together:
 
 - **One tree, two consumers.** The evaluator and the LaTeX printer walk the same AST, so the layout of a result (symbolic, substituted, result) is decided in `latex.py` and nowhere else.
 - **One spec, three outputs.** `plotspec.py` turns a plot's source into a plain dict. The SVG renderer, the pgfplots writer and the page all read that dict. The mouse never draws; it only rewrites the option lines in the worksheet text, and the plot is redrawn from the text.
+
+- **One result interface.** Each line's `LineResult` (`lineresult.py`) answers the same small interface, whatever its kind: the lines it owns, its display parts, its block handle and its symbols. A plot's or solver's data sits behind it as a typed payload (`r.plot`, `r.solver`). The LaTeX writer, the CLI and the endpoints read results through it, and the page reads the JSON rows through one module (`rows.js`). The row shape is pinned by a contract test.
 
 - **One writer of block lines.** Every change the server makes to the text (an option the mouse set, a stored solver result, a rename) goes back to the page as edits against the text it was sent, never a whole new text. The block editor (`blockedit.py`) writes every line a plot or solver block owns, and the page applies every server edit through one adapter (`applyEdits` in `index.html`, over `Editing.merge`).
 
@@ -40,7 +44,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `si.py` | Reduces a result to simplest coherent SI with a familiar name |
 | `catalogue.py` | The unit catalogue: currencies, percent, subscripted constant symbols and the siunitx spellings, with each family's dimension, reduction, export macro, editor text and error hint |
 | `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`, which also hands back the `\DeclareSIUnit` lines for the units a document printed); `snippet` and `document` |
-| `sheet.py` | Runs a worksheet line by line, dispatching on the line kinds from `sheettext`: commands, unit definitions, plots, results, portable save text. Records each definition in the symbol table |
+| `sheet.py` | Runs a worksheet line by line, dispatching on the line kinds from `sheettext`: commands, unit definitions, plots, results, portable save text. Records each definition in the symbol table. `block_at` and `solver_blocks` find blocks by the text and run the sheet only as far as those blocks (`evaluate(..., until=)`) |
+| `lineresult.py` | The line result: the interface every result answers (owned lines, display parts, block handle, symbols), the plot and solver payloads behind it, and the row JSON `/api/eval` sends (`to_json`, pinned by `tests/test_lineresult.py`) |
 | `commands.py` | The command registry (every `!` command: name, argument rule, summary, help row, effect) and the sheet mode the commands change. Suggestions, help rows and the unknown-command message are generated from it |
 | `plotopts.py` | Plot option parsing, defaults, and the patch a pan, zoom or reset makes to the option lines (written through the block editor) |
 | `plotspec.py` | Samples a plot and resolves options into the spec |
@@ -60,7 +65,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 
 | File | Role |
 |---|---|
-| `index.html` | The page: layout, styles, dialogs, and the glue script that wires the modules below to the DOM and browser APIs |
+| `index.html` | The page: layout, styles, dialogs, and the glue script that wires the modules below to the DOM and browser APIs. `render()` draws each row model's body through a small table of body types |
+| `rows.js` | The row model: what the results pane shows for each eval row, from one table of line kind to body, and which row shows a given line. The page's one reader of the rows' common fields |
 | `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits); `merge` turns the server's edits into one such edit |
 | `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table |
 | `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line. An adapter of `symbols.py`; it applies no scope rule of its own |
@@ -68,8 +74,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `savefile.js` | Save file policy: reuse the open file or ask, the file name, the download fallback. The page passes an adapter over the File System Access API |
 | `theme.js` | Theme data (fonts, presets), the contrast check, loading a stored theme, the CSS variables to set |
 | `shortcuts.js` | The keyboard shortcut table, as data; the page renders it under Settings → Reference, with the command rows `server.py` fills in from `commands.py` |
-| `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server |
-| `solverview.js` | The Run / Interrupt / Verify / Log strip under solver blocks |
+| `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server. Reads the plot payload's spec |
+| `solverview.js` | The Run / Interrupt / Verify / Log strip under solver blocks. Reads the solver payload |
 | `vendor/` | KaTeX, and d3-zoom with d3-scale and dependencies (see `vendor/d3/README.md`) |
 | `fonts/` | IBM Plex and OCR-A, self-hosted |
 | `example.lens` | The sheet the page opens with |
@@ -87,11 +93,11 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | Endpoint | Purpose |
 |---|---|
 | `GET /` | the page, with the command help rows filled in from the registry |
-| `POST /api/eval` | run a sheet; one row per line, each with its part of the symbol table (`symbols: {defines, uses}`); `view: "latex"` adds a snippet per line |
+| `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex`, `error`, `warning`, `stale`, its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line |
 | `POST /api/export` | complete `.tex` document |
 | `POST /api/save` | source with needed unit definitions appended |
 | `POST /api/rename` | rename a name or unit; returns edits (one per use) or a warning/error |
-| `POST /api/plotedit` | edits to one plot's option lines for a pan, zoom or reset |
+| `POST /api/plotedit` | edits to one plot's option lines for a pan, zoom or reset (runs the sheet only as far as the plot) |
 | `POST /api/plotimage` | one plot as a standalone SVG |
 | `POST /api/solve/start`, `GET /api/solve/{job}`, `POST /api/solve/{job}/interrupt` | start, poll and interrupt a solver job |
 | `POST /api/solvestore`, `POST /api/solveedit` | edits that write a finished result into its block; toggle `autorun:` |
