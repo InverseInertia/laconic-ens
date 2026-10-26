@@ -29,6 +29,7 @@ LINK="$HOME/.local/bin/lens"
 MIME_TYPE="application/x-laconic-lens"
 MIME_XML="$DATA/mime/packages/laconic-lens.xml"
 FILE_ICON="$DATA/icons/hicolor/512x512/mimetypes/application-x-laconic-lens.png"
+BROWSER_PROFILE="${XDG_CACHE_HOME:-$HOME/.cache}/laconic-lens"  # the LENS window's own browser profile
 
 refresh() {  # rebuild the caches the desktop reads the menu, file types and icons from
     command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$DATA/applications" 2>/dev/null || true
@@ -46,6 +47,7 @@ remove_existing() {
 
 if [ "${1:-}" = "--uninstall" ]; then
     remove_existing
+    rm -rf "$BROWSER_PROFILE"
     echo "LENS removed."
     exit 0
 fi
@@ -97,6 +99,9 @@ chmod 644 "$MIME_XML"
 "$BIN" --export-examples "$APP_DIR/examples" >/dev/null
 # Icon is the absolute path, not the theme name: a name has to be found through the user's
 # hicolor theme and its icon cache, which some desktops do not rescan, leaving a blank icon.
+# StartupWMClass is how the panel and window list tell a LENS window from any other browser
+# window and show this icon for it; LENS opens its window with that class (see _app_args in
+# laconic/__main__.py).
 cat > "$DESKTOP" <<DESK
 [Desktop Entry]
 Type=Application
