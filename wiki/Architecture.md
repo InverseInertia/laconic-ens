@@ -32,11 +32,12 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `sheettext.py` | The shape of the worksheet text: each line's kind, the plot or solver block that owns it, its expression spans, and the name/unit/number tokens in them. One deep module behind `scan(text)`; the sheet, rename, plot and solver modules read lines and blocks through it. Its lexer patterns are the grammar's terminals too. Terms are defined in `CONTEXT.md` |
 | `parser.py` | Lark LALR grammar for expressions. Assignment, function and unit definitions are split off first (`sheettext.definition`), which avoids a grammar clash between `f(x) = ...` and the call `f(x)` |
 | `nodes.py` | Frozen dataclasses for the AST |
-| `evaluator.py` | AST to Pint quantities. Built-in functions are the `fn_*` methods; every value (scalar or matrix) is a Quantity |
+| `evaluator.py` | AST to Pint quantities. Built-in functions are the `fn_*` methods; every value (scalar or matrix) is a Quantity. A name's key comes from the symbol table |
+| `symbols.py` | The symbol table: which variables and functions each line sees, with each definition's line, lifetime, value and parameters. One deep module behind `bind`, `clear`, `key`, `visible` and `uses`, holding the scope rules (`~` globals, `!clear`/`!clearf`, local parameters, solver unknowns, failed lines). Built as the sheet runs; each eval row carries its part |
 | `si.py` | Reduces a result to simplest coherent SI with a familiar name |
 | `catalogue.py` | The unit catalogue: currencies, percent, subscripted constant symbols and the siunitx spellings, with each family's dimension, reduction, export macro, editor text and error hint |
 | `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`, which also hands back the `\DeclareSIUnit` lines for the units a document printed); `snippet` and `document` |
-| `sheet.py` | Runs a worksheet line by line, dispatching on the line kinds from `sheettext`: commands, unit definitions, plots, results, portable save text |
+| `sheet.py` | Runs a worksheet line by line, dispatching on the line kinds from `sheettext`: commands, unit definitions, plots, results, portable save text. Records each definition in the symbol table |
 | `commands.py` | The command registry (every `!` command: name, argument rule, summary, help row, effect) and the sheet mode the commands change. Suggestions, help rows and the unknown-command message are generated from it |
 | `plotopts.py` | Plot option parsing, defaults, and the writer that edits option lines in the source |
 | `plotspec.py` | Samples a plot and resolves options into the spec |
@@ -58,7 +59,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 |---|---|
 | `index.html` | The page: layout, styles, dialogs, and the glue script that wires the modules below to the DOM and browser APIs |
 | `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits) |
-| `autocomplete.js` | What to suggest, as pure functions |
+| `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table |
+| `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line. An adapter of `symbols.py`; it applies no scope rule of its own |
 | `paste.js` | Table paste to matrix, pure functions |
 | `savefile.js` | Save file policy: reuse the open file or ask, the file name, the download fallback. The page passes an adapter over the File System Access API |
 | `theme.js` | Theme data (fonts, presets), the contrast check, loading a stored theme, the CSS variables to set |
@@ -73,6 +75,8 @@ The example worksheets live in `laconic/examples/` and are served by `/api/examp
 
 The pure-function JS files also load under Node, which is how they are tested without a browser.
 
+The editor never works out scope itself. Autocomplete, the `~` that Math keys add to a global and the global marks all read the symbol table of the last evaluation (`symbols.js`); between a keystroke and the next response they use the last table.
+
 The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and solver-block readers (`Autocomplete.definition`, `solverBlock`), since it reads text as it is typed. They are adapters of `sheettext.py` across the HTTP seam: `tests/sheettext_vectors.json` is run by both `test_sheettext.py` and `test_sheettext.js`, so a change to one side that the other lacks fails a test.
 
 ## HTTP API
@@ -80,7 +84,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | Endpoint | Purpose |
 |---|---|
 | `GET /` | the page, with the command help rows filled in from the registry |
-| `POST /api/eval` | run a sheet; `view: "latex"` adds a snippet per line |
+| `POST /api/eval` | run a sheet; one row per line, each with its part of the symbol table (`symbols: {defines, uses}`); `view: "latex"` adds a snippet per line |
 | `POST /api/export` | complete `.tex` document |
 | `POST /api/save` | source with needed unit definitions appended |
 | `POST /api/rename` | rename a name or unit; returns new text or a warning/error |
