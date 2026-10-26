@@ -330,4 +330,20 @@ eq(sim('~g = 5\nx = g|', ' ', { ...G, enabled: false }), '~g = 5\nx = g |', 'off
 const r = E.charAction(' ', '~g = 5\nx = g', 12, 12, G);
 eq(`${r.from} ${r.to} ${r.insert}`, '11 12 ~g ', 'one edit, so one Ctrl+Z takes it back');
 
+// Edits from the server, all against one text, go in as one edit; the caret stays with its text
+function merged(src, edits) {
+  const st = start(src), r = E.merge(st.t, edits, st.s);
+  if (!r) return null;
+  const t = applyEdit(st, r);
+  return t.t.slice(0, t.s) + '|' + t.t.slice(t.s);
+}
+eq(merged('ab|cdef', [{ from: 4, to: 5, insert: 'XY' }]), 'ab|cdXYf', 'caret before the edit stays');
+eq(merged('abcd|ef', [{ from: 0, to: 1, insert: '' }, { from: 2, to: 2, insert: '+' }]), 'b+cd|ef', 'caret after edits moves with its text');
+eq(merged('abc|def', [{ from: 2, to: 5, insert: 'Z' }]), 'ab|Zf', 'caret inside a replaced part goes to its start');
+eq(merged('abc|def', [{ from: 5, to: 6, insert: '!' }, { from: 0, to: 0, insert: '>' }]), '>abc|de!', 'edits in any order');
+eq(merged('ab|c', []), null, 'no edits, no change');
+eq(merged('ab|c', [{ from: 1, to: 2, insert: 'b' }]), null, 'an edit that changes nothing');
+const m = E.merge('a = 1\nb = a\n', [{ from: 0, to: 1, insert: 'c' }, { from: 10, to: 11, insert: 'c' }], 0);
+eq(`${m.from} ${m.to} ${JSON.stringify(m.insert)}`, '0 11 "c = 1\\nb = c"', 'one edit over the span the edits cover');
+
 console.log(`${n} editing checks passed`);
