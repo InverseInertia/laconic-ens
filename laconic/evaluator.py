@@ -127,6 +127,7 @@ class Evaluator:
         self.funcs = {}
         self.gvars = set()     # bare names defined global with ~; stored as ~name from then on
         self.gfuncs = set()
+        self.gline = {}        # (is function, ~name) -> line that made it global; set by sheet.py
         self.assume = True     # False after !noassume: results keep their typed units
         self.short = False     # True after !short: lines show only the final number, no steps or units
         self.plotdefs = {}     # set by `!plot key: value`, for the plots below it
@@ -148,6 +149,10 @@ class Evaluator:
     def fkey(self, name):
         bare = name.lstrip("~")
         return "~" + bare if name != bare or bare in self.gfuncs else bare
+
+    def gnames_at(self, line):
+        """Bare names that are global on `line`: made global there or above it."""
+        return {key[1:] for (_, key), n in self.gline.items() if n <= line}
 
     def bind_key(self, name, func=False):
         """The key a definition of `name` stores under. A `~` definition makes the name

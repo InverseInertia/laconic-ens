@@ -59,9 +59,11 @@ Marks combine (``v`! `` is `\vec{\dot{v}}`). With a subscript the mark goes at t
 
 ## Global variables
 
-A `~` on a definition makes the name global: `~g = 9.81'm / 's^2`. Every later use is the global one, so you write plain `g` from then on.
+A `~` on a definition makes the name global: `~g = 9.81'm / 's^2`. Every later use is the global one, written `~g`. With Math keys on, the editor adds the `~` for you: type `g` on a later line and the `~` appears as soon as the name is finished (a space, an operator, a bracket or Enter). The `~` is source-only and never typeset.
 
-- A global and an ordinary variable can never share a name. Assigning `g` after `~g` changes the global; defining `~g` for a name already used without `~` is an error.
+- A global and an ordinary variable can never share a name. Plain `g` after `~g` still means the global, so assigning `g = 12` changes it. That line gets a warning, since a missing `~` there is usually a slip. Defining `~g` for a name already used without `~` is an error.
+- Globals are tinted in the editor and colored and underlined in the results. Hover one, in either place, to see the line that made it global. **Mark globals** in the header switches the marks in the results off; a note at the top of the results then says how many globals are unmarked. Warnings still show, and the LaTeX view and export are always plain.
+- `!clear` and `!clearf` name the globals they kept: `Cleared a, b. Kept global ~g`.
 - Evaluation is top to bottom, so a global is only available below its definition (units are the exception, see [Units](Units)).
 - Functions work the same way: `~f(x) = x^2`, used as `f(2)`.
 

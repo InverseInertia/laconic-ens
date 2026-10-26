@@ -503,6 +503,43 @@
     return edit(from, s + 1, '', from);
   }
 
+  // ---- globals -----------------------------------------------------------
+  // A global is written with its ~ every time, so a plain one is a slip (the sheet warns when
+  // one is assigned). When a name is finished, by typing something that cannot continue it, and
+  // it is a global from an earlier line, the ~ goes in front. ctx.globals is [[name, line], ...].
+  const MARKS = '`!@';
+  const FUNC_HEAD = /^\s*~?[\p{L}_][\p{L}\p{N}_]*[`!@]*\s*\([^)]*$/u;
+  function globalStart(t, s, ctx) {
+    const globals = ctx && ctx.globals;
+    if (!globals || !globals.length || isIdent(t[s]) || MARKS.includes(t[s] || ' ')) return -1;
+    const ls = lineStartOf(t, s);
+    let a = s;
+    while (a > ls && MARKS.includes(t[a - 1])) a--;
+    const end = a;
+    while (a > ls && isIdent(t[a - 1])) a--;
+    if (a === end || !/[\p{L}_]/u.test(t[a])) return -1;               // no name, or a number such as 1e5
+    if (a > ls && "~'.!".includes(t[a - 1])) return -1;                // has its ~, a unit, after a point, a command
+    if (FUNC_HEAD.test(t.slice(ls, a))) return -1;                      // a function's own parameters
+    const name = t.slice(a, s), line = t.slice(0, s).split('\n').length;
+    return globals.some(([n, at]) => n === name && at < line) ? a : -1;
+  }
+  // Runs `base` on the text with the ~ added, then returns the whole change as one edit on `t`,
+  // so a single Ctrl+Z takes back both. `typed` is what the browser would insert if `base` does nothing.
+  function withTilde(t, s, g, typed, base) {
+    const t2 = t.slice(0, g) + '~' + t.slice(g), r = base(t2, s + 1);
+    let final = t2, caret = s + 1;
+    if (!r || (r.insert === undefined && r.caretOnly === undefined)) {
+      final = t2.slice(0, s + 1) + typed + t2.slice(s + 1); caret = s + 1 + typed.length;
+    } else if (r.insert !== undefined) {
+      final = t2.slice(0, r.from) + r.insert + t2.slice(r.to); caret = r.caret;
+    } else caret = r.caretOnly;
+    let a = 0, b = 0;
+    while (a < t.length && t[a] === final[a]) a++;
+    while (b < t.length - a && t[t.length - 1 - b] === final[final.length - 1 - b]) b++;
+    return edit(a, t.length - b, final.slice(a, final.length - b), caret);
+  }
+  const plainCtx = (ctx) => ({ ...ctx, globals: null });
+
   // Keys that wrap a highlighted region instead of replacing it.
   const WRAPPERS = new Set(['/', '\\', '^', '(', '[', '|']);
 
@@ -514,6 +551,8 @@
     if (isComment(t, ls)) return null;
     // Inside quotes (a props() key or fluid such as "1-Butene") the text is not math.
     if (((t.slice(ls, s).match(/"/g) || []).length % 2) === 1) return null;
+    const g = e === s && !isTok(ch) && !MARKS.includes(ch) ? globalStart(t, s, ctx) : -1;
+    if (g >= 0) return withTilde(t, s, g, ch, (t2, s2) => charAction(ch, t2, s2, s2, plainCtx(ctx)));
     if (e > s && WRAPPERS.has(ch)) {
       const n = snap(t, s, e); // act on whole terms, however the text was highlighted
       if (!n) {
@@ -594,6 +633,8 @@
     }
     // Enter with only closing brackets left on the line finishes the line, so the
     // `]` that Ctrl+M added is not stranded on the next line.
+    const g = plain && !comment && key === 'Enter' && e === s ? globalStart(t, s, ctx) : -1;
+    if (g >= 0) return withTilde(t, s, g, '\n', (t2, s2) => keyAction(key, mods, t2, s2, s2, plainCtx(ctx)));
     if (plain && !comment && key === 'Enter' && e === s && /^[)\]]+$/.test(t.slice(s, le))) {
       return edit(le, le, '\n', le + 1);
     }

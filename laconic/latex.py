@@ -128,6 +128,14 @@ class Fmt:
         self.builtin = {}   # Pint units siunitx lacks, given macros too: name -> how they print
         self._dimless = ureg.Unit("dimensionless")
 
+    def var(self, key):
+        """A variable or function by its stored key. In the live view a global (`~g`) is
+        tagged so the page can color and underline it; LaTeX snippets and the export stay plain."""
+        tex = name_latex(key)
+        if self.siunitx or not key.startswith("~"):
+            return tex
+        return f"\\htmlData{{global={key[1:]}}}{{{tex}}}"
+
     def _macro(self, name, spelling=None):
         if name not in self.macros:
             macro = _unit_macro(spelling or name)
@@ -307,7 +315,7 @@ class Printer:
         if self.ev.is_var(name):
             if self.subst and (self.expand_matrices or np.ndim(self.ev.vars[self.ev.vkey(name)].magnitude) == 0):
                 return self.value(self.ev.vars[self.ev.vkey(name)])
-            return name_latex(name), ATOM
+            return self.fmt.var(self.ev.vkey(name)), ATOM
         if name in CONSTANTS:
             return {"pi": "\\pi", "e": "e", "∞": "\\infty"}[name], ATOM
         # Not defined yet (e.g. a function body that uses a later variable): keep it symbolic.
@@ -348,7 +356,7 @@ class Printer:
     def call(self, n):
         f, a = n.func, [self.tex(x) for x in n.args]
         if self.ev.fkey(f) in self.ev.funcs:
-            return f"{name_latex(f)}\\left({', '.join(a)}\\right)", ATOM
+            return f"{self.fmt.var(self.ev.fkey(f))}\\left({', '.join(a)}\\right)", ATOM
         if f == "sqrt":
             return f"\\sqrt{{{a[0]}}}", ATOM
         if f == "abs":

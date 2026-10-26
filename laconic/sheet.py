@@ -16,6 +16,7 @@ from .parser import ParseError, parse_expr, parse_line
 from .plotopts import (OPT_RE, PlotError, block_end, canon, is_plot_line,
                        parse_option, parse_plot)
 from .plotspec import Builder
+from .rename import global_spans
 from .plotsvg import render_svg
 from . import solver
 from .solver import SolverError
@@ -35,6 +36,9 @@ class LineResult:
     end: int = 0           # plot, solver: last line of its option lines
     solver: dict = None    # solver: status, hash and values of the block (see _run_solver)
     stale: bool = False    # reads a value from a solver whose result is out of date
+    warning: str = ""      # shown under the result: the line works but may not do what was meant
+    gdef: str = ""         # assign, funcdef: the name this line makes global, without its ~
+    gspans: list = field(default_factory=list)  # [column, length] of each global name in the source line
 
     @property
     def latex(self):
@@ -160,6 +164,8 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
             results.append(_run_command(i, raw, s, ev, fmt))
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
+    for r, spans in zip(results, global_spans(text)):
+        r.gspans = spans(ev.gnames_at(r.n))
     ws = Worksheet(text, results)
     # Instance units the sheet relies on, with the units those are defined in terms of.
     need, todo = set(), [n for n in used if n in ev.globals]
@@ -247,8 +253,7 @@ def _run_command(i, raw, s, ev, fmt):
         for n in gone:
             del ev.funcs[n]
         ev.cleared_funcs.update(gone)
-        text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
-        return LineResult(i, raw, "command", text=text)
+        return LineResult(i, raw, "command", text=_cleared(gone, [n for n in ev.funcs if n.startswith("~")]))
     if name in ("trigdeg", "trigrad"):
         ev.angle = "degree" if name == "trigdeg" else "radian"
         text = ("Trig functions take and return degrees" if ev.angle == "degree"
@@ -259,8 +264,15 @@ def _run_command(i, raw, s, ev, fmt):
         del ev.vars[n]
     ev.cleared.update(gone)
     ev.stale -= set(gone)
+    return LineResult(i, raw, "command", text=_cleared(gone, [n for n in ev.vars if n.startswith("~")]))
+
+
+def _cleared(gone, kept):
+    """`!clear` and `!clearf` name what they kept as well, since a global surviving one is easy to miss."""
     text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
-    return LineResult(i, raw, "command", text=text)
+    if kept:
+        text += f". Kept global{'s' * (len(kept) > 1)} {', '.join(kept)}"
+    return text
 
 
 def _precision_command(i, raw, name, args, fmt):
@@ -388,7 +400,7 @@ def _run_solver(i, raw, lines, ev, fmt, used, solve):
     if qs is not None:
         for u, q in zip(prob.unknowns, qs):
             ev.vars[u.key] = q
-    values = [_value(u.name, name_latex(u.key), fmt.quantity(ev.vars[u.key])) for u in prob.unknowns]
+    values = [_value(u.name, fmt.var(u.key), fmt.quantity(ev.vars[u.key])) for u in prob.unknowns]
     plain = [f"{u.key} = {fmt.plain(ev.vars[u.key])}" for u in prob.unknowns]
     obj = prob.stored_objective(stored) if qs is not None else None
     if obj is not None:
@@ -430,9 +442,11 @@ def _run_line(i, raw, s, ev, fmt, used):
         if isinstance(stmt, FuncDef):
             printer = Printer(ev, fmt, local=stmt.params)
             sym = printer.tex(stmt.body)
-            ev.funcs[ev.bind_key(stmt.name, func=True)] = (stmt.params, stmt.body)
-            head = f"{name_latex(stmt.name)}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
-            return LineResult(i, raw, "funcdef", lhs=head, stages=[sym], text=s)
+            key = ev.bind_key(stmt.name, func=True)
+            ev.funcs[key] = (stmt.params, stmt.body)
+            head = f"{fmt.var(key)}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
+            return LineResult(i, raw, "funcdef", lhs=head, stages=[sym], text=s,
+                              **_global_note(i, stmt.name, key, ev, func=True))
 
         expr = stmt.expr
         value = ev.check_finite(ev.eval(expr), expr)
@@ -452,11 +466,27 @@ def _run_line(i, raw, s, ev, fmt, used):
             key = ev.bind_key(stmt.name)
             ev.vars[key] = value
             (ev.stale.add if stale else ev.stale.discard)(key)
-            return LineResult(i, raw, "assign", lhs=name_latex(key), stages=stages,
-                              text=f"{key} = {fmt.plain(value)}", stale=stale)
+            return LineResult(i, raw, "assign", lhs=fmt.var(key), stages=stages,
+                              text=f"{key} = {fmt.plain(value)}", stale=stale,
+                              **_global_note(i, stmt.name, key, ev))
         return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value), stale=stale)
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e))
+
+
+def _global_note(i, name, key, ev, func=False):
+    """What a definition of a global puts on its row: the name, on the line that first makes
+    it global, or a warning when it is assigned without its ~. The editor adds the ~ as a
+    global is typed, so a plain name here usually means the ~ was deleted by accident."""
+    if not key.startswith("~"):
+        return {}
+    first = ev.gline.setdefault((func, key), i)
+    if first == i:
+        return {"gdef": key[1:]}
+    if name.startswith("~"):
+        return {}
+    kind = "function" if func else "global"
+    return {"warning": f"Changes the {kind} {key}, defined on line {first}. Write {key} if that is meant"}
 
 
 def _describe(e):

@@ -23,6 +23,7 @@ These are off on comment lines and on the text lines under a plot (title, labels
 | `Ctrl+[` , `Ctrl+Shift+[` | Wrap in `idx( , )` / `elem( , , )` |
 | `Ctrl+/`, `Ctrl+\` | A literal `/` (spaced) or `\`, with no fraction or radical slot |
 | `Enter` | With only closing brackets left on the line, finishes the line |
+| `g` then space, operator, `(`, `)` or `Enter` | When `g` is a global from an earlier line, adds its `~`: `~g`. Not in a unit (`'g`), a function's own parameters or a comment |
 | `Ctrl+Space` | Opens suggestions by hand. With text highlighted: pick a function to wrap it in |
 | `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
 | `F2` | Rename the name at the caret everywhere |
@@ -64,7 +65,7 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 | the unknowns in `!root x, y` | variables defined above |
 | `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`) |
 
-`Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions.
+`Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions.
 
 ## Greek table
 
