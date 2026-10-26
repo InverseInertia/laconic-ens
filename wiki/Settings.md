@@ -5,7 +5,7 @@ Open **Settings** from the header. It holds:
 - **Reference:** the list of keys.
 - **Greek letters:** the table behind Ctrl+G.
 - **Global units:** units available in every sheet (see [Units](Units)). Nothing is stored unless every definition is valid.
-- **Theme:** colors (including the color global variables are marked in), fonts and paper style. Presets: LENS blueprint (default), Engineering paper, White paper, Dark. The default monospace font is OCR-A. A saved theme whose text is unreadable on its paper is discarded at load, with a popup saying so.
+- **Theme:** colors (including the color global variables are marked in), fonts and paper style. Presets: LENS blueprint (default), Engineering paper, White paper, Dark, Canoe Dark. The default monospace font is OCR-A. A saved theme whose text is unreadable on its paper is discarded at load, with a popup saying so.
 
 ## Where things are stored
 
