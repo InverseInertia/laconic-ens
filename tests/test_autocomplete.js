@@ -64,6 +64,8 @@ eq(at('si|n = 3').ctx, null, 'the name being defined on the left of =');
 eq(at("'sm|oot = 2'm").ctx, null, 'the unit being defined');
 eq(at('f(x, ab|) = x').ctx, null, 'function parameters');
 eq(at("x = si|n(a)").ctx.end, 'x = sin'.length, 'the whole word is replaced');
+eq(at('x = T_∞|').ctx.start, 'x = '.length, 'a name with an ∞ subscript is one word');
+eq(at('T_∞| = 3').ctx, null, 'and is the name being defined');
 eq(at('!cl|').ctx.kind, 'command', 'after !');
 eq(at('!clear x|').ctx, null, 'no commands after the first word');
 eq(at('x = ~ab|').ctx.tilde, true, 'a typed ~ restricts to globals');
