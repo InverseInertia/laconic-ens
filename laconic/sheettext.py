@@ -18,7 +18,8 @@ from dataclasses import dataclass, field
 
 NAME = r"~?[^\W\d]\w*[`!@]*"
 UNIT = r"'(?:(?:[^\W\d]|°)[\w°]*|%)"
-NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?"
+# A trailing i or j makes the number imaginary: 4i, 2.5e3j. `2in` is still a number and a name.
+NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?(?:[ij](?!\w))?"
 STRING = r'"[^"\n]*"'
 
 _TOKEN = re.compile(rf"(?P<text>{STRING})|(?P<unit>{UNIT})|(?P<num>{NUMBER})|(?P<name>{NAME})")

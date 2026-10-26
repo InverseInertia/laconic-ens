@@ -20,6 +20,7 @@ _SIGNATURES = {
     "dot": "dot(a, b)", "cross": "cross(a, b)", "kron": "kron(A, B)",
     "hstack": "hstack(A, B, ...)", "vstack": "vstack(A, B, ...)",
     "sum": "sum(A)", "mean": "mean(A)", "min": "min(A)", "max": "max(A)",
+    "re": "re(z)", "im": "im(z)", "conj": "conj(z)", "arg": "arg(z)",
     "props": 'props("D", "T", T, "P", p, "Water")',
 }
 

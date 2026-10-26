@@ -346,9 +346,10 @@ def tainted(ev, nodes, local=()):
 def _qdigest(q):
     """A quantity as hashable text. Values are cut to 12 significant digits, so a last-bit
     difference in a library (another machine, another BLAS) does not make a result look stale.
-    Done with numpy, since a matrix input can have a million entries."""
-    mag = np.asarray(q.magnitude, dtype=float)
-    flat = mag.ravel()
+    Done with numpy, since a matrix input can have a million entries. A complex input is
+    digested as its real parts followed by its imaginary parts."""
+    mag = np.asarray(q.magnitude)
+    flat = np.concatenate([mag.real.ravel(), mag.imag.ravel()]) if np.iscomplexobj(mag) else mag.astype(float).ravel()
     with np.errstate(divide="ignore", invalid="ignore"):
         exp = np.where(flat == 0, 0.0, np.floor(np.log10(np.abs(flat))))
         mant = np.round(flat / 10.0 ** (exp - 11))
@@ -428,6 +429,8 @@ class Problem:
             if key not in ev.vars:
                 raise SolverError(f"'{name}' needs a starting value: define it above the block, e.g. {name} = 1")
             q = ev.vars[key]
+            if np.iscomplexobj(q.magnitude):
+                raise SolverError(f"The starting value of '{name}' is complex; the solver works with real numbers")
             mag = np.asarray(q.magnitude, dtype=float)
             if not np.all(np.isfinite(mag)):
                 raise SolverError(f"The starting value of '{name}' is not finite")
@@ -452,6 +455,8 @@ class Problem:
                     continue
                 try:
                     q = self.ev.eval(node).to(u.units)
+                    if np.iscomplexobj(q.magnitude):
+                        raise SolverError("a bound must be real")
                     mag = np.broadcast_to(np.asarray(q.magnitude, dtype=float), u.shape).ravel()
                 except Exception as e:
                     raise SolverError(f"line {line}: {label} bound: {self.describe(e)}") from None
@@ -530,6 +535,9 @@ class Problem:
                 e.units = q.units
             elif q.units != e.units:
                 q = q.to(e.units)
+            if np.iscomplexobj(q.magnitude):
+                raise SolverError(f"line {e.rel.line} is complex at {self.where(x)}; the solver works with "
+                                  "real numbers. Solve for re() and im() separately, or use abs()")
             v = np.asarray(q.magnitude, dtype=float).ravel()
         except SolverError:
             raise

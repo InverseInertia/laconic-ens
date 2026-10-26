@@ -19,6 +19,7 @@ These are off on comment lines and on the text lines under a plot (title, labels
 | `Backspace` | In an empty slot, removes the slot with its `^`, `/` or `sqrt`. After `, `, `; ` or a spaced operator, removes it with its spaces in one press |
 | `Ctrl+M` | Array `[]`, or wraps the selection |
 | `Ctrl+T` or `Alt+T` | Transpose the term on the left or the selection. Press again to undo |
+| `Ctrl+<` | The polar angle sign `∠`, for complex numbers: `5'V∠30'deg`. On a US keyboard press Ctrl+Shift+, |
 | `Ctrl+G` | Greek letter for the character before the caret. Press again to revert |
 | `Ctrl+[` , `Ctrl+Shift+[` | Wrap in `idx( , )` / `elem( , , )` |
 | `Ctrl+/`, `Ctrl+\` | A literal `/` (spaced) or `\`, with no fraction or radical slot |

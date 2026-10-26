@@ -40,4 +40,4 @@ Headings and comments become `\subsection*{}` and plain text, and commands such 
 | `lens file.lens --tex out.tex` | the same `.tex` from the command line |
 | `lens file.lens --md out.md` | the same Markdown note from the command line |
 
-The LaTeX export needs siunitx v3 or newer for `\qty` and `\unit`. The Markdown export uses the live view's math (`\mathrm{kN}`), which Obsidian's MathJax renders without extra packages.
+The LaTeX export needs siunitx v3 or newer for `\qty`, `\unit` and, for complex values, `\complexqty`. The Markdown export uses the live view's math (`\mathrm{kN}`), which Obsidian's MathJax renders without extra packages.

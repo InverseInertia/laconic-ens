@@ -9,7 +9,7 @@ import math
 import numpy as np
 import pint
 
-from .evaluator import EvalError
+from .evaluator import _TINY, EvalError
 from .latex import name_latex
 from .parser import parse_expr
 from .plotopts import BUILTIN, PALETTE, PlotError, canon
@@ -111,7 +111,13 @@ class Builder:
             if np.ndim(q.magnitude) != 0:
                 raise EvalError("A plotted expression must give a single value, not a matrix")
             m = q.magnitude
-            if np.iscomplexobj(m) or not math.isfinite(float(m)):
+            if np.iscomplexobj(m):
+                if abs(m.imag) > _TINY * abs(m):
+                    raise EvalError(f"The expression is complex at {var} = {xv:.4g}. "
+                                    "Plot its re(), im(), abs() or arg() instead")
+                q = self.ev.Q(m.real, q.units)
+                m = m.real
+            if not math.isfinite(float(m)):
                 raise ZeroDivisionError
             return q
         except (ZeroDivisionError, FloatingPointError, OverflowError):

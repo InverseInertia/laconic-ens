@@ -5,7 +5,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class Num:
-    value: float
+    value: float  # complex for an imaginary literal, `4i`
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,13 @@ class BinOp:
     op: str  # + - * / .* ./ ^
     left: Any
     right: Any
+
+
+@dataclass(frozen=True)
+class Polar:
+    """`5'V∠30'deg`: a complex number from its magnitude and angle."""
+    magnitude: Any
+    angle: Any
 
 
 @dataclass(frozen=True)

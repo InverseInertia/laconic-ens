@@ -31,6 +31,7 @@
       { keys: [',', ';'], inline: true, text: 'A space is added after them automatically. In an array, <code>,</code> separates columns and <code>;</code> separates rows' },
       { keys: ['Ctrl+T', 'Alt+T'], text: 'Transpose the term on the left or the selection. Press again to undo. Browsers reserve Ctrl+T for a new tab, so use Alt+T in a normal tab' },
       { keys: ['Ctrl+[', 'Ctrl+Shift+['], text: 'Index the term on the left or the selection. Ctrl+[ gives <code>idx(A, i)</code>, typeset <code>A<sub>i</sub></code>: one element of a vector, or one row of a matrix. Ctrl+Shift+[ gives <code>elem(A, i, j)</code>, typeset <code>A<sub>i,j</sub></code>: row and column. The caret lands in the index slot. Counting starts at 1. Indexes can be indexed too: <code>idx(elem(A, 1, 2), 3)</code>' },
+      { keys: ['Ctrl+<'], text: 'Polar angle sign <code>∠</code> for complex numbers: <code>5\'V∠30\'deg</code>. On a US keyboard that is Ctrl+Shift+,' },
       { keys: ['Ctrl+G'], text: 'Greek letter for the character before the caret. Press again to go back. Edit the mapping under Greek' },
       { keys: ['Ctrl+/', 'Ctrl+\\'], text: 'Type a literal <code>/</code> or <code>\\</code> with no fraction or radical slot' },
       { keys: ['=', '+', '-', '*'], inline: true, text: 'Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press' },
