@@ -34,7 +34,7 @@ Headings and comments become `\subsection*{}` and plain text, and commands such 
 | Action | Result |
 |---|---|
 | Save | the `.lens` source, with needed global unit definitions appended (see [Units](Units)) |
-| Export LaTeX | a complete `.tex` document with `align*` blocks, `\DeclareSIUnit` lines for custom units, and `pgfplots` when a sheet has plots |
+| Export LaTeX | a complete `.tex` document with `align*` blocks, `\DeclareSIUnit` lines for custom units and for built-in units siunitx lacks (`ft`, `psi`, `g0`), and `pgfplots` when a sheet has plots |
 | Plot SVG / PNG | the picture exactly as drawn (see [Plots](Plots)) |
 | `lens file.lens --tex out.tex` | the same `.tex` from the command line |
 
