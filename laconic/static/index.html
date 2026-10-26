@@ -494,6 +494,7 @@ A * B    A .* B           <i>matrix product, elementwise product</i></pre>
 
 <script src="/static/vendor/d3/d3.min.js"></script>
 <script src="/static/symbols.js"></script>
+<script src="/static/rows.js"></script>
 <script src="/static/editing.js"></script>
 <script src="/static/paste.js"></script>
 <script src="/static/plotview.js"></script>
@@ -537,45 +538,52 @@ function typeset(el, tex) {
   for (const g of el.querySelectorAll("[data-global]")) g.title = globalTitle(g.dataset.global);
 }
 
+// How each kind of row body is drawn; what goes in it comes from the row model (rows.js).
+const BODY = {
+  text: (el, b) => { el.textContent = b.text; },
+  tex: (el, b) => typeset(el, b.tex),
+  error: (el, b) => {
+    const s = document.createElement("span"); s.className = "src"; s.textContent = b.source;
+    el.append(s, b.message);
+  },
+  plot: (el, b, r) => el.append(plotBody(r)),
+  solver: (el, b, r) => el.append(Solvers.build(r)),
+  snippet: (el, b, r) => {
+    const pre = document.createElement("pre"); pre.textContent = b.text; el.append(pre);
+    if (b.solver) el.append(Solvers.tools(r));
+  },
+};
+
+let shown = [];   // the row models on screen
 function render(rows) {
   last = rows;
-  // A plot's option lines are part of its row, so they get no row of their own (unless one is wrong).
-  out.replaceChildren(...rows.filter((r) => r.kind !== "plotopt" && r.kind !== "solveropt").map((r) => {
+  // A block's option lines are part of its row, so they get no row of their own (unless one is wrong).
+  const items = rows.map((r) => [r, Rows.model(r, {view})]).filter(([, m]) => m);
+  shown = items.map(([, m]) => m);
+  out.replaceChildren(...items.map(([r, m]) => {
     const row = document.createElement("div");
-    const snip = view === "latex" && r.snippet && r.kind !== "error";
-    row.className = (snip ? "row snip" : "row " + r.kind) + (r.stale ? " stale" : "");
-    row.dataset.line = r.n;
-    if (r.end) row.dataset.end = r.end;
-    const no = document.createElement("div"); no.className = "no"; no.textContent = r.n;
+    row.className = m.cls;
+    row.dataset.line = m.line;
+    const no = document.createElement("div"); no.className = "no"; no.textContent = m.line;
     const body = document.createElement("div"); body.className = "body";
-    if (snip) {
-      const pre = document.createElement("pre"); pre.textContent = r.snippet; body.append(pre);
-      if (r.kind === "solver") body.append(Solvers.tools(r));
-    } else if (r.kind === "solver") body.append(Solvers.build(r));
-    else if (r.kind === "command") body.textContent = r.source.trim() + "  \u2192  " + r.text;
-    else if (r.kind === "heading" || r.kind === "comment" || r.kind === "meta") body.textContent = r.text;
-    else if (r.kind === "error") {
-      const s = document.createElement("span"); s.className = "src"; s.textContent = r.source.trim();
-      body.append(s, r.error);
-    } else if (r.kind === "plot") body.append(plotBody(r));
-    else if (r.latex) typeset(body, r.latex);
-    if (r.warning) {
-      const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + r.warning;
+    BODY[m.body.type](body, m.body, r);
+    if (m.warning) {
+      const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + m.warning;
       body.append(w);
     }
     row.append(no, body);
-    if (r.stale) {
-      const m = document.createElement("span"); m.className = "stale-mark"; m.textContent = "\u26a0";
-      m.title = "Uses a solver result that is out of date"; m.setAttribute("aria-label", m.title);
-      row.append(m);
+    if (m.stale) {
+      const s = document.createElement("span"); s.className = "stale-mark"; s.textContent = "\u26a0";
+      s.title = "Uses a solver result that is out of date"; s.setAttribute("aria-label", s.title);
+      row.append(s);
     }
-    if (snip) {
+    if (m.copy !== null) {
       const copy = document.createElement("button");
-      copy.className = "copy"; copy.textContent = "Copy"; copy.ariaLabel = `Copy LaTeX for line ${r.n}`;
-      copy.onclick = (ev) => { ev.stopPropagation(); copyText(r.snippet, `Copied line ${r.n}`); };
+      copy.className = "copy"; copy.textContent = "Copy"; copy.ariaLabel = `Copy LaTeX for line ${m.line}`;
+      copy.onclick = (ev) => { ev.stopPropagation(); copyText(m.copy, `Copied line ${m.line}`); };
       row.append(copy);
     }
-    row.addEventListener("click", () => focusLine(r.n));
+    row.addEventListener("click", () => focusLine(m.line));
     return row;
   }));
   markActive();
@@ -594,9 +602,8 @@ function caretLine() { return src.value.slice(0, src.selectionStart).split("\n")
 function markActive() {
   const n = caretLine();
   out.querySelectorAll(".row.active").forEach((e) => e.classList.remove("active"));
-  // The caret may be on one of a plot's option lines, which have no row of their own.
-  const row = out.querySelector(`.row[data-line="${n}"]`) ||
-    [...out.querySelectorAll(".row[data-end]")].find((r) => +r.dataset.line <= n && n <= +r.dataset.end);
+  // The caret may be on one of a block's option lines, which have no row of their own.
+  const m = Rows.at(shown, n), row = m && out.querySelector(`.row[data-line="${m.line}"]`);
   if (row) { row.classList.add("active"); row.scrollIntoView({block: "nearest"}); }
 }
 

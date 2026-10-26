@@ -4,6 +4,9 @@ lookups the endpoints use, and the contract on the JSON rows /api/eval sends to 
 The contract tests pin the shape of a row. If one fails, the shape changed: change
 static/rows.js (and whatever else reads the rows) on purpose, then the expected shape here."""
 import json
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -126,3 +129,22 @@ def test_the_latex_view_adds_a_snippet_to_every_row():
     out = rows("x = 2\n\n" + PLOT, view="latex")
     assert all(set(r) - set(COMMON) - {"plot", "solver"} == {"snippet"} for r in out)
     assert out[0]["snippet"] == "x = 2" and out[1]["snippet"] is None and "axis" in out[3]["snippet"]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_page_reads_every_row_the_server_sends():
+    """static/rows.js over real rows, so a change to the shape that the page would miss fails here."""
+    text = "## Head\n\n!sigfigs 3\nx = 2\nnope +\n" + PLOT + ROOT
+    script = ("const R = require(process.argv[1]); const rows = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+              "console.log(JSON.stringify(rows.map((r) => { const m = R.model(r, {view: 'latex'});"
+              " return m && [m.line, m.end, m.body.type]; })))")
+    rows_js = Path(__file__).parents[1] / "laconic" / "static" / "rows.js"
+    for view, kinds in (("typeset", ["text", "text", "text", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
+                        ("latex", ["snippet", "text", "snippet", "snippet", "error", "snippet", "snippet", "snippet",
+                                   "snippet", "snippet", "snippet"])):
+        r = subprocess.run(["node", "-e", script, str(rows_js)], input=json.dumps(rows(text, view=view)),
+                           capture_output=True, text=True, check=True)
+        models = [m for m in json.loads(r.stdout) if m]
+        assert [m[2] for m in models] == kinds, view
+    lines = [(m[0], m[1]) for m in models]
+    assert (7, 9) in lines and (12, 13) in lines and not {8, 9, 13} & {a for a, _ in lines}
