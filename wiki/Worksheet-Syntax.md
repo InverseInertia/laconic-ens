@@ -12,6 +12,7 @@ M = w * L^2 / 8 -> 'kN * 'm    -> converts units
 A = [2, -1; -1, 2]             matrix: commas within a row, semicolons between rows
 f(x, y) = x^2 + y              user function
 T = 20'degC -> 'degF           offset units work
+z = 3 + 4i   v = 10'V∠30'deg   complex numbers (see Complex Numbers)
 σ_max = 3                      Greek letters and subscripts in names
 'smoot = 1.7018'm              define a unit (see Units)
 ~g = 9.81'm / 's^2             global variable (see below)
@@ -24,6 +25,7 @@ x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 - A bare name is always a variable, so `m` can be a mass while `'m` is the metre.
 - Only a number followed by units may be written without `*`. `3 x` is an error; write `3*x`.
 - Names may use Greek letters and subscripts (`σ_max`, `M_max`). A trailing digit becomes a subscript in the typeset view (`x1` is x₁).
+- A number ending in `i` or `j` is imaginary: `4i`, `2.5j`. See [Complex Numbers](Complex-Numbers).
 - Constants: `pi`, `e`, and `∞` (Ctrl+G after an `8`). A result may be infinite only when the line uses `∞`, so `1/0` is still an error; `∞ - ∞` and `0*∞` are too.
 
 ## Operators
@@ -35,11 +37,12 @@ x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 | `/` | divide (not by a matrix: use `solve` or `inv`) |
 | `^` | power; matrix powers need whole exponents |
 | `.*` `./` | elementwise |
+| `∠` | polar complex number, `10'V∠30'deg` (Ctrl+<); binds between `*` and `+` |
 | `->` | convert to the units on the right |
 
 ## Functions
 
-`sqrt abs floor ceil sin cos tan asin acos atan exp ln log10` and `heaviside` (aliases `step`, `heav`: 0 below zero, 1 at zero and above), plus the [matrix functions](Matrices) and [`props`](Material-Properties).
+`sqrt abs floor ceil sin cos tan asin acos atan exp ln log10`, the [complex](Complex-Numbers) `re im conj arg`, and `heaviside` (aliases `step`, `heav`: 0 below zero, 1 at zero and above), plus the [matrix functions](Matrices) and [`props`](Material-Properties).
 
 Trig functions read a bare number as radians unless `!trigdeg` is active; `asin`, `acos` and `atan` return in the current angle unit.
 
@@ -80,6 +83,7 @@ A line starting with `!` is a command. It affects every line below it.
 | `!short` / `!long` | show only each line's final result / full steps again |
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |
+| `!complex rect\|polar\|real` | show complex results as `3 + 4i` (default) or `5∠53.13°`, or make any complex result an error, see [Complex Numbers](Complex-Numbers) |
 | `!plot ...` | draw a graph, see [Plots](Plots) |
 | `!plotspec key: value` | default plot option for the plots below, see [Plots](Plots) |
 | `!root`, `!minimize`, `!maximize` | solve equations or optimize, see [Solving and Optimizing](Solving-and-Optimizing) |

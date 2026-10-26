@@ -363,7 +363,7 @@ def _run_line(i, raw, s, ev, fmt, used):
                               warning=_global_note(stmt.name, name, ev.symbols))
 
         expr = stmt.expr
-        value = ev.check_finite(ev.eval(expr), expr)
+        value = ev.settle(ev.check_finite(ev.eval(expr), expr))
         literal = _is_literal(expr, ev)
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.
@@ -383,10 +383,20 @@ def _run_line(i, raw, s, ev, fmt, used):
             (ev.stale.add if stale else ev.stale.discard)(key)
             return LineResult(i, raw, "assign", lhs=fmt.var(key), stages=stages,
                               text=f"{key} = {fmt.plain(value)}", stale=stale,
-                              warning=_global_note(stmt.name, name, ev.symbols))
+                              warning=_global_note(stmt.name, name, ev.symbols) or _imaginary_note(stmt.name, ev.mode))
         return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value), stale=stale)
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e))
+
+
+def _imaginary_note(name, mode):
+    """The warning on a variable named i or j while complex numbers are on: it reads as the
+    imaginary unit, which the sheet writes 1i."""
+    bare = name.lstrip("~")
+    if bare not in ("i", "j") or mode.complex == "real":
+        return ""
+    return (f"{bare} reads like the imaginary unit, but here it is a variable. Write the imaginary "
+            f"unit as 1{bare}, or use another name (or !complex real)")
 
 
 def _global_note(name, sym, table):

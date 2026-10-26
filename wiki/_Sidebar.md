@@ -5,6 +5,7 @@
 - [Worksheet Syntax](Worksheet-Syntax)
 - [Units](Units)
 - [Matrices](Matrices)
+- [Complex Numbers](Complex-Numbers)
 - [Material Properties](Material-Properties)
 - [Plots](Plots)
 - [Solving and Optimizing](Solving-and-Optimizing)

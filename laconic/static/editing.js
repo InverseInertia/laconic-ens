@@ -37,7 +37,7 @@
   // classes are spelled out here.
   const W = '[\\p{L}\\p{N}_]', W0 = '[\\p{L}\\p{Nl}\\p{No}_]';
   const TOKEN_RE = new RegExp('("[^"\\n]*")' + `|('(?:(?:${W0}|°)(?:${W}|°)*|%))`
-    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?)' + `|(~?${W0}${W}*[\`!@]*)`, 'gu');
+    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?${W0}${W}*[\`!@]*)`, 'gu');
   const KINDS = ['text', 'unit', 'num', 'name'];
   // The tokens of one line: [{kind, start, text}], left to right.
   function tokens(line) {
@@ -644,6 +644,10 @@
     // Ctrl+Shift+[ opens row and column: elem(A, i, j), shown A_i,j.
     if (mods.ctrl && !mods.alt && !mods.meta && !comment && (key === '[' || key === '{')) {
       return mods.shift || key === '{' ? indexCall(t, s, e, ls, 'elem') : indexCall(t, s, e, ls, 'idx');
+    }
+    // Ctrl+< (Ctrl+Shift+, on a US keyboard) types the polar angle sign: 5'V∠30'deg.
+    if (mods.ctrl && !mods.alt && !mods.meta && !comment && (key === '<' || (mods.shift && key === ','))) {
+      return edit(s, e, '∠', s + 1);
     }
     if (mods.ctrl && !mods.alt && !mods.shift && !mods.meta) {
       if (k === 'g') return greek(t, s, e, (ctx && ctx.greek) || DEFAULT_GREEK);

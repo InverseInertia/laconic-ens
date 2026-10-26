@@ -106,6 +106,16 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Sheet mode** (`SheetMode`): the state commands change as a sheet runs top to bottom: angle unit, assume (reduce to SI), short (final result only), display precision (significant figures, decimal places, trailing zeros), plot defaults, and the names removed by `!clear` / `!clearf`. Each run starts with a fresh one; only commands write it, and the evaluator, `Fmt` and the plot builder read it.
 
+## Complex numbers
+
+**Imaginary literal**: a number with a trailing `i` or `j` (`4i`, `2.5e3j`). It is part of the NUMBER token, so the lexer, the grammar and the editor read `4i` as one number; `2in` is still a number and a name. There is no bare `i`.
+
+**Polar sign**: `∠` between a real magnitude and an angle, `10'V∠30'deg`. The angle reads like a trig argument. It binds between products and sums. The editor types it with Ctrl+<.
+
+**Complex value**: a quantity with a complex magnitude. A sheet becomes complex only when one goes in: a negative real under `sqrt`, `ln` or a fractional power is still NaN (so plots keep their gaps), and the line's error says to add `0i`. A line's value whose imaginary parts are all zero is made real again (`Evaluator.settle`).
+
+**Complex display** (`SheetMode.complex`, set by `!complex`): `rect` (`3 + 4i`, the default), `polar` (`5∠53.13°`, the angle in the trig unit) or `real`, where a complex line result is an error. `Fmt` hides a part smaller than 10⁻¹² of the whole. A typed imaginary literal is always shown as typed.
+
 ## Units
 
 **Unit catalogue** (`laconic/catalogue.py`): the one module that knows about the unit families needing more than Pint gives. Other modules ask it rather than keeping their own lists.

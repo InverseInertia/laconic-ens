@@ -200,6 +200,9 @@ eq(sim('# [a|]', ['Enter']), '# [a\n|]', 'comments are left alone');
 // --- Greek ----------------------------------------------------------------------
 eq(sim('x = a|', [ctrl('g')]), 'x = α|', 'a -> alpha');
 eq(sim('x = a|', [ctrl('g'), ctrl('g')]), 'x = a|', 'second Ctrl+G reverts');
+eq(sim("v = 5'V|", [ctrl('<'), '3', '0']), "v = 5'V∠30|", 'Ctrl+< types the polar angle sign');
+eq(applyEdit(start("v = 5|"), E.keyAction(',', { ctrl: true, shift: true, alt: false, meta: false }, 'v = 5', 5, 5, {})).t, 'v = 5∠', 'Ctrl+Shift+, does too');
+eq(E.keyAction('<', { ctrl: true, shift: true, alt: false, meta: false }, '# a', 3, 3, {}), null, 'not in a comment');
 eq(sim('x = D|', [ctrl('g')]), 'x = Δ|', 'capital delta');
 eq(sim('sigma = s|', [ctrl('g')]), 'sigma = σ|', 'only the preceding character');
 eq(sim('x = 5|', [ctrl('g')]), 'x = 5|', 'no mapping, no change');

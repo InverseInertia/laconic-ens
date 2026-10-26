@@ -21,6 +21,15 @@ from . import catalogue
 from .parser import parse_expr
 
 CONSTANTS = {"pi": math.pi, "e": math.e, "∞": math.inf}
+_TINY = 1e-12   # an imaginary part this much smaller than the whole value is rounding noise
+
+
+def _settle(m):
+    """A numpy result that is complex only through rounding (eigenvalues of a symmetric matrix)
+    as real; anything else unchanged."""
+    if np.iscomplexobj(m) and np.all(np.abs(m.imag) <= 1e-9 * max(1.0, np.abs(m).max())):
+        return m.real
+    return m
 
 
 class EvalError(Exception):
@@ -50,6 +59,21 @@ def registry():
 
 def _ndim(q):
     return np.ndim(q.magnitude)
+
+
+def _array(m):
+    """A magnitude as a numpy array: float, or complex when it has an imaginary part."""
+    m = np.asarray(m)
+    return m if np.iscomplexobj(m) else m.astype(float)
+
+
+def is_complex(q):
+    return np.iscomplexobj(q.magnitude)
+
+
+def _offset(q, ureg):
+    """True if q's units hold an offset unit such as degC, whose zero is not zero."""
+    return any(ureg.Quantity(0, u).to_base_units().magnitude != 0 for u, _ in q.unit_items())
 
 
 UNIT_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
@@ -115,6 +139,7 @@ class Evaluator:
         self.symbols = SymbolTable()  # which names each line sees; filled in by sheet.py
         self.stale = set()     # variable keys whose value comes from a solver result that is out of date
         self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
+        self.nan_hint = None   # why the value being computed may be NaN; read by check_finite
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
@@ -210,13 +235,16 @@ class Evaluator:
     def ev_Implicit(self, n, scope):
         """`12'kN/'m`: a number followed by units. A variable after a number
         needs an explicit `*`, so `3 x` is an error rather than a guess."""
-        num = f"{n.number.value:g}"
+        v = n.number.value
+        num = f"{v.imag:g}i" if isinstance(v, complex) else f"{v:g}"
         for f in n.factors:
             if not self.is_unit_node(f):
                 what = f.name if isinstance(f, Name) else "an expression"
                 raise EvalError(f"{what} cannot follow a number directly. Write {num}*{what} to multiply; "
                                 f"units need an apostrophe, e.g. {num}'{what}")
         first = self.unit_value(n.factors[0], scope)
+        if isinstance(n.number.value, complex) and _offset(first, self.ureg):
+            raise EvalError("A complex number cannot carry an offset unit such as 'degC")
         result = self.Q(n.number.value, first.units)  # direct build keeps degC working
         for f in n.factors[1:]:
             result = result * self.unit_value(f, scope)
@@ -262,6 +290,10 @@ class Evaluator:
     def power(self, a, b):
         if _ndim(b) != 0 or not b.dimensionless:
             raise EvalError("Exponent must be a dimensionless scalar")
+        if is_complex(b):
+            if not a.dimensionless or _ndim(a) != 0:
+                raise EvalError("A complex exponent needs a dimensionless scalar base")
+            return self.Q(complex(a.to("dimensionless").magnitude) ** complex(b.to("dimensionless").magnitude))
         n = float(b.to("dimensionless").magnitude)
         if _ndim(a) == 2:
             if n != int(n):
@@ -271,7 +303,11 @@ class Evaluator:
                 return self.Q(np.linalg.matrix_power(a.magnitude, n), a.units ** n)
             except np.linalg.LinAlgError:
                 raise EvalError("Matrix is singular") from None
-        return a ** n
+        if n != int(n):
+            self._negative(a, "A negative number to a fractional power is complex. "
+                              "Add 0i to the base for the complex result: (x + 0i)^0.5")
+        with np.errstate(invalid="ignore"):   # NaN is reported by check_finite
+            return self._as_numpy(a) ** n
 
     def ev_Matrix(self, n, scope):
         rows = [[self.eval(e, scope) for e in row] for row in n.rows]
@@ -285,14 +321,30 @@ class Evaluator:
                 if _ndim(e) != 0:
                     raise EvalError("Matrix entries must be scalars")
                 if e.units == unit0:
-                    out.append(float(e.magnitude))
+                    out.append(np.asarray(e.magnitude).item())
                     continue
                 try:
-                    out.append(float(e.to(unit0).magnitude))
+                    out.append(np.asarray(e.to(unit0).magnitude).item())
                 except pint.errors.DimensionalityError:
                     raise EvalError("Matrix entries must share one dimension") from None
             data.append(out)
-        return self.Q(np.array(data), unit0)
+        return self.Q(_array(data), unit0)
+
+    def ev_Polar(self, n, scope):
+        """`r∠θ` is r·e^(iθ). A bare-number angle is read in the current angle unit, as in sin."""
+        r, angle = self.eval(n.magnitude, scope), self.eval(n.angle, scope)
+        if is_complex(r) or is_complex(angle):
+            raise EvalError("Both sides of ∠ must be real: a magnitude and an angle")
+        if _offset(r, self.ureg):
+            raise EvalError("A complex number cannot carry an offset unit such as 'degC")
+        try:
+            theta = self._radians(angle)
+        except pint.errors.DimensionalityError:
+            raise EvalError("The right side of ∠ must be an angle, e.g. 30'deg") from None
+        try:
+            return self.Q(np.asarray(r.magnitude) * np.exp(1j * np.asarray(theta)), r.units)
+        except ValueError:
+            raise EvalError(f"Shape mismatch for ∠: {np.shape(r.magnitude)} vs {np.shape(theta)}") from None
 
     def ev_Convert(self, n, scope):
         v, target = self.eval(n.expr, scope), self.eval(n.target, scope)
@@ -335,14 +387,24 @@ class Evaluator:
             raise EvalError(f"{fname} needs a square matrix")
         return A
 
-    def fn_sqrt(self, x): return x ** 0.5
+    def _real(self, x, fname):
+        """x, refused when it is complex: `fname` orders or rounds numbers."""
+        if is_complex(x):
+            raise EvalError(f"{fname} needs a real argument. Use re(), im() or abs() first")
+        return x
+
+    def fn_sqrt(self, x):
+        self._negative(x, "sqrt of a negative number is complex. Add 0i for the complex result: sqrt(x + 0i)")
+        with np.errstate(invalid="ignore"):
+            return self._as_numpy(x) ** 0.5
+
     def fn_abs(self, x): return abs(x)
-    def fn_floor(self, x): return self.Q(np.floor(x.magnitude), x.units)
-    def fn_ceil(self, x): return self.Q(np.ceil(x.magnitude), x.units)
+    def fn_floor(self, x): return self.Q(np.floor(self._real(x, "floor").magnitude), x.units)
+    def fn_ceil(self, x): return self.Q(np.ceil(self._real(x, "ceil").magnitude), x.units)
 
     def fn_heaviside(self, x):
         """Unit step: 0 below zero, 1 at zero and above. The argument may carry any unit."""
-        return self.Q(np.where(np.asarray(x.magnitude) < 0, 0.0, 1.0))
+        return self.Q(np.where(np.asarray(self._real(x, "heaviside").magnitude) < 0, 0.0, 1.0))
     fn_step = fn_heav = fn_heaviside
 
     def _radians(self, x):
@@ -358,27 +420,52 @@ class Evaluator:
     def fn_acos(self, x): return self.Q(np.arccos(self._dimless(x, "acos")), "radian").to(self.mode.angle)
     def fn_atan(self, x): return self.Q(np.arctan(self._dimless(x, "atan")), "radian").to(self.mode.angle)
     def fn_exp(self, x): return self.Q(np.exp(self._dimless(x, "exp")))
-    def fn_ln(self, x): return self.Q(np.log(self._dimless(x, "ln")))
-    def fn_log10(self, x): return self.Q(np.log10(self._dimless(x, "log10")))
+    def fn_ln(self, x): return self.Q(np.log(self._positive(x, "ln")))
+    def fn_log10(self, x): return self.Q(np.log10(self._positive(x, "log10")))
+
+    def _positive(self, x, fname):
+        m = self._dimless(x, fname)
+        self._negative(x, f"{fname} of a negative number is complex. Add 0i for the complex result: {fname}(x + 0i)")
+        return m
+
+    def _as_numpy(self, x):
+        """x with a numpy magnitude. Python's own `(-4.0) ** 0.5` is complex; numpy's is NaN,
+        so a real sheet stays real unless a complex number goes in."""
+        return x if is_complex(x) else self.Q(_array(x.magnitude)[()], x.units)
+
+    def _negative(self, x, hint):
+        """Remember `hint` when x is real and negative somewhere. The result is still NaN, as
+        plots and solvers expect; check_finite gives the hint instead of its usual message."""
+        if not is_complex(x) and np.any(np.asarray(x.magnitude) < 0):
+            self.nan_hint = hint
+
+    # ---- complex numbers ---------------------------------------------------
+    def fn_re(self, z): return self.Q(np.real(z.magnitude), z.units)
+    def fn_im(self, z): return self.Q(np.imag(z.magnitude), z.units)
+    def fn_conj(self, z): return self.Q(np.conj(z.magnitude), z.units)
+
+    def fn_arg(self, z):
+        """The angle of z, in the current angle unit (as atan gives it)."""
+        return self.Q(np.angle(z.magnitude), "radian").to(self.mode.angle)
 
     # ---- matrices ----------------------------------------------------------
     # Every function works on the raw numpy magnitude and puts the unit back
     # afterwards, so Pint stays out of the inner loops.
     def _mat(self, A, fname):
         """The magnitude of A as a 2-D float array. A 1-D array reads as a column."""
-        m = np.asarray(A.magnitude, dtype=float)
+        m = _array(A.magnitude)
         if m.ndim == 0:
             raise EvalError(f"{fname} needs a matrix or vector")
         return m.reshape(-1, 1) if m.ndim == 1 else m
 
     def _vec(self, A, fname):
-        m = np.asarray(A.magnitude, dtype=float)
+        m = _array(A.magnitude)
         if m.ndim == 0 or (m.ndim == 2 and 1 not in m.shape):
             raise EvalError(f"{fname} needs a vector")
         return m.ravel()
 
     def _int(self, x, fname, lo=0):
-        if _ndim(x) != 0 or not x.dimensionless:
+        if _ndim(x) != 0 or not x.dimensionless or is_complex(x):
             raise EvalError(f"{fname} needs a dimensionless whole number")
         v = float(x.to("dimensionless").magnitude)
         if v != int(v) or v < lo:
@@ -394,7 +481,7 @@ class Evaluator:
 
     def fn_idx(self, A, i):
         """A vector element, or a matrix row as a row vector. Counts from 1."""
-        m = np.asarray(A.magnitude, dtype=float)
+        m = _array(A.magnitude)
         if m.ndim == 0:
             raise EvalError("idx needs a matrix or vector")
         if m.ndim == 1 or 1 in m.shape:
@@ -433,7 +520,7 @@ class Evaluator:
 
     def fn_trace(self, A):
         self._square(A, "trace")
-        return self.Q(float(np.trace(A.magnitude)), A.units)
+        return self.Q(np.trace(A.magnitude).item(), A.units)
 
     def fn_rank(self, A): return self.Q(float(np.linalg.matrix_rank(self._mat(A, "rank"))))
 
@@ -444,7 +531,7 @@ class Evaluator:
 
     def fn_diag(self, A):
         """A vector becomes a diagonal matrix, a matrix gives its diagonal as a column."""
-        m = np.asarray(A.magnitude, dtype=float)
+        m = _array(A.magnitude)
         if m.ndim == 2 and 1 not in m.shape:
             return self.Q(np.diag(m)[:, None], A.units)
         return self.Q(np.diag(self._vec(A, "diag")), A.units)
@@ -471,21 +558,14 @@ class Evaluator:
 
     def fn_eigvals(self, A):
         self._square(A, "eigvals")
-        w = np.linalg.eigvals(A.magnitude)
-        if np.iscomplexobj(w):
-            if np.abs(w.imag).max() > 1e-9 * max(1.0, np.abs(w).max()):
-                raise EvalError("eigvals: the matrix has complex eigenvalues")
-            w = w.real
+        w = _settle(np.linalg.eigvals(A.magnitude))
         return self.Q(np.sort(w)[:, None], A.units)
 
     def fn_eigvecs(self, A):
         """Unit-length eigenvectors as columns, in the order eigvals gives the values."""
         self._square(A, "eigvecs")
         w, v = np.linalg.eig(A.magnitude)
-        if np.iscomplexobj(w):
-            if np.abs(w.imag).max() > 1e-9 * max(1.0, np.abs(w).max()) or np.abs(v.imag).max() > 1e-9:
-                raise EvalError("eigvecs: the matrix has complex eigenvalues")
-            w, v = w.real, v.real
+        w, v = _settle(w), _settle(v)
         return self.Q(v[:, np.argsort(w)])
 
     def fn_svdvals(self, A):
@@ -495,7 +575,7 @@ class Evaluator:
         x, y = self._vec(a, "dot"), self._vec(b, "dot")
         if x.size != y.size:
             raise EvalError(f"dot needs vectors of equal length, got {x.size} and {y.size}")
-        return self.Q(float(x @ y), a.units * b.units)
+        return self.Q((x @ y).item(), a.units * b.units)
 
     def fn_cross(self, a, b):
         x, y = self._vec(a, "cross"), self._vec(b, "cross")
@@ -525,12 +605,12 @@ class Evaluator:
     def fn_vstack(self, a, *rest): return self._stack("vstack", 0, a, rest)
 
     def _reduce(self, fn, A):
-        return self.Q(float(fn(np.asarray(A.magnitude, dtype=float))), A.units)
+        return self.Q(fn(_array(A.magnitude)).item(), A.units)
 
     def fn_sum(self, A): return self._reduce(np.sum, A)
     def fn_mean(self, A): return self._reduce(np.mean, A)
-    def fn_min(self, A): return self._reduce(np.min, A)
-    def fn_max(self, A): return self._reduce(np.max, A)
+    def fn_min(self, A): return self._reduce(np.min, self._real(A, "min"))
+    def fn_max(self, A): return self._reduce(np.max, self._real(A, "max"))
 
     def fn_props(self, out, *args):
         """Material and fluid properties from CoolProp: props("D", "T", 300'K, "P", 1'atm, "Water")."""
@@ -540,15 +620,31 @@ class Evaluator:
     def check_finite(self, q, expr=None):
         """NaN is always an error. Infinity is too, unless `expr` reaches a typed-in ∞
         (directly or through a variable holding one), so 1/0 still reports a problem."""
-        mag = np.asarray(q.magnitude, dtype=float)
+        mag = _array(q.magnitude)
+        hint, self.nan_hint = self.nan_hint, None
+        if np.any(np.isnan(mag)) and hint:
+            raise EvalError(hint)
         if np.any(np.isnan(mag)) or (np.any(np.isinf(mag)) and not self.uses_infinity(expr)):
             raise EvalError("Result is not finite (division by zero or domain error)")
         return q
+
+    def settle(self, q):
+        """A line's value as the sheet keeps it: a complex value whose imaginary parts are all
+        zero becomes real. Under `!complex real` a value with an imaginary part is an error;
+        one too small to show (1e-12 of the value) is dropped instead."""
+        if not is_complex(q):
+            return q
+        m = np.asarray(q.magnitude)
+        if self.mode.complex == "real":
+            if np.any(np.abs(m.imag) > _TINY * np.abs(m)):
+                raise EvalError("The result is complex, and !complex real allows only real results")
+            return self.Q(m.real, q.units)
+        return self.Q(m.real, q.units) if not np.any(m.imag) else q
 
     def uses_infinity(self, expr):
         for name in names_in(expr) if expr is not None else ():
             if name == "∞":
                 return True
-            if self.is_var(name) and np.any(np.isinf(np.asarray(self.vars[self.vkey(name)].magnitude, dtype=float))):
+            if self.is_var(name) and np.any(np.isinf(_array(self.vars[self.vkey(name)].magnitude))):
                 return True
         return False

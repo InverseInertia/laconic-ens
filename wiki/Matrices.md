@@ -28,7 +28,7 @@ A .* B     A ./ B              elementwise
 | `hstack(A, B, ...)` `vstack(A, B, ...)` | Join side by side or one above the other |
 | `sum` `mean` `min` `max` | Over every entry |
 
-Complex eigenvalues are reported as an error, not returned.
+Entries may be complex (see [Complex Numbers](Complex-Numbers)), and `eigvals` and `eigvecs` return complex eigenvalues and eigenvectors when the matrix has them. `min` and `max` need real entries.
 
 ## Indexing keys
 

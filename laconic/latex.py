@@ -10,9 +10,9 @@ import numpy as np
 
 from . import catalogue
 from .commands import SheetMode
-from .evaluator import CONSTANTS, EvalError
-from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Str,
-                    UnitLit)
+from .evaluator import _TINY, CONSTANTS, EvalError
+from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Polar,
+                    Str, UnitLit)
 
 # Precedence levels. A child is wrapped in parentheses when its level is lower
 # than the level the parent requires.
@@ -164,7 +164,69 @@ class Fmt:
             return (s if keep or "." not in s else s.rstrip("0").rstrip(".")), None
         return (mant if keep or "." not in mant else mant.rstrip("0").rstrip(".")), exp
 
+    # ---- complex numbers ----------------------------------------------------
+    # Shown as `3 + 4i` or, under `!complex polar`, `5∠53.13°` with the angle in the trig unit.
+    # A part too small to show beside the other (_TINY of the whole) is left out.
+    def _split(self, z):
+        z = complex(z)
+        tiny = _TINY * abs(z)
+        return (0.0 if abs(z.real) <= tiny else z.real), (0.0 if abs(z.imag) <= tiny else z.imag)
+
+    def _polar(self, z):
+        """(magnitude, angle in the trig unit, the angle's LaTeX mark, its plain mark)."""
+        angle = float(np.angle(complex(z)))
+        if self.mode.angle == "degree":
+            return abs(complex(z)), np.degrees(angle), "^\\circ", "°"
+        return abs(complex(z)), angle, "\\,\\mathrm{rad}", " rad"
+
+    def polar_form(self, q):
+        return self.mode.complex == "polar" and np.iscomplexobj(q.magnitude)
+
+    def imaginary(self, z, sig=12):
+        """A typed-in imaginary number, `4i`, as typed: never polar, and `0i` stays."""
+        s = self.number(z.imag, sig)
+        return s + ("\\,\\mathrm{i}" if "\\times" in s else "\\mathrm{i}")
+
+    def complex_number(self, z, sig=None):
+        """LaTeX for a complex number."""
+        if self.mode.complex == "polar":
+            r, a, mark, _ = self._polar(z)
+            return f"{self.number(r, sig)}\\angle {self.number(a, sig)}{mark}"
+        re_, im = self._split(z)
+        if im == 0:
+            return self.number(re_, sig)
+        imag = self.number(abs(im), sig)
+        imag += "\\,\\mathrm{i}" if "\\times" in imag else "\\mathrm{i}"
+        if re_ == 0:
+            return ("-" if im < 0 else "") + imag
+        return f"{self.number(re_, sig)} {'-' if im < 0 else '+'} {imag}"
+
+    def _si_complex(self, z, sig=None):
+        """`3+4i` as siunitx's \\complexnum reads it."""
+        re_, im = self._split(z)
+        if im == 0:
+            return self._si_number(re_, sig)
+        imag = self._si_number(abs(im), sig) + "i"
+        if re_ == 0:
+            return ("-" if im < 0 else "") + imag
+        return f"{self._si_number(re_, sig)}{'-' if im < 0 else '+'}{imag}"
+
+    def _plain_complex(self, z, spaced=True):
+        if self.mode.complex == "polar":
+            r, a, _, mark = self._polar(z)
+            return f"{self._plain_number(r)}∠{self._plain_number(a)}{mark}"
+        re_, im = self._split(z)
+        if im == 0:
+            return self._plain_number(re_)
+        imag = self._plain_number(abs(im)) + "i"
+        if re_ == 0:
+            return ("-" if im < 0 else "") + imag
+        sign = (" - " if im < 0 else " + ") if spaced else ("-" if im < 0 else "+")
+        return self._plain_number(re_) + sign + imag
+
     def number(self, x, sig=None):
+        if np.iscomplexobj(x):
+            return self.complex_number(x, sig)
         if np.isinf(x):
             return "\\infty" if x > 0 else "-\\infty"
         mant, exp = self._parts(x, sig)
@@ -207,6 +269,8 @@ class Fmt:
         """Latex for a scalar or matrix Quantity."""
         u = self.unit(q.units)
         mag = np.asarray(q.magnitude)
+        if mag.ndim == 0 and np.iscomplexobj(mag):
+            return self._complex_quantity(complex(mag), q.units, u)
         if mag.ndim == 0:
             if self.siunitx and u and np.isfinite(mag):   # \qty cannot parse \infty
                 return f"\\qty{{{self._si_number(mag)}}}{{{u}}}"
@@ -221,15 +285,38 @@ class Fmt:
             tex += f"\\,\\unit{{{u}}}" if self.siunitx else f"\\,{u}"
         return tex
 
+    def _complex_quantity(self, z, units, u):
+        """A complex scalar with its unit: `(3 + 4i) V`, or `5 V∠53.13°` in polar form."""
+        if self.mode.complex == "polar":
+            r, a, mark, _ = self._polar(z)
+            return f"{self.quantity(self.ureg.Quantity(r, units))}\\angle {self.number(a)}{mark}"
+        re_, im = self._split(z)
+        if im == 0:
+            return self.quantity(self.ureg.Quantity(re_, units))
+        if not u:
+            return self.complex_number(z)
+        if self.siunitx:
+            return f"\\complexqty{{{self._si_complex(z)}}}{{{u}}}"
+        return f"\\left({self.complex_number(z)}\\right)\\,{u}"
+
     def plain(self, q):
         mag = np.asarray(q.magnitude)
         u = f"{q.units:~P}"
+        if mag.ndim == 0 and np.iscomplexobj(mag):
+            z = complex(mag)
+            if self.mode.complex == "polar":
+                r, a, _, mark = self._polar(z)
+                return f"{self._plain_number(r)} {u}".strip() + f"∠{self._plain_number(a)}{mark}"
+            text = self._plain_complex(z)
+            return f"({text}) {u}" if u and " " in text else f"{text} {u}".strip()
         if mag.ndim == 0:
             return f"{self._plain_number(mag)} {u}".strip()
         body = np.array2string(mag, formatter={"all": self._plain_number}, separator=" ")
         return body + (f" {u}" if u else "")
 
     def _plain_number(self, x):
+        if np.iscomplexobj(x):
+            return self._plain_complex(x, spaced=False)
         if np.isinf(x):
             return "∞" if x > 0 else "-∞"
         mant, exp = self._parts(x, None)
@@ -258,6 +345,11 @@ class Printer:
     def value(self, q):
         s = self.fmt.quantity(q)
         mag = np.asarray(q.magnitude)
+        if mag.ndim == 0 and np.iscomplexobj(mag):
+            re_, im = self.fmt._split(mag)
+            if self.fmt.polar_form(q) or (re_ and im):
+                return s, ADD
+            return s, (ADD if (re_ or im) < 0 else MUL)
         if mag.ndim == 0 and float(mag) < 0:
             return s, ADD
         if self.fmt.unit(q.units) or "\\times" in s:
@@ -265,6 +357,9 @@ class Printer:
         return s, ATOM
 
     def p(self, n):
+        if isinstance(n, Num) and isinstance(n.value, complex):
+            # `4i` reads as one number, so `4i^2` is shown as (4i)^2, which is what it computes
+            return self.fmt.imaginary(n.value), POW
         if isinstance(n, Num):
             s = self.fmt.number(n.value, sig=12)
             return s, (MUL if "\\times" in s else ATOM)
@@ -287,6 +382,8 @@ class Printer:
             return "\\begin{bmatrix} " + body + " \\end{bmatrix}", ATOM
         if isinstance(n, Convert):
             return self.p(n.expr)
+        if isinstance(n, Polar):
+            return f"{self.child(n.magnitude, MUL)}\\angle {self.child(n.angle, MUL)}", ADD
         raise TypeError(f"Cannot print {type(n).__name__}")
 
     def name(self, n):
@@ -312,12 +409,15 @@ class Printer:
 
     def implicit(self, n):
         # Always rendered `number, thin space, unit`. Units never become variables here.
+        v = n.number.value
         if self.fmt.siunitx:
             q = self.ev.eval(n)
             u = self.fmt.unit(q.units)
+            if u and isinstance(v, complex):
+                return f"\\complexqty{{{self.fmt._si_number(v.imag, 12)}i}}{{{u}}}", MUL
             if u:
-                return f"\\qty{{{self.fmt._si_number(n.number.value, 12)}}}{{{u}}}", MUL
-        parts = [self.fmt.number(n.number.value, sig=12)]
+                return f"\\qty{{{self.fmt._si_number(v, 12)}}}{{{u}}}", MUL
+        parts = [self.fmt.imaginary(v) if isinstance(v, complex) else self.fmt.number(v, sig=12)]
         parts += [self.unit_tex(f) for f in n.factors]
         return "\\,".join(parts), MUL
 
@@ -361,6 +461,10 @@ class Printer:
             return f"{{{self.child(n.args[0], ATOM)}}}_{{{a[1]}}}", ATOM
         if f == "elem" and len(a) == 3:
             return f"{{{self.child(n.args[0], ATOM)}}}_{{{a[1]},\\,{a[2]}}}", ATOM
+        if f in ("re", "im", "arg"):
+            return f"\\operatorname{{{f.capitalize()}}}\\left({a[0]}\\right)", ATOM
+        if f == "conj":
+            return f"\\overline{{{a[0]}}}", ATOM
         if f == "trace":
             return f"\\operatorname{{tr}}\\left({a[0]}\\right)", ATOM
         if f in _BINARY_TEX and len(a) == 2:

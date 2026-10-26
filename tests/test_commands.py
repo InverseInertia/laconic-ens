@@ -3,7 +3,7 @@ commands.COMMANDS. A new command needs a row here and nothing in the vocab or he
 import pytest
 
 from laconic import run
-from laconic.commands import COMMANDS, NoArgs, Statement, Text, Whole, help_rows
+from laconic.commands import COMMANDS, Choice, NoArgs, Statement, Text, Whole, help_rows
 
 
 def shown(r):
@@ -36,6 +36,10 @@ CASES = {
     "decplace": ("x = 1/3\n!decplace 2\nx\n[1/3, 2]\ny = x*3\n!sigfigs 4\nx", 2, "Results show 2 decimal places",
                  lambda rs: shown(rs[2]) == "0.33" and rs[3].text == "[[0.33 2.00]]" and shown(rs[4]) == "1.00"
                  and shown(rs[6]) == "0.3333"),
+    "complex": ("z = 3 + 4i\n!complex polar\nz\n!complex real\nz\nabs(z)", 2,
+                "Complex results are shown as magnitude∠angle",
+                lambda rs: shown(rs[2]) == "5∠0.9273 rad" and "allows only real results" in rs[4].error
+                and shown(rs[5]) == "5"),
     "plotspec": ("!plotspec grid: off\n!plotspec reset", 1, "Plots below: grid off",
                  lambda rs: rs[1].text == "Plot options are back to the defaults"),
     # Statements: their lines are run by plotspec.py and solver.py, never by the dispatcher.
@@ -51,6 +55,7 @@ BAD = {
     Whole: (lambda c: f"!{c.name} {c.args.hi + 1}",
             lambda c: f"!{c.name} takes a whole number from {c.args.lo} to {c.args.hi}, e.g. `!{c.name} 3`"),
     Text: (lambda c: f"!{c.name} nonsense", lambda c: f"!{c.name} reads"),
+    Choice: (lambda c: f"!{c.name} nonsense", lambda c: f"!{c.name} takes one of {', '.join(c.args.options)}"),
     Statement: (lambda c: f"!{c.name}", lambda c: c.args.usage),
 }
 
