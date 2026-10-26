@@ -23,6 +23,8 @@ Two ideas hold it together:
 - **One tree, two consumers.** The evaluator and the LaTeX printer walk the same AST, so the layout of a result (symbolic, substituted, result) is decided in `latex.py` and nowhere else.
 - **One spec, three outputs.** `plotspec.py` turns a plot's source into a plain dict. The SVG renderer, the pgfplots writer and the page all read that dict. The mouse never draws; it only rewrites the option lines in the worksheet text, and the plot is redrawn from the text.
 
+- **One writer of block lines.** Every change the server makes to the text (an option the mouse set, a stored solver result, a rename) goes back to the page as edits against the text it was sent, never a whole new text. The block editor (`blockedit.py`) writes every line a plot or solver block owns, and the page applies every server edit through one adapter (`applyEdits` in `index.html`, over `Editing.merge`).
+
 The whole sheet is re-run on every edit (a few milliseconds at worksheet size), so there is no incremental state to get out of sync.
 
 ## Python modules (`laconic/`)
@@ -30,6 +32,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | Module | Role |
 |---|---|
 | `sheettext.py` | The shape of the worksheet text: each line's kind, the plot or solver block that owns it, its expression spans, and the name/unit/number tokens in them. One deep module behind `scan(text)`; the sheet, rename, plot and solver modules read lines and blocks through it. Its lexer patterns are the grammar's terminals too. Terms are defined in `CONTEXT.md` |
+| `blockedit.py` | Edits to the sheet text (`Edit`, `apply`, the UTF-16 wire form) and the block editor: set, remove or replace an option line, store a result (kept last), append a block-owned line. It keeps the block's indent and the file's line endings, and returns at most one minimal edit. `plotopts` and `solver` write through it; `rename` returns its `Edit`s and the save text takes its `newline` |
 | `parser.py` | Lark LALR grammar for expressions. Assignment, function and unit definitions are split off first (`sheettext.definition`), which avoids a grammar clash between `f(x) = ...` and the call `f(x)` |
 | `nodes.py` | Frozen dataclasses for the AST |
 | `evaluator.py` | AST to Pint quantities. Built-in functions are the `fn_*` methods; every value (scalar or matrix) is a Quantity. A name's key comes from the symbol table |
@@ -39,11 +42,11 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`, which also hands back the `\DeclareSIUnit` lines for the units a document printed); `snippet` and `document` |
 | `sheet.py` | Runs a worksheet line by line, dispatching on the line kinds from `sheettext`: commands, unit definitions, plots, results, portable save text. Records each definition in the symbol table |
 | `commands.py` | The command registry (every `!` command: name, argument rule, summary, help row, effect) and the sheet mode the commands change. Suggestions, help rows and the unknown-command message are generated from it |
-| `plotopts.py` | Plot option parsing, defaults, and the writer that edits option lines in the source |
+| `plotopts.py` | Plot option parsing, defaults, and the patch a pan, zoom or reset makes to the option lines (written through the block editor) |
 | `plotspec.py` | Samples a plot and resolves options into the spec |
 | `plotsvg.py` | Spec to SVG |
 | `plotpgf.py` | Spec to pgfplots |
-| `solver.py` | `!root` / `!minimize` / `!maximize`: block parsing, the input hash, the scipy calls, the stored `#@ result` line |
+| `solver.py` | `!root` / `!minimize` / `!maximize`: block parsing, the input hash, the scipy calls, the stored `#@ result` line (written through the block editor) |
 | `solverjobs.py` | The worker process that runs a solve, so it can be interrupted |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
@@ -58,7 +61,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | File | Role |
 |---|---|
 | `index.html` | The page: layout, styles, dialogs, and the glue script that wires the modules below to the DOM and browser APIs |
-| `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits) |
+| `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits); `merge` turns the server's edits into one such edit |
 | `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table |
 | `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line. An adapter of `symbols.py`; it applies no scope rule of its own |
 | `paste.js` | Table paste to matrix, pure functions |
@@ -87,14 +90,16 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | `POST /api/eval` | run a sheet; one row per line, each with its part of the symbol table (`symbols: {defines, uses}`); `view: "latex"` adds a snippet per line |
 | `POST /api/export` | complete `.tex` document |
 | `POST /api/save` | source with needed unit definitions appended |
-| `POST /api/rename` | rename a name or unit; returns new text or a warning/error |
-| `POST /api/plotedit` | rewrite one plot's option lines for a pan, zoom or reset |
+| `POST /api/rename` | rename a name or unit; returns edits (one per use) or a warning/error |
+| `POST /api/plotedit` | edits to one plot's option lines for a pan, zoom or reset |
 | `POST /api/plotimage` | one plot as a standalone SVG |
 | `POST /api/solve/start`, `GET /api/solve/{job}`, `POST /api/solve/{job}/interrupt` | start, poll and interrupt a solver job |
-| `POST /api/solvestore`, `POST /api/solveedit` | write a finished result into its block; toggle `autorun:` |
+| `POST /api/solvestore`, `POST /api/solveedit` | edits that write a finished result into its block; toggle `autorun:` |
 | `GET /api/settings`, `GET /api/vocab`, `GET /api/vocab/props` | settings, editor vocabulary, props keys and fluids (loaded lazily because it imports CoolProp) |
 | `PUT /api/greek`, `PUT /api/units` | store settings (units only if all valid) |
 | `POST /api/ping`, `POST /api/bye` | page lifecycle for the packaged app |
+
+Endpoints that change the text return `{"ok": true, "edits": [{"from", "to", "insert"}, ...]}`: edits against the text in the request, not overlapping, with offsets in UTF-16 code units as JavaScript counts them. The page makes them only if its text is still the one it sent.
 
 ## Conventions
 

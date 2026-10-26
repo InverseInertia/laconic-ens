@@ -11,6 +11,9 @@
      Verify     solve again from the same start and compare with the stored result
      Log        the solver's log, or what is stored when nothing has run in this page
 
+   The page is the host: `host.text()` is the sheet, and `host.edit(text, edits)` makes the edits a
+   server endpoint returned for `text`, or says false when the sheet has changed since.
+
    Runs are remembered here by hash, not by line, so editing above a block does not lose track
    of it. A run whose inputs change underneath it is stopped and its result discarded. */
 const Solvers = (() => {
@@ -108,7 +111,7 @@ const Solvers = (() => {
     cb.title = "Re-solve automatically a moment after the inputs change. Stored in the block as `autorun: on`";
     cb.onclick = (ev) => ev.stopPropagation();
     cb.onchange = async () => {
-      try { setAuto(r, cb.checked); } catch (e) { host.say(e.message || "Failed"); }
+      try { await setAuto(r, cb.checked); } catch (e) { host.say(e.message || "Failed"); }
     };
     auto.append(cb, " Auto");
     box.append(stat,
@@ -185,10 +188,19 @@ const Solvers = (() => {
       return;
     }
     try {
-      const res = await api("/api/solvestore", {text: host.text(), record: outcome.record});
+      // Edits fit only the text they were made for, so if the sheet changed on the way, ask again.
+      // The store matches blocks by their inputs' hash, so typing elsewhere does not lose the result.
+      let res, stored = false;
+      for (let tries = 0; tries < 3 && !stored; tries++) {
+        const text = host.text();
+        res = await api("/api/solvestore", {text, record: outcome.record});
+        if (!res.ok) break;
+        stored = host.edit(text, res.edits);
+      }
+      if (res.ok && !stored) res = {ok: false, error: "The sheet kept changing, so the result was not stored"};
       active = null;
       run.state = "done";
-      if (res.ok) { host.setText(res.text); host.say("Solved and stored"); }
+      if (res.ok) host.say("Solved and stored");
       else { run.state = "failed"; run.message = res.error; run.log.push(res.error); }
     } catch (e) {
       active = null; run.state = "failed"; run.message = e.message;
@@ -209,9 +221,10 @@ const Solvers = (() => {
   }
 
   async function setAuto(r, on) {
-    const res = await api("/api/solveedit", {text: host.text(), line: r.n, autorun: on});
+    const text = host.text();
+    const res = await api("/api/solveedit", {text, line: r.n, autorun: on});
     if (!res.ok) throw new Error(res.error);
-    host.setText(res.text);
+    if (!host.edit(text, res.edits)) throw new Error("The sheet changed meanwhile; try again");
   }
 
   // ---- after each evaluation: stop orphaned runs, start auto-run blocks --------------------------

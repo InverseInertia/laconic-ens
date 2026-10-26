@@ -124,6 +124,16 @@ def test_f2_renames_the_name_at_the_caret(page):
     page.keyboard.press("Enter")
     page.wait_for_selector("#renameDlg", state="hidden")
     assert value(page) == "span = 4.5'm\nA = span * 2"
+    page.keyboard.press("Control+z")                     # one step takes the whole rename back
+    assert value(page) == "L = 4.5'm\nA = L * 2"
+
+
+def test_server_edits_for_a_text_that_has_changed_are_not_made(page):
+    reset(page, "x = 1")
+    assert page.evaluate("applyEdits('x = 2', [{from: 4, to: 5, insert: '3'}])") is False
+    assert value(page) == "x = 1"
+    assert page.evaluate("applyEdits('x = 1', [{from: 4, to: 5, insert: '3'}])") is True
+    assert value(page) == "x = 3"
 
 
 @pytest.mark.parametrize("text,caret,name", [

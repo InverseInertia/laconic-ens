@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field, fields, is_dataclass
 import pint
 
 from . import catalogue
+from .blockedit import newline
 from .evaluator import EvalError, Evaluator
 from .latex import Fmt, Printer, name_latex
 from .nodes import (Assign, BinOp, Convert, FuncDef, Implicit, Neg, Num,
@@ -114,13 +115,14 @@ class Worksheet:
     def portable_text(self):
         """The source with the unit definitions it relies on appended, so a copy
         opened on another instance evaluates the same way. Units are hoisted, so
-        definitions at the end are fine."""
+        definitions at the end are fine. They end their lines as the file does."""
         if not self.needed:
             return self.text
+        nl = newline(self.text)
         lines = ["#@ unit definitions used above, added when this sheet was saved"]
         lines += [f"'{n} = {d}" for n, d in self.needed]
         lines.append("#@ end of unit definitions")
-        return self.text.rstrip("\n") + "\n\n" + "\n".join(lines) + "\n"
+        return self.text.rstrip("\r\n") + nl * 2 + nl.join(lines) + nl
 
 
 def run(text, siunitx=False, global_units=None):

@@ -1,7 +1,9 @@
 """Rename a variable, function or custom unit everywhere it appears in a worksheet.
 Works on the source text, token by token, so comments, commands and numbers like
 `1e5` are left alone. Names and units are separate: renaming `m` leaves `'m` (the
-metre) alone, and renaming `'smoot` leaves a variable `smoot` alone."""
+metre) alone, and renaming `'smoot` leaves a variable `smoot` alone. The result is one
+Edit (blockedit.py) per use, against the text it was given."""
+from .blockedit import Edit, newline
 from .evaluator import CONSTANTS, UNIT_NAME_RE, Evaluator
 from .sheettext import is_name, scan
 
@@ -62,30 +64,26 @@ def _rename_unit(text, old, new, confirm):
             + ("" if new in used or ev.is_unit(new)
                else f" and adds a definition of '{new} for you to adjust")
             + ". Rename again to confirm.")
-    out, count = _substitute(text, "unit", "'" + old, "'" + new)
+    edits, count = _substitute(text, "unit", "'" + old, "'" + new)
     if not (new in used or ev.is_unit(new)):
-        out = f"'{new} = 1'{old}\n" + out
-    return out, count
+        edits.insert(0, Edit(0, 0, f"'{new} = 1'{old}" + newline(text)))
+    return edits, count
 
 
 def _substitute(text, kind, old, new):
-    count, out = 0, []
+    edits, at = [], 0
     for line in scan(text).lines:
-        pos = 0
         for t in line.tokens(kind):
             # the ~ marks a definition as global and stays where it is
-            if (t.bare if kind == "name" else t.text) != old:
-                continue
-            count += 1
-            a = t.end - len(t.bare) if kind == "name" else t.start
-            out += [line.text[pos:a], new]
-            pos = t.end
-        out += [line.text[pos:], line.eol]
-    return "".join(out), count
+            if (t.bare if kind == "name" else t.text) == old:
+                a = t.end - len(t.bare) if kind == "name" else t.start
+                edits.append(Edit(at + a, at + t.end, new))
+        at += len(line.text) + len(line.eol)
+    return edits, len(edits)
 
 
 def rename(text, old, new, confirm=False):
-    """Returns (new_text, count). Raises RenameError when the rename is not safe:
+    """Returns (edits, count). Raises RenameError when the rename is not safe:
     a malformed name, a built-in, or a name the sheet already uses. A leading `'`
     on `old` renames a unit (the quote on `new` is optional); replacing a standard unit
     raises RenameWarning unless `confirm` is set."""

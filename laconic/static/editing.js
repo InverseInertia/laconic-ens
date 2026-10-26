@@ -7,6 +7,9 @@
  * {caretOnly} moves the caret, {select: [from, to]} changes the selection and
  * {message} reports something without editing.
  *
+ * `merge` turns the edits the server sends (a plot view, a stored solver result, a rename)
+ * into one such edit.
+ *
  * The page applies edits; the same functions run under Node for tests.
  */
 (function (root) {
@@ -50,6 +53,34 @@
     return line.trimStart().startsWith('#') || TEXT_OPTION.test(line);
   };
   const edit = (from, to, insert, caret) => ({ from, to, insert, caret });
+
+  // Two edits, `b` made on the text `a` left, as one edit on `t`, with b's caret.
+  function chain(t, a, b) {
+    const grow = a.insert.length - (a.to - a.from);
+    const from = Math.min(a.from, b.from), end = Math.max(a.from + a.insert.length, b.to);
+    const t2 = t.slice(0, a.from) + a.insert + t.slice(a.to);
+    const t3 = t2.slice(0, b.from) + b.insert + t2.slice(b.to);
+    return edit(from, end - grow, t3.slice(from, end + b.insert.length - (b.to - b.from)), b.caret);
+  }
+
+  // The server's edits (laconic/blockedit.py), all against `t` and not overlapping, as one edit
+  // over the span they cover, so one Ctrl+Z takes back all of them. The caret stays with the text
+  // it was in; inside text an edit replaced, it goes to where that edit starts. Null if nothing changes.
+  function merge(t, edits, caret) {
+    const es = [...edits].sort((a, b) => a.from - b.from);
+    if (!es.length) return null;
+    const from = es[0].from, to = es[es.length - 1].to;
+    let insert = '', pos = from, moved = caret, grow = 0;
+    for (const e of es) {
+      insert += t.slice(pos, e.from) + e.insert;
+      pos = e.to;
+      if (caret >= e.to) moved = caret + grow + e.insert.length - (e.to - e.from);
+      else if (caret > e.from) moved = e.from + grow;
+      grow += e.insert.length - (e.to - e.from);
+    }
+    if (insert === t.slice(from, to)) return null;
+    return edit(from, to, insert, moved);
+  }
 
   // ---- bracket helpers (always limited to one line) -----------------------
   function matchBack(t, i, ls) {
@@ -539,17 +570,10 @@
   // Runs `base` on the text with the ~ added, then returns the whole change as one edit on `t`,
   // so a single Ctrl+Z takes back both. `typed` is what the browser would insert if `base` does nothing.
   function withTilde(t, s, g, typed, base) {
-    const t2 = t.slice(0, g) + '~' + t.slice(g), r = base(t2, s + 1);
-    let final = t2, caret = s + 1;
-    if (!r || (r.insert === undefined && r.caretOnly === undefined)) {
-      final = t2.slice(0, s + 1) + typed + t2.slice(s + 1); caret = s + 1 + typed.length;
-    } else if (r.insert !== undefined) {
-      final = t2.slice(0, r.from) + r.insert + t2.slice(r.to); caret = r.caret;
-    } else caret = r.caretOnly;
-    let a = 0, b = 0;
-    while (a < t.length && t[a] === final[a]) a++;
-    while (b < t.length - a && t[t.length - 1 - b] === final[final.length - 1 - b]) b++;
-    return edit(a, t.length - b, final.slice(a, final.length - b), caret);
+    const tilde = edit(g, g, '~', s + 1), r = base(t.slice(0, g) + '~' + t.slice(g), s + 1);
+    if (!r || (r.insert === undefined && r.caretOnly === undefined)) return chain(t, tilde, edit(s + 1, s + 1, typed, s + 1 + typed.length));
+    if (r.insert !== undefined) return chain(t, tilde, r);
+    return chain(t, tilde, edit(r.caretOnly, r.caretOnly, '', r.caretOnly));
   }
   const plainCtx = (ctx) => ({ ...ctx, symbols: null });
 
@@ -659,7 +683,7 @@
   }
 
   const api = {
-    DEFAULT_GREEK, charAction, keyAction,
+    DEFAULT_GREEK, charAction, keyAction, merge,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
     isTextLine: isComment,

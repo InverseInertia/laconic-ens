@@ -27,9 +27,10 @@ from dataclasses import dataclass, field, fields, is_dataclass
 
 import numpy as np
 
+from .blockedit import BlockEditor
 from .nodes import BinOp, Call, Name, UnitLit
 from .parser import ParseError, parse_expr
-from .sheettext import is_name, scan
+from .sheettext import is_name
 
 KINDS = ("root", "minimize", "maximize")
 ROOT_METHODS = ("hybr", "lm", "broyden1", "broyden2", "krylov", "brentq")
@@ -771,39 +772,28 @@ def describe_record(rec):
 
 
 # ---- editing the text ----------------------------------------------------------------------------
-def _block(text, header):
-    """The raw lines of `text` (a "\\r" stays on its line) and the solver block whose header is on `header`."""
-    b = scan(text).block(header)
-    if b is None or b.kind != "solver":
+def _editor(text, header):
+    ed = BlockEditor(text, header)
+    if ed.kind != "solver":
         raise SolverError(f"Line {header} is not a solver block")
-    return text.split("\n"), b
-
-
-def _eol(line):
-    return "\r" if line.endswith("\r") else ""
+    return ed
 
 
 def write_result(text, header, record):
-    """The text with `record` stored as the block's last line, replacing any earlier result."""
-    lines, b = _block(text, header)
-    i, end = header - 1, b.end
-    eol = _eol(lines[i])
-    body = [lines[l.n - 1] for l in b.members if l.result is None]
-    new = "  #@ result " + json.dumps(record, separators=(",", ":")) + eol
-    return "\n".join(lines[:i + 1] + body + [new] + lines[end:])
+    """The edits that store `record` as the block's last line, replacing any earlier result."""
+    ed = _editor(text, header)
+    ed.store_result(record)
+    return ed.edits()
 
 
 def set_option(text, header, key, value):
-    """Set (or with value None, remove) one `key: value` line of the block. The result line stays last."""
-    lines, b = _block(text, header)
-    i, end = header - 1, b.end
-    eol = _eol(lines[i])
-    keep = [l for l in b.members if not (l.option and l.option.key == key)]
-    others = [lines[l.n - 1] for l in keep if l.result is None]
-    results = [lines[l.n - 1] for l in keep if l.result is not None]
-    if value is not None:
-        others.append(f"  {key}: {value}{eol}")
-    return "\n".join(lines[:i + 1] + others + results + lines[end:])
+    """The edits that set (or with value None, remove) one `key: value` line of the block."""
+    ed = _editor(text, header)
+    if value is None:
+        ed.remove(key)
+    else:
+        ed.set(key, value)
+    return ed.edits()
 
 
 # ---- one run request, threaded through a sheet evaluation -------------------------------------------

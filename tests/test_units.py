@@ -104,6 +104,11 @@ def test_save_appends_only_the_global_units_the_sheet_uses():
     assert text.rstrip().endswith("#@ end of unit definitions")
 
 
+def test_a_crlf_sheet_gets_its_unit_definitions_with_crlf_endings():
+    text = evaluate("x = 3'smoot\r\n", global_units=SMOOT).portable_text()
+    assert text.startswith("x = 3'smoot\r\n\r\n#@ unit") and "\n" not in text.replace("\r\n", "")
+
+
 def test_units_used_by_a_global_definition_come_along():
     g = SMOOT + [("bigsmoot", "10'smoot")]
     ws = evaluate("x = 1'bigsmoot", global_units=g)
