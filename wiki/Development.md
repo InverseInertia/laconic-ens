@@ -18,6 +18,9 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_autocomplete.js` | suggestions |
 | `node tests/test_paste.js` | table paste |
 | `node tests/test_sheettext.js` | the editor's lexer against the shared vectors |
+| `node tests/test_savefile.js` | which file Save and Save As write, and the download fallback |
+| `node tests/test_theme.js` | theme loading, contrast check, presets |
+| `node tests/test_shortcuts.js` | the shortcut table, and that the wiki lists its Ctrl/Alt keys |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 
 | File | Covers |
