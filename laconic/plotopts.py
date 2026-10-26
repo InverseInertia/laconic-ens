@@ -13,7 +13,7 @@ import math
 import re
 
 from .blockedit import BlockEditor
-from .sheettext import PLOT_LIMIT_KEYS
+from .sheettext import IDENT, PLOT_LIMIT_KEYS
 
 PALETTE = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9")
 
@@ -45,7 +45,7 @@ COLORS = {"black": "#000000", "gray": "#7f7f7f", "grey": "#7f7f7f", "red": "#d55
           "green": "#009e73", "orange": "#e69f00", "purple": "#cc79a7", "sky": "#56b4e9",
           "navy": "#17253d"}
 
-_RANGE_RE = re.compile(r"^(.*),\s*([^\W\d]\w*)\s*=\s*(.+?)\s*\.\.\s*(.+)$")
+_RANGE_RE = re.compile(rf"^(.*),\s*({IDENT})\s*=\s*(.+?)\s*\.\.\s*(.+)$")
 _NOTE_RE = re.compile(r'^"(.*)"\s+at\s*\((.*)\)$')
 _SIZE_RE = re.compile(r"^(\d+)\s*[x×]\s*(\d+)$")
 

@@ -16,7 +16,10 @@ editor's own lexers in static/ are held to this one by tests/sheettext_vectors.j
 import re
 from dataclasses import dataclass, field
 
-NAME = r"~?[^\W\d]\w*[`!@]*"
+# A name may hold ∞ as a whole subscript (`v_∞`, `T_∞_0`), the free-stream mark; ∞ on its own is
+# the constant, and not a name.
+IDENT = r"[^\W\d](?:_∞|\w)*"
+NAME = rf"~?{IDENT}[`!@]*"
 UNIT = r"'(?:(?:[^\W\d]|°)[\w°]*|%)"
 # A trailing i or j makes the number imaginary: 4i, 2.5e3j. `2in` is still a number and a name.
 NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?(?:[ij](?!\w))?"
@@ -26,7 +29,7 @@ _TOKEN = re.compile(rf"(?P<text>{STRING})|(?P<unit>{UNIT})|(?P<num>{NUMBER})|(?P
 _NAME_RE = re.compile(rf"{NAME}\Z")
 
 _FUNC_RE = re.compile(
-    r"^(~?[^\W\d]\w*)\s*\(\s*([^\W\d]\w*(?:\s*,\s*[^\W\d]\w*)*)\s*\)\s*=(?!=)\s*(.+)$")
+    rf"^(~?{IDENT})\s*\(\s*({IDENT}(?:\s*,\s*{IDENT})*)\s*\)\s*=(?!=)\s*(.+)$")
 _UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 

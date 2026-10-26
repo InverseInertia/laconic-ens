@@ -76,6 +76,26 @@ def test_greek_and_subscripts():
     assert r"\beta = \alpha \cdot 3" in r.latex
 
 
+def test_infinity_subscript():
+    # free-stream T_∞, typed with Ctrl+G 8 or spelled out as inf
+    assert r"v_{\infty} = 3" in last("v_∞ = 3").latex
+    assert r"T_{\infty} \cdot 2" in last("T_inf = 3\nT_inf*2").latex
+    assert last("T_∞ = 3\nT_∞ + 1").text == "4"
+    assert r"\vec{v}_{\infty,0}" in last("v_∞_0! = 1").latex
+    assert r"q_{\infty}" in last("q_∞(h) = 2*h").latex
+    # only a whole `inf` part is infinity, and ∞ alone is still the constant
+    assert r"x_{\mathrm{info}}" in last("x_info = 1").latex
+    assert r"x_{\mathrm{infl}}" in last("x_infl = 1").latex
+    assert r"\mathrm{inf}" in last("inf = 1").latex
+    r = last("x = 2*∞")
+    assert not r.error and r.text == "x = ∞"
+
+
+def test_infinity_subscript_in_export():
+    tex = document(run("T_∞ = 300'K\nT_inf = T_∞", siunitx=True))
+    assert r"T_{\infty}" in tex and "∞" not in tex.split("\\begin{document}")[1]
+
+
 def test_mixed_greek_name():
     assert r"\mathrm{\Delta x}" in last("Δx = 3").latex
 

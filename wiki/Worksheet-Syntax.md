@@ -13,7 +13,7 @@ A = [2, -1; -1, 2]             matrix: commas within a row, semicolons between r
 f(x, y) = x^2 + y              user function
 T = 20'degC -> 'degF           offset units work
 z = 3 + 4i   v = 10'V∠30'deg   complex numbers (see Complex Numbers)
-σ_max = 3                      Greek letters and subscripts in names
+σ_max = 3   T_∞ = 300'K        Greek letters and subscripts in names
 'smoot = 1.7018'm              define a unit (see Units)
 ~g = 9.81'm / 's^2             global variable (see below)
 x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
@@ -25,6 +25,7 @@ x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 - A bare name is always a variable, so `m` can be a mass while `'m` is the metre.
 - Only a number followed by units may be written without `*`. `3 x` is an error; write `3*x`.
 - Names may use Greek letters and subscripts (`σ_max`, `M_max`). A trailing digit becomes a subscript in the typeset view (`x1` is x₁).
+- A subscript may be infinity, as in a free-stream `T_∞` or `v_∞`: type `T.8` then Ctrl+G, or spell it `T_inf`. Both show as T<sub>∞</sub> (`T_{\infty}`), but they are two different names, as `sigma` and `σ` are. Only a whole `inf` part counts (`x_info` stays as it is), and ∞ is allowed in a name only right after `_`: `∞` on its own is still the constant.
 - A number ending in `i` or `j` is imaginary: `4i`, `2.5j`. See [Complex Numbers](Complex-Numbers).
 - Constants: `pi`, `e`, and `∞` (Ctrl+G after an `8`). A result may be infinite only when the line uses `∞`, so `1/0` is still an error; `∞ - ∞` and `0*∞` are too.
 

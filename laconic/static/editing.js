@@ -26,7 +26,7 @@
     8: '∞',
   };
 
-  const IDENT_RE = /[\p{L}\p{N}_°]/u;
+  const IDENT_RE = /[\p{L}\p{N}_°∞]/u;   // ∞ for subscripts such as v_∞
   const SIMPLE_RE = /^-?[\p{L}\p{N}_.'°][\p{L}\p{N}_.'°%^]*$/u;
   const isIdent = (c) => c !== undefined && IDENT_RE.test(c);
   // % appears only in the unit '%, so it belongs to the term like a unit's letters.
@@ -37,7 +37,7 @@
   // classes are spelled out here.
   const W = '[\\p{L}\\p{N}_]', W0 = '[\\p{L}\\p{Nl}\\p{No}_]';
   const TOKEN_RE = new RegExp('("[^"\\n]*")' + `|('(?:(?:${W0}|°)(?:${W}|°)*|%))`
-    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?${W0}${W}*[\`!@]*)`, 'gu');
+    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?${W0}(?:_∞|${W})*[\`!@]*)`, 'gu');
   const KINDS = ['text', 'unit', 'num', 'name'];
   // The tokens of one line: [{kind, start, text}], left to right.
   function tokens(line) {
