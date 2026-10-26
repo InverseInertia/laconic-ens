@@ -1,9 +1,12 @@
 """Local web UI. One page, a few endpoints. The whole sheet is re-run on each
 edit; for worksheet-sized documents that takes a few milliseconds. Settings
-(Greek table, global units) live on the server, in `settings.py`."""
+(Greek table, global units, display preferences) live on the server, in `settings.py`."""
+import json
+import secrets
 import subprocess
 import threading
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
@@ -28,12 +31,19 @@ app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
 HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 VERSION_MARKER = "{{version}}"  # in index.html; replaced with the program's version (_version.py)
+PREFS_MARKER = "{{prefs}}"      # in index.html; replaced with the stored display preferences (settings.py)
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
 OPENED = None   # Path of the worksheet the program was started with (`lens --window FILE`), set by __main__
+OPEN_WINDOW = None  # set by __main__ when serving: opens a window on a path of this server ("/?sheet=...")
+HANDED = {}     # token -> Path: sheets other launches handed to this server, each in a window of its own
 
 
 class Client(BaseModel):
     id: str
+
+
+class WindowBody(BaseModel):
+    path: str | None = None    # the sheet to open; None for a window with no file
 
 
 class Sheet(BaseModel):
@@ -86,6 +96,10 @@ class GreekBody(BaseModel):
     greek: dict[str, str] | None = None  # None: back to the built-in table
 
 
+class PrefsBody(BaseModel):
+    prefs: dict[str, Any]   # key -> new value; None removes it
+
+
 class UnitRow(BaseModel):
     name: str
     definition: str
@@ -101,7 +115,11 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 @app.get("/")
 def index():
     page = (STATIC / "index.html").read_text(encoding="utf-8")
-    return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label()))
+    # In the page, not fetched, so the theme and the rest are there before the page first draws.
+    # "<" escaped, so no value can close the script element it sits in.
+    prefs = json.dumps(settings.load()["prefs"]).replace("<", "\\u003c")
+    return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
+                        .replace(PREFS_MARKER, prefs))
 
 
 def _run(sheet, siunitx):
@@ -256,37 +274,51 @@ def get_settings():
     return settings.load()
 
 
+@app.put("/api/prefs")
+def put_prefs(body: PrefsBody):
+    settings.save_prefs(body.prefs)
+    return {"ok": True}
+
+
 @app.put("/api/welcomed")
 def put_welcomed():
     settings.save_welcomed()
     return {"ok": True}
 
 
+def _opened(sheet):
+    """The file a window opened on: the program's own (no `sheet`), or one handed over by
+    another launch. A window opened with `?sheet=` (empty) or an unknown token has none."""
+    return OPENED if sheet is None else HANDED.get(sheet)
+
+
 @app.get("/api/opened")
-def get_opened():
-    """The worksheet the program was started with, or {} when there is none. `writable` is
+def get_opened(sheet: str | None = None):
+    """The worksheet the window was opened on, or {} when there is none. `writable` is
     False for a .cs or .txt file, which is read but never overwritten (as in savefile.js)."""
-    if OPENED is None:
+    path = _opened(sheet)
+    if path is None:
         return {}
     try:
-        text = OPENED.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
-        return {"file": OPENED.name, "error": f"Could not open {OPENED.name}: {e}"}
-    return {"file": OPENED.name, "path": str(OPENED), "text": text,
-            "writable": OPENED.suffix.lower() == ".lens"}
+        return {"file": path.name, "error": f"Could not open {path.name}: {e}"}
+    return {"file": path.name, "path": str(path), "text": text,
+            "writable": path.suffix.lower() == ".lens"}
 
 
 @app.post("/api/opened/save")
-def save_opened(body: TextBody):
-    """Writes the worksheet back to the file the program was started with: the only file on
+def save_opened(body: TextBody, sheet: str | None = None):
+    """Writes the worksheet back to the file the window was opened on: the only file on
     disk the page can write to by name."""
-    if OPENED is None or OPENED.suffix.lower() != ".lens":
+    path = _opened(sheet)
+    if path is None or path.suffix.lower() != ".lens":
         raise HTTPException(409, "no .lens file to save to")
     try:
-        with open(OPENED, "w", encoding="utf-8", newline="") as f:   # keep the text's line endings
+        with open(path, "w", encoding="utf-8", newline="") as f:   # keep the text's line endings
             f.write(body.text)
     except OSError as e:
-        return {"ok": False, "error": f"Could not save {OPENED.name}: {e}"}
+        return {"ok": False, "error": f"Could not save {path.name}: {e}"}
     return {"ok": True}
 
 
@@ -347,3 +379,25 @@ def ping(c: Client):
 @app.post("/api/bye")
 def bye(c: Client):
     lifecycle.bye(c.id)
+
+
+@app.get("/api/hello")
+def hello():
+    """How another launch of LENS knows this server for one (instance.py)."""
+    return {"app": "lens", "version": version_label()}
+
+
+@app.post("/api/window")
+def open_window(body: WindowBody):
+    """Another launch of LENS found this one running and hands its window over: open one here,
+    on the same port, so the page finds this browser's stored presets."""
+    if OPEN_WINDOW is None:
+        raise HTTPException(409, "this server does not open windows")
+    if body.path:
+        token = secrets.token_urlsafe(12)   # not guessable, so no other page can ask for the file
+        HANDED[token] = Path(body.path).resolve()
+    else:
+        token = ""
+    lifecycle.expect()
+    OPEN_WINDOW(f"/?sheet={token}")
+    return {"ok": True}

@@ -531,13 +531,33 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 <script src="/static/solverview.js"></script>
 <script src="/static/autocomplete.js"></script>
 <script src="/static/theme.js"></script>
+<script type="application/json" id="prefs">{{prefs}}</script>
 <script src="/static/savefile.js"></script>
 <script src="/static/shortcuts.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
-// Settings live under "lens:". Older builds used "calcsheet:" and "laconic:", read as a fallback.
+// Display preferences live in the server's settings.json, so they are the same whatever port the
+// page is on; the server writes them into the page, so they can be read before anything draws.
+// Other settings live in this browser under "lens:". Older builds used "calcsheet:" and "laconic:",
+// read as a fallback.
+const PREF_KEYS = ["theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest"];
+const prefs = (() => { try { return JSON.parse($("#prefs").textContent); } catch { return {}; } })();
+// One save at a time; what changes meanwhile goes in the next, so a color picker, which saves the
+// theme on every move, sends a few requests rather than hundreds. keepalive: a reload or a closed
+// window does not cancel a save on its way.
+let prefsPending = {}, prefsBusy = false;
+function flushPrefs() {
+  if (prefsBusy || !Object.keys(prefsPending).length) return;
+  const body = JSON.stringify({prefs: prefsPending});
+  prefsPending = {}; prefsBusy = true;
+  fetch("/api/prefs", {method: "PUT", headers: {"Content-Type": "application/json"}, body, keepalive: true})
+    .catch(() => {}).finally(() => { prefsBusy = false; flushPrefs(); });
+}
+function savePref(k, v) { prefs[k] = v; prefsPending[k] = v; flushPrefs(); }
+window.addEventListener("pagehide", () => { prefsBusy = false; flushPrefs(); });
 const store = {
   get(k, d) {
+    if (PREF_KEYS.includes(k) && k in prefs) return prefs[k];
     for (const prefix of ["lens:", "calcsheet:", "laconic:"]) {
       try {
         const raw = localStorage.getItem(prefix + k);
@@ -547,8 +567,17 @@ const store = {
     }
     return d;
   },
-  set(k, v) { try { localStorage.setItem("lens:" + k, JSON.stringify(v)); } catch {} },
+  set(k, v) {
+    if (PREF_KEYS.includes(k)) { savePref(k, v); return; }
+    try { localStorage.setItem("lens:" + k, JSON.stringify(v)); } catch {}
+  },
 };
+// Preferences an older build kept in this browser are sent up once, so nothing is lost.
+for (const k of PREF_KEYS) {
+  if (k in prefs) continue;
+  const v = store.get(k, null);
+  if (v !== null) savePref(k, v);
+}
 const src = $("#src"), out = $("#out"), nameEl = $("#name");
 let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
 let tableText = null;   // the text `last` was evaluated from
@@ -691,7 +720,7 @@ async function save(as) {
     render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
     write: async (h, text) => {
       if (h.server) {
-        const r = await (await fetch("/api/opened/save", {method: "POST", headers: {"Content-Type": "application/json"},
+        const r = await (await fetch(openedApi("/api/opened/save"), {method: "POST", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({text})})).json();
         if (!r.ok) throw new Error(r.error);
         return;
@@ -1484,11 +1513,18 @@ for (const el of document.querySelectorAll("[data-icon]")) {
   }).catch(() => {});
 }
 
+// A window another launch handed to this server says which sheet it opened on (?sheet=, empty
+// for none); a window without it opened on the sheet the program was started with.
+function openedApi(path) {
+  const sheet = new URLSearchParams(location.search).get("sheet");
+  return sheet === null ? path : `${path}?sheet=${encodeURIComponent(sheet)}`;
+}
+
 // A sheet the program was started with replaces the stored text, once: reloading the page keeps
 // the edits made since (they are in the stored text) and still saves to that file.
 async function openStartFile() {
   let o;
-  try { o = await (await fetch("/api/opened")).json(); } catch { return false; }
+  try { o = await (await fetch(openedApi("/api/opened"))).json(); } catch { return false; }
   if (!o.file) return false;
   if (o.error) { say(o.error); return false; }
   const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true} : null);

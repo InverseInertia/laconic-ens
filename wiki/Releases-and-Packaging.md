@@ -12,7 +12,7 @@ PyInstaller does not cross-compile, so build on each target OS. The result needs
 | File | Role |
 |---|---|
 | `packaging/lens.spec` | PyInstaller spec |
-| `packaging/launcher.py` | entry point of the frozen build: with no arguments, or `--window [FILE]`, it starts the server on a free port in an app window (with FILE open) and quits when the window closes; with other arguments it is the normal CLI. It calls `multiprocessing.freeze_support()` because the solver worker is a spawned copy of the executable |
+| `packaging/launcher.py` | entry point of the frozen build: with no arguments, or `--window [FILE]`, it hands the window (with FILE open) to a LENS already running, or else starts the server in an app window, on the first free port from 8765 so the browser's stored presets carry over, and quits when the window closes (see `laconic/instance.py`); with other arguments it is the normal CLI. It calls `multiprocessing.freeze_support()` because the solver worker is a spawned copy of the executable |
 | `packaging/smoke.py` | starts the built program and checks the page (and, given a second argument, the version it shows), vendored assets, an evaluation, a plot SVG and a solver run |
 | `packaging/icon.png` | executable icon on Windows and macOS (rendered from `laconic/static/logo.svg`) |
 | `packaging/file-icon.png`, `file-icon.ico` | icon of a `.lens` file, drawn by `packaging/make_file_icon.py` from `icon.png`; the PNG is attached to releases as `lens-<version>-file-icon.png`, the ICO is bundled into the Windows build for `--register-files` (`laconic/fileassoc.py`) |

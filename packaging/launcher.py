@@ -1,25 +1,16 @@
 """Entry point for the frozen (PyInstaller) build.
 
-Double-clicking the executable starts the server on a free port and opens the
-UI. `lens --window sheet.lens` does the same with that sheet open, saving back to
+Double-clicking the executable opens the UI. If LENS is already running, that
+LENS opens the window and this one quits; otherwise this one starts the server,
+on the same port as last time where it can (see laconic/instance.py).
+`lens --window sheet.lens` does the same with that sheet open, saving back to
 it: that is what a double-clicked .lens file runs (see install-linux.sh and
 laconic/fileassoc.py). Any other arguments are passed straight to the normal CLI,
 so the same binary also does `lens sheet.lens --tex out.tex`."""
 import os
-import socket
 import sys
 import threading
 import time
-
-
-def _free_port(preferred=8765):
-    for port in (preferred, 0):
-        with socket.socket() as s:
-            try:
-                s.bind(("127.0.0.1", port))
-            except OSError:
-                continue
-            return s.getsockname()[1]
 
 
 def _quit_when_closed():
@@ -43,7 +34,12 @@ if __name__ == "__main__":
     from laconic.__main__ import main
 
     if sys.argv[1:2] in ([], ["--window"]):
+        from laconic.instance import claim
+
         sheet = sys.argv[2:3]   # the sheet to open, if one was given
-        sys.argv[1:] = ["--serve", "--app", "--port", str(_free_port())] + sheet
+        port = claim(sheet[0] if sheet else None)
+        if port is None:   # a running LENS opened the window
+            sys.exit(0)
+        sys.argv[1:] = ["--serve", "--app", "--port", str(port)] + sheet
         threading.Thread(target=_quit_when_closed, daemon=True).start()
     main()

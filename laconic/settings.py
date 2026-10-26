@@ -1,6 +1,8 @@
 """Per-user settings kept on the machine running the server, so they follow the
 user across browsers and are shared with the command line: the Greek table
-behind Ctrl+G, the global unit definitions and whether the welcome dialog has been shown.
+behind Ctrl+G, the global unit definitions, whether the welcome dialog has been shown and the
+page's display preferences (PREFS). Kept here rather than in the browser, whose storage belongs
+to one origin and so to one port, so the page looks the same whatever port LENS runs on.
 
 The file is JSON, written atomically. `LENS_CONFIG_DIR` overrides where it lives."""
 import json
@@ -11,6 +13,9 @@ import threading
 from pathlib import Path
 
 _lock = threading.Lock()
+
+# The page's display preferences: what each holds is the page's business (theme.js checks a theme).
+PREFS = ("theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest")
 
 
 def config_dir():
@@ -28,19 +33,21 @@ def _path():
 
 
 def load():
-    """{"welcomed": bool, "greek": dict or None, "units": [{"name", "definition"}]}. A missing or
-    unreadable file gives the defaults rather than an error."""
+    """{"welcomed": bool, "greek": dict or None, "units": [{"name", "definition"}], "prefs": dict}.
+    A missing or unreadable file gives the defaults rather than an error."""
     try:
         data = json.loads(_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         data = {}
     greek = data.get("greek")
     units = data.get("units")
+    prefs = data.get("prefs")
     return {
         "welcomed": data.get("welcomed") is True,
         "greek": greek if isinstance(greek, dict) else None,
         "units": [u for u in units if isinstance(u, dict) and isinstance(u.get("name"), str)
                   and isinstance(u.get("definition"), str)] if isinstance(units, list) else [],
+        "prefs": {k: v for k, v in prefs.items() if k in PREFS} if isinstance(prefs, dict) else {},
     }
 
 
@@ -80,6 +87,20 @@ def save_welcomed():
     with _lock:
         data = load()
         data["welcomed"] = True
+        _write(data)
+
+
+def save_prefs(changes):
+    """Merges `changes` into the stored preferences; None removes one. Other keys are ignored."""
+    with _lock:
+        data = load()
+        for k, v in changes.items():
+            if k not in PREFS:
+                continue
+            if v is None:
+                data["prefs"].pop(k, None)
+            else:
+                data["prefs"][k] = v
         _write(data)
 
 

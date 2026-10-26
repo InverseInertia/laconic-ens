@@ -36,6 +36,8 @@ def page(server):
             browser = p.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH") or None)
         except Exception as e:  # no browser installed
             pytest.skip(f"no Chromium: {e}")
+        from laconic import settings
+        settings.save_prefs(dict.fromkeys(settings.PREFS))   # kept by the server, so not cleared with the browser
         pg = browser.new_page(viewport={"width": 1200, "height": 800})
         pg.goto(server)
         pg.wait_for_function("document.querySelector('#src').value.length > 0")
