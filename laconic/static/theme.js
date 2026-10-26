@@ -36,6 +36,7 @@
     'Engineering paper': { paper: '#e6eedf', text: '#17253d', ink: '#17253d', grid: '#c3d2bd', rule: '#9db39a', err: '#a8231b', global: '#1d6b55' },
     'White paper': { paper: '#fbfbf8', text: '#1b1b1b', ink: '#1b1b1b', grid: '#dcdcd4', rule: '#b5b5aa', err: '#b3261e', global: '#0f6e6a' },
     'Dark': { paper: '#1e2127', text: '#d9dde3', ink: '#d9dde3', grid: '#2c313a', rule: '#444b57', err: '#ff7b72', global: '#6fd3b8' },
+    'Canoe Dark': { paper: '#120a02', text: '#f5cca3', ink: '#ff4d00', grid: '#2e1a05', rule: '#ff4d00', err: '#ff1100', global: '#7ee0c3' },
   };
   const BACKGROUNDS = ['grid', 'lines', 'dots', 'plain'];
   // Below this ratio text is hard to read on its paper.
