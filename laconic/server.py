@@ -5,12 +5,13 @@ import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import document, evaluate as evaluate_sheet, snippet
 from . import settings
+from .commands import help_rows
 from .evaluator import check_units
 from .lifecycle import lifecycle
 from .plotopts import PlotError, apply_patch
@@ -22,6 +23,7 @@ from .vocab import props_vocabulary, vocabulary
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
+HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
 
 
@@ -89,7 +91,8 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    page = (STATIC / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse(page.replace(HELP_MARKER, help_rows()))
 
 
 def _run(sheet, siunitx):

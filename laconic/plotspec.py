@@ -122,7 +122,7 @@ class Builder:
 
     def build(self, line, series_src, var, lo_src, hi_src, opts):
         ev = self.ev
-        cfg = {**BUILTIN, **ev.plotdefs}
+        cfg = {**BUILTIN, **ev.mode.plotdefs}
         block, per, notes, at, idxline = {}, {}, [], {}, {}
         for ln, key, idx, val in opts:
             at[key] = ln
@@ -184,7 +184,7 @@ class Builder:
         if first is None:
             ydisp = ev.Q(1).units
         else:
-            ydisp = reduce_si(first, ev.ureg).units if ev.assume else first.units
+            ydisp = reduce_si(first, ev.ureg).units if ev.mode.assume else first.units
         if "yunit" in block and first is not None:
             ydisp = self.unit_option(at["yunit"], block["yunit"], first.units) or ydisp
         elif "yunit" in block:

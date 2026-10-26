@@ -13,11 +13,12 @@ from .nodes import (Assign, BinOp, Convert, FuncDef, Implicit, Neg, Num,
                     UnitDef, UnitLit)
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
-from .plotopts import PlotError, canon, parse_option, parse_plot
+from .plotopts import PlotError, parse_option, parse_plot
 from .plotspec import Builder
 from .sheettext import scan
 from .plotsvg import render_svg
-from . import solver
+from . import commands, solver
+from .commands import CommandError
 from .solver import SolverError
 
 
@@ -132,7 +133,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
     sheet = scan(text)
     has_defs = any(l.kind == "unitdef" for l in sheet.lines)
     ev = Evaluator(global_units or (), fork=has_defs)
-    fmt = Fmt(ev.ureg, siunitx=siunitx, custom=ev.custom)
+    fmt = Fmt(ev.ureg, siunitx=siunitx, custom=ev.custom, mode=ev.mode)
     defs, here, used = {}, {}, set()
     for l in sheet.lines:
         if l.kind == "unitdef":
@@ -157,7 +158,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None):
         elif l.kind == "comment":
             results.append(LineResult(i, raw, "comment", text=s[1:].strip()))
         elif l.kind == "command":
-            results.append(_run_command(i, raw, s, ev, fmt))
+            results.append(_run_command(i, raw, s, ev))
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
     for r, l in zip(results, sheet.lines):
@@ -210,98 +211,12 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
         return LineResult(i, raw, "error", error=_describe(e))
 
 
-def _run_command(i, raw, s, ev, fmt):
-    """`!clear` removes every variable whose name does not start with ~.
-    `!clearf` does the same for user functions. `!noassume` keeps computed results in the
-    units that came out of the arithmetic instead of reducing them to SI, until
-    `!assume` restores the default. `!trigdeg` and `!trigrad` set the angle unit
-    that trig functions read bare numbers in and that inverse ones return. `!short`
-    shows only each line's final result, without intermediate steps, until
-    `!long` restores the full display. `!sigfigs n`, `!sigfigsbig n` (keeps trailing zeros) and `!decplace n` choose how results
-    are printed, by significant figures (4 by default) or by decimal places; the last one
-    given wins. Only the display is rounded."""
-    parts = s[1:].split()
-    name = parts[0] if parts else ""
-    if name == "plotspec":
-        return _plotspec_command(i, raw, s, ev)
-    if name == "plot":     # a plot statement with something after it never gets here
-        return LineResult(i, raw, "error", error="A plot reads `!plot f(x), x = low .. high`")
-    if name in ("sigfigs", "sigfigsbig", "decplace"):
-        return _precision_command(i, raw, name, parts[1:], fmt)
-    if name not in ("clear", "clearf", "assume", "noassume", "trigdeg", "trigrad",
-                    "short", "long"):
-        return LineResult(i, raw, "error",
-                          error=f"Unknown command '!{name}'. Available: !clear, !clearf, !assume, "
-                                "!noassume, !trigdeg, !trigrad, !short, !long, !sigfigs, !decplace, !plot, !plotspec, "
-                                "!root, !minimize, !maximize")
-    if len(parts) > 1:
-        return LineResult(i, raw, "error", error=f"!{name} takes no arguments")
-    if name in ("assume", "noassume"):
-        ev.assume = name == "assume"
-        text = "Units are reduced to SI again" if ev.assume else "Units are kept as typed unless converted with ->"
-        return LineResult(i, raw, "command", text=text)
-    if name in ("short", "long"):
-        ev.short = name == "short"
-        text = "Showing final results only, without steps" if ev.short else "Showing steps again"
-        return LineResult(i, raw, "command", text=text)
-    if name == "clearf":
-        gone = [n for n in ev.funcs if not n.startswith("~")]
-        for n in gone:
-            del ev.funcs[n]
-        ev.cleared_funcs.update(gone)
-        return LineResult(i, raw, "command", text=_cleared(gone, [n for n in ev.funcs if n.startswith("~")]))
-    if name in ("trigdeg", "trigrad"):
-        ev.angle = "degree" if name == "trigdeg" else "radian"
-        text = ("Trig functions take and return degrees" if ev.angle == "degree"
-                else "Trig functions take and return radians")
-        return LineResult(i, raw, "command", text=text)
-    gone = [n for n in ev.vars if not n.startswith("~")]
-    for n in gone:
-        del ev.vars[n]
-    ev.cleared.update(gone)
-    ev.stale -= set(gone)
-    return LineResult(i, raw, "command", text=_cleared(gone, [n for n in ev.vars if n.startswith("~")]))
-
-
-def _cleared(gone, kept):
-    """`!clear` and `!clearf` name what they kept as well, since a global surviving one is easy to miss."""
-    text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
-    if kept:
-        text += f". Kept global{'s' * (len(kept) > 1)} {', '.join(kept)}"
-    return text
-
-
-def _precision_command(i, raw, name, args, fmt):
-    """`!sigfigs 5` or `!decplace 2`: how many digits results are displayed with."""
-    lo, hi = (0, 15) if name == "decplace" else (1, 15)
-    if len(args) != 1 or not re.fullmatch(r"\d+", args[0]) or not lo <= int(args[0]) <= hi:
-        return LineResult(i, raw, "error", error=f"!{name} takes a whole number from {lo} to {hi}, e.g. `!{name} 3`")
-    n = int(args[0])
-    if name != "decplace":
-        fmt.sig, fmt.places, fmt.keep_zeros = n, None, name == "sigfigsbig"
-        text = f"Results show {n} significant figure{'s' * (n != 1)}" + (", trailing zeros kept" if fmt.keep_zeros else "")
-    else:
-        fmt.places = n
-        text = f"Results show {n} decimal place{'s' * (n != 1)}"
-    return LineResult(i, raw, "command", text=text)
-
-
-def _plotspec_command(i, raw, s, ev):
-    """`!plotspec grid: off` sets an option for every plot below it; `!plotspec reset` clears them."""
-    words = s[1:].split(None, 1)
-    rest = words[1].strip() if len(words) > 1 else ""
-    if rest == "reset":
-        ev.plotdefs.clear()
-        return LineResult(i, raw, "command", text="Plot options are back to the defaults")
-    m = re.fullmatch(r"([A-Za-z]\w*)\s*:\s*(.*)", rest)
+def _run_command(i, raw, s, ev):
+    """A `!name` line: run through the command registry (commands.py), which changes the sheet mode."""
     try:
-        if not m:
-            raise PlotError("!plotspec reads `!plotspec key: value` or `!plotspec reset`")
-        key, _, value = parse_option(m.group(1), None, m.group(2), sheet=True)
-    except PlotError as e:
+        return LineResult(i, raw, "command", text=commands.run(s, ev.mode, ev))
+    except CommandError as e:
         return LineResult(i, raw, "error", error=str(e))
-    ev.plotdefs[key] = value
-    return LineResult(i, raw, "command", text=f"Plots below: {key} {canon(key, value)}")
 
 
 def _run_plot(i, raw, block, ev, fmt, used):
@@ -449,15 +364,15 @@ def _run_line(i, raw, s, ev, fmt, used):
         literal = _is_literal(expr, ev)
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.
-        if ev.assume and not (literal or isinstance(expr, Convert)):
+        if ev.mode.assume and not (literal or isinstance(expr, Convert)):
             value = reduce_si(value, ev.ureg)
-            if ev.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
+            if ev.mode.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
                 value = value.to("degree")
         stale = solver.tainted(ev, [expr])
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
         res = fmt.quantity(value)
-        stages = [res] if literal or ev.short else _dedupe([sym, sub, res])
+        stages = [res] if literal or ev.mode.short else _dedupe([sym, sub, res])
         if isinstance(stmt, Assign):
             key = ev.bind_key(stmt.name)
             ev.vars[key] = value

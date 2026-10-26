@@ -371,7 +371,7 @@ def digest(block, ev, unknowns):
                 units[key] = str(ev.Q(1, ev.ureg.parse_units(key)).to_base_units())
             except Exception:
                 units[key] = key
-    parts = {"v": RECORD_VERSION, "kind": block.kind, "unknowns": block.unknowns, "angle": ev.angle,
+    parts = {"v": RECORD_VERSION, "kind": block.kind, "unknowns": block.unknowns, "angle": ev.mode.angle,
              "lines": block.canon, "start": [_qdigest(ev.vars[u.key]) for u in unknowns],
              "vars": deps, "funcs": funcs, "units": units}
     blob = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()

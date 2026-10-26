@@ -2,26 +2,8 @@
 from functools import lru_cache
 
 from . import solver
+from .commands import COMMANDS
 from .evaluator import CONSTANTS, CURRENCIES, Evaluator, registry
-
-COMMANDS = [
-    ("clear", "remove all non-global variables"),
-    ("clearf", "remove all non-global functions"),
-    ("noassume", "keep typed units in results"),
-    ("assume", "reduce results to SI again"),
-    ("trigdeg", "trig functions use degrees"),
-    ("trigrad", "trig functions use radians"),
-    ("short", "show only final results, no steps"),
-    ("long", "show steps again"),
-    ("sigfigs", "display n significant figures (default 4): !sigfigs 5"),
-    ("sigfigsbig", "like !sigfigs, but keeps trailing zeros: 2.500"),
-    ("decplace", "display n decimal places instead: !decplace 2"),
-    ("plot", "plot functions: !plot f(x), x = 0 .. 1"),
-    ("plotspec", "set a plot option for the plots below, e.g. !plotspec grid: off"),
-    ("root", "solve equations for unknowns: !root x, y, then indented equation: lines"),
-    ("minimize", "find the unknowns that minimize an objective: !minimize x"),
-    ("maximize", "find the unknowns that maximize an objective: !maximize x"),
-]
 
 # Signature shown next to each function. Anything missing shows just its name.
 _SIGNATURES = {
@@ -86,7 +68,7 @@ def vocabulary(global_units=()):
         "globalUnits": [[n, d] for n, d in global_units],
         "functions": [[f, _SIGNATURES.get(f, f)] for f in funcs],
         "constants": sorted(CONSTANTS),
-        "commands": [list(c) for c in COMMANDS],
+        "commands": [[c.name, c.summary] for c in COMMANDS],
         "solver": {
             "keys": {kind: [[k, solver.KEY_NOTES[k]] for k in keys] for kind, keys in solver.KEYS.items()},
             "methods": {"root": [[m, solver.METHOD_NOTES[m]] for m in solver.ROOT_METHODS],
