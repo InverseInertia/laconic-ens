@@ -331,3 +331,40 @@ def test_sigfigsbig_keeps_trailing_zeros():
     rs = run("a = 2.5\nb = 12345.678\nc = 0.00012\nd = 3e9\n!sigfigsbig 4\na\nb\nc\nd\n0\n!sigfigs 4\na")
     shown = lambda r: r.text.split("= ")[-1]
     assert [shown(rs[i]) for i in (5, 6, 7, 8, 9, 11)] == ["2.500", "12350", "0.0001200", "3.000e9", "0.000", "2.5"]
+
+
+def test_browser_env_restores_library_path_when_frozen(monkeypatch):
+    """#37: a browser started from the PyInstaller build must not see the bundle's
+    LD_LIBRARY_PATH (Firefox fails to start with it)."""
+    import sys
+    from laconic import __main__ as cli
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/_MEI123")
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/opt/lib")
+    env = cli._browser_env()
+    assert env["LD_LIBRARY_PATH"] == "/opt/lib" and "LD_LIBRARY_PATH_ORIG" not in env
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG")
+    assert "LD_LIBRARY_PATH" not in cli._browser_env()
+    monkeypatch.setattr(sys, "frozen", False)
+    assert cli._browser_env()["LD_LIBRARY_PATH"] == "/tmp/_MEI123"
+
+
+def test_launch_passes_clean_env_and_reports_failure(monkeypatch, capsys):
+    import sys
+    from laconic import __main__ as cli
+    calls = []
+
+    def fake_popen(cmd, **kw):
+        calls.append((cmd, kw["env"]))
+        raise OSError("no display")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/tmp/_MEI123")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    monkeypatch.setattr(cli.shutil, "which", lambda exe: "/usr/bin/" + exe)
+    monkeypatch.setattr(cli.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: False)
+    cli._launch("http://127.0.0.1:1", app=False)
+    assert calls[0][0] == ["xdg-open", "http://127.0.0.1:1"]
+    assert "LD_LIBRARY_PATH" not in calls[0][1]
+    assert "open http://127.0.0.1:1 by hand" in capsys.readouterr().out
