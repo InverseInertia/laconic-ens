@@ -26,6 +26,8 @@ class SheetMode:
     sig: int = 4               # significant figures shown (!sigfigs, !sigfigsbig)
     places: int = None         # decimal places shown instead, after !decplace
     keep_zeros: bool = False   # !sigfigsbig: pad to exactly `sig` figures, 2.5 -> 2.500
+    complex: str = "rect"      # !complex: show complex results as 3 + 4i ("rect") or 5∠53.13° ("polar"),
+                               # or allow only real results ("real")
     plotdefs: dict = field(default_factory=dict)   # !plotspec key: value, for the plots below
     cleared: set = field(default_factory=set)        # variables removed by !clear, for a clearer error
     cleared_funcs: set = field(default_factory=set)  # functions removed by !clearf
@@ -59,6 +61,21 @@ class Whole:
         if not re.fullmatch(r"\d+", rest) or not self.lo <= int(rest) <= self.hi:
             raise CommandError(f"!{name} takes a whole number from {self.lo} to {self.hi}, e.g. `!{name} 3`")
         return int(rest)
+
+
+@dataclass(frozen=True)
+class Choice:
+    """One word from `options`."""
+    options: tuple
+
+    @property
+    def hint(self):
+        return " " + "|".join(self.options)
+
+    def parse(self, name, rest):
+        if rest not in self.options:
+            raise CommandError(f"!{name} takes one of {', '.join(self.options)}, e.g. `!{name} {self.options[0]}`")
+        return rest
 
 
 @dataclass(frozen=True)
@@ -128,6 +145,16 @@ def _decplace(mode, ev, n):
     return f"Results show {n} decimal place{'s' * (n != 1)}"
 
 
+_COMPLEX_TEXT = {"rect": "Complex results are shown as 3 + 4i",
+                 "polar": "Complex results are shown as magnitude∠angle",
+                 "real": "Only real results are allowed; a complex result is an error"}
+
+
+def _complex(mode, ev, how):
+    mode.complex = how
+    return _COMPLEX_TEXT[how]
+
+
 def _plotspec(mode, ev, rest):
     """`!plotspec grid: off` sets an option for every plot below it; `!plotspec reset` clears them."""
     if rest == "reset":
@@ -149,7 +176,7 @@ def _plotspec(mode, ev, rest):
 @dataclass(frozen=True)
 class Command:
     name: str
-    args: object       # an argument rule: NoArgs, Whole, Text or Statement
+    args: object       # an argument rule: NoArgs, Whole, Choice, Text or Statement
     summary: str       # one line, shown by the editor's suggestions
     effect: object = None
     help: str = ""     # the page's help row (HTML); commands with the same text share a row
@@ -168,6 +195,10 @@ _SHORT_HELP = ("Below <code>!short</code>, each line shows only its final result
 _PRECISION_HELP = ("Choose how many significant figures (4 by default; <code>!sigfigsbig</code> keeps trailing "
                    "zeros, <code>2.500</code>) or decimal places results are displayed with. The last one given "
                    "wins. Only the display is rounded; every calculation uses the full value")
+_COMPLEX_HELP = ("How complex results are shown: <code>rect</code> (the default) gives <code>3 + 4i</code>, "
+                 "<code>polar</code> gives <code>5∠53.13°</code> with the angle in the trig unit. "
+                 "<code>real</code> makes any complex result an error. Write complex numbers as "
+                 "<code>3 + 4i</code> (or <code>4j</code>) or <code>5'V∠30'deg</code>")
 
 COMMANDS = (
     Command("clear", NoArgs(), "remove all non-global variables", _clear, _CLEAR_HELP),
@@ -190,6 +221,8 @@ COMMANDS = (
             _sigfigs(True), _PRECISION_HELP),
     Command("decplace", Whole(0, 15), "display n decimal places instead: !decplace 2",
             _decplace, _PRECISION_HELP),
+    Command("complex", Choice(("rect", "polar", "real")), "show complex results as rect or polar, or allow only real",
+            _complex, _COMPLEX_HELP),
     Command("plot", Statement("A plot reads `!plot f(x), x = low .. high`"),
             "plot functions: !plot f(x), x = 0 .. 1"),
     Command("plotspec", Text(), "set a plot option for the plots below, e.g. !plotspec grid: off", _plotspec),

@@ -60,6 +60,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `server.py` | FastAPI app |
 | `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
 | `__main__.py` | The `lens` command line |
+| `_version.py` | The program's version, the one place it is written; the release build stamps it from the tag |
 
 ## Front end (`laconic/static/`)
 
@@ -92,7 +93,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /` | the page, with the command help rows filled in from the registry |
+| `GET /` | the page, with the command help rows filled in from the registry and the version (`_version.py`) in the header and Help |
 | `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex`, `error`, `warning`, `stale`, its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line |
 | `POST /api/export` | complete `.tex` document |
 | `POST /api/save` | source with needed unit definitions appended |

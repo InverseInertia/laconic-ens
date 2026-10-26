@@ -111,6 +111,9 @@ def test_the_display_parts_of_a_row():
     assert g["warning"].startswith("Changes the global ~g")
     both = rows("~g = 1\ng = 2 * 'degC")[1]["warning"]   # the evaluator's notes join the line's own
     assert both.startswith("Changes the global ~g") and "'delta_degC" in both
+    three = rows("~i = 1\ni = 2 * 'degC")[1]["warning"].split(". ")   # global, imaginary unit, offset unit
+    assert three[0].startswith("Changes the global ~i") and any(t.startswith("i reads like") for t in three)
+    assert "'delta_degC" in three[-1]
 
 
 def test_a_plot_row_carries_its_picture_and_spec():

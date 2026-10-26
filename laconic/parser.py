@@ -7,7 +7,7 @@ from lark.exceptions import UnexpectedInput
 
 from . import catalogue
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
-                    Matrix, Name, Neg, Num, Str, UnitDef, UnitLit)
+                    Matrix, Name, Neg, Num, Polar, Str, UnitDef, UnitLit)
 from .sheettext import NAME, NUMBER, STRING, UNIT, definition
 
 GRAMMAR = r"""
@@ -16,9 +16,12 @@ GRAMMAR = r"""
 ?expr: sum
      | sum "->" sum                 -> convert
 
-?sum: product
-    | sum "+" product               -> add
-    | sum "-" product               -> sub
+?sum: polar
+    | sum "+" polar                 -> add
+    | sum "-" polar                 -> sub
+
+?polar: product
+      | product "∠" product         -> polar
 
 ?product: unary
         | product "*" unary         -> mul
@@ -63,9 +66,15 @@ UNIT: /{UNIT}/
 """
 
 
+def _number(t):
+    """A NUMBER token's value: `4i` and `4j` are imaginary."""
+    t = str(t)
+    return complex(0, float(t[:-1])) if t[-1] in "ij" else float(t)
+
+
 @v_args(inline=True)
 class _ToAst(Transformer):
-    def num(self, t): return Num(float(t))
+    def num(self, t): return Num(_number(t))
     def string(self, t): return Str(str(t)[1:-1])
     def name(self, t): return Name(str(t))
     def infinity(self): return Name("∞")
@@ -79,7 +88,8 @@ class _ToAst(Transformer):
     def ediv(self, a, b): return BinOp("./", a, b)
     def pow(self, a, b): return BinOp("^", a, b)
     def convert(self, a, b): return Convert(a, b)
-    def implicit(self, n, *factors): return Implicit(Num(float(n)), tuple(factors))
+    def polar(self, r, angle): return Polar(r, angle)
+    def implicit(self, n, *factors): return Implicit(Num(_number(n)), tuple(factors))
     def args(self, *a): return tuple(a)
     def row(self, *a): return tuple(a)
     def call(self, name, args): return Call(str(name), args)

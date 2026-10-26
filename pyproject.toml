@@ -1,6 +1,6 @@
 [project]
 name = "laconic"
-version = "0.1.0"
+dynamic = ["version"]  # from laconic/_version.py, which the release build stamps with the tag
 description = "Laconic Engineering Notebook System (LENS): a units-aware line worksheet on Pint with live evaluation and LaTeX export"
 requires-python = ">=3.10"
 dependencies = ["pint>=0.24", "numpy", "lark>=1.1", "fastapi", "uvicorn", "CoolProp>=6.6", "scipy>=1.9"]
@@ -18,6 +18,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["laconic"]  # explicit: packaging/ holds build scripts, not a package
+
+[tool.setuptools.dynamic]
+version = { attr = "laconic._version.__version__" }
 
 [tool.setuptools.package-data]
 laconic = ["static/**/*", "examples/*.lens"]
