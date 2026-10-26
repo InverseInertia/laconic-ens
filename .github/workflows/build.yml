@@ -53,18 +53,24 @@ jobs:
         with: { path: artifacts }
       - name: Collect release files
         run: |
+          # The version from the tag (v0.2.0 -> 0.2.0) goes in every file name, so downloads of
+          # different releases do not overwrite each other.
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir release
-          mv artifacts/lens-windows-x64/lens.exe release/lens-windows-x64.exe
-          mv artifacts/lens-linux-x64/lens release/lens-linux-x64
-          chmod +x release/lens-linux-x64  # upload-artifact drops the executable bit
+          mv artifacts/lens-windows-x64/lens.exe "release/lens-$VERSION-windows-x64.exe"
+          mv artifacts/lens-linux-x64/lens "release/lens-$VERSION-linux-x64"
+          chmod +x "release/lens-$VERSION-linux-x64"  # upload-artifact drops the executable bit
       - uses: actions/checkout@v4
         with: { path: src }
       - name: Add the Linux installer and its icons
         run: |
-          cp src/packaging/install-linux.sh release/lens-install-linux.sh
-          cp src/packaging/icon.png release/lens-icon.png
-          cp src/packaging/file-icon.png release/lens-file-icon.png
-          chmod +x release/lens-install-linux.sh
+          # The installer looks for, and downloads, the files of the release it is stamped with.
+          sed "s/^VERSION=\"\"/VERSION=\"$VERSION\"/" src/packaging/install-linux.sh > "release/lens-$VERSION-install-linux.sh"
+          grep -q "^VERSION=\"$VERSION\"" "release/lens-$VERSION-install-linux.sh"
+          cp src/packaging/icon.png "release/lens-$VERSION-icon.png"
+          cp src/packaging/file-icon.png "release/lens-$VERSION-file-icon.png"
+          chmod +x "release/lens-$VERSION-install-linux.sh"
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*
