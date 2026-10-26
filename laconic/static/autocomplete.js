@@ -23,6 +23,18 @@
   const MAX = 8;
   const SOLVER_HEAD = /^\s*!(root|minimize|maximize)\b(.*)$/;
 
+  // What a trimmed line defines: {kind: 'unitdef' | 'funcdef' | 'assign', name, params}, or null.
+  // As laconic/sheettext.py's definition() for whole lines (tests/sheettext_vectors.json), but a
+  // line being typed counts before its body or with half its parameters.
+  function definition(s) {
+    let m = UNITDEF_RE.exec(s);
+    if (m) return { kind: 'unitdef', name: m[1], params: [], body: m[2] };
+    m = FUNC_RE.exec(s);
+    if (m) return { kind: 'funcdef', name: m[1], params: m[2].split(',').map((p) => p.trim()).filter(Boolean) };
+    m = ASSIGN_RE.exec(s);
+    return m ? { kind: 'assign', name: m[1], params: [] } : null;
+  }
+
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
 
@@ -41,10 +53,9 @@
         if (/^!clearf\s*$/.test(s)) for (const n of [...funcs.keys()]) if (n[0] !== '~') funcs.delete(n);
         continue;
       }
-      let m = FUNC_RE.exec(s);
-      if (m) { funcs.set(key(m[1], gf), { params: m[2].split(',').map((p) => p.trim()).filter(Boolean), line: i + 1 }); continue; }
-      m = ASSIGN_RE.exec(s);
-      if (m) vars.set(key(m[1], gv), { line: i + 1 });
+      const d = definition(s);
+      if (d && d.kind === 'funcdef') funcs.set(key(d.name, gf), { params: d.params, line: i + 1 });
+      else if (d) vars.set(key(d.name, gv), { line: i + 1 });
     }
     return { vars, funcs };
   }
@@ -53,8 +64,8 @@
   function unitDefs(text) {
     const out = [];
     text.split('\n').forEach((l, i) => {
-      const m = UNITDEF_RE.exec(l.trim());
-      if (m) out.push({ name: m[1], definition: m[2].trim(), line: i + 1 });
+      const d = definition(l.trim());
+      if (d && d.kind === 'unitdef') out.push({ name: d.name, definition: d.body.trim(), line: i + 1 });
     });
     return out;
   }
@@ -280,7 +291,7 @@
     return { from: ctx.start, to: ctx.end, insert: cand.insert, caret: ctx.start + cand.insert.length };
   }
 
-  const api = { scan, unitDefs, solverBlock, context, candidates, accept };
+  const api = { scan, unitDefs, definition, solverBlock, context, candidates, accept };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Autocomplete = api;
 })(typeof window !== 'undefined' ? window : globalThis);

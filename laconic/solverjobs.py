@@ -15,6 +15,7 @@ import time
 import uuid
 
 from . import solver
+from .sheettext import scan
 
 STARTUP_SLACK = 30.0     # seconds a fresh worker may take to start before the job's own clock begins
 MAX_LOG_LINES = 5000
@@ -128,10 +129,10 @@ class Jobs:
     def start(self, text, line, mode, units):
         """Begin solving the block on `line`. Raises Busy if a job is already running and
         SolverError if the line is not a runnable block."""
-        lines = text.splitlines()
-        if not 1 <= line <= len(lines) or not solver.is_solver_line(lines[line - 1]):
+        block = scan(text).block(line)
+        if block is None or block.kind != "solver":
             raise solver.SolverError(f"Line {line} is not a !root, !minimize or !maximize line")
-        timeout = solver.parse_block(lines, line - 1).timeout
+        timeout = solver.parse_block(block).timeout
         with self._lock:
             if self.current is not None and self.current.state == "running":
                 raise Busy("Another solver is still running. Interrupt it or wait for it to finish")

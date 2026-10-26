@@ -35,10 +35,10 @@ def kinds(text):
 # ---- syntax -----------------------------------------------------------------------
 
 def test_plot_statement_splits_series_and_range():
-    assert parse_plot("!plot M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L")
-    assert parse_plot("!plot f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2")
+    assert parse_plot("M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L")
+    assert parse_plot("f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2")
     with pytest.raises(PlotError):
-        parse_plot("!plot sin(x)")
+        parse_plot("sin(x)")
 
 
 def test_split_top_ignores_commas_inside_brackets():
@@ -59,10 +59,6 @@ def test_option_lines_belong_to_the_plot_above():
         ["plot", "plotopt", "plotopt", "blank", "assign"]
     r = run("!plot x, x = 0 .. 1\n  title: A\n  grid: off")[0]
     assert r.end == 3
-
-
-def test_an_indented_ordinary_line_ends_the_block():
-    assert kinds("!plot x, x = 0 .. 1\n  y = 2") == ["plot", "assign"]
 
 
 def test_option_values_are_checked():

@@ -28,6 +28,18 @@
   // % appears only in the unit '%, so it belongs to the term like a unit's letters.
   const isTok = (c) => isIdent(c) || c === '.' || c === "'" || c === '~' || c === '%';
 
+  // The worksheet lexer, the same as laconic/sheettext.py (tests/sheettext_vectors.json holds
+  // them together): quoted text, units, numbers and names. Python's \w is Unicode, so the
+  // classes are spelled out here.
+  const W = '[\\p{L}\\p{N}_]', W0 = '[\\p{L}\\p{Nl}\\p{No}_]';
+  const TOKEN_RE = new RegExp('("[^"\\n]*")' + `|('(?:(?:${W0}|°)(?:${W}|°)*|%))`
+    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?)' + `|(~?${W0}${W}*[\`!@]*)`, 'gu');
+  const KINDS = ['text', 'unit', 'num', 'name'];
+  // The tokens of one line: [{kind, start, text}], left to right.
+  function tokens(line) {
+    return [...line.matchAll(TOKEN_RE)].map((m) => ({ kind: KINDS[m.slice(1).findIndex((g) => g !== undefined)], start: m.index, text: m[0] }));
+  }
+
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
   // Lines that hold text and not math: comments, and the title, label and note text under a plot.
@@ -648,7 +660,7 @@
   const api = {
     DEFAULT_GREEK, charAction, keyAction,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
-    snap, grow, wrapWithCall,
+    snap, grow, wrapWithCall, tokens, isTok,
     isTextLine: isComment,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
