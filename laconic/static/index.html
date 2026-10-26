@@ -1370,17 +1370,15 @@ $("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.s
 function nameAtCaret() {
   const t = src.value, p = src.selectionStart;
   const sel = t.slice(src.selectionStart, src.selectionEnd);
-  if (sel && /^(?:~?[^\W\d]\w*[`!@]*|'[A-Za-z]\w*)$/u.test(sel)) return sel;
+  const named = (tok) => tok.kind === "name" || tok.kind === "unit";
+  const whole = Editing.tokens(sel);
+  if (sel && whole.length === 1 && whole[0].text === sel && named(whole[0])) return sel;
   const ls = t.lastIndexOf("\n", p - 1) + 1;
   let le = t.indexOf("\n", p); if (le < 0) le = t.length;
   const line = t.slice(ls, le);
   if (line.trimStart().startsWith("#")) return "";
-  const re = /('(?:[^\W\d]|\u00b0)[\w\u00b0]*)|(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?|(~?[^\W\d]\w*[`!@]*)/gu;
-  for (const m of line.matchAll(re)) {
-    const name = m[1] || m[2];
-    if (name && p - ls >= m.index && p - ls <= m.index + m[0].length) return name;
-  }
-  return "";
+  const at = Editing.tokens(line).filter(named).find((tok) => p - ls >= tok.start && p - ls <= tok.start + tok.text.length);
+  return at ? at.text : "";
 }
 function openRename() {
   $("#renameOld").value = nameAtCaret();

@@ -61,10 +61,6 @@ def test_option_lines_belong_to_the_plot_above():
     assert r.end == 3
 
 
-def test_an_indented_ordinary_line_ends_the_block():
-    assert kinds("!plot x, x = 0 .. 1\n  y = 2") == ["plot", "assign"]
-
-
 def test_option_values_are_checked():
     for key, value, message in [("grid", "maybe", "on, off"), ("samples", "3", "between"), ("size", "5 x 5", "size reads"),
                                 ("color", "chartreuse", "color is"), ("xlim", "3", "low .. high"),

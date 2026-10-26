@@ -126,6 +126,21 @@ def test_f2_renames_the_name_at_the_caret(page):
     assert value(page) == "span = 4.5'm\nA = span * 2"
 
 
+@pytest.mark.parametrize("text,caret,name", [
+    ("σ_max = 3", 2, "σ_max"),          # the page reads names with the server's lexer, Greek included
+    ("p = 5'%", 7, "'%"),
+    ("F = 12'kN", 6, "'kN"),             # between the number and its unit, the unit is the name
+    ('t = "L"', 6, ""),                  # text is not a name
+])
+def test_f2_reads_the_name_at_the_caret_like_the_server(page, text, caret, name):
+    reset(page, text)
+    select(page, caret, caret)
+    page.keyboard.press("F2")
+    page.wait_for_selector("#renameDlg[open]")
+    assert page.input_value("#renameOld") == name
+    page.keyboard.press("Escape")
+
+
 def test_alt_z_toggles_wrapping(page):
     reset(page, "x = 1")
     assert not page.evaluate("document.querySelector('#src').classList.contains('wrapped')")
