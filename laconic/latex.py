@@ -400,13 +400,12 @@ def snippet(r, wrap="inline"):
         return f"% line {r.n}: {r.error}"
     if r.kind == "command":
         return f"% {r.source.strip()}"
-    if r.kind == "plot":
+    if r.plot:
         from .plotpgf import pgfplots   # imported late: plotpgf uses this module's escape()
-        return pgfplots(r.plot)
-    if r.kind == "solver":
-        info, vals = r.solver, r.solver["values"]
-        note = ""
-        if info["status"] != "valid" or info["tainted"]:
+        return pgfplots(r.plot.spec)
+    if r.solver:
+        vals, note = r.solver.values, ""
+        if not r.solver.current:
             note = f"% line {r.n}: solver result is out of date or not run; values shown may be starting values\n"
         if wrap == "align":
             return note + "\\begin{align*}\n" + " \\\\\n".join(f"{v['lhs']} &= {v['rhs']}" for v in vals) + "\n\\end{align*}"
@@ -433,7 +432,7 @@ def document(results, title=None, declarations=()):
            r"\usepackage{siunitx}  % siunitx v3 or newer (\qty, \unit)",
            r"\sisetup{per-mode=symbol, inter-unit-product=\ensuremath{{\cdot}}}",
            r"\setlength{\parindent}{0pt}"]
-    if any(r.kind == "plot" for r in results):
+    if any(r.plot for r in results):
         out += [r"\usepackage{pgfplots}", r"\pgfplotsset{compat=newest}"]
     out += list(declarations)
     out.append(r"\begin{document}")

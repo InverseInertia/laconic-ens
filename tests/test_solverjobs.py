@@ -71,7 +71,7 @@ def test_a_failure_is_a_finished_job_with_the_reason(pool):
 def test_the_hash_a_job_computes_is_the_one_the_sheet_shows(pool):
     job = wait(pool, pool.start(ROOT, 2, "run", []))
     shown = next(r for r in evaluate(ROOT).results if r.kind == "solver")
-    assert job.outcome["hash"] == shown.solver["hash"]
+    assert job.outcome["hash"] == shown.solver.hash
 
 
 def test_only_one_job_runs_at_a_time(sleepy):
@@ -142,7 +142,7 @@ def test_run_then_store_writes_the_result_into_the_sheet(api):
     assert view["state"] == "done"
     stored = api.solve_store(SolveStoreBody(text=ROOT, record=view["outcome"]["record"]))
     assert stored["ok"] and stored["lines"] == [2]
-    assert next(r for r in evaluate(edited(ROOT, stored)).results if r.kind == "solver").solver["status"] == "valid"
+    assert next(r for r in evaluate(edited(ROOT, stored)).results if r.kind == "solver").solver.status == "valid"
 
 
 def test_a_result_for_inputs_that_changed_meanwhile_is_not_stored(api):

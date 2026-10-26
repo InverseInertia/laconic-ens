@@ -301,7 +301,7 @@ def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
 def test_globals_are_marked_and_get_their_tilde(page):
     reset(page, "~g = 5")
     page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
-    page.wait_for_function("last.length === 1 && Symbols.globals(Symbols.table(last)).has('g')")
+    page.wait_for_selector("#out .row[data-line='1'] [data-global='g']")   # the evaluation is on screen
     page.keyboard.type("\ng = 12")
     assert value(page) == "~g = 5\n~g = 12"      # the ~ is added when the name ends
     assert page.get_attribute("#out [data-global]", "title") == "Global variable ~g, defined on line 1"
@@ -315,3 +315,32 @@ def test_globals_are_marked_and_get_their_tilde(page):
     assert page.evaluate("getComputedStyle(document.querySelector('#out [data-global]')).borderBottomStyle") == "none"
     page.click("#globalsChip")
     assert page.is_checked("#markGlobals") and page.is_hidden("#globalsChip")
+
+
+def test_each_kind_of_line_shows_its_row(page):
+    """What the results pane shows for each kind of line (static/rows.js, drawn by index.html)."""
+    text = "## Loads\n!sigfigs 3\nx = 2'm\nnope +\n!plot x, x = 0 .. 1\n  grid: off\n  bad: 1\ny = 1\n!root y\n  equation: y^2 = 2"
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector(".row.solver .solver-tools")
+    rows = page.eval_on_selector_all("#out .row", "rs => rs.map((r) => [+r.dataset.line, r.className.replace(' active', '')])")
+    assert rows == [[1, "row heading"], [2, "row command"], [3, "row assign"], [4, "row error"], [5, "row plot"],
+                    [7, "row error"], [8, "row assign"], [9, "row solver stale"]]
+    assert page.inner_text(".row[data-line='1'] .body") == "Loads"
+    assert page.text_content(".row[data-line='2'] .body") == "!sigfigs 3  →  Results show 3 significant figures"
+    assert page.inner_text(".row[data-line='4'] .body .src") == "nope +"
+    assert page.locator(".row[data-line='3'] .katex").count() == 1
+    assert page.locator(".row[data-line='9'] .stale-mark").count() == 1
+    at = text.index("  grid")
+    select(page, at, at)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('click'))")
+    assert page.get_attribute(".row.active", "data-line") == "5"     # an option line: its plot's row
+    select(page, len(text), len(text))
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('click'))")
+    assert page.get_attribute(".row.active", "data-line") == "9"
+    page.click("#viewLatex")
+    page.wait_for_selector(".row.snip pre")
+    assert page.locator(".row.snip .copy").count() == 6 and page.locator(".row.error .copy").count() == 0
+    assert page.locator(".row.snip .solver-tools").count() == 1
+    assert page.inner_text(".row[data-line='3'] pre").startswith("x =")
+    page.click("#viewTypeset")

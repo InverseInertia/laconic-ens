@@ -37,6 +37,29 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Global**
 : A name defined with a leading `~`. It survives `!clear`, and the editor marks each use of it.
 
+## Line results (`lineresult.py`)
+
+**Line result** (`LineResult`)
+: What running one line gives: everything that shows a line or acts on it reads it. Every result, whatever its kind, answers one small interface: the lines it **owns**, its **display parts**, its **block handle** and its part of the symbol table. What only one kind has is its **payload**.
+
+**Owned lines**
+: A result owns its own line; a block header's result owns the whole block, header to last line (`n` .. `end`). A block's option lines still get results of their own, but the page shows them inside the header's row unless one is wrong.
+
+**Display parts**
+: What a row can show, the same fields on every result and empty when the line has none: `text` (plain), `latex` (typeset), `error`, `warning` and `stale`.
+
+**Block handle**
+: On a block header's result, the sheettext **Block** it starts, whether the block drew or failed. `sheet.block_at(text, line)` finds a block by its header, and `sheet.solver_blocks(text)` finds every solver block. Both read the text to find the blocks and run the sheet only as far as they need (`evaluate(..., until=)`).
+
+**Payload**
+: The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) or `r.solver` (`SolverPayload`: status, hash, values, stored record). On every other line both are None, a failed block header included.
+
+**Row**
+: A line result as `/api/eval` sends it (`to_json()`): the common fields, plus `plot` or `solver` for those kinds and `snippet` in the LaTeX view. `tests/test_lineresult.py` pins its shape.
+
+**Row model**
+: What the results pane shows for one row: its lines, class names, a typed body (text, math, error, plot, solver or snippet), the warning, the stale mark and the Copy text. `static/rows.js` builds it from a row with one table from line kind to body; option lines map to no row of their own.
+
 ## Name scope (`symbols.py`)
 
 **Symbol table**

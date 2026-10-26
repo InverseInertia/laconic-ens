@@ -229,7 +229,7 @@ const Solvers = (() => {
 
   // ---- after each evaluation: stop orphaned runs, start auto-run blocks --------------------------
   function after(newRows) {
-    rows = newRows.filter((r) => r.kind === "solver");
+    rows = newRows.filter((r) => r.solver);
     if (active && !rows.some((r) => r.solver.hash === active.hash)) interrupt("The inputs changed while this was running, so the run was discarded.");
     repaint();
     schedule();
