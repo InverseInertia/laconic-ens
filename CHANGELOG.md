@@ -9,6 +9,9 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 
 ## Unreleased
 
+### Fixes
+- Dragging or zooming a plot makes its line the focused line, so the results no longer jump back to the line the caret was on. (#83)
+
 ## v0.3.5
 
 ### Changes
