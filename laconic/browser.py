@@ -5,6 +5,7 @@ rest all take `--app`, `--class`, `--user-data-dir` and `--print-to-pdf`). The u
 browser comes first when it is one of them, so a Brave user gets Brave rather than a Chrome that
 happens to be installed too (#72). LENS_CHROMIUM names one by hand and beats both."""
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -144,13 +145,50 @@ def find():
     return next(candidates(), None)
 
 
-def profile_dir(exe):
-    """Where the app window's own browser profile goes. A snap or flatpak browser is confined
-    and cannot write to ~/.cache, so its profile goes in the folder its sandbox gives it."""
+def app_candidates():
+    """candidates() for the app window: on Linux, browsers installed natively come before
+    flatpak and snap ones. The desktop ties a window from a sandboxed browser to that browser
+    (Cinnamon and GNOME look up a window's sandbox before its WM_CLASS), so only a native
+    browser's window can show as LENS, with the LENS icon (#93). A sandboxed one is still
+    used when it is all there is."""
+    found = list(candidates())
+    if not sys.platform.startswith("linux"):
+        return iter(found)
+    return iter([p for p in found if not sandbox(p)] + [p for p in found if sandbox(p)])
+
+
+_SNAP_EXEC = re.compile(rb"/snap/bin/([A-Za-z0-9][A-Za-z0-9.+_-]*)")
+
+
+def sandbox(exe):
+    """("flatpak", app id) or ("snap", snap name) when `exe` runs a sandboxed browser, else
+    None. Besides /snap/bin, a snap is reached through /usr/bin/snap itself, or through a
+    small script that runs it: Ubuntu's /usr/bin/chromium-browser is one."""
     exe = Path(exe)
-    if exe.parent == Path("/snap/bin"):
-        return Path.home() / "snap" / exe.name.split(".")[0] / "common" / "laconic-lens"
     if exe.parent.name == "bin" and exe.parent.parent.name == "exports" and exe.name in FLATPAKS:
-        return Path.home() / ".var" / "app" / exe.name / "cache" / "laconic-lens"
+        return ("flatpak", exe.name)
+    if exe.parent == Path("/snap/bin") or os.path.realpath(exe).endswith("/snap"):
+        return ("snap", exe.name.split(".")[0])
+    try:
+        with open(exe, "rb") as f:
+            head = f.read(4096)
+    except OSError:
+        return None
+    if head.startswith(b"#!") and (m := _SNAP_EXEC.search(head)):
+        return ("snap", m.group(1).decode().split(".")[0])
+    return None
+
+
+def profile_dir(exe):
+    """Where the app window's own browser profile goes: one per browser, so a window is never
+    handed to another browser's process (or to one LENS started with other flags), which
+    would open it under that process's identity. A snap or flatpak browser is confined and
+    cannot write to ~/.cache, so its profile goes in the folder its sandbox gives it."""
+    kind = sandbox(exe)
+    if kind and kind[0] == "snap":
+        return Path.home() / "snap" / kind[1] / "common" / "laconic-lens"
+    if kind:
+        return Path.home() / ".var" / "app" / kind[1] / "cache" / "laconic-lens"
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", Path(os.path.realpath(exe)).name) or "browser"
     cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-    return cache / "laconic-lens" / "browser"
+    return cache / "laconic-lens" / f"browser-{name}"
