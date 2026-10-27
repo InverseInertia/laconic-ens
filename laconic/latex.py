@@ -12,7 +12,7 @@ from . import catalogue
 from .commands import SheetMode
 from .evaluator import _TINY, CONSTANTS, EvalError
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Polar,
-                    Str, UnitLit)
+                    Str, UnitLit, is_literal)
 
 # Precedence levels. A child is wrapped in parentheses when its level is lower
 # than the level the parent requires.
@@ -422,6 +422,17 @@ class Printer:
         parts += [self.unit_tex(f) for f in n.factors]
         return "\\,".join(parts), MUL
 
+    def literal(self, n):
+        """A typed-in quantity such as `0.72'kg/'L`, shown as its line's result shows it:
+        the number, then the whole unit, not a fraction with the number on top."""
+        q = self.ev.eval(n)
+        mag, u = q.magnitude, self.fmt.unit(q.units)
+        if np.ndim(mag) or np.iscomplexobj(mag) or not u:
+            return None
+        if self.fmt.siunitx:
+            return f"\\qty{{{self.fmt._si_number(mag, 12)}}}{{{u}}}", (ADD if mag < 0 else MUL)
+        return f"{self.fmt.number(mag, sig=12)}\\,{u}", (ADD if mag < 0 else MUL)
+
     def binop(self, n):
         op = n.op
         if op in ("+", "-"):
@@ -429,6 +440,8 @@ class Printer:
         if op in ("*", ".*", "./"):
             sym = {"*": r"\cdot", ".*": r"\odot", "./": r"\oslash"}[op]
             return f"{self.child(n.left, MUL)} {sym} {self.child(n.right, MUL)}", MUL
+        if op == "/" and is_literal(n) and (lit := self.literal(n)):
+            return lit
         if op == "/":
             return f"\\frac{{{self.tex(n.left)}}}{{{self.tex(n.right)}}}", POW
         if op == "^":
