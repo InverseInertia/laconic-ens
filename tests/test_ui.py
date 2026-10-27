@@ -123,9 +123,22 @@ def test_f2_renames_the_name_at_the_caret(page):
     page.fill("#renameNew", "span")
     page.keyboard.press("Enter")
     page.wait_for_selector("#renameDlg", state="hidden")
+    page.wait_for_function("document.querySelector('#src').value.startsWith('span')")
     assert value(page) == "span = 4.5'm\nA = span * 2"
     page.keyboard.press("Control+z")                     # one step takes the whole rename back
     assert value(page) == "L = 4.5'm\nA = L * 2"
+    page.keyboard.press("Control+y")                     # and one makes it again
+    assert value(page) == "span = 4.5'm\nA = span * 2"
+
+
+def test_an_edit_the_user_asked_for_joins_the_undo_stack_wherever_the_focus_is(page):
+    # Right after a dialog closes, some browsers leave the focus in its field (#75).
+    reset(page, "L = 1\nA = L")
+    page.focus("#name")
+    assert page.evaluate("applyEdits('L = 1\\nA = L', [{from: 0, to: 1, insert: 'w'}, {from: 10, to: 11, insert: 'w'}], true)")
+    assert value(page) == "w = 1\nA = w"
+    page.keyboard.press("Control+z")
+    assert value(page) == "L = 1\nA = L"
 
 
 def test_server_edits_for_a_text_that_has_changed_are_not_made(page):
