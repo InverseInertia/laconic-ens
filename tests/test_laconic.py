@@ -391,14 +391,91 @@ def test_app_window_gets_the_launchers_wm_class_on_linux(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    for var in ("WAYLAND_DISPLAY", "XDG_SESSION_TYPE"):
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(cli.browser, "candidates", lambda: iter(["/usr/bin/google-chrome"]))
     monkeypatch.setattr(cli, "_spawn", lambda cmd: calls.append(cmd) or True)
     cli._launch("http://127.0.0.1:1", app=True)
     cmd = calls[0]
     assert "--class=lens" in cmd and cmd[-1] == "--app=http://127.0.0.1:1"
-    assert f"--user-data-dir={tmp_path / 'laconic-lens' / 'browser'}" in cmd
+    assert f"--user-data-dir={tmp_path / 'laconic-lens' / 'browser-google-chrome'}" in cmd
+    assert not any(a.startswith("--ozone-platform") for a in cmd)
     monkeypatch.setattr(sys, "platform", "win32")
     assert cli._app_args("http://x", "chrome.exe") == ["--app=http://x"]
+
+
+def test_app_window_on_wayland_goes_through_xwayland(monkeypatch, tmp_path):
+    """#93: on Wayland Chromium names an app window "chrome-127.0.0.1__-Default" whatever
+    --class says, so no launcher matches it. With XWayland there, the window opens through it
+    and keeps --class=lens; with no X server, or from a sandboxed browser, it does not."""
+    import sys
+    from laconic import __main__ as cli
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(cli.browser.Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    monkeypatch.setenv("DISPLAY", ":0")
+    args = cli._app_args("http://x", "/usr/bin/google-chrome")
+    assert "--ozone-platform=x11" in args and "--class=lens" in args and args[-1] == "--app=http://x"
+    monkeypatch.delenv("WAYLAND_DISPLAY")
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    assert "--ozone-platform=x11" in cli._app_args("http://x", "/usr/bin/google-chrome")
+    assert "--ozone-platform=x11" not in cli._app_args("http://x", "/snap/bin/chromium")
+    flat = tmp_path / ".local/share/flatpak/exports/bin/com.brave.Browser"
+    assert "--ozone-platform=x11" not in cli._app_args("http://x", str(flat))
+    monkeypatch.delenv("DISPLAY")   # Wayland with no XWayland
+    assert "--ozone-platform=x11" not in cli._app_args("http://x", "/usr/bin/google-chrome")
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("XDG_SESSION_TYPE", "x11")   # plain X11: --class works as it is
+    assert "--ozone-platform=x11" not in cli._app_args("http://x", "/usr/bin/google-chrome")
+
+
+def test_app_window_prefers_a_native_browser_to_a_sandboxed_one(monkeypatch, tmp_path):
+    """#93: Cinnamon and GNOME tie a flatpak or snap browser's windows to that browser, before
+    looking at WM_CLASS, so a native browser comes first for the app window, even when the
+    sandboxed one is the default. A sandboxed browser is still used when it is the only one."""
+    import sys
+    from laconic import __main__ as cli
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(cli.browser.Path, "home", lambda: tmp_path)
+    flat = str(tmp_path / ".local/share/flatpak/exports/bin/com.brave.Browser")
+    wrapper = tmp_path / "usr/bin/chromium-browser"   # Ubuntu's: a script that runs the snap
+    wrapper.parent.mkdir(parents=True)
+    wrapper.write_text('#!/bin/sh\nexec /snap/bin/chromium "$@"\n')
+    native = tmp_path / "usr/bin/vivaldi"
+    native.write_text("")
+    found = [flat, "/snap/bin/chromium", str(wrapper), str(native)]
+    monkeypatch.setattr(cli.browser, "candidates", lambda: iter(found))
+    assert list(cli.browser.app_candidates()) == [str(native), flat, "/snap/bin/chromium", str(wrapper)]
+    assert cli.browser.find() == flat   # the PDF export still takes the first one found
+    calls = []
+    monkeypatch.setattr(cli, "_spawn", lambda cmd: calls.append(cmd[0]) or True)
+    cli._launch("http://127.0.0.1:1", app=True)
+    assert calls == [str(native)]
+    monkeypatch.setattr(cli.browser, "candidates", lambda: iter([flat]))
+    cli._launch("http://127.0.0.1:1", app=True)
+    assert calls[-1] == flat
+
+
+def test_each_browser_gets_a_profile_of_its_own(monkeypatch, tmp_path):
+    """#93: a window opened with a profile another browser (or an older LENS) is running hands
+    the page to that process, and takes its identity rather than --class. Each browser has its
+    own profile; a snap reached through a wrapper script keeps its profile inside the snap."""
+    from laconic import browser
+    monkeypatch.setattr(browser.Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    real = tmp_path / "opt/google/chrome/google-chrome"
+    real.parent.mkdir(parents=True)
+    real.write_text("")
+    link = tmp_path / "bin/google-chrome-stable"
+    link.parent.mkdir()
+    link.symlink_to(real)
+    assert browser.profile_dir(link) == tmp_path / "cache/laconic-lens/browser-google-chrome"
+    assert browser.profile_dir("/usr/bin/brave-browser") == tmp_path / "cache/laconic-lens/browser-brave-browser"
+    wrapper = tmp_path / "bin/chromium-browser"
+    wrapper.write_text('#!/bin/sh\n# Ubuntu\nexec /snap/bin/chromium.chromium "$@"\n')
+    assert browser.sandbox(wrapper) == ("snap", "chromium")
+    assert browser.profile_dir(wrapper) == tmp_path / "snap/chromium/common/laconic-lens"
+    assert browser.sandbox(real) is None and browser.sandbox(tmp_path / "missing") is None
 
 
 def _no_browsers(monkeypatch, tmp_path, platform, default=None):

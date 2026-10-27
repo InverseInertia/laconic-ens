@@ -45,19 +45,34 @@ def _app_args(url, exe):
     ("127.0.0.1", "Google-chrome") or the like, which no LENS launcher names, so the panel showed the
     browser's icon or none (#66). --class sets it, but only in a browser process of its own:
     a window opened through an already running browser takes that browser's class. Hence a
-    profile of LENS's own, kept in the cache folder (or the sandbox's, see browser.profile_dir)."""
+    profile of LENS's own for each browser (see browser.profile_dir).
+
+    On Wayland, Chromium ignores --class for an app window and names it after the page and the
+    profile ("chrome-127.0.0.1__-Default"), which no launcher matches either (#93). Where the
+    session also runs XWayland, the window is opened through it, so --class applies there too.
+    Not for a flatpak or snap browser: the desktop knows its windows by the sandbox anyway,
+    and its sandbox may not let it reach XWayland."""
     args = [f"--app={url}"]
     if sys.platform.startswith("linux"):
-        args = [f"--class={WM_CLASS}", f"--user-data-dir={browser.profile_dir(exe)}",
-                "--no-first-run", "--no-default-browser-check"] + args
+        flags = [f"--class={WM_CLASS}", f"--user-data-dir={browser.profile_dir(exe)}",
+                 "--no-first-run", "--no-default-browser-check"]
+        if _wayland_with_x() and not browser.sandbox(exe):
+            flags.append("--ozone-platform=x11")
+        args = flags + args
     return args
+
+
+def _wayland_with_x():
+    """A Wayland session that also has an X server (XWayland) to open windows on."""
+    wayland = os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE") == "wayland"
+    return bool(wayland and os.environ.get("DISPLAY"))
 
 
 def _launch(url, app):
     """--app opens a Chromium-family window with no tabs or address bar, which
     gives the page more of the keyboard (Ctrl+T is a new tab in a normal tab)."""
     if app:
-        for exe in browser.candidates():   # the next one when a browser will not start
+        for exe in browser.app_candidates():   # the next one when a browser will not start
             if _spawn([exe] + _app_args(url, exe)):
                 return
         print("No Chromium-based browser found, opening the default browser instead")

@@ -13,8 +13,13 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Windows installer**: `lens-<version>-windows-x64-install-wizard.exe` is a setup wizard. It installs LENS for your user (no administrator) with a Start menu entry, an optional desktop shortcut, the example worksheets, and `.lens` files opening in LENS with their own icon. Running a newer one updates LENS, and Settings → Apps removes it. It replaces the single `lens-<version>-windows-x64.exe`, which had to unpack itself every time it started. (#97)
 
 ### Changes
+- **The hour prints as `hr`** (`2 hr`, `60 km/hr`) in results, the PDF and the LaTeX export, so it is no longer confused with Planck's constant, which is shown as *h*. Typing `'h` or `'hr` still gives the hour, and `kWh`, `Wh` and `mph` keep their symbols. The LaTeX export also compiles with `'h_P` in it. (#89)
 - **The Linux program is now a folder** (released as `lens-<version>-linux-x64.tar.gz`), so it no longer unpacks itself to a temporary folder each time it starts, which took over a second. `lens-install-linux-v2.sh` installs it as before; download the installer again (version 2.0.0), since earlier copies look for the old single file. (#97)
 - **LENS opens faster**: the window opens while LENS is still loading instead of about two seconds later, and the first result no longer waits for the unit tables to be built. A second launch, or double-clicking a `.lens` file while LENS is running, hands over to the running LENS sooner. (#97)
+
+### Fixes
+- On Linux, the LENS window shows as LENS, with the LENS icon, in the dock, panel and Alt+Tab list again, instead of as your browser. LENS now opens its window with a browser installed from your distribution's packages before a flatpak or snap one (whose windows the desktop always shows as that browser), opens it through XWayland on Wayland, and keeps a separate profile for each browser. (#93)
+- Long calculations in the results pane no longer get a scrollbar: like the PDF export, one a little too wide is shrunk to fit and one much too wide is wrapped one stage per row, and they are fitted again when you resize the pane or the window. (#94)
 
 ## [v0.3.6](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.6) (2026-10-27)
 

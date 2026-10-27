@@ -52,40 +52,16 @@ p { margin: 1.5mm 0; }
 .plot svg { max-width: 100%%; height: auto; }
 """
 
-# Render every formula, then fit any that is wider than the column. A little too wide is shrunk;
-# much too wide is set again as one wrapped row per stage (KaTeX breaks inline math after + and =),
-# and shrunk only if a piece still does not fit. zoom (unlike transform) changes the layout box,
-# so the page breaks are worked out from the fitted size.
+# Render every formula, then fit any that is wider than the column, by the same rule as the
+# results pane (static/mathfit.js): a little too wide is shrunk; much too wide is set again as one
+# wrapped row per stage, and shrunk only if a piece still does not fit. zoom (unlike transform)
+# changes the layout box, so the page breaks are worked out from the fitted size. Once the fonts
+# are in, every formula is measured and fitted again.
 _SCRIPT = """
-const MIN_ZOOM = 0.7;
-function shrink(k, room) {
-  k.style.zoom = "";
-  if (k.scrollWidth > room) k.style.zoom = String(room / k.scrollWidth);
-}
-function fit() {
-  for (const el of document.querySelectorAll(".math")) {
-    const room = el.clientWidth;
-    if (!el.classList.contains("wrapped")) {
-      const k = el.firstElementChild;
-      if (!k) continue;
-      k.style.zoom = "";
-      if (k.scrollWidth <= room) continue;
-      if (room / k.scrollWidth >= MIN_ZOOM) { shrink(k, room); continue; }
-      el.classList.add("wrapped");
-      el.textContent = "";
-      for (const row of JSON.parse(el.dataset.rows)) {
-        const d = el.appendChild(document.createElement("div"));
-        d.className = "wrow";
-        katex.render("\\\\displaystyle " + row, d, {throwOnError: false, output: "html"});
-      }
-    }
-    for (const d of el.children) shrink(d, room);
-  }
-}
 for (const el of document.querySelectorAll(".math"))
-  katex.render(el.dataset.tex, el, {displayMode: true, throwOnError: false, output: "html"});
-fit();
-document.fonts.ready.then(fit);
+  MathFit.set(el, el.dataset.tex, JSON.parse(el.dataset.rows), {katex: {throwOnError: false, output: "html"}});
+MathFit.fitAll(document);
+document.fonts.ready.then(() => MathFit.fitAll(document, true));
 """
 
 
@@ -96,10 +72,12 @@ def _esc(s):
     return html.escape(s, quote=True)
 
 
-def _math(n, rows, note=""):
+def _math(n, rows, note="", flat=None):
+    """A calculation: `rows` aligned at their `&`, or, in a column too narrow for them, `flat`
+    wrapped one per row (by default the same rows without the alignment mark)."""
     rows = [plain_math(r) for r in rows]
     tex = rows[0].replace("&", "", 1) if len(rows) == 1 else "\\begin{aligned}" + " \\\\ ".join(rows) + "\\end{aligned}"
-    flat = json.dumps([r.replace("&", "", 1) for r in rows])   # the rows for a wrapped layout
+    flat = json.dumps([plain_math(r) for r in flat] if flat is not None else [r.replace("&", "", 1) for r in rows])
     out = (f'<div class="block"><div class="calc"><span class="ln">{n}</span>'
            f'<div class="math" data-tex="{_esc(tex)}" data-rows="{_esc(flat)}"></div></div>')
     return out + (f'<div class="note">{_esc(note)}</div>' if note else "") + "</div>"
@@ -129,7 +107,7 @@ def block(r):
     if r.kind in ("assign", "expr", "funcdef", "unitdef"):
         rows = [f"{r.lhs} &= {r.stages[0]}" if r.lhs else f"&{r.stages[0]}"]
         note = r.warning or ("Reads an out-of-date solver result." if r.stale else "")
-        return _math(r.n, rows + [f"&= {s}" for s in r.stages[1:]], note)
+        return _math(r.n, rows + [f"&= {s}" for s in r.stages[1:]], note, flat=r.latex_rows)
     return None
 
 
@@ -154,6 +132,7 @@ def page(results, title=None, assets=None, autoprint=False):
 <link rel="stylesheet" href="{assets}/fonts/fonts.css">
 <link rel="stylesheet" href="{assets}/vendor/katex/katex.min.css">
 <script src="{assets}/vendor/katex/katex.min.js"></script>
+<script src="{assets}/mathfit.js"></script>
 <style>{_STYLE % {"title": footer}}</style></head>
 <body>
 {chr(10).join(body)}
