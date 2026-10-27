@@ -13,6 +13,8 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 - **Tab indents** the line, or every highlighted line, by two spaces, and **Shift+Tab** unindents, instead of moving the focus out of the editor. Press Esc first to leave the editor with Tab. (#88)
 ### Fixes
 - Dragging or zooming a plot makes its line the focused line, so the results no longer jump back to the line the caret was on. (#83)
+### Changes
+- **The Linux installer installs the latest release**: `lens-install-linux.sh` (one name in every release) looks up the newest LENS release when it runs and downloads it, so running it again updates LENS. `--release 0.3.5` installs a given release, and without a connection it installs the newest release whose files are beside it. The installer now has a version of its own, shown by `--version`. (#84)
 
 ## v0.3.5
 

@@ -35,7 +35,8 @@ def body(section):
 
 
 def previous_tag(tag):
-    r = subprocess.run(["git", "describe", "--tags", "--abbrev=0", f"{tag}^"],
+    # LENS's own tags only, not the installer's (installer-v1.0.0)
+    r = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", f"{tag}^"],
                        capture_output=True, text=True)
     return r.stdout.strip() if r.returncode == 0 else None
 
