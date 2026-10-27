@@ -1,8 +1,10 @@
-"""packaging/install-linux.sh, run against a stand-in binary in a throwaway home folder."""
+"""packaging/install-linux.sh, run against a stand-in program in a throwaway home folder."""
+import io
 import os
 import re
 import shutil
 import subprocess
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -48,11 +50,22 @@ def program(version):
     return f'#!/bin/sh\n# LENS {version}\n[ "$1" = --export-examples ] && mkdir -p "$2"\n'
 
 
+def archive(path, version):
+    """A program archive as the build makes it: the folder lens/, with lens/lens beside lens/_internal."""
+    with tarfile.open(path, "w:gz") as tar:
+        for name, text, mode in (("lens/lens", program(version), 0o755),
+                                 (f"lens/_internal/lib-{version}.so", version, 0o644)):
+            data = text.encode()
+            info = tarfile.TarInfo(name)
+            info.size, info.mode = len(data), mode
+            tar.addfile(info, io.BytesIO(data))
+
+
 def release(github, version):
     """Put a release's files on the stand-in GitHub."""
     d = github / f"v{version}"
     d.mkdir(parents=True)
-    (d / f"lens-{version}-linux-x64").write_text(program(version))
+    archive(d / f"lens-{version}-linux-x64.tar.gz", version)
     (d / f"lens-{version}-icon.png").write_bytes(PNG)
     (d / f"lens-{version}-file-icon.png").write_bytes(PNG)
 
@@ -77,6 +90,7 @@ def github(tmp_path):
 
 def installed(home):
     app = home / ".local" / "share" / "laconic-lens"
+    assert os.access(app / "lens", os.X_OK)
     return (app / "lens").read_text(), (app / "version").read_text().strip()
 
 
@@ -85,7 +99,7 @@ def downloads(tmp_path):
     dl = tmp_path / "dl"
     dl.mkdir()
     shutil.copy(ROOT / "packaging" / "install-linux.sh", dl)
-    (dl / "lens-linux-x64").write_text('#!/bin/sh\n[ "$1" = --export-examples ] && mkdir -p "$2"\n')
+    archive(dl / "lens-linux-x64.tar.gz", "own")
     (dl / "lens-icon.png").write_bytes(PNG)
     (dl / "lens-file-icon.png").write_bytes(PNG)
     return dl
@@ -123,6 +137,20 @@ def test_installs_the_latest_release_and_updates_to_a_newer_one(tmp_path, github
     r, home = run(tmp_path)
     assert "Updating LENS 0.3.5 -> 0.4.0" in r.stdout
     assert installed(home) == (program("0.4.0"), "0.4.0")
+    # the libraries of the release it replaced are gone, not left beside the new ones
+    assert [p.name for p in (home / ".local/share/laconic-lens/_internal").iterdir()] == ["lib-0.4.0.so"]
+
+
+def test_a_download_that_is_not_a_program_archive_changes_nothing(tmp_path, github):
+    release(github, "0.3.5")
+    latest(github, "0.3.5")
+    _, home = run(tmp_path)
+    release(github, "0.4.0")
+    (github / "v0.4.0" / "lens-0.4.0-linux-x64.tar.gz").write_text("<html>captive portal</html>")
+    latest(github, "0.4.0")
+    r, home = run(tmp_path, check=False)
+    assert r.returncode == 1 and "is not a LENS program archive" in r.stderr
+    assert installed(home) == (program("0.3.5"), "0.3.5")
 
 
 def test_uses_files_of_the_latest_release_already_beside_it(tmp_path, github):

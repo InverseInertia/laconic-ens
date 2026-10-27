@@ -1,6 +1,7 @@
 """Draws packaging/file-icon.png and file-icon.ico, the icon of a .lens file: a page with a
 folded corner carrying the app icon (packaging/icon.png), and copies the app icon to
-laconic/static/icon-192.png and icon-512.png for the app window. Run it after changing icon.png."""
+laconic/static/icon-192.png and icon-512.png for the app window and to packaging/icon.ico for the
+Windows installer. Run it after changing icon.png."""
 import os
 from PIL import Image, ImageDraw
 
@@ -18,6 +19,8 @@ d.line([(R - F, T), (R, T + F)], fill=ink, width=w)
 app = Image.open(f"{root}/packaging/icon.png").convert("RGBA")
 for px in (192, 512):
     app.resize((px, px), Image.LANCZOS).save(f"{root}/laconic/static/icon-{px}.png", optimize=True)
+ICO_SIZES = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
+app.save(f"{root}/packaging/icon.ico", sizes=ICO_SIZES)
 logo = app
 size = int(250 * u)
 logo = logo.resize((size, size), Image.LANCZOS)
@@ -31,4 +34,4 @@ for i in range(3):
                         radius=8 * u, fill=(58, 140, 255, 255))
 out = img.resize((512, 512), Image.LANCZOS)
 out.save(f"{root}/packaging/file-icon.png", optimize=True)
-out.save(f"{root}/packaging/file-icon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+out.save(f"{root}/packaging/file-icon.ico", sizes=ICO_SIZES)

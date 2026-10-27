@@ -93,7 +93,7 @@ def _tell(msg):
 def main(undo=False):
     """The --register-files / --unregister-files commands. Returns the process exit code."""
     if sys.platform != "win32" or not getattr(sys, "frozen", False):
-        print("--register-files is for the Windows build of LENS. On Linux, lens-install-linux.sh "
+        print("--register-files is for the Windows build of LENS. On Linux, lens-install-linux-v2.sh "
               "sets up .lens files.", file=sys.stderr)
         return 2
     if undo:

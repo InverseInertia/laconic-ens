@@ -7,6 +7,7 @@ import math
 import re
 import shutil
 import tempfile
+import threading
 from functools import lru_cache
 
 import numpy as np
@@ -36,8 +37,18 @@ class EvalError(Exception):
     pass
 
 
-@lru_cache(maxsize=1)
+# The server builds the registries in the background as it starts (`warm`); a request that
+# arrives meanwhile waits for that build rather than starting a second one.
+_building = threading.RLock()
+
+
 def registry():
+    with _building:
+        return _registry()
+
+
+@lru_cache(maxsize=1)
+def _registry():
     # Building a registry takes a noticeable fraction of a second, so share one.
     # Pint's pound is `lb`, which reads as a force as easily as a mass. Name it `lbm`
     # (matching `lbf`) and drop `lb`. Pint's year symbol is `a` (annum), which nobody reads
@@ -134,10 +145,11 @@ class Evaluator:
         A sheet that defines units of its own needs `fork=True`: Pint cannot
         undefine a unit, so each run gets a private copy of the registry."""
         units = tuple((str(n), str(d)) for n, d in global_units)
-        if units:
-            base, ok, _ = _registry_with(units)
-        else:
-            base, ok = registry(), ()
+        with _building:
+            if units:
+                base, ok, _ = _registry_with(units)
+            else:
+                base, ok = registry(), ()
         self._owned = fork
         self.ureg = copy.deepcopy(base) if fork else base
         self.globals = {n: d for n, d in units if n in ok}   # instance-wide units
