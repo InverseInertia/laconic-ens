@@ -1,6 +1,6 @@
 """Per-user settings kept on the machine running the server, so they follow the
 user across browsers and are shared with the command line: the Greek table
-behind Ctrl+G, the global unit definitions, whether the welcome dialog has been shown and the
+behind Ctrl+G, the global unit definitions, the tags the user gave units in the units dialog, whether the welcome dialog has been shown and the
 page's display preferences (PREFS). Kept here rather than in the browser, whose storage belongs
 to one origin and so to one port, so the page looks the same whatever port LENS runs on.
 
@@ -15,7 +15,7 @@ from pathlib import Path
 _lock = threading.Lock()
 
 # The page's display preferences: what each holds is the page's business (theme.js checks a theme).
-PREFS = ("theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest")
+PREFS = ("theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest", "layout", "autoLayout", "layoutAsk")
 
 
 def config_dir():
@@ -33,7 +33,8 @@ def _path():
 
 
 def load():
-    """{"welcomed": bool, "greek": dict or None, "units": [{"name", "definition"}], "prefs": dict}.
+    """{"welcomed": bool, "greek": dict or None, "units": [{"name", "definition"}],
+    "tags": {tag: [unit, ...]}, "prefs": dict}.
     A missing or unreadable file gives the defaults rather than an error."""
     try:
         data = json.loads(_path().read_text(encoding="utf-8"))
@@ -42,11 +43,14 @@ def load():
     greek = data.get("greek")
     units = data.get("units")
     prefs = data.get("prefs")
+    tags = data.get("tags")
     return {
         "welcomed": data.get("welcomed") is True,
         "greek": greek if isinstance(greek, dict) else None,
         "units": [u for u in units if isinstance(u, dict) and isinstance(u.get("name"), str)
                   and isinstance(u.get("definition"), str)] if isinstance(units, list) else [],
+        "tags": {t: [u for u in us if isinstance(u, str)] for t, us in tags.items()
+                 if isinstance(t, str) and isinstance(us, list)} if isinstance(tags, dict) else {},
         "prefs": {k: v for k, v in prefs.items() if k in PREFS} if isinstance(prefs, dict) else {},
     }
 
@@ -79,6 +83,14 @@ def save_units(units):
     with _lock:
         data = load()
         data["units"] = [{"name": n, "definition": d} for n, d in units]
+        _write(data)
+
+
+def save_tags(tags):
+    """The user's unit tags, {tag: [unit, ...]}, replacing the stored ones."""
+    with _lock:
+        data = load()
+        data["tags"] = tags
         _write(data)
 
 

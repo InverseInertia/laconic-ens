@@ -21,9 +21,9 @@ Ready-made programs for Windows and Linux are on the
 
 - **Windows:** download `lens-<version>-windows-x64.exe` and double-click it. To open `.lens` files by
   double-clicking them, run `lens-<version>-windows-x64.exe --register-files` once (`--unregister-files` undoes it).
-- **Linux:** download `lens-<version>-install-linux.sh` and run it (`sh lens-<version>-install-linux.sh`). It installs LENS for
-  your user only (no root), adds it to your application menu and makes `.lens` files open in it.
-  `sh lens-<version>-install-linux.sh --uninstall` removes it.
+- **Linux:** download `lens-install-linux.sh` and run it (`sh lens-install-linux.sh`). It installs the latest release of LENS
+  for your user only (no root), adds it to your application menu and makes `.lens` files open in it. Run it again to
+  update. `sh lens-install-linux.sh --uninstall` removes it.
 - **From source** (Python 3.10 or newer), for the command-line tool and for development:
 
       pip install -e .[dev]

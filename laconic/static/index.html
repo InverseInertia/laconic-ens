@@ -246,6 +246,25 @@
   .swatches input[type=color] { width: 42px; height: 26px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
   .preview { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--rule); font: 400 14px/var(--row) var(--mono); }
   #helpDlg { width: min(720px, 94vw); }
+  #unitsDlg { width: min(760px, 94vw); }
+  .ub-top { padding: 10px 16px 8px; border-bottom: 1px solid var(--rule); }
+  #ubQuery { width: 100%; font: 400 14px var(--sans); padding: 4px 8px; color: var(--text); background: transparent; border: 1px solid var(--rule); }
+  .ub-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .ub-tags button { padding: 1px 9px; font: 400 12.5px var(--sans); border-color: var(--rule); color: var(--text-soft); border-radius: 10px; }
+  .ub-tags button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .ub-tags button.mine { border-style: dashed; }
+  #ubList { padding: 4px 0; max-height: 56vh; }
+  .ub-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 4px 16px; border-bottom: 1px solid var(--grid); }
+  .ub-row .ub-name { padding: 0 6px; font: 500 13.5px var(--mono); border-color: var(--rule); min-width: 7ch; text-align: left; }
+  .ub-row .ub-det { flex: 1 1 14em; min-width: 0; font: 400 13px var(--sans); color: var(--text-soft); overflow-wrap: anywhere; }
+  .ub-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+  .ub-chip { font: 400 11.5px var(--sans); color: var(--text-soft); border: 1px solid var(--grid); border-radius: 9px; padding: 0 7px; }
+  .ub-chip.mine { border-style: dashed; border-color: var(--rule); }
+  .ub-chip button { border: 0; padding: 0 0 0 4px; font-size: 11.5px; color: var(--text-soft); background: transparent; }
+  .ub-chip button:hover { color: var(--err); background: transparent; }
+  .ub-chips .ub-add { padding: 0 7px; font: 400 11.5px var(--sans); border-color: var(--grid); color: var(--text-soft); border-radius: 9px; }
+  .ub-chips input { width: 12ch; font: 400 12px var(--sans); padding: 0 6px; color: var(--text); background: transparent; border: 1px solid var(--ink); }
+  .ub-empty { padding: 10px 16px; }
   #helpDlg .dlg-body { max-height: 72vh; }
   .help h3 { margin: 18px 0 6px; font: 600 14px var(--sans); letter-spacing: .06em; text-transform: uppercase; }
   .help h3:first-child { margin-top: 0; }
@@ -266,15 +285,25 @@
   @media (max-width: 560px) { .help .welcome { flex-direction: column; text-align: center; } }
   .u-empty { color: var(--text-soft); font-size: 13.5px; }
 
-  /* Narrow or vertical screens: results on top, editor at the bottom. */
+  /* Stacked view: results on top, editor at the bottom. layout.js decides when (narrow windows, Alt+L). */
+  body.stacked main { --split: 40%; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(80px, 1fr) 8px minmax(80px, var(--split)); }
+  body.stacked #out { order: -1; padding-right: 12px; }
+  body.stacked #srcBox { order: 2; }
+  body.stacked #split { cursor: row-resize; }
+  body.stacked #split::before { inset: 3px 0; }
+  body.stacked #split:hover::before, body.stacked #split.drag::before, body.stacked #split:focus-visible::before { inset: 2px 0; }
+  body.stacked.dragging { cursor: row-resize; }
+  /* After the layout has switched itself a few times: a quiet offer to stop that, which never takes the focus. */
+  #layoutAsk { position: fixed; right: 16px; bottom: 16px; z-index: 20; max-width: min(420px, calc(100vw - 32px)); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px 8px 12px; font: 400 13px/1.4 var(--sans); color: var(--text); background: var(--paper); border: 1px solid var(--ink); box-shadow: 0 2px 10px rgba(23, 37, 61, .2); }
+  #layoutAsk[hidden] { display: none; }
+  #layoutAsk p { flex: 1 1 100%; margin: 0; }
+  #layoutAsk .close { margin-left: auto; }
+  .set-sec.flash { outline: 2px solid var(--ink); outline-offset: 4px; transition: outline-color 1.5s; }
+  .set-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font: 400 14px var(--sans); cursor: pointer; }
+  .set-check input { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
+
+  /* Narrow windows: a tighter header. */
   @media (max-width: 760px) {
-    main { --split: 40%; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(80px, 1fr) 8px minmax(80px, var(--split)); }
-    #out { order: -1; padding-right: 12px; }
-    #srcBox { order: 2; }
-    #split { cursor: row-resize; }
-    #split::before { inset: 3px 0; }
-    #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 2px 0; }
-    body.dragging { cursor: row-resize; }
     header { gap: 8px 12px; padding: 4px 12px 8px 0; }
     .logo { align-self: flex-start; }
     header .spacer { display: none; }
@@ -303,6 +332,7 @@
   <label><input type="checkbox" id="mathkeys" checked> Math keys</label>
   <label title="Color and underline global variables in the results"><input type="checkbox" id="markGlobals" checked> Mark globals</label>
   <label title="Suggest units, variables, functions and commands while you type (Ctrl+Space opens it by hand)"><input type="checkbox" id="suggest" checked> Suggest</label>
+  <button id="unitsBtn" class="wide" title="Browse units: search them, filter by tag, and add tags of your own">Units</button>
   <button id="renameBtn" data-icon="rename" class="sq" title="Rename a variable, function or custom unit everywhere (F2)" aria-label="Rename"></button>
   <button id="settingsBtn" data-icon="settings" class="sq" title="Settings" aria-label="Settings"></button>
   <button id="open" data-icon="open" class="sq" title="Open a worksheet (Ctrl+O)" aria-label="Open"></button>
@@ -328,6 +358,12 @@
   <button id="globalsChip" title="Global variables are not marked in the results. Click to mark them again" hidden></button>
 </main>
 <div id="ac" role="listbox" aria-label="Suggestions" hidden></div>
+<div id="layoutAsk" role="status" hidden>
+  <p id="layoutAskMsg">The layout has switched itself several times as the window was resized. Turn automatic switching off?</p>
+  <button id="layoutAskOpen">Layout settings</button>
+  <button id="layoutAskNever">Don't ask again</button>
+  <button class="close" id="layoutAskClose" aria-label="Dismiss" title="Dismiss">&times;</button>
+</div>
 
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <div class="dlg-head"><h2 id="keysTitle">Math keys</h2><button class="close">Close</button></div>
@@ -375,9 +411,10 @@ v` = 2                    <i>a mark after a name is an accent: ` dot, ! arrow, @
 !clear                    <i>forget every non-global variable above</i></pre>
     <ul>
       <li>Operators: <code>+ - * / ^</code>, elementwise <code>.* ./</code>, and <code>-&gt;</code> to convert units. Only a number followed by units may skip the <code>*</code>: write <code>3*x</code>, not <code>3 x</code>.</li>
-      <li>Constants are <code>pi</code>, <code>e</code> and <code>&infin;</code> (<kbd>Ctrl</kbd>+<kbd>G</kbd> after an <code>8</code>). Functions include <code>sqrt abs sin cos tan exp ln log10</code> and <code>heaviside</code>.</li>
+      <li>Constants are <code>pi</code>, <code>e</code> and <code>&infin;</code> (<kbd>Ctrl</kbd>+<kbd>G</kbd> after an <code>8</code>). Physical constants are units: <code>'R</code>, <code>'k_B</code>, <code>'h_P</code>, <code>'N_A</code>. Functions include <code>sqrt abs sin cos tan exp ln log10</code> and <code>heaviside</code>.</li>
       <li>Every later use of a global is written <code>~g</code>; with Math keys on, the editor adds the <code>~</code> once you finish typing the name. Globals are colored and underlined in the results unless <strong>Mark globals</strong> is off.</li>
       <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!clearf</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more. Settings &rarr; Reference lists them all.</li>
+      <li><strong>Units</strong> lists every unit: search by name or description, filter by a tag such as <em>constants</em> or <em>thermodynamics</em>, and click one to insert it. <strong>+ tag</strong> adds a tag of your own.</li>
       <li>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>. Comments and plot titles are left alone.</li>
     </ul>
 
@@ -448,7 +485,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
     <p><button id="helpKeys">All keyboard shortcuts</button></p>
 
     <h3>Settings <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Settings" target="_blank" rel="noopener">Settings</a></h3>
-    <p>Settings has four parts: <strong>Reference</strong> (every key and command), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). The Greek table and global units are stored on this machine, for every browser and the command line; the theme is kept per browser. Press <kbd>F1</kbd> any time to bring this window back.</p>
+    <p>Settings has five parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). The Greek table and global units are stored on this machine, for every browser and the command line; the theme is kept per browser. Press <kbd>F1</kbd> any time to bring this window back.</p>
   </div>
 </dialog>
 
@@ -481,12 +518,32 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
   <div class="dlg-foot"><span class="spacer"></span><span id="alertBtns" class="alert-btns"></span></div>
 </dialog>
 
+<dialog id="unitsDlg" aria-labelledby="unitsTitle">
+  <div class="dlg-head"><h2 id="unitsTitle">Units</h2><button class="close">Close</button></div>
+  <div class="ub-top">
+    <input type="search" id="ubQuery" placeholder="Search by name or description: bar, gas, boltz" aria-label="Search units" spellcheck="false" autocomplete="off">
+    <div id="ubTags" class="ub-tags" role="group" aria-label="Filter by tag"></div>
+  </div>
+  <div class="dlg-body" id="ubList" aria-label="Units"></div>
+  <div class="dlg-foot"><span class="note" id="ubCount" style="margin:0"></span><span class="spacer"></span><span class="note" style="margin:0">Click a unit to insert it. <strong>+ tag</strong> adds a tag of your own, kept in your settings.</span></div>
+</dialog>
+<datalist id="ubTagNames"></datalist>
+
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
   <div class="dlg-body">
     <section class="set-sec">
       <h3>Reference</h3>
       <div class="set-btns"><button id="keysBtn">Keyboard shortcuts</button></div>
+    </section>
+    <section class="set-sec" id="layoutSec">
+      <h3>Layout</h3>
+      <p class="note">Alt+L switches between the two views at any time. With automatic switching on, the page also stacks when the window is 760 px wide or less, and goes back to side by side when it widens; a view you picked by hand holds until the next switch. Kept on this machine.</p>
+      <label class="set-row"><span>View</span><select id="layoutView">
+        <option value="side">Side by side</option>
+        <option value="stacked">Stacked (results on top)</option>
+      </select></label>
+      <label class="set-check"><input type="checkbox" id="layoutAuto" checked> Switch automatically when the window is narrow</label>
     </section>
     <section class="set-sec">
       <h3>Greek letters</h3>
@@ -536,17 +593,19 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 <script src="/static/plotview.js"></script>
 <script src="/static/solverview.js"></script>
 <script src="/static/autocomplete.js"></script>
+<script src="/static/unitbrowser.js"></script>
 <script src="/static/theme.js"></script>
 <script type="application/json" id="prefs">{{prefs}}</script>
 <script src="/static/savefile.js"></script>
 <script src="/static/shortcuts.js"></script>
+<script src="/static/layout.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 // Display preferences live in the server's settings.json, so they are the same whatever port the
 // page is on; the server writes them into the page, so they can be read before anything draws.
 // Other settings live in this browser under "lens:". Older builds used "calcsheet:" and "laconic:",
 // read as a fallback.
-const PREF_KEYS = ["theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest"];
+const PREF_KEYS = ["theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest", "layout", "autoLayout", "layoutAsk"];
 const prefs = (() => { try { return JSON.parse($("#prefs").textContent); } catch { return {}; } })();
 // One save at a time; what changes meanwhile goes in the next, so a color picker, which saves the
 // theme on every move, sends a few requests rather than hundreds. keepalive: a reload or a closed
@@ -830,6 +889,9 @@ async function patchPlot(line, patch) {
   } catch { say("Could not reach the server"); return false; }
   if (!res.ok) { say(res.error); return false; }
   if (!applyEdits(text, res.edits)) { say("The sheet changed meanwhile, so the plot was not changed"); return false; }
+  // The moved plot becomes the focused line, so the redraw keeps it in view rather than
+  // scrolling back to wherever the caret was.
+  focusLine(line);
   return true;
 }
 
@@ -999,7 +1061,7 @@ function apply(r) {
     let ok = document.activeElement === src
       && (r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert));
     if (!ok) { src.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
-    src.setSelectionRange(r.caret, r.caret);
+    src.setSelectionRange(...(r.sel || [r.caret, r.caret]));
     applying = false;
   }
   markActive();
@@ -1019,12 +1081,20 @@ src.addEventListener("paste", (ev) => {
   const r = Paste.pasteEdit(src.value, ev.clipboardData.getData("text/plain"), src.selectionStart, src.selectionEnd, {textLine: onCommentLine()});
   if (r) { ev.preventDefault(); apply(r); }
 });
+let escaped = false;
 src.addEventListener("keydown", (ev) => {
   if (ev.isComposing) return;
   plainPaste = (ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.code === "KeyV";
   if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ev.code === "KeyZ") { ev.preventDefault(); acClose(); setWrapped(!wrapped); return; }
   if (acKey(ev)) return;
   if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key === " ") { ev.preventDefault(); acOpenByHand(); return; }
+  // Tab indents instead of moving the focus; right after Esc it moves the focus as usual.
+  const tabLeaves = escaped; escaped = ev.key === "Escape";
+  if (ev.key === "Tab" && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !tabLeaves) {
+    ev.preventDefault();
+    apply(Editing.indentLines(src.value, src.selectionStart, src.selectionEnd, ev.shiftKey));
+    return;
+  }
   const mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
   if (mathKeys.checked && mods.alt && !mods.ctrl && !mods.shift && !mods.meta && ev.key === "ArrowDown") {
     ev.preventDefault(); shrinkSelection(); return;
@@ -1208,13 +1278,44 @@ function setWrapped(on, save = true) {
 }
 setWrapped(store.get("wrapText", false) === true, false);
 
+// ---- layout: side by side or stacked (Alt+L) -------------------------------------------
+// layout.js decides which; this draws it, stores it and runs the Settings controls.
+const narrow = matchMedia(`(max-width: ${Layout.NARROW}px)`);
+let layout = Layout.initial({auto: store.get("autoLayout", true), view: store.get("layout", "side")}, narrow.matches);
+const stacked = () => layout.view === "stacked";
+function setLayout(next, save = false) {
+  const changed = next.view !== layout.view;
+  layout = next;
+  document.body.classList.toggle("stacked", stacked());
+  $("#layoutView").value = layout.view;
+  $("#layoutAuto").checked = layout.auto;
+  if (save) { store.set("layout", layout.view); store.set("autoLayout", layout.auto); }
+  if (changed) { loadSplit(); if (ac) acPaint(); }
+  if (layout.ask && store.get("layoutAsk", true) !== false) $("#layoutAsk").hidden = false;
+}
+const toggleLayout = () => {
+  setLayout(Layout.choose(layout, Layout.other(layout.view)), true);
+  say(stacked() ? "Stacked view" : "Side-by-side view");
+};
+document.addEventListener("keydown", (ev) => {
+  if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ev.code === "KeyL" && !document.querySelector("dialog[open]")) {
+    ev.preventDefault(); toggleLayout();
+  }
+});
+$("#layoutView").onchange = (ev) => setLayout(Layout.choose(layout, ev.target.value), true);
+$("#layoutAuto").onchange = (ev) => setLayout(Layout.setAuto(layout, ev.target.checked, narrow.matches), true);
+const hideLayoutAsk = () => { $("#layoutAsk").hidden = true; };
+$("#layoutAskClose").onclick = hideLayoutAsk;
+$("#layoutAskNever").onclick = () => { store.set("layoutAsk", false); hideLayoutAsk(); };
+$("#layoutAskOpen").onclick = () => { hideLayoutAsk(); openSettings("#layoutSec", "#layoutAuto"); };
+
 // ---- movable split between editor and output ---------------------------------------
-const mainEl = $("main"), splitEl = $("#split"), narrow = matchMedia("(max-width: 760px)");
-const splitKey = () => narrow.matches ? "splitV" : "splitH";
+const mainEl = $("main"), splitEl = $("#split");
+const splitKey = () => stacked() ? "splitV" : "splitH";
 function setSplit(f) {
   if (typeof f === "number") mainEl.style.setProperty("--split", (f * 100).toFixed(2) + "%");
   else mainEl.style.removeProperty("--split");
-  splitEl.setAttribute("aria-orientation", narrow.matches ? "horizontal" : "vertical");
+  splitEl.setAttribute("aria-orientation", stacked() ? "horizontal" : "vertical");
   if (typeof f === "number") splitEl.setAttribute("aria-valuenow", Math.round(f * 100));
   else splitEl.removeAttribute("aria-valuenow");
 }
@@ -1223,7 +1324,7 @@ const loadSplit = () => { const f = store.get(splitKey(), null); setSplit(typeof
 // The editor's share of the main area: its width, or its height when stacked.
 const currentSplit = () => {
   const m = mainEl.getBoundingClientRect(), s = src.getBoundingClientRect();
-  return narrow.matches ? s.height / m.height : s.width / m.width;
+  return stacked() ? s.height / m.height : s.width / m.width;
 };
 splitEl.addEventListener("pointerdown", (ev) => {
   if (ev.button !== 0) return;
@@ -1234,7 +1335,7 @@ splitEl.addEventListener("pointerdown", (ev) => {
 splitEl.addEventListener("pointermove", (ev) => {
   if (!splitEl.hasPointerCapture(ev.pointerId)) return;
   const m = mainEl.getBoundingClientRect();
-  setSplit(clampSplit(narrow.matches ? (m.bottom - ev.clientY) / m.height : (ev.clientX - m.left) / m.width));
+  setSplit(clampSplit(stacked() ? (m.bottom - ev.clientY) / m.height : (ev.clientX - m.left) / m.width));
 });
 const endDrag = (ev) => {
   if (!splitEl.classList.contains("drag")) return;
@@ -1250,11 +1351,12 @@ splitEl.addEventListener("keydown", (ev) => {
   if (!dir) return;
   ev.preventDefault();
   // Left or up moves the divider toward the start of the screen.
-  const grow = narrow.matches ? -dir : dir;
+  const grow = stacked() ? -dir : dir;
   const f = clampSplit(currentSplit() + grow * 0.02);
   setSplit(f); store.set(splitKey(), f);
 });
-narrow.addEventListener("change", loadSplit);
+narrow.addEventListener("change", () => setLayout(Layout.crossed(layout, narrow.matches)));
+setLayout(layout);
 loadSplit();
 
 // ---- settings: theme ------------------------------------------------------------------
@@ -1311,11 +1413,20 @@ fetch("/static/logo.svg").then((r) => r.text()).then((t) => {
   document.querySelector("#helpLogo img").replaceWith(document.importNode(big, true));
   document.querySelector("img.logo").replaceWith(document.importNode(svg, true));
 }).catch(() => {});
-$("#settingsBtn").onclick = async () => {
+// `section`, if given, is scrolled into view and `control` in it (else its first) focused, so a
+// prompt elsewhere on the page can send the user straight to the setting it is about.
+async function openSettings(section, control) {
   syncThemeForm(); buildGreek();
   $("#settingsDlg").showModal();
+  const sec = section && $(section);
+  if (sec) {
+    sec.scrollIntoView({block: "center"});
+    (control ? $(control) : sec.querySelector("input, select, button")).focus();
+    sec.classList.add("flash"); setTimeout(() => sec.classList.remove("flash"), 1500);
+  }
   await loadUnits();
-};
+}
+$("#settingsBtn").onclick = () => openSettings();
 
 // ---- dialogs ---------------------------------------------------------------
 for (const d of document.querySelectorAll("dialog:not(#alertDlg)")) {
@@ -1444,6 +1555,94 @@ $("#renameForm").addEventListener("submit", async (ev) => {
   if (!applyEdits(text, res.edits, true)) { say("The sheet changed meanwhile; rename again"); return; }
   say(`Renamed ${res.count} use${res.count === 1 ? "" : "s"}`);
 });
+
+// ---- units dialog ------------------------------------------------------------------
+// The list and its standard tags come from the server each time the dialog opens; the user's
+// tags are changed here and stored whole (PUT /api/tags), so they land in settings.json.
+const ub = {data: null, userTags: {}, tag: null, sel: [0, 0]};
+async function openUnits() {
+  ub.sel = [src.selectionStart, src.selectionEnd];
+  $("#unitsDlg").showModal();
+  if (!ub.data) $("#ubList").replaceChildren(Object.assign(document.createElement("p"), {className: "note ub-empty", textContent: "Loading units\u2026"}));
+  try {
+    ub.data = await (await fetch("/api/unitbrowse")).json();
+    ub.userTags = ub.data.userTags;
+  } catch { say("Could not load the units"); return; }
+  if (ub.tag && !UnitBrowser.tagList(ub.data, ub.userTags).includes(ub.tag)) ub.tag = null;
+  renderUnits();
+  $("#ubQuery").focus(); $("#ubQuery").select();
+}
+function renderUnits() {
+  const tags = UnitBrowser.tagList(ub.data, ub.userTags);
+  $("#ubTags").replaceChildren(...[null, ...tags].map((t) => {
+    const b = Object.assign(document.createElement("button"), {textContent: t ?? "all", type: "button"});
+    b.setAttribute("aria-pressed", String(t === ub.tag));
+    if (t && !ub.data.tags.includes(t)) { b.className = "mine"; b.title = "Your tag"; }
+    b.onclick = () => { ub.tag = t; renderUnits(); };
+    return b;
+  }));
+  $("#ubTagNames").replaceChildren(...tags.map((t) => Object.assign(document.createElement("option"), {value: t})));
+  const rows = UnitBrowser.filter(ub.data, ub.userTags, $("#ubQuery").value, ub.tag);
+  $("#ubCount").textContent = `${rows.length} unit${rows.length === 1 ? "" : "s"}`;
+  const list = rows.map((row) => unitBrowseRow(row));
+  if (!list.length) list.push(Object.assign(document.createElement("p"), {className: "note ub-empty", textContent: "No units match."}));
+  $("#ubList").replaceChildren(...list);
+}
+function unitBrowseRow(row) {
+  const [name, detail] = row;
+  const el = Object.assign(document.createElement("div"), {className: "ub-row"});
+  const pick = Object.assign(document.createElement("button"), {className: "ub-name", type: "button", textContent: "'" + name, title: `Insert '${name}`});
+  pick.onclick = () => insertUnit(name);
+  const det = Object.assign(document.createElement("span"), {className: "ub-det", textContent: detail});
+  const chips = Object.assign(document.createElement("span"), {className: "ub-chips"});
+  for (const t of UnitBrowser.tagsOf(row, ub.userTags)) {
+    const chip = Object.assign(document.createElement("span"), {className: "ub-chip", textContent: t});
+    if ((ub.userTags[t] || []).includes(name)) {
+      chip.classList.add("mine");
+      const x = Object.assign(document.createElement("button"), {type: "button", textContent: "\u00d7", title: `Remove your tag "${t}"`, ariaLabel: `Remove tag ${t}`});
+      x.onclick = () => saveTags(UnitBrowser.removeTag(ub.userTags, t, name));
+      chip.append(x);
+    }
+    chips.append(chip);
+  }
+  const add = Object.assign(document.createElement("button"), {className: "ub-add", type: "button", textContent: "+ tag", title: "Tag this unit"});
+  add.onclick = () => {
+    const input = Object.assign(document.createElement("input"), {placeholder: "tag", ariaLabel: `New tag for ${name}`, spellcheck: false});
+    input.setAttribute("list", "ubTagNames");
+    input.onkeydown = (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); if (input.value.trim()) saveTags(UnitBrowser.addTag(ub.userTags, input.value, name)); else input.replaceWith(add); }
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); input.replaceWith(add); }
+    };
+    input.onblur = () => { if (input.isConnected) input.replaceWith(add); };
+    add.replaceWith(input); input.focus();
+  };
+  chips.append(add);
+  el.append(pick, det, chips);
+  return el;
+}
+async function saveTags(tags) {
+  let res;
+  try {
+    res = await (await fetch("/api/tags", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({tags})})).json();
+  } catch { say("Could not save the tags"); return; }
+  if (!res.ok) { say(res.error); return; }
+  ub.userTags = res.tags;
+  if (ub.tag && !UnitBrowser.tagList(ub.data, ub.userTags).includes(ub.tag)) ub.tag = null;
+  const scroll = $("#ubList").scrollTop;
+  renderUnits();
+  $("#ubList").scrollTop = scroll;
+}
+// Inserts at the caret the editor had when the dialog opened; a quote already before it is reused.
+async function insertUnit(name) {
+  $("#unitsDlg").close();
+  src.focus();
+  await new Promise(requestAnimationFrame);   // the focus has to be back in the editor for the undo stack
+  const [from, to] = ub.sel;
+  const text = (src.value[from - 1] === "'" ? "" : "'") + name;
+  apply({from, to, insert: text, caret: from + text.length});
+}
+$("#unitsBtn").onclick = openUnits;
+$("#ubQuery").oninput = () => { if (ub.data) renderUnits(); };
 
 // ---- global units ------------------------------------------------------------------
 function unitRow(name = "", definition = "", error = "") {

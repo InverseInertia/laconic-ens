@@ -123,9 +123,13 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Unit catalogue** (`laconic/catalogue.py`): the one module that knows about the unit families needing more than Pint gives. Other modules ask it rather than keeping their own lists.
 
-**Unit family**: a group of units that share one policy in the catalogue: currencies, percent, constants with subscripted symbols, Pint units siunitx lacks.
+**Unit family**: a group of units that share one policy in the catalogue: currencies, percent, physical constants, constants with subscripted symbols, Pint units siunitx lacks.
 
 **Currency**: a unit named by its ISO 4217 code ('USD, 'EUR). Each is a dimension of its own, so currencies never convert into each other; an exchange rate is an ordinary variable.
+
+**Physical constant**: a constant of nature typed as a unit ('R, 'k_B, 'h_P), listed in `CONSTANTS` in the catalogue. Being a unit, it never takes a variable's name. The editor's suggestion for one gives what it is and its value, so a search for `gas` or `boltz` finds it. A quantity typed with one is never shown as typed: it stands for a value, so its line shows that value in SI.
+
+**Unit tag**: a label the units dialog filters by. A **standard tag** is defined in `laconic/unittags.py` as a list of units and Pint dimensions (`"[pressure]"` takes every pressure unit); a **user tag** is one the user put on units in the dialog, stored in `settings.json` as `{tag: [unit, ...]}`. See `laconic/static/unitbrowser.js`.
 
 **Declared unit**: a unit the `.tex` export gives a `\DeclareSIUnit` of its own, because siunitx does not define it (a user-defined unit, a currency, 'ft, 'g0). `Fmt.declarations()` returns the lines for the units a document printed.
 
@@ -137,4 +141,5 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 - **Preset**: a named color set (LENS blueprint, Engineering paper, White paper, Dark, Canoe Dark). Colors that match none are "Custom".
 - **Readable theme**: one whose text and paper colors have a WCAG contrast ratio of at least 3:1. A stored theme that is not readable is replaced by the default colors on load, with a note.
 - **Version** (`laconic/_version.py`): the program's version, written there and nowhere else. `0+dev` in the repository, shown as `dev`; a release build stamps it with the tag's version, shown as `v0.2.0` beside the title and in Help.
+- **Layout**: side by side (editor left, results right) or stacked (results on top). With automatic switching on, crossing the narrow width (760 px) switches it; Alt+L or Settings → Layout picks one by hand, which holds until the next crossing, or for good with automatic switching off. See `laconic/static/layout.js`.
 - **Shortcut table**: the list of editor keys under Settings → Reference, kept as data in `laconic/static/shortcuts.js`, except the worksheet-command rows, which come from the command registry. `wiki/Editor-Shortcuts.md` describes the same keys at more length; a test checks it mentions every Ctrl and Alt shortcut.

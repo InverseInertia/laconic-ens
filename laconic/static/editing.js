@@ -632,6 +632,32 @@
     }
   }
 
+  // Tab and Shift+Tab: indent or unindent every line the caret or selection touches by one block
+  // indent (two spaces). A selection ending at the start of a line leaves that line alone, and
+  // blank lines in a multi-line selection are not indented. Unindenting takes up to two leading
+  // spaces, or one tab. The selection stays on the same text; `sel` is the selection afterwards.
+  function indentLines(t, s, e, out) {
+    const ls = lineStartOf(t, s);
+    const le = lineEndOf(t, e > s && t[e - 1] === '\n' ? e - 1 : e);
+    const lines = t.slice(ls, le).split('\n');
+    const shift = lines.map((line) => {
+      if (!out) return lines.length > 1 && line.trim() === '' ? 0 : 2;
+      return -(line[0] === '\t' ? 1 : /^ {0,2}/.exec(line)[0].length);
+    });
+    if (shift.every((d) => d === 0)) return { select: [s, e] };
+    const insert = lines.map((line, i) => (shift[i] > 0 ? '  ' + line : line.slice(-shift[i]))).join('\n');
+    // A position moves with its line's text; one inside removed indent lands at the line start.
+    const moved = (p) => {
+      if (p > le) return p + insert.length - (le - ls);
+      let start = ls, i = 0, delta = 0;
+      while (start + lines[i].length < p) { delta += shift[i]; start += lines[i].length + 1; i++; }
+      const col = p - start;
+      return p + delta + (shift[i] >= 0 ? shift[i] : -Math.min(col, -shift[i]));
+    };
+    const sel = [moved(s), moved(e)];
+    return { from: ls, to: le, insert, caret: sel[1], sel };
+  }
+
   // Control and navigation keys (call from `keydown`). `mods` = {ctrl, alt, shift, meta}.
   function keyAction(key, mods, t, s, e, ctx) {
     if (ctx && ctx.enabled === false) return null;
@@ -687,7 +713,7 @@
   }
 
   const api = {
-    DEFAULT_GREEK, charAction, keyAction, merge,
+    DEFAULT_GREEK, charAction, keyAction, indentLines, merge,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
     isTextLine: isComment,

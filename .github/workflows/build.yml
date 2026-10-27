@@ -76,12 +76,14 @@ jobs:
         run: cd src && python3 packaging/release_notes.py "$GITHUB_REF_NAME" > ../notes.md && cat ../notes.md
       - name: Add the Linux installer and its icons
         run: |
-          # The installer looks for, and downloads, the files of the release it is stamped with.
-          sed "s/^VERSION=\"\"/VERSION=\"$VERSION\"/" src/packaging/install-linux.sh > "release/lens-$VERSION-install-linux.sh"
-          grep -q "^VERSION=\"$VERSION\"" "release/lens-$VERSION-install-linux.sh"
+          # The installer looks up the latest release when it runs, so it is not stamped and its
+          # name carries no version: .../releases/latest/download/lens-install-linux.sh always
+          # gives the newest one. Its own version is the INSTALLER_VERSION line in the script.
+          grep -Eq '^INSTALLER_VERSION="[0-9]+\.[0-9]+\.[0-9]+"$' src/packaging/install-linux.sh
+          cp src/packaging/install-linux.sh release/lens-install-linux.sh
           cp src/packaging/icon.png "release/lens-$VERSION-icon.png"
           cp src/packaging/file-icon.png "release/lens-$VERSION-file-icon.png"
-          chmod +x "release/lens-$VERSION-install-linux.sh"
+          chmod +x release/lens-install-linux.sh
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*

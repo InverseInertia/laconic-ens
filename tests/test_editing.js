@@ -353,4 +353,25 @@ eq(merged('ab|c', [{ from: 1, to: 2, insert: 'b' }]), null, 'an edit that change
 const m = E.merge('a = 1\nb = a\n', [{ from: 0, to: 1, insert: 'c' }, { from: 10, to: 11, insert: 'c' }], 0);
 eq(`${m.from} ${m.to} ${JSON.stringify(m.insert)}`, '0 11 "c = 1\\nb = c"', 'one edit over the span the edits cover');
 
+// Tab / Shift+Tab: the selection is marked [ ... ], a bare caret |.
+function indented(src, out) {
+  const s = src.includes('|') ? src.indexOf('|') : src.indexOf('[');
+  const e = src.includes('|') ? s : src.indexOf(']') - 1;
+  const t = src.replace(/[|[\]]/g, '');
+  const r = E.indentLines(t, s, e, out);
+  if (r.insert === undefined) return 'unchanged';
+  const t2 = t.slice(0, r.from) + r.insert + t.slice(r.to);
+  const [a, b] = r.sel;
+  return a === b ? t2.slice(0, a) + '|' + t2.slice(a) : t2.slice(0, a) + '[' + t2.slice(a, b) + ']' + t2.slice(b);
+}
+eq(indented('x = |1', false), '  x = |1', 'Tab indents the whole line, the caret moves with its text');
+eq(indented('a = 1\n  x = |1', true), 'a = 1\nx = |1', 'Shift+Tab unindents the line');
+eq(indented(' |x = 1', true), '|x = 1', 'Shift+Tab takes one space when that is all there is');
+eq(indented('  |  x = 1', true), '|  x = 1', 'a caret inside removed indent goes to the line start');
+eq(indented('\tx = |1', true), 'x = |1', 'Shift+Tab takes a leading tab');
+eq(indented('x = |1', true), 'unchanged', 'nothing to unindent');
+eq(indented('a = [1\n\nb = 2]\nc = 3', false), '  a = [1\n\n  b = 2]\nc = 3', 'every line of a selection, blank lines left alone');
+eq(indented('[a = 1\n]b = 2', false), '  [a = 1\n]b = 2', 'a selection ending at a line start leaves that line alone');
+eq(indented('  [a = 1\n    b = 2]', true), '[a = 1\n  b = 2]', 'Shift+Tab over several lines');
+
 console.log(`${n} editing checks passed`);

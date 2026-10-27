@@ -204,6 +204,22 @@ def test_clicking_the_picture_does_not_jump_the_editor_but_the_row_does(page):
     assert page.evaluate("document.querySelector('#src').selectionStart") > 0
 
 
+def test_dragging_a_plot_makes_it_the_focused_line(page):
+    """The page keeps the focused line's row in view; a pan must not scroll back to the old caret (#83)."""
+    show(page, SRC + "".join(f"a{i} = {i}\n" for i in range(60)))
+    page.evaluate("const s = document.querySelector('#src'); s.setSelectionRange(s.value.length - 1, s.value.length - 1)")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('keyup'))")    # the last row is focused
+    assert page.evaluate("document.querySelector('#out').scrollTop") > 0
+    page.locator(".row.plot").scroll_into_view_if_needed()
+    b = box(page)
+    drag(page, b, -b["width"] / 10, 0)
+    assert "x" in views(page)
+    assert page.evaluate("document.querySelector('#src').value.slice(0, document.querySelector('#src').selectionStart).split('\\n').length") == 1
+    assert "active" in page.locator(".row.plot").get_attribute("class")
+    assert page.locator(".row.plot").evaluate(
+        "r => { const a = r.getBoundingClientRect(), o = r.closest('#out').getBoundingClientRect(); return a.bottom > o.top && a.top < o.bottom; }")
+
+
 def test_the_caret_on_an_option_line_marks_the_plot_row(page):
     show(page, SRC + "  title: T\n  grid: off\n")
     page.evaluate("document.querySelector('#src').setSelectionRange(document.querySelector('#src').value.length - 3, document.querySelector('#src').value.length - 3)")

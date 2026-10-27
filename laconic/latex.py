@@ -427,7 +427,7 @@ class Printer:
         the number, then the whole unit, not a fraction with the number on top."""
         q = self.ev.eval(n)
         mag, u = q.magnitude, self.fmt.unit(q.units)
-        if np.ndim(mag) or np.iscomplexobj(mag) or not u:
+        if np.ndim(mag) or np.iscomplexobj(mag) or not u or catalogue.holds_constant(q, self.ev.ureg):
             return None
         if self.fmt.siunitx:
             return f"\\qty{{{self.fmt._si_number(mag, 12)}}}{{{u}}}", (ADD if mag < 0 else MUL)

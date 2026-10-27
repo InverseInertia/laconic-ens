@@ -6,7 +6,7 @@ A computed result is shown in the simplest coherent SI unit, with a familiar nam
 
 ```
 N  J  W  Pa  Hz  C  V  Ω  F  H  S  Wb  T
-N/m  m/N  N·m²  Pa·s  W/m²  W/m³  W/(m·K)  J/K  J/(kg·K)  V/m  F/m  H/m
+N/m  m/N  N·m²  Pa·s  W/m²  W/m³  W/(m·K)  J/K  J/(kg·K)  J/(mol·K)  J·s  W/(m²·K⁴)  V/m  F/m  H/m
 ```
 
 Anything else stays in reduced base units (`m²/s²`, `kg/m³`). Where one dimension has several common names, the first wins:
@@ -20,6 +20,44 @@ Anything else stays in reduced base units (`m²/s²`, `kg/m³`). Where one dimen
 Angles keep their radians (`asin(0.5)` gives `0.5236 rad`). degF becomes degC, and degC stays. `!noassume` turns the reduction off, so `10'kN * 2'm` shows `20 kN⋅m` instead of `20000 J`; `!assume` restores it.
 
 The pound is `'lbm` (mass) and `'lbf` (force). Pint's own `lb` is removed because it reads as either.
+
+## The units dialog
+
+**Units** in the header lists every unit LENS knows. Type in the search box to match a unit's name or description (`bar`, `gas`, `pound square`: every word must match), and click a tag to show only the units that have it. Click a unit to insert it at the caret; Ctrl+Z takes it back.
+
+The standard tags are *common*, *constants*, *length*, *area*, *volume*, *mass*, *time*, *speed*, *force*, *pressure*, *energy*, *temperature*, *thermodynamics*, *chemistry*, *electrical*, *imperial* and *currency*. Most take every unit of a dimension (*pressure* holds Pa, bar, psi, inHg and the rest); *common*, *constants*, *thermodynamics*, *chemistry* and *imperial* are hand-picked lists. Global units from Settings come first, under *global units*.
+
+**+ tag** on a unit adds a tag of your own, new or existing (a standard name works too). Your tags show with a dashed outline, and × takes one off a unit; a tag left on no unit goes. They are kept in `settings.json` (see [Settings](Settings)), so they follow you across browsers.
+
+## Physical constants
+
+Physical constants are units, typed with a quote like any other: `'R`, `'k_B`, `'c`. Because they are units, they never take a variable's name, so a sheet can set `R = 5'ohm` and still use `'R`, and a thermodynamics sheet that forgets to define `h` gets an error, not Planck's constant.
+
+```
+p = 2'mol * 'R * 300'K / 1'm^3   4989 Pa
+E = 'h_P * 'c / 500'nm           3.973e-19 J
+n = 2'mol * 'N_A                 1.204e24
+```
+
+A line that uses a constant shows its value, even a single typed quantity (`3'mol * 'R` is `24.94 J/K`, not `3 R·mol`). Each constant's suggestion shows what it is and its value in SI, so typing `'gas` or `'boltz` finds it. The **Units** dialog lists them all under the *constants* tag.
+
+| Type | Constant | Value |
+|---|---|---|
+| `'R` | universal gas constant | 8.31446261815 J/(mol·K) |
+| `'N_A` | Avogadro constant | 6.02214076×10²³ /mol |
+| `'Av` | Avogadro's number, a plain count (no unit) | 6.02214076×10²³ |
+| `'k_B` (or `'k`) | Boltzmann constant | 1.380649×10⁻²³ J/K |
+| `'c` | speed of light in vacuum | 299792458 m/s |
+| `'h_P` | Planck constant (`'h` is the hour) | 6.62607015×10⁻³⁴ J·s |
+| `'hbar` | reduced Planck constant | 1.05457181765×10⁻³⁴ J·s |
+| `'e` | elementary charge | 1.602176634×10⁻¹⁹ C |
+| `'sigma` | Stefan–Boltzmann constant | 5.67037441918×10⁻⁸ W/(m²·K⁴) |
+| `'G_N` | Newtonian constant of gravitation (`'G` is the gauss) | 6.6743×10⁻¹¹ m³/(kg·s²) |
+| `'g_0` | standard gravity | 9.80665 m/s² |
+| `'eps_0`, `'mu_0` | vacuum permittivity and permeability | 8.85418781879×10⁻¹² F/m, 1.25663706127×10⁻⁶ H/m |
+| `'m_e`, `'m_p` | electron and proton mass | 9.1093837139×10⁻³¹ kg, 1.67262192595×10⁻²⁷ kg |
+
+The values are CODATA's, as Pint has them. To ask for another constant, open an issue; [Development](Development) says how to add one.
 
 ## Temperatures
 
