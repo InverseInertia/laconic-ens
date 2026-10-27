@@ -11,7 +11,7 @@ These change only how a result is printed. Values are stored as floats and the e
 | `!decplace n` | n decimal places |
 | `!short` / `!long` | final result only / full steps |
 
-The last of `!sigfigs`, `!sigfigsbig` and `!decplace` wins. Plain notation is used between 1e-4 and 1e7, scientific notation outside. Typed-in numbers always show 12 significant figures. Matrices use the same formatter. `!sigfigs` and `!sigfigsbig` take 1 to 15, `!decplace` 0 to 15. See [Units](Units) for `!assume` and `!noassume`.
+The last of `!sigfigs`, `!sigfigsbig` and `!decplace` wins. Plain notation is used between 1e-4 and 1e7, scientific notation outside. Typed-in numbers always show 12 significant figures, so a line that is only a typed-in number or quantity (`L = 12345.678'm`) shows it as typed; the setting rounds what the sheet computes. Matrices use the same formatter. `!sigfigs` and `!sigfigsbig` take 1 to 15, `!decplace` 0 to 15. See [Units](Units) for `!assume` and `!noassume`.
 
 Each calculation line shows up to three stages: the symbolic form, the form with values substituted, and the result.
 

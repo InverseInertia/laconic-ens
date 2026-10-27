@@ -341,9 +341,18 @@ def test_matrix_functions():
 
 
 def test_sigfigsbig_keeps_trailing_zeros():
-    rs = run("a = 2.5\nb = 12345.678\nc = 0.00012\nd = 3e9\n!sigfigsbig 4\na\nb\nc\nd\n0\n!sigfigs 4\na")
+    rs = run("a = 2.5\nb = 12345.678\nc = 0.00012\nd = 3e9\n!sigfigsbig 4\na\nb\nc\nd\na - a\n!sigfigs 4\na")
     shown = lambda r: r.text.split("= ")[-1]
     assert [shown(rs[i]) for i in (5, 6, 7, 8, 9, 11)] == ["2.500", "12350", "0.0001200", "3.000e9", "0.000", "2.5"]
+
+
+def test_typed_in_values_are_shown_as_typed():
+    """#96: the sheet's figures round what it computes, not a number or quantity typed on its own."""
+    rs = run("L = 12345.678'm\nx = 3.14159265\n-2.718281828\nv = 3.14159'm/'s\n2*x")
+    assert [r.text for r in rs] == ["L = 12345.678 m", "x = 3.14159265", "-2.718281828",
+                                    "v = 3.14159 m/s", "6.283"]
+    assert rs[0].stages == ["12345.678\\,\\mathrm{m}"]
+    assert rs[1].stages == ["3.14159265"]
 
 
 def test_browser_env_restores_library_path_when_frozen(monkeypatch):
