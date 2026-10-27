@@ -56,6 +56,7 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 ## CI
 
 - `.github/workflows/build.yml` runs pytest on every push and pull request, then builds and smoke-tests the standalone programs. See [Releases and Packaging](Releases-and-Packaging).
+- `.github/workflows/changelog.yml` fails a pull request that changes `laconic/` or `packaging/` without adding to `## Unreleased` in `CHANGELOG.md`, unless it is labelled `no changelog`.
 - `.github/workflows/wiki.yml` publishes `wiki/` to the GitHub wiki when it changes on `main`. Edit the pages in `wiki/`, never in the wiki itself.
 
 The browser tests need `playwright`; with a preinstalled browser, set `CHROMIUM_PATH` to its executable.

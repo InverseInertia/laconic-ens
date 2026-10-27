@@ -1,0 +1,25 @@
+name: changelog
+
+# A pull request that changes the program must add to CHANGELOG.md's Unreleased section, which
+# the release job publishes as the release notes. Label the PR "no changelog" for changes no
+# user would notice (refactors, tests, CI).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  changelog:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no changelog') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: CHANGELOG.md is updated when laconic/ or packaging/ changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          if echo "$changed" | grep -q '^\(laconic\|packaging\)/' && ! echo "$changed" | grep -qx CHANGELOG.md; then
+            echo "::error file=CHANGELOG.md::This PR changes laconic/ or packaging/ but not CHANGELOG.md. Add a line under '## Unreleased', or label the PR 'no changelog' if no user would notice the change."
+            exit 1
+          fi
