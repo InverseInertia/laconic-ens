@@ -369,11 +369,78 @@ def test_app_window_gets_the_launchers_wm_class_on_linux(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    monkeypatch.setattr(cli.shutil, "which", lambda exe: "/usr/bin/" + exe)
+    monkeypatch.setattr(cli.browser, "find", lambda: "/usr/bin/google-chrome")
     monkeypatch.setattr(cli, "_spawn", lambda cmd: calls.append(cmd) or True)
     cli._launch("http://127.0.0.1:1", app=True)
     cmd = calls[0]
     assert "--class=lens" in cmd and cmd[-1] == "--app=http://127.0.0.1:1"
     assert f"--user-data-dir={tmp_path / 'laconic-lens' / 'browser'}" in cmd
     monkeypatch.setattr(sys, "platform", "win32")
-    assert cli._app_args("http://x") == ["--app=http://x"]
+    assert cli._app_args("http://x", "chrome.exe") == ["--app=http://x"]
+
+
+def _no_browsers(monkeypatch, tmp_path, platform, default=None):
+    """browser.find on `platform` with nothing installed, `default` the default browser's
+    .desktop name (none when None) and an empty home."""
+    import sys
+    from laconic import browser
+    monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.delenv("LENS_CHROMIUM", raising=False)
+    monkeypatch.setattr(browser.shutil, "which", lambda exe: None)
+    monkeypatch.setattr(browser.subprocess, "run",
+                        lambda *a, **k: browser.subprocess.CompletedProcess(a, 0, (default or "") + "\n", ""))
+    monkeypatch.setattr(browser, "_windows_default", lambda: None)
+    monkeypatch.setattr(browser.Path, "home", lambda: tmp_path)
+    return browser
+
+
+def test_find_browser_takes_any_chromium_family_browser(monkeypatch, tmp_path):
+    """#72: Brave (or Vivaldi, Opera...) alone is enough for the app window and the PDF."""
+    browser = _no_browsers(monkeypatch, tmp_path, "linux")
+    assert browser.find() is None
+    monkeypatch.setattr(browser.shutil, "which", lambda exe: "/usr/bin/brave" if exe == "brave" else None)
+    assert browser.find() == "/usr/bin/brave"
+
+
+def test_find_browser_prefers_the_default_browser(monkeypatch, tmp_path):
+    """With Chrome and Brave both installed and Brave the default, LENS opens Brave."""
+    browser = _no_browsers(monkeypatch, tmp_path, "linux", default="brave-browser.desktop")
+    monkeypatch.setattr(browser.shutil, "which", lambda exe: "/usr/bin/" + exe)
+    assert browser.find() == "/usr/bin/brave-browser"
+    # A .desktop name LENS does not know: its Exec line names the program.
+    browser = _no_browsers(monkeypatch, tmp_path, "linux", default="brave-custom.desktop")
+    monkeypatch.setattr(browser.shutil, "which", lambda exe: "/usr/bin/" + exe)
+    apps = tmp_path / "share" / "applications"
+    apps.mkdir(parents=True)
+    (apps / "brave-custom.desktop").write_text("[Desktop Entry]\nExec=/opt/brave.com/brave/brave-browser-stable %U\n")
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
+    assert browser.find() == "/usr/bin/brave-browser-stable"
+    # A default that is not Chromium-family is passed over.
+    browser = _no_browsers(monkeypatch, tmp_path, "linux", default="firefox.desktop")
+    monkeypatch.setattr(browser.shutil, "which", lambda exe: "/usr/bin/" + exe)
+    assert browser.find() == "/usr/bin/google-chrome"
+
+
+def test_find_browser_flatpak_windows_and_macos(monkeypatch, tmp_path):
+    browser = _no_browsers(monkeypatch, tmp_path, "linux")
+    flat = tmp_path / ".local/share/flatpak/exports/bin/com.brave.Browser"
+    flat.parent.mkdir(parents=True)
+    flat.write_text("")
+    assert browser.find() == str(flat)
+    assert browser.profile_dir(flat) == tmp_path / ".var/app/com.brave.Browser/cache/laconic-lens"
+    assert browser.profile_dir("/snap/bin/brave") == tmp_path / "snap/brave/common/laconic-lens"
+
+    browser = _no_browsers(monkeypatch, tmp_path, "win32")
+    exe = tmp_path / "pf" / "BraveSoftware/Brave-Browser/Application/brave.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_text("")
+    monkeypatch.setenv("PROGRAMFILES", str(tmp_path / "pf"))
+    monkeypatch.delenv("PROGRAMFILES(X86)", raising=False)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    assert browser.find() == str(exe)
+
+    browser = _no_browsers(monkeypatch, tmp_path, "darwin")
+    app = tmp_path / "Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+    app.parent.mkdir(parents=True)
+    app.write_text("")
+    assert browser.find() == str(app)

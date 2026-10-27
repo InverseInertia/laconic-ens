@@ -7,16 +7,12 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from . import document, evaluate, markdown, settings
+from . import browser, document, evaluate, markdown, settings
 from .sheet import solve_block, solver_blocks
 from .blockedit import apply
 from .solver import write_result
 
 EXAMPLES = Path(__file__).parent / "examples"
-
-_CHROMIUM = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-             "microsoft-edge", "brave-browser")
-
 
 def _browser_env():
     """The environment for a browser we start. A PyInstaller build on Linux puts its own
@@ -45,17 +41,16 @@ def _spawn(cmd):
 WM_CLASS = "lens"   # the StartupWMClass of the launcher install-linux.sh writes
 
 
-def _app_args(url):
+def _app_args(url, exe):
     """The browser arguments for an app window. On Linux the desktop matches a window to its
     launcher, and so to the launcher's icon, by the window's WM_CLASS; a Chromium app window's is
     ("127.0.0.1", "Google-chrome") or the like, which no LENS launcher names, so the panel showed the
     browser's icon or none (#66). --class sets it, but only in a browser process of its own:
     a window opened through an already running browser takes that browser's class. Hence a
-    profile of LENS's own, kept in the cache folder."""
+    profile of LENS's own, kept in the cache folder (or the sandbox's, see browser.profile_dir)."""
     args = [f"--app={url}"]
     if sys.platform.startswith("linux"):
-        cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-        args = [f"--class={WM_CLASS}", f"--user-data-dir={cache / 'laconic-lens' / 'browser'}",
+        args = [f"--class={WM_CLASS}", f"--user-data-dir={browser.profile_dir(exe)}",
                 "--no-first-run", "--no-default-browser-check"] + args
     return args
 
@@ -64,10 +59,9 @@ def _launch(url, app):
     """--app opens a Chromium-family window with no tabs or address bar, which
     gives the page more of the keyboard (Ctrl+T is a new tab in a normal tab)."""
     if app:
-        for exe in _CHROMIUM:
-            path = shutil.which(exe)
-            if path and _spawn([path] + _app_args(url)):
-                return
+        exe = browser.find()
+        if exe and _spawn([exe] + _app_args(url, exe)):
+            return
         print("No Chromium-based browser found, opening the default browser instead")
     # GTK browsers print harmless messages to the terminal; _spawn keeps them out of it.
     if sys.platform.startswith("linux") and shutil.which("xdg-open") and _spawn(["xdg-open", url]):
@@ -107,7 +101,7 @@ def main():
     ap.add_argument("file", nargs="?", help="worksheet file (.lens); with --serve, the sheet the page opens")
     ap.add_argument("--tex", metavar="OUT", help="write a LaTeX document to OUT")
     ap.add_argument("--md", metavar="OUT", help="write a Markdown note (Obsidian style) to OUT")
-    ap.add_argument("--pdf", metavar="OUT", help="write a PDF to OUT (needs Chrome, Chromium or Edge)")
+    ap.add_argument("--pdf", metavar="OUT", help="write a PDF to OUT (needs a Chromium-based browser: Chrome, Edge, Brave...)")
     ap.add_argument("--plots", metavar="DIR", help="write each plot as an SVG file in DIR")
     ap.add_argument("--solve", action="store_true",
                     help="run every !root/!minimize/!maximize block that is not up to date and store the results in the file")
