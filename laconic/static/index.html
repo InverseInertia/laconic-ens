@@ -789,14 +789,15 @@ document.addEventListener("keydown", (ev) => {
 // The plot, solver and rename endpoints answer with edits against the text they were sent
 // (laconic/blockedit.py). They go in here, as one edit, so one Ctrl+Z takes them back. If the text
 // changed while the server was working, the edits no longer fit: nothing is made and this says false.
-function applyEdits(base, edits) {
+// `asked` is for an edit the user asked for in a dialog (rename): it always takes the focus.
+function applyEdits(base, edits, asked = false) {
   if (src.value !== base) return false;
   const r = Editing.merge(base, edits, src.selectionStart);
   if (!r) return true;
   // An edit made while the user is typing somewhere else (a dialog, the name box) must not take the
   // focus; it goes in without joining the editor's undo stack. Otherwise it joins that stack.
   const other = document.activeElement;
-  if (other && other !== src && other !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(other.tagName)) {
+  if (!asked && other && other !== src && other !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(other.tagName)) {
     src.setRangeText(r.insert, r.from, r.to, "preserve");
     src.setSelectionRange(r.caret, r.caret);
     src.dispatchEvent(new Event("input", {bubbles: true}));
@@ -988,7 +989,9 @@ function apply(r) {
   else if (r.insert !== undefined) {
     applying = true;
     src.setSelectionRange(r.from, r.to);
-    let ok = r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert);
+    // execCommand edits whatever has the focus, so it is used only while the editor has it.
+    let ok = document.activeElement === src
+      && (r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert));
     if (!ok) { src.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
     src.setSelectionRange(r.caret, r.caret);
     applying = false;
@@ -1428,8 +1431,11 @@ $("#renameForm").addEventListener("submit", async (ev) => {
   }
   if (!res.ok) { err.textContent = res.error; err.hidden = false; return; }
   $("#renameDlg").close();
-  src.focus();   // so the rename joins the editor's undo stack and Ctrl+Z takes it back
-  if (!applyEdits(text, res.edits)) { say("The sheet changed meanwhile; rename again"); return; }
+  // Some browsers keep the focus in the closed dialog's field until the next frame, and an edit made
+  // then misses the editor's undo stack. After it, the rename goes into the editor as one step that
+  // Ctrl+Z takes back and Ctrl+Y makes again.
+  await new Promise(requestAnimationFrame);
+  if (!applyEdits(text, res.edits, true)) { say("The sheet changed meanwhile; rename again"); return; }
   say(`Renamed ${res.count} use${res.count === 1 ? "" : "s"}`);
 });
 
