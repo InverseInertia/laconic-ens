@@ -34,14 +34,15 @@
     display: grid;
     grid-template-rows: auto 1fr;
   }
+  /* The toolbar wraps rather than running off the right edge (a long name, or a window just wide enough to keep the editor beside the results). */
   header {
-    display: flex; align-items: center; gap: 8px;
-    min-height: var(--hdr); padding: 0 12px 0 0;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    min-height: var(--hdr); padding: 4px 12px 4px 0;
     border-bottom: 1px solid var(--rule);
     background: var(--paper-deep);
   }
   svg.logo .grid { display: none; }  /* the header logo drops the grid; the favicon file keeps it */
-  .logo { display: block; flex: none; width: var(--hdr); height: var(--hdr); }
+  .logo { display: block; flex: none; width: var(--hdr); height: var(--hdr); margin: -4px 0; }  /* fills the header's padding */
   .brand { font: 600 14px var(--sans); letter-spacing: .1em; padding-right: 10px; border-right: 1px solid var(--rule); white-space: nowrap; }
   .brand .version { font: 400 11px var(--sans); letter-spacing: 0; color: var(--text-soft); }
   header input[type=text] {
@@ -150,7 +151,8 @@
   .row.snip .copy:hover { color: var(--paper); border-color: var(--ink); }
   header label { display: flex; align-items: center; gap: 4px; font: 400 13px/1.15 var(--sans); cursor: pointer; }
   header input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
-  #status { font: 400 13px var(--sans); color: var(--text-soft); min-height: 1em; }
+  /* The status takes only space left over on its row, so a message never moves the buttons. */
+  #status { font: 400 13px var(--sans); color: var(--text-soft); min-height: 1em; flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   dialog { background: var(--paper); color: var(--text); border: 2px solid var(--ink); padding: 0; width: min(600px, 92vw); }
   dialog::backdrop { background: rgba(23, 37, 61, .35); }
@@ -269,7 +271,7 @@
     #split::before { inset: 3px 0; }
     #split:hover::before, #split.drag::before, #split:focus-visible::before { inset: 2px 0; }
     body.dragging { cursor: row-resize; }
-    header { flex-wrap: wrap; gap: 8px 12px; padding: 0 12px 8px 0; }
+    header { gap: 8px 12px; padding: 4px 12px 8px 0; }
     .logo { align-self: flex-start; }
     header .spacer { display: none; }
     .brand { border-right: 0; padding-right: 0; }
