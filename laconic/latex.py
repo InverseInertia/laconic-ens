@@ -76,9 +76,10 @@ _GREEK_CHARS = {
 }
 
 
-# Unit symbols in the .tex preamble go through pdflatex, which wants macros for these.
+# Unit symbols in the .tex preamble go through pdflatex, which wants macros for these
+# (ℎ is Pint's symbol for Planck's constant, an italic h).
 _DECL_GLYPHS = {c: v + " " if v.startswith("\\") else v
-                for c, v in {**_GREEK_CHARS, "µ": "\\mu", "∞": "\\infty"}.items()}
+                for c, v in {**_GREEK_CHARS, "µ": "\\mu", "∞": "\\infty", "ℎ": "\\mathit{h}"}.items()}
 
 
 def _glyph(c):

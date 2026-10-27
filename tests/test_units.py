@@ -165,11 +165,27 @@ def test_export_declares_pint_units_siunitx_lacks():
 
 
 def test_export_uses_siunitx_spellings_and_declares_nothing_it_knows():
-    ws = evaluate("a = 2'eV\nb = 3'au\nc = 4't\nd = 5'km/'h\ne = 6'degC\nf = 7'percent", siunitx=True)
+    ws = evaluate("a = 2'eV\nb = 3'au\nc = 4't\nd = 5'km/'min\ne = 6'degC\nf = 7'percent", siunitx=True)
     tex = "\n".join(r.latex for r in ws.results)
-    assert all(m in tex for m in (r"\electronvolt", r"\astronomicalunit", r"\tonne", r"\kilo\meter\per\hour",
+    assert all(m in tex for m in (r"\electronvolt", r"\astronomicalunit", r"\tonne", r"\kilo\meter\per\minute",
                                   r"\degreeCelsius", r"\percent"))
     assert ws.declarations == []
+
+
+def test_the_hour_shows_as_hr_and_plancks_constant_as_h():
+    # #89: siunitx's \hour and Pint's hour both print h, the symbol of Planck's constant
+    assert last("t = 2'h").text == "t = 2 hr" and last("t = 2'hr").text == "t = 2 hr"
+    assert last("v = 60'km/'h").text == "v = 60 km/hr"
+    assert r"\frac{\mathrm{km}}{\mathrm{hr}}" in last("v = 60'km/'h").latex
+    assert last("E = 2'kW*'h").text == "E = 2 hr⋅kW"
+    assert last("E = 3'kWh").text == "E = 3 kWh"      # a unit of its own, symbol and all
+    assert r"\mathrm{ℎ}" in last("x = 'h_P").latex
+    ws = evaluate("t = 2'h\nv = 5'km/'h\nx = 'h_P", siunitx=True)
+    assert r"\qty{2}{\hour}" in ws.results[0].latex and r"\kilo\meter\per\hour" in ws.results[1].latex
+    tex = document(ws.results, declarations=ws.declarations)
+    assert r"\DeclareSIUnit{\hour}{\ensuremath{\mathrm{hr}}}" in tex
+    assert r"\DeclareSIUnit{\planckConstant}{\ensuremath{\mathrm{\mathit{h} }}}" in tex
+    assert "ℎ" not in tex    # pdflatex has no glyph for it
 
 
 def test_every_exported_unit_macro_is_a_name_latex_accepts():
@@ -219,7 +235,7 @@ def test_currencies_are_units_that_never_convert_into_each_other():
 
 def test_a_price_keeps_the_units_it_was_typed_in():
     assert last("p = 0.12'USD/'kWh * 2").text == "p = 0.24 USD/kWh"
-    assert last("p = 12'USD/'h * 3").text == "p = 36 USD/h"
+    assert last("p = 12'USD/'h * 3").text == "p = 36 USD/hr"
     assert last("p = 0.12'USD/'kWh * 3'MJ").text == "p = 0.1 USD"
     assert last("p = 2'kUSD * 3").text == "p = 6 kUSD"
 

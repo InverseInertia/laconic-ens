@@ -43,6 +43,8 @@ def registry():
     # (matching `lbf`) and drop `lb`. Pint's year symbol is `a` (annum), which nobody reads
     # as a year; make `yr` the symbol and keep `a` as an alias. Pint's liter symbol is `l`,
     # easily misread as a 1; print the capital `L` (mL, kL) and keep `l` as an alias.
+    # Pint's hour symbol is `h`, which is also the symbol of Planck's constant ('h_P);
+    # print `hr` (km/hr) and keep `h` as an alias.
     src = Path(pint.__file__).parent
     with tempfile.TemporaryDirectory() as tmp:
         shutil.copy(src / "constants_en.txt", tmp)
@@ -55,6 +57,9 @@ def registry():
         before = renamed
         renamed = renamed.replace("liter = decimeter ** 3 = l = L =", "liter = decimeter ** 3 = L = l =")
         assert renamed != before, "pint's liter definition changed"
+        before = renamed
+        renamed = renamed.replace("hour = 60 * minute = h = hr", "hour = 60 * minute = hr = h")
+        assert renamed != before, "pint's hour definition changed"
         (Path(tmp) / "default_en.txt").write_text(renamed, encoding="utf-8")
         ureg = pint.UnitRegistry(str(Path(tmp) / "default_en.txt"), autoconvert_offset_to_baseunit=True)
     catalogue.define(ureg)

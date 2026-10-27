@@ -40,7 +40,7 @@ CONSTANTS = [
     ("Av", "Avogadro's number, a plain count", "Av = avogadro_number"),
     ("k_B", "Boltzmann constant", None),
     ("c", "speed of light in vacuum", None),
-    ("h_P", "Planck constant", "@alias planck_constant = h_P"),   # 'h is the hour
+    ("h_P", "Planck constant", "@alias planck_constant = h_P"),   # 'h is the hour, shown as hr
     ("hbar", "reduced Planck constant", None),
     ("e", "elementary charge", None),
     ("sigma", "Stefan-Boltzmann constant", None),
@@ -54,12 +54,14 @@ CONSTANTS = [
 
 # What siunitx v3 defines itself, of the macro names Pint's siunitx format emits.
 # Any other Pint unit (foot, standard_gravity, ...) needs a \DeclareSIUnit of its own.
+# siunitx's \hour is left out on purpose: it prints h, the symbol of Planck's constant, so the
+# export declares \hour again with LENS's symbol, hr.
 _SIUNITX = set("""
     quecto ronto yocto zepto atto femto pico nano micro milli centi deci deca hecto kilo
     mega giga tera peta exa zetta yotta ronna quetta kibi mebi gibi tebi pebi exbi zebi yobi
     ampere candela kelvin kilogram gram meter metre mole second becquerel degreeCelsius
     coulomb farad gray hertz henry joule katal lumen lux newton ohm pascal radian siemens
-    sievert steradian tesla volt watt weber day hour minute hectare liter litre tonne
+    sievert steradian tesla volt watt weber day minute hectare liter litre tonne
     arcminute arcsecond degree electronvolt dalton neper bel decibel astronomicalunit percent
     per square squared cubic cubed tothe raiseto""".split())
 # Pint names whose siunitx macro is spelt differently.

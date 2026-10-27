@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Changes
+- **The hour prints as `hr`** (`2 hr`, `60 km/hr`) in results, the PDF and the LaTeX export, so it is no longer confused with Planck's constant, which is shown as *h*. Typing `'h` or `'hr` still gives the hour, and `kWh`, `Wh` and `mph` keep their symbols. The LaTeX export also compiles with `'h_P` in it. (#89)
+
 ## [v0.3.6](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.6) (2026-10-27)
 
 ### New

@@ -21,6 +21,8 @@ Angles keep their radians (`asin(0.5)` gives `0.5236 rad`). degF becomes degC, a
 
 The pound is `'lbm` (mass) and `'lbf` (force). Pint's own `lb` is removed because it reads as either.
 
+The hour prints as `hr` (`60 km/hr`, `2 hr`), in the results, the PDF and the LaTeX export, because `h` is the symbol of Planck's constant. Type `'h` or `'hr`; both are the hour. Units with a symbol of their own keep it: `kWh`, `Wh`, `mph`.
+
 ## The units dialog
 
 **Units** in the header lists every unit LENS knows. Type in the search box to match a unit's name or description (`bar`, `gas`, `pound square`: every word must match), and click a tag to show only the units that have it. Click a unit to insert it at the caret; Ctrl+Z takes it back.
@@ -48,7 +50,7 @@ A line that uses a constant shows its value, even a single typed quantity (`3'mo
 | `'Av` | Avogadro's number, a plain count (no unit) | 6.02214076×10²³ |
 | `'k_B` (or `'k`) | Boltzmann constant | 1.380649×10⁻²³ J/K |
 | `'c` | speed of light in vacuum | 299792458 m/s |
-| `'h_P` | Planck constant (`'h` is the hour) | 6.62607015×10⁻³⁴ J·s |
+| `'h_P` | Planck constant, shown as *h* (`'h` is the hour, shown as hr) | 6.62607015×10⁻³⁴ J·s |
 | `'hbar` | reduced Planck constant | 1.05457181765×10⁻³⁴ J·s |
 | `'e` | elementary charge | 1.602176634×10⁻¹⁹ C |
 | `'sigma` | Stefan–Boltzmann constant | 5.67037441918×10⁻⁸ W/(m²·K⁴) |
@@ -109,5 +111,5 @@ Defined once per machine under **Settings → Units** and available in every she
 Save and Export carry the definitions a sheet depends on, so a copy opens correctly on another machine.
 
 - **Save (`.lens`)** appends the global units the sheet uses, and the units those are defined in terms of, in a marked block at the end (`#@ unit definitions ...` to `#@ end ...`). Units the sheet already defines are not repeated, so saving twice does not stack blocks.
-- **Export (`.tex`)** writes a `\DeclareSIUnit` line per custom unit in the preamble. Names that are not letters only get a letters-only macro (`psi_g` becomes `\psiUnderg`). Built-in units that siunitx does not define, such as `'ft`, `'psi` and `'g0`, are declared the same way (`\foot`, `\poundForcePerSquareInch`, `\standardGravity`).
+- **Export (`.tex`)** writes a `\DeclareSIUnit` line per custom unit in the preamble. Names that are not letters only get a letters-only macro (`psi_g` becomes `\psiUnderg`). Built-in units that siunitx does not define, such as `'ft`, `'psi` and `'g0`, are declared the same way (`\foot`, `\poundForcePerSquareInch`, `\standardGravity`). siunitx's own `\hour` prints `h`, so the export declares `\hour` again as `hr`.
 - **Opening** a sheet on a machine with its own global of the same name is fine if the sizes agree. If they differ, the definition line shows an error naming the machine's value; rename the unit in the sheet or change the global.
