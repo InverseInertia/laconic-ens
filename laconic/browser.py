@@ -17,13 +17,16 @@ NAMES = ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"
 # Flatpak's launchers, in its exports folder, which is not always on PATH.
 FLATPAKS = ("com.google.Chrome", "org.chromium.Chromium", "com.microsoft.Edge", "com.brave.Browser",
             "com.vivaldi.Vivaldi", "com.opera.Opera", "io.github.ungoogled_software.ungoogled_chromium")
-# Windows does not put the browsers on PATH: paths under Program Files and the per-user AppData.
+# Windows does not put the browsers on PATH: paths under Program Files and the per-user AppData,
+# else wherever the registry's App Paths says the program is (a browser installed elsewhere).
 # Edge is always there, so it is last: an installed Brave or Chrome is the one the user chose.
 WINDOWS = ("BraveSoftware/Brave-Browser/Application/brave.exe", "Google/Chrome/Application/chrome.exe",
            "Vivaldi/Application/vivaldi.exe", "Chromium/Application/chrome.exe",
-           "Microsoft/Edge/Application/msedge.exe")
+           "Programs/Opera/opera.exe", "Microsoft/Edge/Application/msedge.exe")
 # The default browser's ProgId (from the http UserChoice key) -> the WINDOWS entry it is.
-_WINDOWS_PROGIDS = {"BraveHTML": 0, "ChromeHTML": 1, "VivaldiHTM": 2, "ChromiumHTM": 3, "MSEdgeHTM": 4}
+_WINDOWS_PROGIDS = {"BraveHTML": 0, "ChromeHTML": 1, "VivaldiHTM": 2, "ChromiumHTM": 3, "Opera": 4,
+                    "MSEdgeHTM": 5}
+_APP_PATHS = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
 MACOS = ("Google Chrome", "Brave Browser", "Microsoft Edge", "Chromium", "Vivaldi", "Opera")
 
 
@@ -75,46 +78,70 @@ def _windows_roots():
     return [r for r in (os.environ.get(v) for v in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA")) if r]
 
 
-def _windows_default():
+def _registry(hive, key, name=""):
+    """A registry value under HKEY_CURRENT_USER ("HKCU") or HKEY_LOCAL_MACHINE ("HKLM"), or None."""
     try:
         import winreg
-        key = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
-            progid = winreg.QueryValueEx(k, "ProgId")[0]
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER if hive == "HKCU" else winreg.HKEY_LOCAL_MACHINE, key) as k:
+            return winreg.QueryValueEx(k, name)[0]
     except (ImportError, OSError):
         return None
-    i = next((i for prefix, i in _WINDOWS_PROGIDS.items() if progid.startswith(prefix)), None)
-    if i is None:
-        return None
-    return next((str(p) for r in _windows_roots() if (p := Path(r) / WINDOWS[i]).is_file()), None)
 
 
-def find():
-    """A Chromium-family browser's path, or None."""
-    if (p := os.environ.get("LENS_CHROMIUM")) and Path(p).is_file():
-        return p
-    if sys.platform.startswith("linux") and (p := _linux_default()):
-        return p
-    if sys.platform == "win32" and (p := _windows_default()):
-        return p
-    for exe in NAMES:
-        if p := shutil.which(exe):
+def _windows(rel):
+    """Where the WINDOWS entry `rel` is installed: under one of the usual roots, else where App
+    Paths says its program is. None when neither has it."""
+    for root in _windows_roots():
+        if (p := Path(root) / rel).is_file():
+            return str(p)
+    for hive in ("HKCU", "HKLM"):
+        if (p := _registry(hive, rf"{_APP_PATHS}\{Path(rel).name}")) and Path(p := p.strip('"')).is_file():
             return p
+    return None
+
+
+def _windows_default():
+    key = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
+    if not (progid := _registry("HKCU", key, "ProgId")):
+        return None
+    i = next((i for prefix, i in _WINDOWS_PROGIDS.items() if progid.startswith(prefix)), None)
+    return None if i is None else _windows(WINDOWS[i])
+
+
+def candidates():
+    """Every Chromium-family browser found, best first, each once."""
+    seen = set()
+    for p in _candidates():
+        if p and p not in seen:
+            seen.add(p)
+            yield p
+
+
+def _candidates():
+    if (p := os.environ.get("LENS_CHROMIUM")) and Path(p).is_file():
+        yield p
+    if sys.platform.startswith("linux"):
+        yield _linux_default()
+    if sys.platform == "win32":
+        yield _windows_default()
+    for exe in NAMES:
+        yield shutil.which(exe)
     if sys.platform.startswith("linux"):
         for app_id in FLATPAKS:
-            if p := _flatpak(app_id):
-                return p
+            yield _flatpak(app_id)
     if sys.platform == "win32":
         for rel in WINDOWS:
-            for root in _windows_roots():
-                if (p := Path(root) / rel).is_file():
-                    return str(p)
+            yield _windows(rel)
     if sys.platform == "darwin":
         for app in MACOS:
             for root in (Path("/Applications"), Path.home() / "Applications"):
                 if (p := root / f"{app}.app" / "Contents" / "MacOS" / app).is_file():
-                    return str(p)
-    return None
+                    yield str(p)
+
+
+def find():
+    """The best Chromium-family browser's path, or None."""
+    return next(candidates(), None)
 
 
 def profile_dir(exe):

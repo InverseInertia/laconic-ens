@@ -59,9 +59,9 @@ def _launch(url, app):
     """--app opens a Chromium-family window with no tabs or address bar, which
     gives the page more of the keyboard (Ctrl+T is a new tab in a normal tab)."""
     if app:
-        exe = browser.find()
-        if exe and _spawn([exe] + _app_args(url, exe)):
-            return
+        for exe in browser.candidates():   # the next one when a browser will not start
+            if _spawn([exe] + _app_args(url, exe)):
+                return
         print("No Chromium-based browser found, opening the default browser instead")
     # GTK browsers print harmless messages to the terminal; _spawn keeps them out of it.
     if sys.platform.startswith("linux") and shutil.which("xdg-open") and _spawn(["xdg-open", url]):

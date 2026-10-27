@@ -1,5 +1,6 @@
 """Draws packaging/file-icon.png and file-icon.ico, the icon of a .lens file: a page with a
-folded corner carrying the app icon (packaging/icon.png). Run it after changing icon.png."""
+folded corner carrying the app icon (packaging/icon.png), and copies the app icon to
+laconic/static/icon-192.png and icon-512.png for the app window. Run it after changing icon.png."""
 import os
 from PIL import Image, ImageDraw
 
@@ -14,7 +15,10 @@ w = int(12 * u)
 d.polygon([(L, T), (R - F, T), (R, T + F), (R, B), (L, B)], fill=page, outline=ink, width=w)
 d.polygon([(R - F, T), (R - F, T + F), (R, T + F)], fill=fold, outline=ink, width=w)
 d.line([(R - F, T), (R, T + F)], fill=ink, width=w)
-logo = Image.open(f"{root}/packaging/icon.png").convert("RGBA")
+app = Image.open(f"{root}/packaging/icon.png").convert("RGBA")
+for px in (192, 512):
+    app.resize((px, px), Image.LANCZOS).save(f"{root}/laconic/static/icon-{px}.png", optimize=True)
+logo = app
 size = int(250 * u)
 logo = logo.resize((size, size), Image.LANCZOS)
 x, y = int((L + R) / 2 - size / 2), int(B - size - 40 * u)
