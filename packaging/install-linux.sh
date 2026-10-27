@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs LENS for the current user: copies the binary and icon under ~/.local, adds a
+# Installs LENS for the current user: unpacks the program and copies the icons under ~/.local, adds a
 # launcher entry (.desktop file) to the application menu, and makes .lens files open in LENS
 # with an icon of their own. Any earlier install is removed first, so running it again updates.
 #
@@ -9,21 +9,22 @@
 #   sh lens-install-linux.sh --version          print this installer's version
 #
 # The latest release is looked up on GitHub when the script runs. Files of that release already
-# beside the script (lens-<version>-linux-x64, lens-<version>-icon.png,
+# beside the script (lens-<version>-linux-x64.tar.gz, lens-<version>-icon.png,
 # lens-<version>-file-icon.png) are used as they are; missing ones are downloaded. Offline, it
-# installs the newest release whose files are beside it. A build of your own (lens-linux-x64,
-# lens-icon.png and lens-file-icon.png beside it) is installed without asking GitHub.
+# installs the newest release whose files are beside it. A build of your own
+# (lens-linux-x64.tar.gz, lens-icon.png and lens-file-icon.png beside it) is installed without
+# asking GitHub. The archive holds the folder PyInstaller builds: lens/lens and lens/_internal.
 # No root needed; XDG_DATA_HOME is honoured.
 set -eu
 
 # The installer's own version, numbered apart from LENS's: bump it when this script changes
 # (see wiki/Releases-and-Packaging.md).
-INSTALLER_VERSION="1.0.0"
+INSTALLER_VERSION="2.0.0"
 REPO="inverseinertia/laconic-ens"
 LATEST_API="${LENS_RELEASE_API:-https://api.github.com/repos/$REPO/releases/latest}"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 APP_DIR="$DATA/laconic-lens"
-BIN="$APP_DIR/lens"
+BIN="$APP_DIR/lens"   # the program, beside its _internal folder
 ICON="$DATA/icons/hicolor/512x512/apps/laconic-lens.png"
 DESKTOP="$DATA/applications/laconic-lens.desktop"
 LINK="$HOME/.local/bin/lens"
@@ -75,14 +76,14 @@ latest_release() {  # the latest release's version (0.3.5) from the GitHub API, 
     fi
     rm -f "$reply"
 }
-newest_beside() {  # the newest version with a lens-<version>-linux-x64 beside the script, or nothing
-    for f in "$HERE"/lens-*-linux-x64; do
+newest_beside() {  # the newest version with a lens-<version>-linux-x64.tar.gz beside the script, or nothing
+    for f in "$HERE"/lens-*-linux-x64.tar.gz; do
         [ -f "$f" ] || continue
-        v="${f##*/lens-}"; echo "${v%-linux-x64}"
+        v="${f##*/lens-}"; echo "${v%-linux-x64.tar.gz}"
     done | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1
 }
 
-if [ -z "$RELEASE" ] && [ -f "$HERE/lens-linux-x64" ]; then
+if [ -z "$RELEASE" ] && [ -f "$HERE/lens-linux-x64.tar.gz" ]; then
     PREFIX="lens"  # a build of your own, unversioned: nothing to look up or download
     BASE=""
     echo "Installing the LENS build beside this script (installer $INSTALLER_VERSION) ..."
@@ -94,7 +95,7 @@ else
             RELEASE="$(newest_beside)"
             if [ -z "$RELEASE" ]; then
                 echo "Could not look up the latest release (offline, or GitHub did not answer)." >&2
-                echo "Try again later, or put lens-<version>-linux-x64, lens-<version>-icon.png and" >&2
+                echo "Try again later, or put lens-<version>-linux-x64.tar.gz, lens-<version>-icon.png and" >&2
                 echo "lens-<version>-file-icon.png from https://github.com/$REPO/releases beside this script." >&2
                 exit 1
             fi
@@ -125,7 +126,7 @@ is_png() {  # a proxy or captive portal can hand back an HTML page instead of th
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-fetch "$PREFIX-linux-x64" "$STAGE/lens"
+fetch "$PREFIX-linux-x64.tar.gz" "$STAGE/lens.tar.gz"
 fetch "$PREFIX-icon.png" "$STAGE/icon.png"
 fetch "$PREFIX-file-icon.png" "$STAGE/file-icon.png"
 for f in icon.png file-icon.png; do
@@ -134,10 +135,15 @@ for f in icon.png file-icon.png; do
         exit 1
     fi
 done
+mkdir "$STAGE/app"
+if ! tar -xzf "$STAGE/lens.tar.gz" -C "$STAGE/app" 2>/dev/null || [ ! -x "$STAGE/app/lens/lens" ]; then
+    echo "$PREFIX-linux-x64.tar.gz is not a LENS program archive (download failed?); not installing." >&2
+    exit 1
+fi
 
 remove_existing
 mkdir -p "$APP_DIR" "$(dirname "$ICON")" "$(dirname "$DESKTOP")" "$(dirname "$MIME_XML")" "$(dirname "$FILE_ICON")"
-install -m 755 "$STAGE/lens" "$BIN"
+cp -R "$STAGE/app/lens/." "$APP_DIR/"
 if [ -n "$BASE" ]; then echo "$RELEASE" > "$APP_DIR/version"; fi  # what the next run updates from
 install -m 644 "$STAGE/icon.png" "$ICON"
 install -m 644 "$STAGE/file-icon.png" "$FILE_ICON"

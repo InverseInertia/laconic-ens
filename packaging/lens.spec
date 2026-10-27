@@ -20,23 +20,11 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 icon = ICON if os.path.exists(ICON) and sys.platform in ("win32", "darwin") else None
-if sys.platform == "win32":
-    # A folder (dist/lens: lens.exe beside _internal), which packaging/lens.iss turns into the
-    # installer. A one-file build unpacks itself to a temporary folder on every launch (and
-    # antivirus scans what it unpacks) before LENS can start.
-    exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="lens",
-              console=False,  # no console window
-              upx=False, icon=icon)
-    coll = COLLECT(exe, a.binaries, a.datas, name="lens", upx=False)
-else:
-    # One file (dist/lens), which is what install-linux.sh installs.
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.datas,
-        name="lens",
-        console=True,
-        upx=False,
-        icon=icon,
-    )
+# A folder, dist/lens: the program lens (lens.exe) beside _internal, which the installers install
+# (packaging/lens.iss on Windows; on Linux the build workflow packs it as a .tar.gz for
+# install-linux.sh). A one-file build unpacks itself to a temporary folder on every launch (and
+# antivirus scans what it unpacks) before LENS can start.
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="lens",
+          console=sys.platform != "win32",  # no console window on Windows
+          upx=False, icon=icon)
+coll = COLLECT(exe, a.binaries, a.datas, name="lens", upx=False)

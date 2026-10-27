@@ -25,10 +25,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Windows builds a folder (dist/lens) and the installer made from it (packaging/lens.iss).
+          # Both build a folder, dist/lens. Windows makes the installer from it (packaging/lens.iss);
+          # Linux packs it as the archive install-linux.sh installs.
           - { os: windows-latest, name: lens-windows-x64, exe: dist/lens/lens.exe, out: dist/lens-setup.exe }
           # Oldest available runner so the binary works on more distros (glibc).
-          - { os: ubuntu-22.04, name: lens-linux-x64, exe: dist/lens, out: dist/lens }
+          - { os: ubuntu-22.04, name: lens-linux-x64, exe: dist/lens/lens, out: dist/lens-linux-x64.tar.gz }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +48,23 @@ jobs:
       - name: Smoke test (serves the page and the self-hosted assets)
         shell: bash
         run: python packaging/smoke.py ${{ matrix.exe }} "$(python -c 'from laconic._version import label; print(label())')"
+      - name: Pack, install, smoke test and uninstall (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # tar keeps the executable bits, which upload-artifact would drop.
+          tar -czf dist/lens-linux-x64.tar.gz -C dist lens
+          # Install it as a build of your own: the archive and icons, unversioned, beside the script.
+          kit="$RUNNER_TEMP/kit"; mkdir "$kit"
+          cp packaging/install-linux.sh dist/lens-linux-x64.tar.gz "$kit"
+          cp packaging/icon.png "$kit/lens-icon.png"; cp packaging/file-icon.png "$kit/lens-file-icon.png"
+          export HOME="$RUNNER_TEMP/home"; mkdir "$HOME"
+          sh "$kit/install-linux.sh"
+          app="$HOME/.local/share/laconic-lens"
+          python packaging/smoke.py "$app/lens" "$(python -c 'from laconic._version import label; print(label())')"
+          ls "$app"/examples/*.lens > /dev/null
+          grep -qx "Exec=\"$app/lens\" --window %f" "$HOME/.local/share/applications/laconic-lens.desktop"
+          sh "$kit/install-linux.sh" --uninstall
+          test ! -e "$app" && test ! -e "$HOME/.local/share/applications/laconic-lens.desktop"
       - name: Build the Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
@@ -94,8 +112,7 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir release
           mv artifacts/lens-windows-x64/lens-setup.exe "release/lens-$VERSION-windows-x64-setup.exe"
-          mv artifacts/lens-linux-x64/lens "release/lens-$VERSION-linux-x64"
-          chmod +x "release/lens-$VERSION-linux-x64"  # upload-artifact drops the executable bit
+          mv artifacts/lens-linux-x64/lens-linux-x64.tar.gz "release/lens-$VERSION-linux-x64.tar.gz"
       - uses: actions/checkout@v4
         with: { path: src, fetch-depth: 0 }  # all tags, for the compare link to the previous one
       - name: Release notes from CHANGELOG.md

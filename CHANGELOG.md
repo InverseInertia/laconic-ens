@@ -13,6 +13,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Windows installer**: `lens-<version>-windows-x64-setup.exe` is a setup wizard. It installs LENS for your user (no administrator) with a Start menu entry, an optional desktop shortcut, the example worksheets, and `.lens` files opening in LENS with their own icon. Running a newer one updates LENS, and Settings → Apps removes it. It replaces the single `lens-<version>-windows-x64.exe`, which had to unpack itself every time it started.
 
 ### Changes
+- **The Linux program is now a folder** (released as `lens-<version>-linux-x64.tar.gz`), so it no longer unpacks itself to a temporary folder each time it starts, which took over a second. `lens-install-linux.sh` installs it as before; download the installer again (version 2.0.0), since earlier copies look for the old single file.
 - **LENS opens faster**: the window opens while LENS is still loading instead of about two seconds later, and the first result no longer waits for the unit tables to be built. A second launch, or double-clicking a `.lens` file while LENS is running, hands over to the running LENS sooner.
 
 ## [v0.3.6](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.6) (2026-10-27)
