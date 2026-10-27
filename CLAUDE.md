@@ -8,7 +8,7 @@ Read `CONTEXT.md` for the domain glossary and `wiki/Architecture.md` and `wiki/D
 
 - Any change a user would notice (a feature, a behaviour or output change, a fix, a packaging or install change) adds a line under `## Unreleased`, in the group it belongs to (`### New`, `### Changes`, `### Fixes`), in the same commit or PR. Write it for users, not developers: what they can now do or what no longer goes wrong, ending with the PR or issue number, e.g. `(#74)`. Create the group if it is missing.
 - Refactors, tests, CI and docs-only changes need no entry; label the PR `no changelog`. The `changelog` workflow fails a PR that changes `laconic/` or `packaging/` without touching `CHANGELOG.md` and without that label.
-- When cutting a release, rename `## Unreleased` to `## [vX.Y.Z](https://github.com/InverseInertia/laconic-ens/releases/tag/vX.Y.Z) (YYYY-MM-DD)` and add a new, empty `## Unreleased` above it, then tag.
+- To cut a release, push a `vX.Y.Z` tag on main and leave `CHANGELOG.md` alone: the `changelog` job in `build.yml` renames `## Unreleased` to `## [vX.Y.Z](https://github.com/InverseInertia/laconic-ens/releases/tag/vX.Y.Z) (YYYY-MM-DD)` on main after the release, with a new, empty `## Unreleased` above it (`packaging/stamp_changelog.py`).
 
 ## Reviewing
 
