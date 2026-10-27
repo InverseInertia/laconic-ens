@@ -830,6 +830,9 @@ async function patchPlot(line, patch) {
   } catch { say("Could not reach the server"); return false; }
   if (!res.ok) { say(res.error); return false; }
   if (!applyEdits(text, res.edits)) { say("The sheet changed meanwhile, so the plot was not changed"); return false; }
+  // The moved plot becomes the focused line, so the redraw keeps it in view rather than
+  // scrolling back to wherever the caret was.
+  focusLine(line);
   return true;
 }
 
