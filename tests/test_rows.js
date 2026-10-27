@@ -11,7 +11,9 @@ const row = (kind, extra = {}) => ({ n: 1, end: 1, kind, source: '', text: '', l
 const body = (r, view) => R.model(r, { view }).body;
 
 // --- what each kind shows ---------------------------------------------------------------------
-eq(body(row('assign', { latex: 'x = 2' })), { type: 'tex', tex: 'x = 2' }, 'a calculation is typeset');
+eq(body(row('assign', { latex: 'x = 2' })), { type: 'tex', tex: 'x = 2', rows: ['x = 2'] }, 'a calculation is typeset');
+eq(body(row('assign', { latex: 'x = 1 + 1 = 2', latex_rows: ['x = 1 + 1', '= 2'] })).rows, ['x = 1 + 1', '= 2'],
+  'with its stages, one per row, for a narrow pane');
 eq(body(row('unitdef', { latex: '1 = 2' })).type, 'tex', 'so is a unit definition');
 eq(body(row('heading', { text: 'Loads' })), { type: 'text', text: 'Loads' }, 'a heading shows its text');
 eq(body(row('comment', { text: 'n' })), { type: 'text', text: 'n' }, 'so does a comment');

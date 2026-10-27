@@ -103,7 +103,7 @@ def test_launcher_names_the_window_class_lens_opens_with(tmp_path, downloads):
 def test_uninstall_removes_what_install_and_the_window_left(tmp_path, downloads):
     _, home = run(tmp_path)
     data = home / ".local" / "share"
-    profile = home / ".cache" / "laconic-lens" / "browser"   # what a LENS window creates (see _app_args)
+    profile = home / ".cache" / "laconic-lens" / "browser-google-chrome"   # what a LENS window creates (see _app_args)
     profile.mkdir(parents=True)
     ours = [p for p in data.rglob("*") if p.is_file() and "laconic-lens" in str(p)]
     assert len(ours) >= 5   # program, icon, file icon, launcher, file type

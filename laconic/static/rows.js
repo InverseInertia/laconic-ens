@@ -8,7 +8,8 @@
  *     line, end    the lines the row owns (a block header owns its block)
  *     cls          the row's class names
  *     body         {type: "text", text}             plain text
- *                  {type: "tex", tex}               typeset math
+ *                  {type: "tex", tex, rows}         typeset math, and the same one stage per row
+ *                                                   for a pane too narrow for it (mathfit.js)
  *                  {type: "error", source, message} the line as typed and what is wrong
  *                  {type: "plot"} | {type: "solver"} drawn from the row's own payload
  *                  {type: "snippet", text, solver}  the LaTeX view; `solver`: add its controls
@@ -22,7 +23,7 @@
   'use strict';
 
   const text = (r) => ({ type: 'text', text: r.text });
-  const calc = (r) => (r.latex ? { type: 'tex', tex: r.latex } : { type: 'text', text: '' });
+  const calc = (r) => (r.latex ? { type: 'tex', tex: r.latex, rows: r.latex_rows || [r.latex] } : { type: 'text', text: '' });
 
   // line kind -> its body, or null when the line has no row of its own. Other kinds are calculations.
   const BODY = {
