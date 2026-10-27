@@ -15,7 +15,7 @@ _BASE = ("kilogram", "meter", "second", "ampere", "kelvin", "mole", "candela")
 _PREFERRED = [
     "N", "J", "W", "Pa", "Hz", "C", "V", "ohm", "F", "H", "S", "Wb", "T",
     "N/m", "m/N", "N*m**2", "Pa*s", "W/m**2", "W/m**3", "W/(m*K)", "J/K", "J/(kg*K)",
-    "V/m", "F/m", "H/m",
+    "J/(mol*K)", "J*s", "W/(m**2*K**4)", "V/m", "F/m", "H/m",
 ]
 
 

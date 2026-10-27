@@ -1,7 +1,9 @@
 import re
 
-from laconic import document, evaluate, run, snippet
-from laconic.evaluator import check_units
+import pytest
+
+from laconic import catalogue, document, evaluate, run, snippet, vocab
+from laconic.evaluator import check_units, registry
 
 SMOOT = [("smoot", "1.7018'm")]
 
@@ -175,12 +177,12 @@ def test_every_exported_unit_macro_is_a_name_latex_accepts():
     ws = evaluate("\n".join(f"x{i} = 1'{u}" for i, u in enumerate(units.split())), siunitx=True)
     for r in ws.results:
         assert r.kind == "assign", r.error
-        assert re.fullmatch(r"(\\[A-Za-z]+)+", re.search(r"\\qty\{1\}\{(.*)\}", r.latex).group(1))
+        assert re.fullmatch(r"(\\[A-Za-z]+)+", re.search(r"\\qty\{1\}\{([^}]*)\}", r.latex).group(1))
 
 
 def test_preview_subscripts_constant_symbols():
-    assert last("a = 1'g0").latex.endswith(r"1\,\mathrm{g}_{\mathrm{0}}")
-    assert r"\frac{\mathrm{N}_{\mathrm{A}}}{\mathrm{m}_{\mathrm{e}}^{2}}" in last("a = 1'N_A/'m_e^2").latex
+    assert r"1\,\mathrm{g}_{\mathrm{0}}" in last("a = 1'g0").latex
+    assert r"\frac{\mathrm{N}_{\mathrm{A}}}{\mathrm{m}_{\mathrm{e}}^{2}}" in last("a = 'N_A/'m_e^2").latex
     assert r"\mathrm{mg}_{\mathrm{0}}" in last("a = 1'mg0").latex
     assert r"\mathrm{sq\_ft}" in last("a = 1'sq_ft").latex    # a word, not a subscript
 
@@ -292,3 +294,59 @@ def test_the_catalogue_lists_every_offset_unit():
     temps = [n for n in ureg._units if ureg.Quantity(1, n).dimensionality == {"[temperature]": 1}]
     offset = {n for n in temps if ureg.Quantity(0, n).to_base_units().magnitude != 0}
     assert {str(ureg.parse_units(n)) for n in offset} == set(OFFSET_TEMPERATURES)
+
+
+# ---- physical constants ------------------------------------------------------------
+def test_the_constants_have_their_codata_values():
+    expected = {"R": 8.31446261815324, "N_A": 6.02214076e23, "k_B": 1.380649e-23, "c": 299792458,
+                "h_P": 6.62607015e-34, "e": 1.602176634e-19, "G_N": 6.6743e-11, "g_0": 9.80665}
+    spellings = [s for s, _, _ in catalogue.CONSTANTS]
+    assert len(set(spellings)) == len(spellings) and set(expected) <= set(spellings)
+    ws = evaluate("\n".join(f"x = 1'{s}" for s in spellings))
+    assert all(r.kind == "assign" for r in ws.results), [r.error for r in ws.results]
+    ureg = registry()
+    for s, value in expected.items():
+        assert ureg.Quantity(1, s).to_base_units().magnitude == pytest.approx(value, rel=1e-12), s
+    assert ureg.Quantity(1, "Av").to("").magnitude == pytest.approx(6.02214076e23, rel=1e-12)
+
+
+def test_a_constant_never_takes_a_variables_name():
+    res = run("R = 5'ohm\nV = 2'A * R\np = 2'mol * 'R * 300'K / 1'm^3")
+    assert res[1].text == "V = 10 V"
+    assert res[2].text == "p = 4989 Pa"
+
+
+def test_a_quantity_typed_with_a_constant_shows_its_value():
+    assert last("x = 'R").text == "x = 8.314 J/K/mol"
+    r = last("y = 3'mol * 'R")
+    assert r.text == "y = 24.94 J/K" and r.latex.endswith(r"24.94\,\frac{\mathrm{J}}{\mathrm{K}}")
+    assert last("n = 2'mol * 'N_A").text == "n = 1.204e24"
+    assert last("x = 'h_P").text == "x = 6.626e-34 J⋅s"
+    assert last("a = 2'Av").text == "a = 1.204e24"   # a plain count
+
+
+def test_a_constant_in_a_typed_fraction_is_not_folded_into_a_number():
+    r = last("E = 'h_P * 'c / 500'nm")
+    assert r.text == "E = 3.973e-19 J"
+    assert r"\frac{\mathrm{ℎ} \cdot \mathrm{c}}{500\,\mathrm{nm}}" in r.latex
+
+
+def test_typed_quantities_without_a_constant_still_show_as_typed():
+    r = last("k = 3'kN/'m")
+    assert r.text == "k = 3 kN/m" and r.latex == r"k = 3\,\frac{\mathrm{kN}}{\mathrm{m}}"
+
+
+def test_the_editor_describes_constants_with_their_values_but_does_not_put_them_first():
+    units = vocab._units()
+    rows = {u[0]: u for u in units}
+    assert rows["R"][1].startswith("universal gas constant, 8.31446261815 J/")   # `gas` finds it
+    assert rows["k_B"][1] == "Boltzmann constant, 1.380649e-23 J/K"              # and `boltz`
+    assert rows["h_P"][1] == "Planck constant, 6.62607015e-34 J⋅s"
+    assert all(rows[s][2] == 0 for s, _, _ in catalogue.CONSTANTS)
+    assert units[0][0] != "R"
+
+
+def test_constants_export_with_declared_macros():
+    ws = evaluate("E = 'k_B * 300'K\nx = 2'Av", siunitx=True)
+    tex = document(ws.results, declarations=ws.declarations)
+    assert r"\DeclareSIUnit" in tex and "\\Av" in tex

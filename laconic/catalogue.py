@@ -8,10 +8,12 @@ The families:
 
 - currencies: ISO 4217 codes, each a dimension of its own
 - percent: Pint's dimensionless `percent`, kept on a result that is only percent
+- physical constants ('R, 'k_B, 'h_P), typed as units so they never take a variable's name
 - constants with subscripted symbols (g_0, m_e, N_A, µ_0)
 - Pint units siunitx lacks, which the export declares itself
 - offset temperatures ('degC, 'degF, 'degRe), which mean something else after * or /"""
 import re
+from functools import lru_cache
 
 # ISO 4217 codes. Each is a dimension of its own: exchange rates change, so 'USD + 'EUR is an
 # error and a rate is an ordinary variable (rate = 1.08'USD/'EUR). Symbols such as $ are not
@@ -26,6 +28,29 @@ CURRENCIES = {
     "BRL": "Brazilian real", "MXN": "Mexican peso", "ZAR": "South African rand",
     "TRY": "Turkish lira", "ILS": "Israeli shekel", "AED": "UAE dirham", "SAR": "Saudi riyal",
 }
+
+# Physical constants, typed as units: 'R, 'k_B, 'h_P. As units they never take a variable's name,
+# so a sheet can set R = 5'ohm and still use 'R. Each entry is the spelling a sheet types, what it is,
+# and the Pint definition that adds the spelling, or None when Pint already has it. The values are
+# Pint's (CODATA). The editor suggests every entry with its value; a line that uses one shows its
+# value in SI. To add a constant, add a line here.
+CONSTANTS = [
+    ("R", "universal gas constant", None),
+    ("N_A", "Avogadro constant", None),
+    ("Av", "Avogadro's number, a plain count", "Av = avogadro_number"),
+    ("k_B", "Boltzmann constant", None),
+    ("c", "speed of light in vacuum", None),
+    ("h_P", "Planck constant", "@alias planck_constant = h_P"),   # 'h is the hour
+    ("hbar", "reduced Planck constant", None),
+    ("e", "elementary charge", None),
+    ("sigma", "Stefan-Boltzmann constant", None),
+    ("G_N", "Newtonian constant of gravitation", "G_N = gravitational_constant"),   # 'G is the gauss
+    ("g_0", "standard gravity", None),
+    ("eps_0", "vacuum permittivity", None),
+    ("mu_0", "vacuum permeability", None),
+    ("m_e", "electron mass", None),
+    ("m_p", "proton mass", None),
+]
 
 # What siunitx v3 defines itself, of the macro names Pint's siunitx format emits.
 # Any other Pint unit (foot, standard_gravity, ...) needs a \DeclareSIUnit of its own.
@@ -51,6 +76,20 @@ def define(ureg):
     """Add the units Pint lacks to a fresh registry."""
     for code in CURRENCIES:
         ureg.define(f"{code} = [{code}]")
+    for _, _, definition in CONSTANTS:
+        if definition:
+            ureg.define(definition)
+
+
+@lru_cache(maxsize=8)
+def _constant_units(ureg):
+    return frozenset(ureg.get_name(spelling) for spelling, _, _ in CONSTANTS)
+
+
+def holds_constant(q, ureg):
+    """True if a quantity's units include one of the physical constants. Such a quantity
+    stands for a value, so it is never shown as typed: 3'mol * 'R is 24.94 J/K."""
+    return any(name in _constant_units(ureg) for name, _ in q.unit_items())
 
 
 def _is_money(name):
@@ -72,9 +111,16 @@ def reduce(q, ureg):
     return r.to(cash) if (r / ureg.Quantity(1, cash)).dimensionless else r
 
 
+def is_constant(spelling):
+    """True if `spelling` is how a sheet types one of the physical constants ('R, 'k_B)."""
+    return any(spelling == s for s, _, _ in CONSTANTS)
+
+
 def detail(name):
     """The editor's description of a unit, or None to use Pint's name for it."""
-    return f"{CURRENCIES[name]} (currency)" if name in CURRENCIES else None
+    if name in CURRENCIES:
+        return f"{CURRENCIES[name]} (currency)"
+    return next((what for spelling, what, _ in CONSTANTS if spelling == name), None)
 
 
 def syntax_hint(rest):

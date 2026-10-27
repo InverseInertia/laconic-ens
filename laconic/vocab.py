@@ -4,6 +4,7 @@ from functools import lru_cache
 from . import catalogue, solver
 from .commands import COMMANDS
 from .evaluator import CONSTANTS, Evaluator, registry
+from .si import reduce_si
 
 # Signature shown next to each function. Anything missing shows just its name.
 _SIGNATURES = {
@@ -32,6 +33,12 @@ _PREFIXABLE = "m g s A K mol N Pa J W Hz C V ohm F H S Wb T L Wh bar eV".split()
 _PREFIXES = "T G M k c m u n p".split()
 
 
+def _value(q, ureg):
+    """A constant's value in SI, as the editor shows it: 8.31446261815 J/K/mol."""
+    q = reduce_si(q, ureg)
+    return f"{q.magnitude:.12g} {q.units:~P}".strip()
+
+
 @lru_cache(maxsize=1)
 def _units():
     ureg = registry()
@@ -46,6 +53,8 @@ def _units():
     for key in sorted(names, key=lambda k: (len(k), k)):
         try:
             detail = catalogue.detail(key) or ureg.get_name(key)
+            if catalogue.is_constant(key):   # its description and value, so `gas` or `boltz` finds it
+                detail = f"{detail}, {_value(ureg.Quantity(1, key), ureg)}"
             add(key, detail, key in _COMMON)
         except Exception:
             continue

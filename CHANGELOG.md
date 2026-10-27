@@ -15,6 +15,8 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 - Dragging or zooming a plot makes its line the focused line, so the results no longer jump back to the line the caret was on. (#83)
 ### Changes
 - **The Linux installer installs the latest release**: `lens-install-linux.sh` (one name in every release) looks up the newest LENS release when it runs and downloads it, so running it again updates LENS. `--release 0.3.5` installs a given release, and without a connection it installs the newest release whose files are beside it. The installer now has a version of its own, shown by `--version`. (#84)
+- **Physical constants** are units you type with a quote: `'R`, `'N_A`, `'Av` (Avogadro's number, unitless), `'k_B`, `'c`, `'h_P` (Planck; `'h` is the hour), `'hbar`, `'e`, `'sigma`, `'G_N`, `'g_0`, `'eps_0`, `'mu_0`, `'m_e`, `'m_p`. They never take a variable's name, the editor's suggestion shows what each is and its value (so `'gas` or `'boltz` finds it), and a line that uses one shows its value in SI (`3'mol * 'R` is `24.94 J/K`). Results in J/(mol·K), J·s and W/(m²·K⁴) are shown in those units. (#86)
+- **Units dialog**: the **Units** button lists every unit, with a search over names and descriptions and tags to filter by (constants, thermodynamics, chemistry, pressure, imperial and more). Click a unit to insert it. Add tags of your own to any unit; they are kept in `settings.json`. (#86)
 
 ## v0.3.5
 

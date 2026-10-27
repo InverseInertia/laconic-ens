@@ -11,7 +11,7 @@ Open **Settings** from the header. It holds:
 
 | Setting | Stored |
 |---|---|
-| Greek table, global units | on the machine running LENS, in `settings.json`, so they are the same in every browser and for the command line |
+| Greek table, global units, your unit tags (Units dialog) | on the machine running LENS, in `settings.json`, so they are the same in every browser and for the command line |
 | Theme, output view, wrapper, line wrapping, the Math keys, Mark globals and Suggest checkboxes | on the machine running LENS, in `settings.json`, so they are the same in every browser and whatever port LENS runs on. Values an older build kept in the browser are moved there the first time the page opens |
 | Split position and the unsaved worksheet text | in the browser (`localStorage`), per browser and per port |
 
