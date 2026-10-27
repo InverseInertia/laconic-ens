@@ -23,6 +23,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_shortcuts.js` | the shortcut table, and that the wiki lists its Ctrl/Alt keys |
 | `node tests/test_layout.js` | when the page stacks or goes side by side, and when it offers to stop switching |
 | `node tests/test_rows.js` | the row model: what the results pane shows for each kind of line |
+| `node tests/test_mathfit.js` | when a formula too wide for its room is shrunk or wrapped (the drawing is tested in Chromium) |
 | `node tests/test_unitbrowser.js` | the units dialog: search, tag filters, adding and removing your tags |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 

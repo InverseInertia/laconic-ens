@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Fixes
+- Long calculations in the results pane no longer get a scrollbar: like the PDF export, one a little too wide is shrunk to fit and one much too wide is wrapped one stage per row, and they are fitted again when you resize the pane or the window. (#94)
+
 ## [v0.3.6](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.6) (2026-10-27)
 
 ### New
