@@ -28,6 +28,7 @@ These are off on comment lines and on the text lines under a plot (title, labels
 | `Ctrl+Space` | Opens suggestions by hand. With text highlighted: pick a function to wrap it in |
 | `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
 | `Alt+Z` | Turn text wrapping in the editor on or off |
+| `Alt+L` | Switch between side-by-side and stacked views. See [Settings](Settings) |
 | `F2` | Rename the name at the caret everywhere |
 | `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+O` | Save, Save As, Open |
 

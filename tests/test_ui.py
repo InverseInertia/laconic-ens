@@ -195,6 +195,63 @@ def test_split_can_be_dragged(page):
     assert abs(page.locator("#src").bounding_box()["width"] - before) < 2
 
 
+def resize(page, width):
+    """Resize and let two frames pass, so the page sees each crossing on its own."""
+    page.set_viewport_size({"width": width, "height": 800})
+    page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+
+
+def stacked(page):
+    src, out = page.locator("#src").bounding_box(), page.locator("#out").bounding_box()
+    return out["y"] + out["height"] <= src["y"] + 1
+
+
+def test_layout_switches_by_width_and_by_hand(page):
+    from laconic import settings
+    assert not stacked(page)
+    resize(page, 600)
+    assert stacked(page)
+    page.locator("#src").focus()
+    page.keyboard.press("Alt+L")   # by hand: side by side, even though the window is narrow
+    assert not stacked(page)
+    assert page.get_attribute("#split", "aria-orientation") == "vertical"
+    resize(page, 1200)
+    resize(page, 600)
+    assert stacked(page)           # the next crossing goes by the width again
+    # Automatic switching off: the view picked holds at any width.
+    page.click("#settingsBtn")
+    page.uncheck("#layoutAuto")
+    page.select_option("#layoutView", "side")
+    page.click("#settingsDlg .close")
+    resize(page, 1200)
+    resize(page, 600)
+    assert not stacked(page)
+    for _ in range(50):
+        if settings.load()["prefs"].get("autoLayout") is False:
+            break
+        page.wait_for_timeout(100)
+    assert settings.load()["prefs"]["autoLayout"] is False
+    assert settings.load()["prefs"]["layout"] == "side"
+
+
+def test_layout_offers_to_stop_switching(page):
+    n = page.evaluate("Layout.ASK_AFTER")
+    page.locator("#src").focus()
+    for i in range(n):
+        assert page.is_hidden("#layoutAsk")
+        resize(page, 600 if i % 2 == 0 else 1200)
+    page.wait_for_selector("#layoutAsk:not([hidden])")
+    assert page.evaluate("document.activeElement.id") == "src"   # it never takes the focus
+    page.click("#layoutAskOpen")
+    page.wait_for_selector("#settingsDlg[open]")
+    assert page.is_hidden("#layoutAsk")
+    assert page.evaluate("document.activeElement.id") == "layoutAuto"
+    page.click("#settingsDlg .close")
+    for i in range(2 * n):         # once a session
+        resize(page, 600 if i % 2 == 0 else 1200)
+    assert page.is_hidden("#layoutAsk")
+
+
 def test_theme_settings(page):
     page.click("#settingsBtn")
     page.wait_for_selector("#settingsDlg[open]")

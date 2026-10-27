@@ -48,6 +48,7 @@
       { keys: ['Ctrl+Space'], text: 'With text highlighted: pick a function to wrap it in (<code>sin(&hellip;)</code>). Type to filter, <kbd>Enter</kbd> or <kbd>Tab</kbd> to apply. With nothing highlighted: opens suggestions by hand' },
       { label: 'Double-click', text: 'Selects the whole term under the pointer' },
       { keys: ['Alt+Z'], text: 'Turn text wrapping in the editor on or off' },
+      { keys: ['Alt+L'], text: 'Switch between side-by-side and stacked views (results on top). Narrow windows still switch by themselves unless that is turned off under Settings &rarr; Layout' },
       { keys: ['Alt+Up', 'Alt+Down'], text: 'Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back' },
     ] },
     { id: 'suggestions', title: 'Suggestions', rows: [

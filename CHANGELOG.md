@@ -9,6 +9,9 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 
 ## Unreleased
 
+### New
+- **Choose the layout**: Alt+L switches between side-by-side and stacked views, and Settings → Layout picks one. Narrow windows still stack by themselves, unless you turn off **Switch automatically when the window is narrow**; if the layout keeps switching itself while you resize, a small note offers to turn that off. (#87)
+
 ## v0.3.5
 
 ### Changes
