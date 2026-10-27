@@ -17,7 +17,7 @@ Each calculation line shows up to three stages: the symbolic form, the form with
 
 ## Typeset and LaTeX views
 
-The **Typeset / LaTeX** switch in the header chooses how results are shown. Typeset renders the math, with global variables colored and underlined unless **Mark globals** is off (see [Worksheet Syntax](Worksheet-Syntax#global-variables)). LaTeX shows the source for each line in the export flavor (siunitx units), with a Copy button per line.
+The **Typeset / LaTeX** switch in the header chooses how results are shown. Typeset renders the math, with global variables colored and underlined unless **Mark globals** is off (see [Worksheet Syntax](Worksheet-Syntax#global-variables)). A calculation too wide for the results pane is fitted to it as in the PDF export: a little too wide is shrunk, much too wide is wrapped one stage per row (and after `+` and `=` within a stage), and it is fitted again when the pane is resized. LaTeX shows the source for each line in the export flavor (siunitx units), with a Copy button per line.
 
 The wrapper menu next to the switch chooses how a calculation is wrapped:
 
@@ -36,7 +36,7 @@ Headings and comments become `\subsection*{}` and plain text, and commands such 
 | Save | the `.lens` source, with needed global unit definitions appended (see [Units](Units)) |
 | Export → LaTeX document | a complete `.tex` document with `align*` blocks, `\DeclareSIUnit` lines for custom units and for built-in units siunitx lacks (`ft`, `psi`, `g0`), and `pgfplots` when a sheet has plots |
 | Export → Markdown note | a `.md` note for Obsidian: headings stay headings, comments become plain text, each calculation becomes a `$$` block (one row per stage, aligned at the equals signs), plots are embedded as SVG images and errors as callouts. Commands such as `!clear` and plot or solver options are left out |
-| Export → PDF | a plain PDF of the results, broken into pages: headings, comments, each calculation with its line number, plots and errors, in one column. A calculation never splits across pages and a heading stays with what follows it. A calculation a little too wide for the page is shrunk; one much too wide is wrapped after `+` and `=`. It is a quick, readable printout, not a typeset document; use the LaTeX export for that |
+| Export → PDF | a plain PDF of the results, broken into pages: headings, comments, each calculation with its line number, plots and errors, in one column. A calculation never splits across pages and a heading stays with what follows it. A calculation a little too wide for the page is shrunk; one much too wide is wrapped after `+` and `=`, the same way as in the results pane. It is a quick, readable printout, not a typeset document; use the LaTeX export for that |
 | Plot SVG / PNG | the picture exactly as drawn (see [Plots](Plots)) |
 | `lens file.lens --tex out.tex` | the same `.tex` from the command line |
 | `lens file.lens --md out.md` | the same Markdown note from the command line |

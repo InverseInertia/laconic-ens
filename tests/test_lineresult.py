@@ -16,8 +16,8 @@ from laconic.sheet import block_at, solver_blocks
 PLOT = "a = 2\n!plot a*x, x = 0 .. 1\n  title: T\n  grid: off\nb = 3\n"
 ROOT = "x = 1\n!root x\n  equation: x^2 = 2\nz = x + 1\n"
 
-COMMON = {"n": int, "end": int, "kind": str, "source": str, "text": str, "latex": str, "error": str,
-          "warning": str, "stale": bool, "symbols": dict}
+COMMON = {"n": int, "end": int, "kind": str, "source": str, "text": str, "latex": str, "latex_rows": list,
+          "error": str, "warning": str, "stale": bool, "symbols": dict}
 PLOT_KEYS = {"svg", "spec", "moved"}
 SOLVER_KEYS = {"kind", "unknowns", "hash", "status", "tainted", "autorun", "method", "timeout",
                "values", "summary", "note", "record"}
@@ -100,6 +100,15 @@ def test_every_row_has_the_common_fields_and_only_its_own_payload():
 def test_a_row_says_the_lines_it_owns():
     out = rows(PLOT)
     assert [(r["n"], r["end"]) for r in out] == [(1, 1), (2, 4), (3, 3), (4, 4), (5, 5)]
+
+
+def test_latex_rows_break_a_calculation_one_stage_per_row():
+    one, many, bare, err = rows("L = 2'm\nM = 3 * L\n3 * L\nnope +")
+    assert one["latex_rows"] == [one["latex"]]
+    assert many["latex_rows"][0].startswith("M = 3") and many["latex_rows"][1].startswith("= ")
+    assert len(many["latex_rows"]) == 3 and " ".join(many["latex_rows"]) == many["latex"]
+    assert not bare["latex_rows"][0].startswith("=") and " ".join(bare["latex_rows"]) == bare["latex"]
+    assert err["latex_rows"] == []
 
 
 def test_the_display_parts_of_a_row():

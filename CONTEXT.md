@@ -46,7 +46,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : A result owns its own line; a block header's result owns the whole block, header to last line (`n` .. `end`). A block's option lines still get results of their own, but the page shows them inside the header's row unless one is wrong.
 
 **Display parts**
-: What a row can show, the same fields on every result and empty when the line has none: `text` (plain), `latex` (typeset), `error`, `warning` and `stale`.
+: What a row can show, the same fields on every result and empty when the line has none: `text` (plain), `latex` (typeset; `latex_rows` is the same broken one stage per row, for a layout too narrow for it), `error`, `warning` and `stale`.
 
 **Block handle**
 : On a block header's result, the sheettext **Block** it starts, whether the block drew or failed. `sheet.block_at(text, line)` finds a block by its header, and `sheet.solver_blocks(text)` finds every solver block. Both read the text to find the blocks and run the sheet only as far as they need (`evaluate(..., until=)`).
