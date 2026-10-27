@@ -68,4 +68,23 @@ eq(T.warning({ paper: '#000000', text: '#111111' }),
   eq(v['--paper-deep'], 'color-mix(in srgb, #1e2127 94%, #d9dde3)', 'derived color');
 }
 
+// YAML snippets.
+{
+  const t = { sans: 3, mono: 1, bg: 'dots', colors: { ...T.PRESETS['Chalcedony Dark'] } };
+  const y = T.toYaml(t);
+  ok(/^name: Chalcedony Dark$/m.test(y), 'snippet names its preset');
+  ok(/^  sans: Georgia \(serif\)$/m.test(y), 'fonts by label');
+  ok(/^  paper: '#000000'$/m.test(y), 'colors quoted, so # is not a comment');
+  eq(T.fromYaml(y, T.defaults()), { theme: t, error: '' }, 'round trip');
+  const d = T.defaults();
+  eq(T.fromYaml('colors:\n  err: #ABCDEF  # bright\n', d).theme.colors, { ...d.colors, err: '#abcdef' }, 'unquoted hex, comments, left-out fields kept');
+  eq(T.fromYaml('fonts:\n  mono: "courier"\n', d).theme.mono, 3, 'font labels ignore case');
+  ok(/unknown sans font "Comic"/.test(T.fromYaml('fonts:\n  sans: Comic\n', d).error), 'bad font rejected');
+  ok(/unknown color "lime"/.test(T.fromYaml('colors:\n  lime: "#00ff00"\n', d).error), 'bad color name rejected');
+  ok(/hard to tell apart/.test(T.fromYaml("colors:\n  paper: '#000000'\n  text: '#111111'\n", d).error), 'unreadable rejected');
+  ok(/no fonts, background or colors/.test(T.fromYaml('name: x\n', d).error), 'empty snippet rejected');
+  ok(/line 1/.test(T.fromYaml('hello\n', d).error), 'garbage rejected');
+  eq(d, T.defaults(), 'current theme not changed');
+}
+
 console.log(`theme: ${n} checks passed`);
