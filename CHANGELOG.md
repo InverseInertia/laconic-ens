@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.4.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.0) (2026-10-27)
+
 ### New
 - **Chalcedony Dark** theme preset: blue on black. (#100)
 - **Share themes as YAML**: Settings → Theme → Share as YAML exports your theme as a YAML snippet, copied to the clipboard, and imports a snippet pasted back in. Fields the snippet leaves out keep their current values, and a snippet with an unknown or invalid field, or unreadable colors, is refused with a note saying why. (#100)
