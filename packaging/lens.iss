@@ -6,8 +6,8 @@
 ;
 ; Build the program first (`pyinstaller packaging/lens.spec`, which leaves dist\lens), then
 ;   iscc /DAppVersion=0.3.7 packaging\lens.iss
-; which writes dist\lens-setup.exe. The build workflow does both and renames the installer
-; lens-<version>-windows-x64-setup.exe.
+; which writes dist\lens-install-wizard.exe. The build workflow does both and renames the installer
+; lens-<version>-windows-x64-install-wizard.exe.
 
 #ifndef AppVersion
   #define AppVersion "0+dev"
@@ -41,7 +41,7 @@ WizardStyle=modern
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir={#Root}\dist
-OutputBaseFilename=lens-setup
+OutputBaseFilename=lens-install-wizard
 
 [Tasks]
 Name: "assoc"; Description: "Open .lens files in LENS"; GroupDescription: "File types:"

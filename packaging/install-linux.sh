@@ -3,10 +3,10 @@
 # launcher entry (.desktop file) to the application menu, and makes .lens files open in LENS
 # with an icon of their own. Any earlier install is removed first, so running it again updates.
 #
-#   sh lens-install-linux.sh                    install the latest release of LENS
-#   sh lens-install-linux.sh --release 0.3.5    install that release instead
-#   sh lens-install-linux.sh --uninstall        remove LENS and its launcher
-#   sh lens-install-linux.sh --version          print this installer's version
+#   sh lens-install-linux-v2.sh                    install the latest release of LENS
+#   sh lens-install-linux-v2.sh --release 0.3.5    install that release instead
+#   sh lens-install-linux-v2.sh --uninstall        remove LENS and its launcher
+#   sh lens-install-linux-v2.sh --version          print this installer's version
 #
 # The latest release is looked up on GitHub when the script runs. Files of that release already
 # beside the script (lens-<version>-linux-x64.tar.gz, lens-<version>-icon.png,

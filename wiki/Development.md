@@ -61,9 +61,10 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 
 `packaging/install-linux.sh` has a version of its own, numbered apart from LENS's: the `INSTALLER_VERSION="X.Y.Z"` line near its top, the one place it is written (`--version` prints it, and it shows in the installer's output). The script looks up the latest LENS release on GitHub when it runs, so it no longer needs a new copy for each LENS release, and its version changes only when the script does.
 
-- Bump `INSTALLER_VERSION` in the same PR as any change to the script: the major number for a change in its options or in where it installs, the minor for a new feature, the patch for a fix. A test checks the line is there and that `--version` prints it.
+- Bump `INSTALLER_VERSION` in the same PR as any change to the script: the major number for a change in its options, in where it installs or in the release files it reads, the minor for a new feature, the patch for a fix. A test checks the line is there and that `--version` prints it.
+- The release file name carries the major number (`lens-install-linux-v2.sh` for 2.x.y): a new major version gets a new name in the `release` job of `build.yml` and in the docs, so a link to an older installer cannot fetch one that no longer matches the release files.
 - After that PR merges, tag the merge commit `installer-vX.Y.Z` (`git tag installer-v1.1.0 && git push origin installer-v1.1.0`). The tag only marks which script that version is: the `build` workflow runs on `v*` tags, so it ignores it, and `release_notes.py` skips it when it finds the previous release for the compare link.
-- Each LENS release attaches the script as it is on the tagged commit, unstamped, as `lens-install-linux.sh`. The name has no version, so `https://github.com/inverseinertia/laconic-ens/releases/latest/download/lens-install-linux.sh` is always the newest installer.
+- Each LENS release attaches the script as it is on the tagged commit, unstamped, as `lens-install-linux-v2.sh`. The name carries no LENS version, so `https://github.com/inverseinertia/laconic-ens/releases/latest/download/lens-install-linux-v2.sh` is always the newest installer.
 
 ## CI
 

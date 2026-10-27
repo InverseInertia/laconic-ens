@@ -27,7 +27,7 @@ jobs:
         include:
           # Both build a folder, dist/lens. Windows makes the installer from it (packaging/lens.iss);
           # Linux packs it as the archive install-linux.sh installs.
-          - { os: windows-latest, name: lens-windows-x64, exe: dist/lens/lens.exe, out: dist/lens-setup.exe }
+          - { os: windows-latest, name: lens-windows-x64, exe: dist/lens/lens.exe, out: dist/lens-install-wizard.exe }
           # Oldest available runner so the binary works on more distros (glibc).
           - { os: ubuntu-22.04, name: lens-linux-x64, exe: dist/lens/lens, out: dist/lens-linux-x64.tar.gz }
     runs-on: ${{ matrix.os }}
@@ -77,7 +77,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $setup = Start-Process dist\lens-setup.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=assoc' -Wait -PassThru
+          $setup = Start-Process dist\lens-install-wizard.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=assoc' -Wait -PassThru
           if ($setup.ExitCode) { throw "installer exited with $($setup.ExitCode)" }
           $app = "$env:LOCALAPPDATA\Programs\LENS"
           python packaging/smoke.py "$app\lens.exe" (python -c "from laconic._version import label; print(label())")
@@ -111,7 +111,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir release
-          mv artifacts/lens-windows-x64/lens-setup.exe "release/lens-$VERSION-windows-x64-setup.exe"
+          mv artifacts/lens-windows-x64/lens-install-wizard.exe "release/lens-$VERSION-windows-x64-install-wizard.exe"
           mv artifacts/lens-linux-x64/lens-linux-x64.tar.gz "release/lens-$VERSION-linux-x64.tar.gz"
       - uses: actions/checkout@v4
         with: { path: src, fetch-depth: 0 }  # all tags, for the compare link to the previous one
@@ -121,13 +121,13 @@ jobs:
       - name: Add the Linux installer and its icons
         run: |
           # The installer looks up the latest release when it runs, so it is not stamped and its
-          # name carries no version: .../releases/latest/download/lens-install-linux.sh always
-          # gives the newest one. Its own version is the INSTALLER_VERSION line in the script.
+          # name carries no LENS version, only its own major version (INSTALLER_VERSION in the
+          # script): .../releases/latest/download/lens-install-linux-v2.sh always gives the newest one.
           grep -Eq '^INSTALLER_VERSION="[0-9]+\.[0-9]+\.[0-9]+"$' src/packaging/install-linux.sh
-          cp src/packaging/install-linux.sh release/lens-install-linux.sh
+          cp src/packaging/install-linux.sh release/lens-install-linux-v2.sh
           cp src/packaging/icon.png "release/lens-$VERSION-icon.png"
           cp src/packaging/file-icon.png "release/lens-$VERSION-file-icon.png"
-          chmod +x release/lens-install-linux.sh
+          chmod +x release/lens-install-linux-v2.sh
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*
