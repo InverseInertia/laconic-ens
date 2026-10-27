@@ -47,6 +47,7 @@
       { keys: ['/', '^', '\\', '(', '[', '|'], inline: true, text: "Apply to the highlighted region: fraction numerator, base of a power, square root, brackets, array brackets, <code>abs()</code>. A highlight that cuts through a term is widened to the whole term first: <code>1</code> inside <code>12'kN</code> means the whole quantity, <code>x</code> in <code>x^2</code> means <code>x^2</code>, half a bracket pair means the pair" },
       { keys: ['Ctrl+Space'], text: 'With text highlighted: pick a function to wrap it in (<code>sin(&hellip;)</code>). Type to filter, <kbd>Enter</kbd> or <kbd>Tab</kbd> to apply. With nothing highlighted: opens suggestions by hand' },
       { label: 'Double-click', text: 'Selects the whole term under the pointer' },
+      { keys: ['Tab', 'Shift+Tab'], text: 'Indent or unindent the line, or every highlighted line, by two spaces. Works with Math keys off too. Press <kbd>Esc</kbd> first to move the focus out of the editor with <kbd>Tab</kbd>' },
       { keys: ['Alt+Z'], text: 'Turn text wrapping in the editor on or off' },
       { keys: ['Alt+Up', 'Alt+Down'], text: 'Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back' },
     ] },

@@ -178,6 +178,22 @@ def test_alt_z_toggles_wrapping(page):
     assert value(page)  # the key never types a character
 
 
+def test_tab_indents_and_shift_tab_unindents(page):
+    reset(page, "a = 1\nb = 2")
+    select(page, 0, 11)
+    page.keyboard.press("Tab")
+    assert value(page) == "  a = 1\n  b = 2"
+    assert page.evaluate("[document.activeElement.id, document.querySelector('#src').selectionStart, document.querySelector('#src').selectionEnd]") == ["src", 2, 15]
+    page.keyboard.press("Shift+Tab")
+    assert value(page) == "a = 1\nb = 2"
+    page.keyboard.press("Control+z")
+    assert value(page) == "  a = 1\n  b = 2"
+    page.keyboard.press("Escape")
+    page.keyboard.press("Tab")
+    assert page.evaluate("document.activeElement.id") != "src"
+    assert value(page) == "  a = 1\n  b = 2"
+
+
 def test_split_can_be_dragged(page):
     box = page.locator("#split").bounding_box()
     before = page.locator("#src").bounding_box()["width"]

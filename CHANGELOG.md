@@ -9,6 +9,9 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 
 ## Unreleased
 
+### New
+- **Tab indents** the line, or every highlighted line, by two spaces, and **Shift+Tab** unindents, instead of moving the focus out of the editor. Press Esc first to leave the editor with Tab. (#88)
+
 ## v0.3.5
 
 ### Changes

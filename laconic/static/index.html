@@ -999,7 +999,7 @@ function apply(r) {
     let ok = document.activeElement === src
       && (r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert));
     if (!ok) { src.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
-    src.setSelectionRange(r.caret, r.caret);
+    src.setSelectionRange(...(r.sel || [r.caret, r.caret]));
     applying = false;
   }
   markActive();
@@ -1019,12 +1019,20 @@ src.addEventListener("paste", (ev) => {
   const r = Paste.pasteEdit(src.value, ev.clipboardData.getData("text/plain"), src.selectionStart, src.selectionEnd, {textLine: onCommentLine()});
   if (r) { ev.preventDefault(); apply(r); }
 });
+let escaped = false;
 src.addEventListener("keydown", (ev) => {
   if (ev.isComposing) return;
   plainPaste = (ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.code === "KeyV";
   if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ev.code === "KeyZ") { ev.preventDefault(); acClose(); setWrapped(!wrapped); return; }
   if (acKey(ev)) return;
   if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key === " ") { ev.preventDefault(); acOpenByHand(); return; }
+  // Tab indents instead of moving the focus; right after Esc it moves the focus as usual.
+  const tabLeaves = escaped; escaped = ev.key === "Escape";
+  if (ev.key === "Tab" && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !tabLeaves) {
+    ev.preventDefault();
+    apply(Editing.indentLines(src.value, src.selectionStart, src.selectionEnd, ev.shiftKey));
+    return;
+  }
   const mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
   if (mathKeys.checked && mods.alt && !mods.ctrl && !mods.shift && !mods.meta && ev.key === "ArrowDown") {
     ev.preventDefault(); shrinkSelection(); return;
