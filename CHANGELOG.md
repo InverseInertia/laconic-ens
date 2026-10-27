@@ -9,6 +9,8 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 
 ## Unreleased
 
+## v0.3.5
+
 ### Changes
 - **Any Chromium-family browser** is found for the app window and PDF export: the default browser when it is Chromium-based, Brave, Vivaldi and Opera, flatpak and snap installs, Windows install folders and App Paths, and macOS app bundles. If one browser won't start, LENS tries the next before falling back to a plain tab. (#72, #77, #82)
 - The liter prints as `L` (`mL`, `kL`); `l` is still read as a liter. A typed quantity inside a larger expression prints its number before its unit (`0.72 kg/L`), as it does on its own line. (#74, #80)
