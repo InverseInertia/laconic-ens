@@ -286,6 +286,24 @@ def test_theme_settings(page):
     assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 56, 107)"
 
 
+def test_theme_yaml_export_and_import(page):
+    page.click("#settingsBtn")
+    page.wait_for_selector("#settingsDlg[open]")
+    page.select_option("#preset", "Chalcedony Dark")
+    page.click("#themeExport")
+    snippet = page.input_value("#themeYaml")
+    assert "name: Chalcedony Dark" in snippet
+    page.click("#themeReset")
+    page.fill("#themeYaml", snippet)
+    page.click("#themeImport")
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 0, 0)"
+    assert page.input_value("#preset") == "Chalcedony Dark"
+    page.fill("#themeYaml", "colors:\n  paper: nope\n")
+    page.click("#themeImport")
+    page.wait_for_selector("#alertDlg[open]")
+    assert "not a #rrggbb color" in page.text_content("#alertMsg")
+
+
 
 def test_display_preferences_follow_the_server_not_the_browser(page):
     """The browser's storage belongs to one port; preferences kept on the server look the same on

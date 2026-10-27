@@ -10,6 +10,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ## Unreleased
 
 ### New
+- **Chalcedony Dark** theme preset: blue on black. (#100)
+- **Share themes as YAML**: Settings → Theme → Share as YAML exports your theme as a YAML snippet, copied to the clipboard, and imports a snippet pasted back in. Fields the snippet leaves out keep their current values, and a snippet with an unknown or invalid field, or unreadable colors, is refused with a note saying why. (#100)
 - **Windows installer**: `lens-<version>-windows-x64-install-wizard.exe` is a setup wizard. It installs LENS for your user (no administrator) with a Start menu entry, an optional desktop shortcut, the example worksheets, and `.lens` files opening in LENS with their own icon. Running a newer one updates LENS, and Settings → Apps removes it. It replaces the single `lens-<version>-windows-x64.exe`, which had to unpack itself every time it started. (#97)
 
 ### Changes

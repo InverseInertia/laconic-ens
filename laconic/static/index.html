@@ -247,6 +247,7 @@
   .swatches label { display: flex; align-items: center; gap: 10px; margin: 6px 0; font: 400 14px var(--sans); }
   .swatches label > span { flex: 0 0 9em; }
   .swatches input[type=color] { width: 42px; height: 26px; padding: 0; border: 1px solid var(--ink); background: transparent; cursor: pointer; }
+  #themeYaml { display: block; box-sizing: border-box; width: 100%; font: 400 13px/1.45 var(--mono); padding: 6px 8px; color: var(--text); background: transparent; border: 1px solid var(--rule); resize: vertical; }
   .preview { margin-top: 10px; padding: 8px 12px; border: 1px solid var(--rule); font: 400 14px/var(--row) var(--mono); }
   #helpDlg { width: min(720px, 94vw); }
   #unitsDlg { width: min(760px, 94vw); }
@@ -582,6 +583,12 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
           <option value="dots">Dots</option>
           <option value="plain">Plain</option>
         </select></label>
+      </fieldset>
+      <fieldset class="set-grp">
+        <legend>Share as YAML</legend>
+        <p class="note">Export copies the theme as a YAML snippet. To import, paste a snippet here and press Import; fields it leaves out keep their current values.</p>
+        <textarea id="themeYaml" rows="8" spellcheck="false" aria-label="Theme YAML snippet"></textarea>
+        <div class="set-acts"><button id="themeExport">Export</button><button id="themeImport">Import</button><span class="spacer"></span></div>
       </fieldset>
     </section>
   </div>
@@ -1418,6 +1425,12 @@ function buildThemeForm() {
   $("#bgStyle").onchange = (ev) => { theme.bg = ev.target.value; applyTheme(); saveTheme(); };
   $("#preset").onchange = (ev) => { const p = Theme.PRESETS[ev.target.value]; if (p) { theme.colors = {...p}; applyTheme(); saveTheme(); syncThemeForm(); } };
   $("#themeReset").onclick = () => { theme = Theme.defaults(); applyTheme(); saveTheme(); syncThemeForm(); };
+  $("#themeExport").onclick = () => { const y = Theme.toYaml(theme); $("#themeYaml").value = y; copyText(y, "Theme copied as YAML"); };
+  $("#themeImport").onclick = () => {
+    const r = Theme.fromYaml($("#themeYaml").value, theme);
+    if (r.error) { alertDialog("Theme not imported", r.error); return; }
+    theme = r.theme; applyTheme(); saveTheme(); syncThemeForm(); say("Theme imported");
+  };
 }
 buildThemeForm();
 applyTheme();
