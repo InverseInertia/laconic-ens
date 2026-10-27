@@ -88,3 +88,33 @@ jobs:
         with:
           files: release/*
           body_path: notes.md
+
+  changelog:
+    # After a release, CHANGELOG.md on main gets the tag's heading in place of ## Unreleased, with
+    # a new, empty ## Unreleased above it. Entries merged since the tag stay under Unreleased.
+    # A push made with GITHUB_TOKEN starts no workflows, so this does not build main again.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    concurrency: { group: changelog-main, cancel-in-progress: false }
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main, fetch-depth: 0 }
+      - name: Stamp the tag's section and push to main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_REF_NAME" origin/main; then
+            echo "::notice::$GITHUB_REF_NAME is not on main; CHANGELOG.md is left as it is."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            python3 packaging/stamp_changelog.py "$GITHUB_REF_NAME" "$(date -u +%F)"
+            git diff --quiet CHANGELOG.md && { echo "CHANGELOG.md already has $GITHUB_REF_NAME"; exit 0; }
+            git commit -qam "CHANGELOG: $GITHUB_REF_NAME released"
+            git push origin HEAD:main && exit 0
+            # main moved while this ran: start again from the new main
+            git fetch -q origin main && git reset -q --hard origin/main
+          done
+          exit 1

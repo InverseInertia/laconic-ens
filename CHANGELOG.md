@@ -4,8 +4,8 @@ What changed in each release of LENS, newest first. The release job publishes a 
 the body of its GitHub release (`packaging/release_notes.py`).
 
 Every pull request that changes what a user sees or does adds a line under **Unreleased**, in the
-group it belongs to (New, Changes or Fixes), naming its PR or issue. When cutting a release,
-rename **Unreleased** to the tag's heading and start a new, empty **Unreleased** above it.
+group it belongs to (New, Changes or Fixes), naming its PR or issue. Pushing a release tag
+renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased** above it.
 
 ## Unreleased
 
@@ -21,7 +21,7 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 ### Fixes
 - Dragging or zooming a plot makes its line the focused line, so the results no longer jump back to the line the caret was on. (#83)
 
-## v0.3.5
+## [v0.3.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.5) (2026-10-27)
 
 ### Changes
 - **Any Chromium-family browser** is found for the app window and PDF export: the default browser when it is Chromium-based, Brave, Vivaldi and Opera, flatpak and snap installs, Windows install folders and App Paths, and macOS app bundles. If one browser won't start, LENS tries the next before falling back to a plain tab. (#72, #77, #82)
