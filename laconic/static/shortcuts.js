@@ -49,6 +49,7 @@
       { label: 'Double-click', text: 'Selects the whole term under the pointer' },
       { keys: ['Tab', 'Shift+Tab'], text: 'Indent or unindent the line, or every highlighted line, by two spaces. Works with Math keys off too. Press <kbd>Esc</kbd> first to move the focus out of the editor with <kbd>Tab</kbd>' },
       { keys: ['Alt+Z'], text: 'Turn text wrapping in the editor on or off' },
+      { keys: ['Alt+L'], text: 'Switch between side-by-side and stacked views (results on top). Narrow windows still switch by themselves unless that is turned off under Settings &rarr; Layout' },
       { keys: ['Alt+Up', 'Alt+Down'], text: 'Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back' },
     ] },
     { id: 'suggestions', title: 'Suggestions', rows: [

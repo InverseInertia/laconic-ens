@@ -29,6 +29,7 @@ These are off on comment lines and on the text lines under a plot (title, labels
 | `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
 | `Tab`, `Shift+Tab` | Indent or unindent the line, or every highlighted line, by two spaces. Works with Math keys off. Press `Esc` first to move the focus out of the editor with `Tab` |
 | `Alt+Z` | Turn text wrapping in the editor on or off |
+| `Alt+L` | Switch between side-by-side and stacked views. See [Settings](Settings) |
 | `F2` | Rename the name at the caret everywhere |
 | `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+O` | Save, Save As, Open |
 

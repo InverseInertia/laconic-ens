@@ -76,6 +76,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `unitbrowser.js` | The units dialog: which units a search and a tag list, and adding and removing the user's tags, as pure functions |
 | `savefile.js` | Save file policy: reuse the open file or ask, the file name, the download fallback. The page passes an adapter over the File System Access API |
 | `theme.js` | Theme data (fonts, presets), the contrast check, loading a stored theme, the CSS variables to set |
+| `layout.js` | Side by side or stacked: switching at the narrow width, Alt+L and the Settings choice, and when to offer to stop switching. The page draws it as `body.stacked` |
 | `shortcuts.js` | The keyboard shortcut table, as data; the page renders it under Settings → Reference, with the command rows `server.py` fills in from `commands.py` |
 | `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server. Reads the plot payload's spec |
 | `solverview.js` | The Run / Interrupt / Verify / Log strip under solver blocks. Reads the solver payload |
