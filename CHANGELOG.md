@@ -9,6 +9,9 @@ rename **Unreleased** to the tag's heading and start a new, empty **Unreleased**
 
 ## Unreleased
 
+### New
+- **Physical constants** are units you type with a quote: `'R`, `'N_A`, `'Av` (Avogadro's number, unitless), `'k_B`, `'c`, `'h_P` (Planck; `'h` is the hour), `'hbar`, `'e`, `'sigma`, `'G_N`, `'g_0`, `'eps_0`, `'mu_0`, `'m_e`, `'m_p`. They never take a variable's name, the editor suggests them first with their values, and a line that uses one shows its value in SI (`3'mol * 'R` is `24.94 J/K`). Results in J/(mol·K), J·s and W/(m²·K⁴) are shown in those units. (#86)
+
 ## v0.3.5
 
 ### Changes

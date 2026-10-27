@@ -51,6 +51,7 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 - **A command:** handle it in `_run_command` in `sheet.py` and list it in `COMMANDS` in `vocab.py`.
 - **A plot option:** add it to the tables at the top of `plotopts.py`, resolve it in `plotspec.py`, and draw it in `plotsvg.py` and `plotpgf.py`.
 - **A field on the eval rows:** add it to `LineResult` (or to a payload, if only one kind has it) and to `to_json`, update the expected shape in `test_lineresult.py`, and read it in `rows.js` (or the payload's own reader: `plotview.js`, `solverview.js`).
+- **A physical constant:** add a line to `CONSTANTS` in `catalogue.py`: the spelling a sheet types, what it is, and `None` when Pint already knows that spelling (`'R`, `'c`). For a spelling Pint lacks, the third item is the Pint definition that adds it: `"@alias planck_constant = h_P"` for another name of a Pint constant, or `"Av = avogadro_number"` for a new unit with its own symbol. The editor's suggestions and the "show its value" rule pick it up from there. Add its row to the table in [Units](Units), and its value to `test_the_constants_have_their_codata_values` in `tests/test_units.py`.
 - **A unit that needs special handling** (its own dimension, a reduction rule, an export spelling, an error or hint): add it to the unit catalogue, `catalogue.py`. A currency is one entry in `CURRENCIES`.
 
 ## CI
