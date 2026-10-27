@@ -1,3 +1,5 @@
+import pytest
+
 from laconic import document, run
 
 
@@ -531,3 +533,29 @@ def test_page_links_the_app_window_icons():
     for icon in manifest["icons"]:
         assert (pdfdoc.STATIC / icon["src"].removeprefix("/static/")).is_file()
         assert icon["type"] != "image/png" or f'href="{icon["src"]}"' in page
+
+
+def test_package_names_load_on_first_use():
+    """The launcher and `--serve` import the package before Pint is needed; its names still work,
+    and `markdown` stays the function even after the submodule is imported elsewhere."""
+    import laconic
+    from laconic import pdfdoc  # noqa: F401  (imports laconic.markdown the module)
+    from laconic import markdown, run
+    assert callable(markdown) and laconic.markdown is markdown
+    assert run("1 + 1")[0].text.endswith("2")
+    with pytest.raises(AttributeError):
+        laconic.nothing_here
+
+
+def test_serve_socket_listens_before_the_server_starts():
+    """A browser started at once connects and waits in the queue; a taken port is an error."""
+    import socket
+    from laconic import __main__ as cli
+    sock = cli._listen(0)
+    try:
+        port = sock.getsockname()[1]
+        socket.create_connection(("127.0.0.1", port), timeout=1).close()
+        with pytest.raises(OSError):
+            cli._listen(port)
+    finally:
+        sock.close()

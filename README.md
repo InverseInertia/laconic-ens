@@ -19,8 +19,9 @@ plots, and equation solving and optimization (scipy).
 Ready-made programs for Windows and Linux are on the
 [releases page](https://github.com/inverseinertia/laconic-ens/releases). They need no Python install. File names carry the version (`<version>` below, e.g. `0.2.0`).
 
-- **Windows:** download `lens-<version>-windows-x64.exe` and double-click it. To open `.lens` files by
-  double-clicking them, run `lens-<version>-windows-x64.exe --register-files` once (`--unregister-files` undoes it).
+- **Windows:** download `lens-<version>-windows-x64-setup.exe` and run it. The wizard installs LENS for your user
+  only (no administrator), adds it to the Start menu and makes `.lens` files open in it. Run a newer one to update;
+  remove LENS under Settings → Apps.
 - **Linux:** download `lens-install-linux.sh` and run it (`sh lens-install-linux.sh`). It installs the latest release of LENS
   for your user only (no root), adds it to your application menu and makes `.lens` files open in it. Run it again to
   update. `sh lens-install-linux.sh --uninstall` removes it.

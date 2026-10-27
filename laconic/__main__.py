@@ -1,16 +1,14 @@
 import argparse
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import webbrowser
 from pathlib import Path
 
-from . import browser, document, evaluate, markdown, settings
-from .sheet import solve_block, solver_blocks
-from .blockedit import apply
-from .solver import write_result
+from . import browser, settings
 
 EXAMPLES = Path(__file__).parent / "examples"
 
@@ -74,12 +72,42 @@ def _launch(url, app):
     print(f"Could not open a browser; open {url} by hand")
 
 
+def _listen(port):
+    """The server's socket, bound and listening. LENS opens it before importing the server (about
+    a second), so the browser starts meanwhile: its first request waits in the socket's queue
+    until the server takes it. SO_REUSEADDR as uvicorn binds (see instance.port_free)."""
+    sock = socket.socket()
+    try:
+        if os.name != "nt":
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", port))
+        sock.listen(2048)
+    except OSError:
+        sock.close()
+        raise
+    return sock
+
+
+def _warm():
+    """Evaluate a tiny sheet, so the unit registry and parser are built before the page asks for
+    its first result."""
+    from . import evaluate
+    try:
+        evaluate("x = 1'm", global_units=settings.global_units())
+    except Exception:   # only a head start: the page's own request reports any real problem
+        pass
+
+
 _STATUS = {"valid": "solved", "stale": "OUT OF DATE: run with --solve", "none": "NOT SOLVED: run with --solve"}
 
 
 def _solve_all(path, text, units):
     """Solve the blocks that are not up to date, top to bottom (a later block may read an earlier
     one's answer), and write each result into the file as it arrives."""
+    from .blockedit import apply
+    from .sheet import solve_block, solver_blocks
+    from .solver import write_result
+
     done = set()
     while True:
         todo = [r for r in solver_blocks(text, units) if r.solver.status != "valid" and r.solver.hash not in done]
@@ -128,21 +156,28 @@ def main():
         return
 
     if a.serve:
+        url = f"http://127.0.0.1:{a.port}"
+        try:
+            sock = _listen(a.port)
+        except OSError as e:
+            sys.exit(f"Cannot serve on port {a.port}: {e}")
+        # Always printed: the browser may fail to start, or start without showing a window.
+        print(f"laconic running at {url} (open it in a browser if no window appears)")
+        if a.open or a.app:
+            threading.Thread(target=_launch, args=(url, a.app)).start()
         import uvicorn
         from . import server
         if a.file:
             server.OPENED = Path(a.file).resolve()
-        url = f"http://127.0.0.1:{a.port}"
         # Another launch of the packaged app hands its window to this server (instance.py).
         server.OPEN_WINDOW = lambda path: threading.Thread(target=_launch, args=(url + path, a.app)).start()
-        # Always printed: the browser may fail to start, or start without showing a window.
-        print(f"laconic running at {url} (open it in a browser if no window appears)")
-        if a.open or a.app:
-            threading.Timer(1.0, _launch, args=(url, a.app)).start()
-        uvicorn.run("laconic.server:app", host="127.0.0.1", port=a.port, log_level="warning")
+        threading.Thread(target=_warm, daemon=True).start()
+        uvicorn.Server(uvicorn.Config(server.app, log_level="warning")).run(sockets=[sock])
         return
     if not a.file:
         ap.error("give a worksheet file or use --serve")
+
+    from . import document, evaluate, markdown
 
     text = Path(a.file).read_text(encoding="utf-8")
     units = settings.global_units()

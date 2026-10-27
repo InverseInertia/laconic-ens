@@ -25,9 +25,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, name: lens-windows-x64 }
+          # Windows builds a folder (dist/lens) and the installer made from it (packaging/lens.iss).
+          - { os: windows-latest, name: lens-windows-x64, exe: dist/lens/lens.exe, out: dist/lens-setup.exe }
           # Oldest available runner so the binary works on more distros (glibc).
-          - { os: ubuntu-22.04, name: lens-linux-x64 }
+          - { os: ubuntu-22.04, name: lens-linux-x64, exe: dist/lens, out: dist/lens }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,11 +46,37 @@ jobs:
       - run: pyinstaller packaging/lens.spec
       - name: Smoke test (serves the page and the self-hosted assets)
         shell: bash
-        run: python packaging/smoke.py dist/lens* "$(python -c 'from laconic._version import label; print(label())')"
+        run: python packaging/smoke.py ${{ matrix.exe }} "$(python -c 'from laconic._version import label; print(label())')"
+      - name: Build the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco upgrade innosetup --no-progress -y   # installs it, or updates it to a version that reads lens.iss
+          $version = python -c "from laconic._version import __version__; print(__version__)"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$version" packaging\lens.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Install, smoke test and uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Start-Process dist\lens-setup.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=assoc' -Wait -PassThru
+          if ($setup.ExitCode) { throw "installer exited with $($setup.ExitCode)" }
+          $app = "$env:LOCALAPPDATA\Programs\LENS"
+          python packaging/smoke.py "$app\lens.exe" (python -c "from laconic._version import label; print(label())")
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ((Get-ItemProperty 'HKCU:\Software\Classes\.lens').'(default)' -ne 'LaconicLens.Worksheet') { throw ".lens files are not set to open in LENS" }
+          if ((Get-ItemProperty 'HKCU:\Software\Classes\LaconicLens.Worksheet\shell\open\command').'(default)' -ne "`"$app\lens.exe`" --window `"%1`"") { throw "wrong open command for .lens files" }
+          if (-not (Test-Path "$app\examples\*.lens")) { throw "no example worksheets installed" }
+          Wait-Process -Name lens -Timeout 30 -ErrorAction SilentlyContinue   # the solver worker, after the smoke test's server
+          # The uninstaller restarts itself from a temporary folder, so wait for the files to go.
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path "$app\lens.exe"); $i++) { Start-Sleep 1 }
+          if (Test-Path "$app\lens.exe") { throw "uninstall left lens.exe behind" }
+          if (Test-Path 'HKCU:\Software\Classes\LaconicLens.Worksheet') { throw "uninstall left the .lens file type behind" }
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: dist/lens*
+          path: ${{ matrix.out }}
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -66,7 +93,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir release
-          mv artifacts/lens-windows-x64/lens.exe "release/lens-$VERSION-windows-x64.exe"
+          mv artifacts/lens-windows-x64/lens-setup.exe "release/lens-$VERSION-windows-x64-setup.exe"
           mv artifacts/lens-linux-x64/lens "release/lens-$VERSION-linux-x64"
           chmod +x "release/lens-$VERSION-linux-x64"  # upload-artifact drops the executable bit
       - uses: actions/checkout@v4

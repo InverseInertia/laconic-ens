@@ -60,7 +60,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `settings.py` | The per-user settings file (Greek table, global units, the user's unit tags) |
 | `server.py` | FastAPI app |
 | `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
-| `__main__.py` | The `lens` command line |
+| `__main__.py` | The `lens` command line. `--serve` opens the server's socket and starts the browser before importing the server (about a second), so the browser's first request waits in the socket's queue rather than LENS waiting for anything, and builds the unit registry in the background before the page asks for a result. The package's `__init__` loads its heavy names on first use for the same reason |
 | `_version.py` | The program's version, the one place it is written; the release build stamps it from the tag |
 
 ## Front end (`laconic/static/`)
