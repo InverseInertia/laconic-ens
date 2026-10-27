@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LENS: Laconic Engineering Notebook System</title>
 <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+<!-- PNG icons too: a Chromium app window takes its window and taskbar icon from these, not the SVG (#72) -->
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/static/icon-512.png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="manifest" href="/static/manifest.json">
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/vendor/katex/katex.min.css">
 <script defer src="/static/vendor/katex/katex.min.js"></script>
@@ -424,7 +429,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
     <ul>
       <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped: inline, <code>\[ \]</code> or <code>align*</code>.</li>
       <li><strong>Export &rarr; LaTeX document</strong> writes a complete <code>.tex</code> document (siunitx v3 or newer; <code>pgfplots</code> when a sheet has plots).</li>
-      <li><strong>Export &rarr; PDF</strong> writes a plain PDF of the results, broken into pages so no calculation is split. It needs Chrome, Chromium or Edge; without one, the print dialog opens instead.</li>
+      <li><strong>Export &rarr; PDF</strong> writes a plain PDF of the results, broken into pages so no calculation is split. It needs a Chromium-family browser (Chrome, Edge, Brave and the like); without one, the print dialog opens instead.</li>
       <li><strong>Export &rarr; Markdown note</strong> writes a <code>.md</code> note for Obsidian: headings, comments as text, each calculation as a <code>$$</code> block and plots as images. Commands such as <code>!clear</code> are left out.</li>
       <li><code>!sigfigs n</code>, <code>!sigfigsbig n</code>, <code>!decplace n</code> and <code>!short</code> change how results are printed, never their values.</li>
       <li>From the command line, <code>lens sheet.lens --tex out.tex</code> and <code>--md out.md</code> write the same files, and <code>--plots DIR</code> writes each plot as SVG.</li>

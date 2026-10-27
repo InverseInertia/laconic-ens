@@ -7,6 +7,7 @@ hidden = (collect_submodules("laconic") + collect_submodules("uvicorn") + ["Cool
           + collect_submodules("scipy.optimize"))
 ROOT = os.path.dirname(SPECPATH)  # SPECPATH is the directory holding this file
 ICON = os.path.join(SPECPATH, "icon.png")  # rendered from laconic/static/logo.svg; PyInstaller converts it (needs Pillow)
+# laconic/static/icon-*.png are the same picture for the app window; they ship with the rest of static/.
 datas = [(os.path.join(ROOT, "laconic", "static"), "laconic/static"),
          (os.path.join(ROOT, "laconic", "examples"), "laconic/examples"),
          (os.path.join(SPECPATH, "file-icon.ico"), ".")] + collect_data_files("pint")  # see laconic/fileassoc.py

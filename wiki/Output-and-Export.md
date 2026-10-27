@@ -44,4 +44,4 @@ Headings and comments become `\subsection*{}` and plain text, and commands such 
 
 The LaTeX export needs siunitx v3 or newer for `\qty`, `\unit` and, for complex values, `\complexqty`. The Markdown export uses the live view's math (`\mathrm{kN}`), which Obsidian's MathJax renders without extra packages.
 
-The PDF is printed by Chrome, Chromium or Edge running headless, found on `PATH` (and in the usual install folders on Windows). Set `LENS_CHROMIUM` to a browser's path to pick one. Without one, **Export → PDF** in the app opens the printable page in a new tab with the browser's print dialog, where **Save as PDF** gives the same document; the command line stops with an error.
+The PDF is printed by a Chromium-family browser (Chrome, Chromium, Edge, Brave, Vivaldi or Opera) running headless, found on `PATH` and in the usual install folders on Windows and macOS; your default browser is used when it is one of these. Set `LENS_CHROMIUM` to a browser's path to pick one. Without one, **Export → PDF** in the app opens the printable page in a new tab with the browser's print dialog, where **Save as PDF** gives the same document; the command line stops with an error.

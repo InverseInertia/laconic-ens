@@ -133,6 +133,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 - **File handle**: the file a sheet was opened from or last saved to, as given by the browser's File System Access API. Only a `.lens` file gets one; a `.cs` or `.txt` file is read but never overwritten. Renaming the sheet drops it. See `laconic/static/savefile.js`. A sheet the program was started with (`lens --window FILE`, a double-clicked file) gets a stand-in handle that the server writes through (`/api/opened/save`).
 - **Save / Save As**: Save writes to the file handle when there is one and the browser grants permission, and otherwise asks for a file. Save As always asks. Without the File System Access API, both download a copy.
+- **Chromium-family browser**: any browser built on Chromium (Chrome, Chromium, Edge, Brave, Vivaldi, Opera); all take the switches LENS uses for the app window (`--app`) and for printing PDFs. `laconic/browsers.py` finds them, the user's default browser first when it is one. `LENS_CHROMIUM` names one by hand.
 - **Theme**: fonts, the color set and the editor paper style, kept in browser storage. See `laconic/static/theme.js`.
 - **Preset**: a named color set (LENS blueprint, Engineering paper, White paper, Dark, Canoe Dark). Colors that match none are "Custom".
 - **Readable theme**: one whose text and paper colors have a WCAG contrast ratio of at least 3:1. A stored theme that is not readable is replaced by the default colors on load, with a note.
