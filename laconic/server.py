@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from . import document, evaluate as evaluate_sheet, markdown, pdfdoc, snippet
 from .sheet import block_at, solver_blocks
-from . import settings
+from . import settings, unittags
 from .blockedit import to_json
 from ._version import label as version_label
 from .commands import help_rows
@@ -107,6 +107,10 @@ class UnitRow(BaseModel):
 
 class UnitsBody(BaseModel):
     units: list[UnitRow]
+
+
+class TagsBody(BaseModel):
+    tags: dict[str, list[str]]   # tag -> the units it is on
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -351,6 +355,22 @@ def vocab():
 def vocab_props():
     """Keys and fluids for props(...) strings. Imports CoolProp, so the page asks for it lazily."""
     return props_vocabulary()
+
+
+@app.get("/api/unitbrowse")
+def unit_browse():
+    cfg = settings.load()
+    return unittags.browse([(u["name"], u["definition"]) for u in cfg["units"]], cfg["tags"])
+
+
+@app.put("/api/tags")
+def put_tags(body: TagsBody):
+    try:
+        tags = unittags.clean(body.tags)
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    settings.save_tags(tags)
+    return {"ok": True, "tags": tags}
 
 
 @app.put("/api/greek")

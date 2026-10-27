@@ -21,6 +21,14 @@ Angles keep their radians (`asin(0.5)` gives `0.5236 rad`). degF becomes degC, a
 
 The pound is `'lbm` (mass) and `'lbf` (force). Pint's own `lb` is removed because it reads as either.
 
+## The units dialog
+
+**Units** in the header lists every unit LENS knows. Type in the search box to match a unit's name or description (`bar`, `gas`, `pound square`: every word must match), and click a tag to show only the units that have it. Click a unit to insert it at the caret; Ctrl+Z takes it back.
+
+The standard tags are *common*, *constants*, *length*, *area*, *volume*, *mass*, *time*, *speed*, *force*, *pressure*, *energy*, *temperature*, *thermodynamics*, *chemistry*, *electrical*, *imperial* and *currency*. Most take every unit of a dimension (*pressure* holds Pa, bar, psi, inHg and the rest); *common*, *constants*, *thermodynamics*, *chemistry* and *imperial* are hand-picked lists. Global units from Settings come first, under *global units*.
+
+**+ tag** on a unit adds a tag of your own, new or existing (a standard name works too). Your tags show with a dashed outline, and × takes one off a unit; a tag left on no unit goes. They are kept in `settings.json` (see [Settings](Settings)), so they follow you across browsers.
+
 ## Physical constants
 
 Physical constants are units, typed with a quote like any other: `'R`, `'k_B`, `'c`. Because they are units, they never take a variable's name, so a sheet can set `R = 5'ohm` and still use `'R`, and a thermodynamics sheet that forgets to define `h` gets an error, not Planck's constant.
@@ -31,7 +39,7 @@ E = 'h_P * 'c / 500'nm           3.973e-19 J
 n = 2'mol * 'N_A                 1.204e24
 ```
 
-A line that uses a constant shows its value, even a single typed quantity (`3'mol * 'R` is `24.94 J/K`, not `3 R·mol`). Typing `'` lists the constants first, each with its value in SI.
+A line that uses a constant shows its value, even a single typed quantity (`3'mol * 'R` is `24.94 J/K`, not `3 R·mol`). Each constant's suggestion shows what it is and its value in SI, so typing `'gas` or `'boltz` finds it. The **Units** dialog lists them all under the *constants* tag.
 
 | Type | Constant | Value |
 |---|---|---|

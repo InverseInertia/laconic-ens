@@ -111,6 +111,11 @@ def reduce(q, ureg):
     return r.to(cash) if (r / ureg.Quantity(1, cash)).dimensionless else r
 
 
+def is_constant(spelling):
+    """True if `spelling` is how a sheet types one of the physical constants ('R, 'k_B)."""
+    return any(spelling == s for s, _, _ in CONSTANTS)
+
+
 def detail(name):
     """The editor's description of a unit, or None to use Pint's name for it."""
     if name in CURRENCIES:

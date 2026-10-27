@@ -3,7 +3,7 @@ import pytest
 
 from laconic import server, settings
 from laconic.commands import COMMANDS, help_rows
-from laconic.server import GreekBody, Sheet, UnitRow, UnitsBody
+from laconic.server import GreekBody, Sheet, TagsBody, UnitRow, UnitsBody
 
 
 @pytest.fixture(autouse=True)
@@ -17,7 +17,7 @@ def put_units(*pairs):
 
 
 def test_defaults_when_nothing_is_stored():
-    assert server.get_settings() == {"welcomed": False, "greek": None, "units": [], "prefs": {}}
+    assert server.get_settings() == {"welcomed": False, "greek": None, "units": [], "tags": {}, "prefs": {}}
 
 
 def test_greek_table_is_stored_and_can_be_reset():
@@ -91,7 +91,7 @@ def test_the_package_version_is_read_from_the_version_module():
 
 def test_settings_survive_a_broken_file(config):
     (config / "settings.json").write_text("{not json")
-    assert server.get_settings() == {"welcomed": False, "greek": None, "units": [], "prefs": {}}
+    assert server.get_settings() == {"welcomed": False, "greek": None, "units": [], "tags": {}, "prefs": {}}
     assert settings.global_units() == []
 
 
@@ -208,3 +208,45 @@ def test_a_stored_preference_cannot_close_the_script_it_is_written_into():
     server.put_prefs(server.PrefsBody(prefs={"view": "</script><script>alert(1)</script>"}))
     page = server.index().body.decode()
     assert "</script><script>alert(1)" not in page and "\\u003c/script>" in page
+
+
+# ---- units dialog ------------------------------------------------------------------
+def test_the_units_dialog_lists_every_unit_with_its_standard_tags():
+    b = server.unit_browse()
+    assert b["tags"][:2] == ["common", "constants"] and "thermodynamics" in b["tags"] and b["userTags"] == {}
+    rows = {r[0]: r for r in b["units"]}
+    assert len(rows) > 1000
+    assert {"constants", "thermodynamics", "chemistry"} <= set(rows["R"][2]) and "gas" in rows["R"][1]
+    assert {"common", "pressure", "imperial"} <= set(rows["psi"][2])
+    assert "pressure" in rows["inHg"][2]          # tagged by its dimension, not by name
+    assert rows["USD"][2] == ["common", "currency"]
+
+
+def test_global_units_head_the_list_with_a_tag_of_their_own():
+    put_units(("smoot", "1.7018'm"))
+    b = server.unit_browse()
+    assert b["units"][0] == ["smoot", "= 1.7018'm", ["global units"]] and b["tags"][-1] == "global units"
+
+
+def test_the_users_tags_are_cleaned_and_kept_in_the_settings_file(config):
+    res = server.put_tags(TagsBody(tags={"  heat   transfer ": ["'W", "W", "Pa"], "empty": [" "]}))
+    assert res == {"ok": True, "tags": {"heat transfer": ["W", "Pa"]}}
+    assert server.get_settings()["tags"] == {"heat transfer": ["W", "Pa"]}
+    assert '"heat transfer"' in (config / "settings.json").read_text(encoding="utf-8")
+    assert server.unit_browse()["userTags"] == {"heat transfer": ["W", "Pa"]}
+    assert server.put_tags(TagsBody(tags={})) == {"ok": True, "tags": {}}
+    assert server.get_settings()["tags"] == {}
+
+
+def test_a_tag_without_a_name_or_too_long_is_refused_and_nothing_is_stored():
+    server.put_tags(TagsBody(tags={"mine": ["W"]}))
+    assert server.put_tags(TagsBody(tags={"  ": ["W"]}))["ok"] is False
+    assert "40" in server.put_tags(TagsBody(tags={"x" * 41: ["W"]}))["error"]
+    assert server.get_settings()["tags"] == {"mine": ["W"]}
+
+
+def test_a_damaged_tags_entry_in_the_settings_file_is_ignored(config):
+    (config / "settings.json").write_text('{"tags": {"ok": ["W", 3], "bad": "W"}}', encoding="utf-8")
+    assert settings.load()["tags"] == {"ok": ["W"]}
+    (config / "settings.json").write_text('{"tags": ["W"]}', encoding="utf-8")
+    assert settings.load()["tags"] == {}

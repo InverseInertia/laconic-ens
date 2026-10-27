@@ -336,15 +336,14 @@ def test_typed_quantities_without_a_constant_still_show_as_typed():
     assert r.text == "k = 3 kN/m" and r.latex == r"k = 3\,\frac{\mathrm{kN}}{\mathrm{m}}"
 
 
-def test_the_editor_suggests_constants_first_with_their_values():
+def test_the_editor_describes_constants_with_their_values_but_does_not_put_them_first():
     units = vocab._units()
-    head = units[:len(catalogue.CONSTANTS)]
-    assert [u[0] for u in head] == [s for s, _, _ in catalogue.CONSTANTS]
-    assert all(u[2] == 1 for u in head)
-    rows = {u[0]: u[1] for u in head}
-    assert rows["R"].startswith("universal gas constant, 8.31446261815 J/")
-    assert rows["k_B"] == "Boltzmann constant, 1.380649e-23 J/K"
-    assert rows["h_P"] == "Planck constant, 6.62607015e-34 J⋅s"
+    rows = {u[0]: u for u in units}
+    assert rows["R"][1].startswith("universal gas constant, 8.31446261815 J/")   # `gas` finds it
+    assert rows["k_B"][1] == "Boltzmann constant, 1.380649e-23 J/K"              # and `boltz`
+    assert rows["h_P"][1] == "Planck constant, 6.62607015e-34 J⋅s"
+    assert all(rows[s][2] == 0 for s, _, _ in catalogue.CONSTANTS)
+    assert units[0][0] != "R"
 
 
 def test_constants_export_with_declared_macros():

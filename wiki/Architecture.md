@@ -56,7 +56,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
-| `settings.py` | The per-user settings file (Greek table, global units) |
+| `unittags.py` | The units dialog's tags: the standard tag list (units and Pint dimensions) and the cleaning of the user's tags before they are stored |
+| `settings.py` | The per-user settings file (Greek table, global units, the user's unit tags) |
 | `server.py` | FastAPI app |
 | `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
 | `__main__.py` | The `lens` command line |
@@ -72,6 +73,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table |
 | `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line. An adapter of `symbols.py`; it applies no scope rule of its own |
 | `paste.js` | Table paste to matrix, pure functions |
+| `unitbrowser.js` | The units dialog: which units a search and a tag list, and adding and removing the user's tags, as pure functions |
 | `savefile.js` | Save file policy: reuse the open file or ask, the file name, the download fallback. The page passes an adapter over the File System Access API |
 | `theme.js` | Theme data (fonts, presets), the contrast check, loading a stored theme, the CSS variables to set |
 | `shortcuts.js` | The keyboard shortcut table, as data; the page renders it under Settings → Reference, with the command rows `server.py` fills in from `commands.py` |
@@ -102,6 +104,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | `POST /api/plotimage` | one plot as a standalone SVG |
 | `POST /api/solve/start`, `GET /api/solve/{job}`, `POST /api/solve/{job}/interrupt` | start, poll and interrupt a solver job |
 | `POST /api/solvestore`, `POST /api/solveedit` | edits that write a finished result into its block; toggle `autorun:` |
+| `GET /api/unitbrowse`, `PUT /api/tags` | every unit with its standard tags, the user's tags and the global units, for the units dialog; store the user's tags |
 | `GET /api/settings`, `GET /api/vocab`, `GET /api/vocab/props` | settings, editor vocabulary, props keys and fluids (loaded lazily because it imports CoolProp) |
 | `PUT /api/greek`, `PUT /api/units` | store settings (units only if all valid) |
 | `POST /api/ping`, `POST /api/bye` | page lifecycle for the packaged app |

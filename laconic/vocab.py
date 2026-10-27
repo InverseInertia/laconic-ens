@@ -50,11 +50,11 @@ def _units():
             seen.add(text)
             out.append([text, detail, int(common)])
 
-    for spelling, what, _ in catalogue.CONSTANTS:
-        add(spelling, f"{what}, {_value(ureg.Quantity(1, spelling), ureg)}", True)
     for key in sorted(names, key=lambda k: (len(k), k)):
         try:
             detail = catalogue.detail(key) or ureg.get_name(key)
+            if catalogue.is_constant(key):   # its description and value, so `gas` or `boltz` finds it
+                detail = f"{detail}, {_value(ureg.Quantity(1, key), ureg)}"
             add(key, detail, key in _COMMON)
         except Exception:
             continue

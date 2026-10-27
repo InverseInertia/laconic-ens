@@ -22,6 +22,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_theme.js` | theme loading, contrast check, presets |
 | `node tests/test_shortcuts.js` | the shortcut table, and that the wiki lists its Ctrl/Alt keys |
 | `node tests/test_rows.js` | the row model: what the results pane shows for each kind of line |
+| `node tests/test_unitbrowser.js` | the units dialog: search, tag filters, adding and removing your tags |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 
 | File | Covers |
@@ -51,7 +52,8 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 - **A command:** handle it in `_run_command` in `sheet.py` and list it in `COMMANDS` in `vocab.py`.
 - **A plot option:** add it to the tables at the top of `plotopts.py`, resolve it in `plotspec.py`, and draw it in `plotsvg.py` and `plotpgf.py`.
 - **A field on the eval rows:** add it to `LineResult` (or to a payload, if only one kind has it) and to `to_json`, update the expected shape in `test_lineresult.py`, and read it in `rows.js` (or the payload's own reader: `plotview.js`, `solverview.js`).
-- **A physical constant:** add a line to `CONSTANTS` in `catalogue.py`: the spelling a sheet types, what it is, and `None` when Pint already knows that spelling (`'R`, `'c`). For a spelling Pint lacks, the third item is the Pint definition that adds it: `"@alias planck_constant = h_P"` for another name of a Pint constant, or `"Av = avogadro_number"` for a new unit with its own symbol. The editor's suggestions and the "show its value" rule pick it up from there. Add its row to the table in [Units](Units), and its value to `test_the_constants_have_their_codata_values` in `tests/test_units.py`.
+- **A physical constant:** add a line to `CONSTANTS` in `catalogue.py`: the spelling a sheet types, what it is, and `None` when Pint already knows that spelling (`'R`, `'c`). For a spelling Pint lacks, the third item is the Pint definition that adds it: `"@alias planck_constant = h_P"` for another name of a Pint constant, or `"Av = avogadro_number"` for a new unit with its own symbol. The editor's suggestions, the *constants* tag in the units dialog and the "show its value" rule pick it up from there. Add its row to the table in [Units](Units), and its value to `test_the_constants_have_their_codata_values` in `tests/test_units.py`.
+- **A standard unit tag:** add it to `STANDARD_TAGS` in `unittags.py`, as a list of unit spellings and Pint dimensions in brackets (`"[pressure]"`); the order there is the order of the dialog's tag buttons. Add a unit to an existing tag the same way. List the tag in [Units](Units).
 - **A unit that needs special handling** (its own dimension, a reduction rule, an export spelling, an error or hint): add it to the unit catalogue, `catalogue.py`. A currency is one entry in `CURRENCIES`.
 
 ## CI
