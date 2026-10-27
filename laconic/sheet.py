@@ -12,8 +12,7 @@ from .blockedit import newline
 from .evaluator import EvalError, Evaluator
 from .latex import Fmt, Printer, name_latex
 from .lineresult import LineResult, PlotPayload, SolverPayload
-from .nodes import (Assign, BinOp, Convert, FuncDef, Implicit, Neg, Num,
-                    UnitDef, UnitLit)
+from .nodes import Assign, Convert, FuncDef, UnitDef, UnitLit, is_literal
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
@@ -24,33 +23,6 @@ from .plotsvg import render_svg
 from . import commands, solver
 from .commands import CommandError
 from .solver import SolverError
-
-
-def _is_literal(n, ev):
-    """`12'kN/'m`, `8.5e7'mm^4`: one typed-in quantity and nothing computed.
-    `10'kN / 5'mm` has two numbers, so it is a calculation."""
-    def count(n):
-        """Number of numeric leaves, or None if the tree is anything else."""
-        if isinstance(n, (Implicit, Num)):
-            return 1
-        if isinstance(n, UnitLit):
-            return 0
-        if isinstance(n, Neg):
-            return count(n.operand)
-        if isinstance(n, BinOp) and n.op == "^":
-            return count(n.left)          # the exponent is not a quantity
-        if isinstance(n, BinOp) and n.op in "*/":
-            a, b = count(n.left), count(n.right)
-            return None if a is None or b is None else a + b
-        return None
-
-    def has_implicit(n):
-        if isinstance(n, Implicit):
-            return True
-        if isinstance(n, Neg):
-            return has_implicit(n.operand)
-        return isinstance(n, BinOp) and (has_implicit(n.left) or has_implicit(n.right))
-    return count(n) == 1 and has_implicit(n)
 
 
 def _dedupe(stages):
@@ -365,7 +337,7 @@ def _run_line(i, raw, s, ev, fmt, used):
 
         expr = stmt.expr
         value = ev.settle(ev.check_finite(ev.eval(expr), expr))
-        literal = _is_literal(expr, ev)
+        literal = is_literal(expr)
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.
         if ev.mode.assume and not (literal or isinstance(expr, Convert)):

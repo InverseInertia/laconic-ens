@@ -91,3 +91,30 @@ class UnitDef:
 @dataclass(frozen=True)
 class ExprStmt:
     expr: Any
+
+
+def is_literal(n):
+    """`12'kN/'m`, `8.5e7'mm^4`: one typed-in quantity and nothing computed.
+    `10'kN / 5'mm` has two numbers, so it is a calculation."""
+    def count(n):
+        """Number of numeric leaves, or None if the tree is anything else."""
+        if isinstance(n, (Implicit, Num)):
+            return 1
+        if isinstance(n, UnitLit):
+            return 0
+        if isinstance(n, Neg):
+            return count(n.operand)
+        if isinstance(n, BinOp) and n.op == "^":
+            return count(n.left)          # the exponent is not a quantity
+        if isinstance(n, BinOp) and n.op in "*/":
+            a, b = count(n.left), count(n.right)
+            return None if a is None or b is None else a + b
+        return None
+
+    def has_implicit(n):
+        if isinstance(n, Implicit):
+            return True
+        if isinstance(n, Neg):
+            return has_implicit(n.operand)
+        return isinstance(n, BinOp) and (has_implicit(n.left) or has_implicit(n.right))
+    return count(n) == 1 and has_implicit(n)

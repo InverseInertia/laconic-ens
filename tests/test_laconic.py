@@ -289,6 +289,26 @@ def test_a_year_shows_as_yr_and_a_still_reads_as_one():
     assert last("t = 365.25'd -> 'year").text == "t = 1 yr"
 
 
+def test_a_liter_shows_as_capital_L_and_l_still_reads_as_one():
+    r = last("V = 3'L")
+    assert r.text == "V = 3 L" and r"\mathrm{L}" in r.latex
+    assert last("V = 3'l").text == "V = 3 L"
+    assert last("V = 2'mL").text == "V = 2 mL"
+    assert last("V = 5'kL").text == "V = 5 kL"
+    assert last("Q = 4'L/'min").text == "Q = 4 L/min"
+    assert last("V = 1'L -> 'mL").text == "V = 1000 mL"
+
+
+def test_a_typed_quantity_inside_an_expression_keeps_its_number_before_its_unit():
+    # 0.72 kg/L, as its own line shows it, not \frac{0.72 kg}{L}
+    r = last("m = 0.72'kg/'L * 20'L")
+    assert r.latex.startswith(r"m = 0.72\,\frac{\mathrm{kg}}{\mathrm{L}} \cdot 20\,\mathrm{L} = ")
+    r = run("m = 0.72'kg/'L * 20'L", siunitx=True)[0]
+    assert r.latex.startswith(r"m = \qty{0.72}{\kilo\gram\per\liter} \cdot \qty{20}{\liter} = ")
+    # two numbers is a calculation, still a fraction
+    assert r"\frac{10\,\mathrm{kg}}{0.72\,\mathrm{L}}" in last("w = 10'kg/0.72'L").latex
+
+
 def test_index_functions_count_from_one_and_print_as_subscripts():
     r = last("A = [1,2,3;4,5,6]\nelem(A, 2, 3)")
     assert r.text == "6" and "{A}_{2,\\,3}" in r.latex
