@@ -1,6 +1,22 @@
 # Changelog
 
-Release notes for each tagged version of LENS. The per-release files in `release-notes/` are the bodies of the GitHub releases.
+What changed in each release of LENS, newest first. The release job publishes a tag's section as
+the body of its GitHub release (`packaging/release_notes.py`).
+
+Every pull request that changes what a user sees or does adds a line under **Unreleased**, in the
+group it belongs to (New, Changes or Fixes), naming its PR or issue. When cutting a release,
+rename **Unreleased** to the tag's heading and start a new, empty **Unreleased** above it.
+
+## Unreleased
+
+### Changes
+- **Any Chromium-family browser** is found for the app window and PDF export: the default browser when it is Chromium-based, Brave, Vivaldi and Opera, flatpak and snap installs, Windows install folders and App Paths, and macOS app bundles. If one browser won't start, LENS tries the next before falling back to a plain tab. (#72, #77, #82)
+- The liter prints as `L` (`mL`, `kL`); `l` is still read as a liter. A typed quantity inside a larger expression prints its number before its unit (`0.72 kg/L`), as it does on its own line. (#74, #80)
+
+### Fixes
+- The toolbar wraps at every window width, so Save As and Export no longer run off the right edge. (#73, #78)
+- Rename always goes into the editor's undo stack, so Ctrl+Z takes it back. (#75, #79)
+- Larger app icons (192 px and 512 px) and a web manifest for the app window. (#82)
 
 ## [v0.3.4](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.4) (2026-10-26)
 

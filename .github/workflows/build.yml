@@ -70,7 +70,10 @@ jobs:
           mv artifacts/lens-linux-x64/lens "release/lens-$VERSION-linux-x64"
           chmod +x "release/lens-$VERSION-linux-x64"  # upload-artifact drops the executable bit
       - uses: actions/checkout@v4
-        with: { path: src }
+        with: { path: src, fetch-depth: 0 }  # all tags, for the compare link to the previous one
+      - name: Release notes from CHANGELOG.md
+        # The tag's section of the changelog, or Unreleased when it has none yet.
+        run: cd src && python3 packaging/release_notes.py "$GITHUB_REF_NAME" > ../notes.md && cat ../notes.md
       - name: Add the Linux installer and its icons
         run: |
           # The installer looks for, and downloads, the files of the release it is stamped with.
@@ -82,3 +85,4 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*
+          body_path: notes.md
