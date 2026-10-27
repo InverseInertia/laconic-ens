@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Fixes
+- On Linux, the LENS window shows as LENS, with the LENS icon, in the dock, panel and Alt+Tab list again, instead of as your browser. LENS now opens its window with a browser installed from your distribution's packages before a flatpak or snap one (whose windows the desktop always shows as that browser), opens it through XWayland on Wayland, and keeps a separate profile for each browser. (#93)
+
 ## [v0.3.6](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.6) (2026-10-27)
 
 ### New
