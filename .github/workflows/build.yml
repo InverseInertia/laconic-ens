@@ -127,7 +127,10 @@ jobs:
           cp src/packaging/install-linux.sh release/lens-install-linux-v2.sh
           cp src/packaging/icon.png "release/lens-$VERSION-icon.png"
           cp src/packaging/file-icon.png "release/lens-$VERSION-file-icon.png"
-          chmod +x release/lens-install-linux-v2.sh
+          # Installer 1.x downloads lens-<version>-linux-x64; this stand-in runs installer 2 for it.
+          sed "s/^VERSION=\"@VERSION@\"$/VERSION=\"$VERSION\"/" src/packaging/v1-bridge.sh > "release/lens-$VERSION-linux-x64"
+          grep -qx "VERSION=\"$VERSION\"" "release/lens-$VERSION-linux-x64"
+          chmod +x release/lens-install-linux-v2.sh "release/lens-$VERSION-linux-x64"
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*
