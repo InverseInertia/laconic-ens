@@ -389,7 +389,7 @@ def test_app_window_gets_the_launchers_wm_class_on_linux(monkeypatch, tmp_path):
     calls = []
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-    monkeypatch.setattr(cli.browser, "find", lambda: "/usr/bin/google-chrome")
+    monkeypatch.setattr(cli.browser, "candidates", lambda: iter(["/usr/bin/google-chrome"]))
     monkeypatch.setattr(cli, "_spawn", lambda cmd: calls.append(cmd) or True)
     cli._launch("http://127.0.0.1:1", app=True)
     cmd = calls[0]
@@ -464,3 +464,70 @@ def test_find_browser_flatpak_windows_and_macos(monkeypatch, tmp_path):
     app.parent.mkdir(parents=True)
     app.write_text("")
     assert browser.find() == str(app)
+
+
+def _windows_with(monkeypatch, tmp_path, registry=None):
+    """browser.find on Windows with nothing installed, Program Files and AppData under tmp_path
+    and `registry` ({(hive, key, name): value}) as the registry."""
+    from laconic import browser
+    windows_default = browser._windows_default
+    browser = _no_browsers(monkeypatch, tmp_path, "win32")
+    monkeypatch.setattr(browser, "_windows_default", windows_default)
+    monkeypatch.setattr(browser, "_registry", lambda hive, key, name="": (registry or {}).get((hive, key, name)))
+    for var, d in (("PROGRAMFILES", "pf"), ("PROGRAMFILES(X86)", "pf86"), ("LOCALAPPDATA", "local")):
+        monkeypatch.setenv(var, str(tmp_path / d))
+    return browser
+
+
+def _install(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("")
+    return str(path)
+
+
+def test_find_browser_on_windows_reads_app_paths(monkeypatch, tmp_path):
+    """A browser installed outside Program Files and AppData is found where the registry's
+    App Paths says it is; a stale App Paths entry is passed over."""
+    brave = _install(tmp_path / "D" / "Brave" / "brave.exe")
+    app_paths = r"Software\Microsoft\Windows\CurrentVersion\App Paths"
+    browser = _windows_with(monkeypatch, tmp_path, {("HKLM", app_paths + r"\brave.exe", ""): f'"{brave}"',
+                                                     ("HKCU", app_paths + r"\chrome.exe", ""): str(tmp_path / "gone.exe")})
+    assert browser.find() == brave
+
+
+def test_find_browser_on_windows_opera_and_the_default(monkeypatch, tmp_path):
+    """Opera's per-user install is found, before the Edge every Windows has; the default
+    browser's ProgId comes before both."""
+    browser = _windows_with(monkeypatch, tmp_path)
+    edge = _install(tmp_path / "pf86" / "Microsoft/Edge/Application/msedge.exe")
+    opera = _install(tmp_path / "local" / "Programs/Opera/opera.exe")
+    assert list(browser.candidates()) == [opera, edge]
+    choice = r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"
+    browser = _windows_with(monkeypatch, tmp_path, {("HKCU", choice, "ProgId"): "MSEdgeHTM"})
+    assert list(browser.candidates()) == [edge, opera]
+    browser = _windows_with(monkeypatch, tmp_path, {("HKCU", choice, "ProgId"): "OperaStable"})
+    assert browser.find() == opera
+
+
+def test_app_window_tries_the_next_browser_when_one_will_not_start(monkeypatch, tmp_path):
+    import sys
+    from laconic import __main__ as cli
+    calls = []
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    monkeypatch.setattr(cli.browser, "candidates", lambda: iter(["/usr/bin/broken", "/usr/bin/brave"]))
+    monkeypatch.setattr(cli, "_spawn", lambda cmd: calls.append(cmd[0]) or cmd[0] != "/usr/bin/broken")
+    cli._launch("http://127.0.0.1:1", app=True)
+    assert calls == ["/usr/bin/broken", "/usr/bin/brave"]
+
+
+def test_page_links_the_app_window_icons():
+    """#72: an app window takes its window and taskbar icon from the page's PNG icons."""
+    import json
+    from laconic import pdfdoc
+    page = (pdfdoc.STATIC / "index.html").read_text(encoding="utf-8")
+    manifest = json.loads((pdfdoc.STATIC / "manifest.json").read_text(encoding="utf-8"))
+    assert '<link rel="manifest" href="/static/manifest.json">' in page
+    for icon in manifest["icons"]:
+        assert (pdfdoc.STATIC / icon["src"].removeprefix("/static/")).is_file()
+        assert icon["type"] != "image/png" or f'href="{icon["src"]}"' in page
