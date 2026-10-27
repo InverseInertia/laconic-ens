@@ -1,25 +1,26 @@
 #!/bin/sh
 # Installs LENS for the current user: copies the binary and icon under ~/.local, adds a
 # launcher entry (.desktop file) to the application menu, and makes .lens files open in LENS
-# with an icon of their own. Any earlier install is removed first.
+# with an icon of their own. Any earlier install is removed first, so running it again updates.
 #
-#   sh lens-<version>-install-linux.sh             install from lens-<version>-linux-x64,
-#                                                  lens-<version>-icon.png and lens-<version>-file-icon.png next to this script
-#   sh lens-<version>-install-linux.sh --uninstall remove LENS and its launcher
+#   sh lens-install-linux.sh                    install the latest release of LENS
+#   sh lens-install-linux.sh --release 0.3.5    install that release instead
+#   sh lens-install-linux.sh --uninstall        remove LENS and its launcher
+#   sh lens-install-linux.sh --version          print this installer's version
 #
-# Run it from the folder holding the files downloaded from the release page. Missing files are
-# fetched from the same release. No root needed; XDG_DATA_HOME is honoured.
+# The latest release is looked up on GitHub when the script runs. Files of that release already
+# beside the script (lens-<version>-linux-x64, lens-<version>-icon.png,
+# lens-<version>-file-icon.png) are used as they are; missing ones are downloaded. Offline, it
+# installs the newest release whose files are beside it. A build of your own (lens-linux-x64,
+# lens-icon.png and lens-file-icon.png beside it) is installed without asking GitHub.
+# No root needed; XDG_DATA_HOME is honoured.
 set -eu
 
-VERSION=""  # the release job writes the release's version here (e.g. 0.2.0)
+# The installer's own version, numbered apart from LENS's: bump it when this script changes
+# (see wiki/Releases-and-Packaging.md).
+INSTALLER_VERSION="1.0.0"
 REPO="inverseinertia/laconic-ens"
-if [ -n "$VERSION" ]; then
-    PREFIX="lens-$VERSION"
-    BASE="https://github.com/$REPO/releases/download/v$VERSION"
-else  # a copy from the source tree: no release to download from, so the files must be beside it
-    PREFIX="lens"
-    BASE=""
-fi
+LATEST_API="${LENS_RELEASE_API:-https://api.github.com/repos/$REPO/releases/latest}"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
 APP_DIR="$DATA/laconic-lens"
 BIN="$APP_DIR/lens"
@@ -45,21 +46,78 @@ remove_existing() {
     refresh
 }
 
-if [ "${1:-}" = "--uninstall" ]; then
-    remove_existing
-    rm -rf "$BROWSER_PROFILE"
-    echo "LENS removed."
-    exit 0
-fi
+RELEASE=""
+case "${1:-}" in
+    --uninstall)
+        remove_existing
+        rm -rf "$BROWSER_PROFILE"
+        echo "LENS removed."
+        exit 0 ;;
+    --version) echo "LENS installer $INSTALLER_VERSION"; exit 0 ;;
+    --release)
+        RELEASE="${2:-}"; RELEASE="${RELEASE#v}"
+        if [ -z "$RELEASE" ]; then echo "--release needs a version, e.g. --release 0.3.5" >&2; exit 2; fi ;;
+    "") ;;
+    *) echo "Unknown option $1 (try --release VERSION, --uninstall or --version)." >&2; exit 2 ;;
+esac
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-fetch() {  # fetch <file name>: use the copy beside the script, else download it
+get() {  # get <url> <file>: download, failing within a reasonable time when offline
+    if command -v curl >/dev/null 2>&1; then curl -fsSL --connect-timeout 15 --retry 2 "$1" -o "$2"
+    elif command -v wget >/dev/null 2>&1; then wget -q -T 15 -t 3 "$1" -O "$2"
+    else return 127; fi
+}
+latest_release() {  # the latest release's version (0.3.5) from the GitHub API, or nothing
+    reply="$(mktemp)"
+    if get "$LATEST_API" "$reply" 2>/dev/null; then
+        # "tag_name": "v0.3.5" appears once in the reply, at the top level
+        tr ',{}' '\n\n\n' < "$reply" | sed -n 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"v\{0,1\}\([0-9][0-9A-Za-z.+-]*\)"[[:space:]]*$/\1/p' | head -n 1
+    fi
+    rm -f "$reply"
+}
+newest_beside() {  # the newest version with a lens-<version>-linux-x64 beside the script, or nothing
+    for f in "$HERE"/lens-*-linux-x64; do
+        [ -f "$f" ] || continue
+        v="${f##*/lens-}"; echo "${v%-linux-x64}"
+    done | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1
+}
+
+if [ -z "$RELEASE" ] && [ -f "$HERE/lens-linux-x64" ]; then
+    PREFIX="lens"  # a build of your own, unversioned: nothing to look up or download
+    BASE=""
+    echo "Installing the LENS build beside this script (installer $INSTALLER_VERSION) ..."
+else
+    if [ -z "$RELEASE" ]; then
+        echo "Looking up the latest LENS release ..."
+        RELEASE="$(latest_release)"
+        if [ -z "$RELEASE" ]; then
+            RELEASE="$(newest_beside)"
+            if [ -z "$RELEASE" ]; then
+                echo "Could not look up the latest release (offline, or GitHub did not answer)." >&2
+                echo "Try again later, or put lens-<version>-linux-x64, lens-<version>-icon.png and" >&2
+                echo "lens-<version>-file-icon.png from https://github.com/$REPO/releases beside this script." >&2
+                exit 1
+            fi
+            echo "Could not look up the latest release; installing $RELEASE from the files beside this script."
+        fi
+    fi
+    PREFIX="lens-$RELEASE"
+    BASE="https://github.com/$REPO/releases/download/v$RELEASE"
+    WAS=""
+    [ -f "$APP_DIR/version" ] && WAS="$(cat "$APP_DIR/version")"
+    if [ -z "$WAS" ]; then echo "Installing LENS $RELEASE (installer $INSTALLER_VERSION) ..."
+    elif [ "$WAS" = "$RELEASE" ]; then echo "Reinstalling LENS $RELEASE (installer $INSTALLER_VERSION) ..."
+    else echo "Updating LENS $WAS -> $RELEASE (installer $INSTALLER_VERSION) ..."; fi
+fi
+
+fetch() {  # fetch <file name> <to>: use the copy beside the script, else download it
     if [ -f "$HERE/$1" ]; then cp "$HERE/$1" "$2"; return; fi
     if [ -z "$BASE" ]; then echo "Need $1 next to this script." >&2; exit 1; fi
     echo "Downloading $1 ..."
-    if command -v curl >/dev/null 2>&1; then curl -fsSL "$BASE/$1" -o "$2"
-    elif command -v wget >/dev/null 2>&1; then wget -q "$BASE/$1" -O "$2"
-    else echo "Need $1 next to this script, or curl/wget to download it." >&2; exit 1; fi
+    get "$BASE/$1" "$2" && return
+    if [ $? -eq 127 ]; then echo "Need $1 next to this script, or curl/wget to download it." >&2
+    else echo "Could not download $BASE/$1 (offline, or no such release?); nothing was changed." >&2; fi
+    exit 1
 }
 is_png() {  # a proxy or captive portal can hand back an HTML page instead of the file
     [ "$(head -c 4 "$1" | od -An -c | tr -d ' \n')" = "211PNG" ]
@@ -80,6 +138,7 @@ done
 remove_existing
 mkdir -p "$APP_DIR" "$(dirname "$ICON")" "$(dirname "$DESKTOP")" "$(dirname "$MIME_XML")" "$(dirname "$FILE_ICON")"
 install -m 755 "$STAGE/lens" "$BIN"
+if [ -n "$BASE" ]; then echo "$RELEASE" > "$APP_DIR/version"; fi  # what the next run updates from
 install -m 644 "$STAGE/icon.png" "$ICON"
 install -m 644 "$STAGE/file-icon.png" "$FILE_ICON"
 # The .lens file type. A file type's icon can only be named, so it is found through the icon theme.
@@ -120,6 +179,6 @@ refresh
 # Make LENS the program a double-clicked .lens file opens (else a text editor might be).
 command -v xdg-mime >/dev/null 2>&1 && xdg-mime default laconic-lens.desktop "$MIME_TYPE" 2>/dev/null || true
 
-echo "LENS installed to $APP_DIR; find it in your application menu. .lens files open in it."
+echo "LENS ${RELEASE:-(own build)} installed to $APP_DIR; find it in your application menu. .lens files open in it."
 echo "Example worksheets: $APP_DIR/examples"
-echo "Remove it with: $0 --uninstall"
+echo "Run this script again to update to the latest release; remove LENS with: $0 --uninstall"
