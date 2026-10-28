@@ -248,6 +248,8 @@ COMMANDS = (
             "find the unknowns that maximize an objective: !maximize x"),
     Command("regression", Statement("A regression block reads `!regression a, b, c`"),
             "fit a polynomial to points: !regression a, b, c, then indented data: lines"),
+    Command("symsolve", Statement("A symbolic solve reads `!symsolve x, y`"),
+            "solve equations for symbols with sympy: !symsolve x, then indented equation: lines"),
 )
 BY_NAME = {c.name: c for c in COMMANDS}
 

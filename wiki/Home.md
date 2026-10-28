@@ -15,6 +15,7 @@ LENS (package name `laconic`) is a units-aware worksheet built on [Pint](https:/
 | Look up fluid or material data | [Material Properties](Material-Properties) |
 | Draw graphs | [Plots](Plots) |
 | Solve equations, minimize or maximize | [Solving and Optimizing](Solving-and-Optimizing) |
+| Work with symbols and solve equations symbolically | [Symbolic Math](Symbolic-Math) |
 | Control how results look, export LaTeX | [Output and Export](Output-and-Export) |
 | Type faster in the editor | [Editor Shortcuts](Editor-Shortcuts) |
 | Change settings or find the settings file | [Settings](Settings) |

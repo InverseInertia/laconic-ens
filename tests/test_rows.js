@@ -17,6 +17,8 @@ eq(body(row('assign', { latex: 'x = 1 + 1 = 2', latex_rows: ['x = 1 + 1', '= 2']
   'with its stages, one per row, for a narrow pane');
 eq(body(row('unitdef', { latex: '1 = 2' })).type, 'tex', 'so is a unit definition');
 eq(body(row('heading', { text: 'Loads' })), { type: 'text', text: 'Loads' }, 'a heading shows its text');
+eq(body(row('symdef', { text: 'symbols a, b' })), { type: 'text', text: 'symbols a, b' }, 'a symbol declaration names its symbols');
+eq(body(row('symsolve', { latex: 'x = 1' })).type, 'tex', 'a symbolic solve is typeset');
 eq(body(row('comment', { text: 'n' })), { type: 'text', text: 'n' }, 'so does a comment');
 eq(body(row('blank')), { type: 'text', text: '' }, 'a blank line shows nothing');
 eq(body(row('command', { source: '!sigfigs 3  ', text: 'sigfigs 3' })),

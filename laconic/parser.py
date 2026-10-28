@@ -2,13 +2,15 @@
 sheettext.definition) so the Lark grammar only has to describe expressions (this avoids an
 LALR reduce/reduce clash between `f(x) = ...` and the call `f(x)`)."""
 
+import re
+
 from lark import Lark, Transformer, v_args
 from lark.exceptions import UnexpectedInput
 
 from . import catalogue
 from .nodes import (Assign, BinOp, Call, Convert, ExprStmt, FuncDef, Implicit,
-                    Matrix, Name, Neg, Num, Polar, Str, UnitDef, UnitLit)
-from .sheettext import NAME, NUMBER, STRING, UNIT, definition
+                    Matrix, Name, Neg, Num, Polar, Str, SymDef, UnitDef, UnitLit)
+from .sheettext import IDENT, NAME, NUMBER, STRING, UNIT, definition, tokenize
 
 GRAMMAR = r"""
 ?start: expr
@@ -103,6 +105,10 @@ class ParseError(Exception):
 
 
 def parse_expr(src):
+    for t in tokenize(src):
+        if t.kind == "name" and "$" in t.text:
+            raise ParseError(f"{t.text} declares a symbol, which is done on a line of its own: {t.text}. "
+                             f"Everywhere else write the plain name, {t.bare}")
     try:
         return _parser.parse(src)
     except UnexpectedInput as e:
@@ -111,9 +117,32 @@ def parse_expr(src):
         raise ParseError(f"Syntax error at column {col}: {bad[:12]!r}{catalogue.syntax_hint(bad)}") from None
 
 
+_SYMBOL_RE = re.compile(rf"(~?)\$({IDENT}[`!@&]*)\Z")
+
+
+def parse_symdef(src):
+    """`$a, $b`, `~$g`: the names a symbol declaration declares, each in one piece with its `$`."""
+    if "=" in src:
+        raise ParseError("A symbol has no value: declare it on a line of its own, `$x`. To give x a value "
+                         "later, write x = 2 on a line below; below that line x is the number")
+    names = []
+    for part in (p.strip() for p in src.split(",")):
+        m = _SYMBOL_RE.match(part)
+        if not m:
+            hint = " A global's ~ comes first: ~$g" if part.startswith("$~") else ""
+            raise ParseError(f"'{part}' is not a symbol. Declare symbols as `$a, $b`, each name with its own $.{hint}")
+        names.append(m.group(1) + m.group(2))
+    bare = [n.lstrip("~") for n in names]
+    if len(set(bare)) != len(bare):
+        raise ParseError("A symbol is declared twice on this line")
+    return SymDef(tuple(names))
+
+
 def parse_line(src):
     src = src.strip()
     d = definition(src)
+    if d is not None and d.kind == "symdef":
+        return parse_symdef(src)
     if d is None:
         return ExprStmt(parse_expr(src))
     if d.kind == "unitdef":

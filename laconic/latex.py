@@ -11,7 +11,7 @@ import numpy as np
 from . import catalogue
 from .commands import SheetMode
 from .exports import Error, Figure, Heading, Paragraph, Source, element, elements
-from .evaluator import _TINY, CONSTANTS, EvalError
+from .evaluator import _TINY, CONSTANTS, EvalError, is_symbolic
 from .functions import FUNCTIONS
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Polar,
                     Str, UnitLit, is_literal)
@@ -414,6 +414,12 @@ class Printer:
         name = n.name
         if name in self.local:
             return name_latex(name), ATOM
+        if self.ev.is_var(name) and is_symbolic(self.ev.vars[self.ev.vkey(name)]):
+            key = self.ev.vkey(name)
+            if not self.subst:
+                return self.fmt.var(key), ATOM
+            from . import symbolic
+            return symbolic.substituted(self.ev, self.fmt, key, self.ev.vars[key])
         if self.ev.is_var(name):
             if self.subst and (self.expand_matrices or np.ndim(self.ev.vars[self.ev.vkey(name)].magnitude) == 0):
                 return self.value(self.ev.vars[self.ev.vkey(name)])

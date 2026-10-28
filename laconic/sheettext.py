@@ -19,14 +19,17 @@ from dataclasses import dataclass, field
 # A name may hold ∞ as a whole subscript (`v_∞`, `T_∞_0`), the free-stream mark; ∞ on its own is
 # the constant, and not a name.
 IDENT = r"[^\W\d](?:_∞|\w)*"
-NAME = rf"~?{IDENT}[`!@&]*"
+# A `$` (after the `~` of a global, if any) declares a symbol: `$x`, `~$g`. It is written only on
+# the line that declares it; every use is the plain name.
+NAME = rf"~?\$?{IDENT}[`!@&]*"
 UNIT = r"'(?:(?:[^\W\d]|°)[\w°]*|%)"
 # A trailing i or j makes the number imaginary: 4i, 2.5e3j. `2in` is still a number and a name.
 NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?(?:[ij](?!\w))?"
 STRING = r'"[^"\n]*"'
 
 _TOKEN = re.compile(rf"(?P<text>{STRING})|(?P<unit>{UNIT})|(?P<num>{NUMBER})|(?P<name>{NAME})")
-_NAME_RE = re.compile(rf"{NAME}\Z")
+_NAME_RE = re.compile(rf"~?{IDENT}[`!@&]*\Z")   # a name as used: no `$`
+_SYMDEF_RE = re.compile(r"^~?\$")
 
 _FUNC_RE = re.compile(
     rf"^(~?{IDENT})\s*\(\s*({IDENT}(?:\s*,\s*{IDENT})*)\s*\)\s*=(?!=)\s*(.+)$")
@@ -34,7 +37,7 @@ _UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 
 _PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
-_SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression)(?:[ \t]+(.*\S))?[ \t]*$")
+_SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*\S))?[ \t]*$")
 _PLOT_OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
@@ -58,8 +61,8 @@ class Token:
 
     @property
     def bare(self):
-        """A name without its ~, a unit without its quote."""
-        return self.text.lstrip("~") if self.kind == "name" else self.text.removeprefix("'")
+        """A name without its ~ or $, a unit without its quote."""
+        return self.text.lstrip("~$") if self.kind == "name" else self.text.removeprefix("'")
 
 
 def tokenize(s, start=0, end=None):
@@ -71,22 +74,27 @@ def tokenize(s, start=0, end=None):
 
 def is_name(s):
     """A variable or function name: letters, digits and _, an optional ~ in front and
-    ` ! @ & after."""
+    ` ! @ & after. The `$` that declares a symbol is not part of it."""
     return bool(_NAME_RE.match(s))
 
 
 @dataclass(frozen=True)
 class Definition:
     """What a line of code defines. `name` is as written (a global keeps its ~); a unit's
-    name has no quote. `body` is the expression source after the `=`."""
-    kind: str     # "assign", "funcdef" or "unitdef"
+    name has no quote. `body` is the expression source after the `=`. A symbol declaration
+    (`$a, $b`) defines every name in `names`, each as written; `name` is the first."""
+    kind: str     # "assign", "funcdef", "unitdef" or "symdef"
     name: str
     params: tuple
     body: str
+    names: tuple = ()
 
 
 def definition(s):
     """The Definition on a stripped line of code, or None for a bare expression."""
+    if _SYMDEF_RE.match(s):    # starts like a declaration; the sheet decides whether it is one
+        names = tuple(t.text for t in tokenize(s) if t.kind == "name")
+        return Definition("symdef", names[0] if names else s, (), "", names)
     if m := _UNITDEF_RE.match(s):
         return Definition("unitdef", m.group(1), (), m.group(2))
     if m := _FUNC_RE.match(s):
@@ -123,7 +131,7 @@ class Line:
     n: int              # 1-based
     text: str           # without its line ending
     eol: str            # "\n", "\r\n", or "" on a last line with none
-    kind: str           # blank heading meta comment command unitdef funcdef assign expr plot plotopt solver solveropt
+    kind: str           # blank heading meta comment command unitdef funcdef assign symdef expr plot plotopt solver solveropt
     block: int = None   # header line of the plot or solver block that owns this line (the header owns itself)
     spans: tuple = ()   # (start, end) of each part that holds expressions
     option: Option = None   # under a block: the parsed option line
@@ -156,7 +164,7 @@ class Line:
 class Block:
     """A `!plot` or a solver header and the lines it owns."""
     kind: str           # "plot" or "solver"
-    command: str        # "plot", "root", "minimize", "maximize" or "regression"
+    command: str        # "plot", "root", "minimize", "maximize", "regression" or "symsolve"
     args: str           # what follows the command on the header line
     lines: list = field(default_factory=list)   # the header Line, then the owned lines
 
@@ -278,7 +286,7 @@ def scan(text):
                 line.kind = cur.kind + "opt"
             line.block = cur.lines[0].n if cur.lines else n
             cur.lines.append(line)
-        if line.kind in ("unitdef", "funcdef", "assign", "expr"):
+        if line.kind in ("unitdef", "funcdef", "assign", "symdef", "expr"):
             line.definition = definition(s)
         lines.append(line)
     return Sheet(lines, blocks)

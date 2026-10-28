@@ -9,6 +9,7 @@
 - [Material Properties](Material-Properties)
 - [Plots](Plots)
 - [Solving and Optimizing](Solving-and-Optimizing)
+- [Symbolic Math](Symbolic-Math)
 - [Output and Export](Output-and-Export)
 - [Editor Shortcuts](Editor-Shortcuts)
 - [Settings](Settings)

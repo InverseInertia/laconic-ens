@@ -17,7 +17,7 @@ Double-clicking the program opens the UI in an app window. It quits a few second
 
 ## From source
 
-Needs Python 3.10 or newer. The dependencies include CoolProp and scipy.
+Needs Python 3.10 or newer. The dependencies include CoolProp, scipy and sympy.
 
 ```
 pip install -e .[dev]

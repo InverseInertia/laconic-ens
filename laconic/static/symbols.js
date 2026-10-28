@@ -11,6 +11,7 @@
  *                          defined again or cleared
  *   globals(table)         name -> the symbol that made it global
  *   marks(row, table)      [column, length, name] of each use of a global on the row's line
+ *   symbolMarks(row, table)  [column, length, name] of each use of a symbol (declared with $)
  *
  * Between a keystroke and the next eval response the page keeps using the last table.
  */
@@ -39,7 +40,14 @@
       .map(([c, len, id]) => [c, len, byId.get(id).name]);
   }
 
-  const api = { table, visible, globals, marks };
+  function symbolMarks(row, tbl) {
+    if (!row || !row.symbols) return [];
+    const byId = new Map((tbl || []).map((s) => [s.id, s]));
+    return row.symbols.uses.filter(([, , id]) => byId.has(id) && byId.get(id).symbol)
+      .map(([c, len, id]) => [c, len, byId.get(id).name]);
+  }
+
+  const api = { table, visible, globals, marks, symbolMarks };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Symbols = api;
 })(typeof window !== 'undefined' ? window : globalThis);

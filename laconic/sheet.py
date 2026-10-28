@@ -9,7 +9,7 @@ import pint
 
 from . import catalogue
 from .blockedit import newline
-from .evaluator import EvalError, Evaluator
+from .evaluator import EvalError, Evaluator, is_symbolic
 from .latex import Fmt, Printer, name_latex
 from .lineresult import LineResult, PlotPayload, RegressionPayload, SolverPayload
 from .nodes import Assign, Convert, FuncDef, Neg, Num, UnitDef, is_literal, refs
@@ -20,7 +20,7 @@ from .plotspec import Builder
 from .sheettext import scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import commands, regression, solver
+from . import commands, regression, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -106,7 +106,7 @@ def _run(text, siunitx=False, global_units=None, until=None):
         elif i in owned:
             results.append(owned.pop(i))
         elif l.kind == "solver":
-            run_block = _run_regression if sheet.block(i).command == "regression" else _run_solver
+            run_block = {"regression": _run_regression, "symsolve": _run_symsolve}.get(sheet.block(i).command, _run_solver)
             r, owned = run_block(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "plot":
@@ -120,6 +120,8 @@ def _run(text, siunitx=False, global_units=None, until=None):
             results.append(LineResult(i, raw, "comment", text=s[1:].strip()))
         elif l.kind == "command":
             results.append(_run_command(i, raw, s, ev))
+        elif l.kind == "symdef":
+            results.append(_run_symdef(i, raw, s, ev))
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
         _add_notes(results[-1], ev.notes)
@@ -330,7 +332,7 @@ def block_at(text, line, global_units=None):
 def solver_blocks(text, global_units=None):
     """The results of the solver blocks that read (they carry a SolverPayload), top to bottom. The
     sheet runs only as far as the last block, and not at all when there is none."""
-    ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver" and b.command != "regression"]
+    ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver" and b.command not in ("regression", "symsolve")]
     if not ends:
         return []
     ws = evaluate(text, global_units=global_units, until=max(ends))
@@ -352,7 +354,10 @@ def _run_line(i, raw, s, ev, fmt, used):
                               warning=_global_note(stmt.name, name, ev.symbols))
 
         expr = stmt.expr
-        value = ev.settle(ev.check_finite(ev.eval(expr), expr))
+        value = _symbolic_value(ev, expr)
+        if value is not None and is_symbolic(value):
+            return _symbolic_line(i, raw, stmt, value, ev, fmt)
+        value = ev.settle(ev.check_finite(ev.eval(expr) if value is None else value, expr))
         literal = is_literal(expr) and not catalogue.holds_constant(value, ev.ureg)
         # A typed-in quantity or number is shown once, as typed: never rounded to the
         # sheet's figures, which only apply to what the sheet computes.
@@ -381,6 +386,106 @@ def _run_line(i, raw, s, ev, fmt, used):
         return LineResult(i, raw, "expr", stages=stages, text=plain, stale=stale)
     except Exception as e:
         return LineResult(i, raw, "error", error=describe(e))
+
+
+def _symbolic_value(ev, expr):
+    """For an expression that reaches a symbol (symbolic.py): its sympy expression, or the quantity
+    it works out to when every symbol in it has a value. None for any other expression."""
+    if not any(is_symbolic(v) for v in ev.vars.values()):
+        return None
+    from . import symbolic
+    return symbolic.evaluate(ev, expr) if symbolic.reaches(ev, [expr]) else None
+
+
+def _symbolic_line(i, raw, stmt, value, ev, fmt):
+    """An expression or assignment whose result is symbolic: shown as typed, with the numbers that
+    go into it, then as sympy gives it."""
+    from . import symbolic
+    expr = stmt.expr
+    res = symbolic.latex(value, ev, fmt)
+    stages = [res] if ev.mode.short else _dedupe([Printer(ev, fmt).tex(expr), Printer(ev, fmt, subst=True).tex(expr)])
+    if res.replace(" ", "") != stages[-1].replace(" ", ""):   # sympy spaces some things differently: e^{- t}
+        stages.append(res)
+    plain = symbolic.plain(value, fmt)
+    stale = ev.symbols.tainted([expr])
+    if isinstance(stmt, Assign):
+        name = ev.symbols.define(stmt.name, value, text=plain, stale=stale)
+        return LineResult(i, raw, "assign", lhs=fmt.var(name.key), stages=stages, text=f"{name.key} = {plain}",
+                          stale=stale, warning=_global_note(stmt.name, name, ev.symbols))
+    return LineResult(i, raw, "expr", stages=stages, text=plain, stale=stale)
+
+
+def _run_symdef(i, raw, s, ev):
+    """`$a, $b` or `~$g`: declares symbols, variables whose value is a sympy Symbol (symbolic.py)."""
+    try:
+        stmt = parse_line(s)
+        import sympy
+        keys, notes = [], []
+        for name in stmt.names:
+            sym = ev.symbols.define(name, sympy.Symbol(name.lstrip("~")), text="symbol", symbol=True)
+            keys.append(sym.key)
+            notes.append(_global_note(name, sym, ev.symbols).replace(f"Write {sym.key}", f"Write ~${sym.name}"))
+        text = ("symbol " if len(keys) == 1 else "symbols ") + ", ".join(keys)
+        return LineResult(i, raw, "symdef", text=text, warning=". ".join(filter(None, notes)))
+    except Exception as e:
+        return LineResult(i, raw, "error", error=describe(e))
+
+
+def _run_symsolve(i, raw, handle, ev, fmt, used):
+    """A `!symsolve` line with its equations. Like a regression it is worked out every run (sympy,
+    see symbolic.py); with one solution, or the one `pick:` names, its unknowns hold it below."""
+    block = symsolve.parse_block(handle)
+
+    def owned():
+        return {l.n: LineResult(l.n, l.text, "error" if l.n in block.errors else "solveropt",
+                                error=block.errors.get(l.n, "")) for l in handle.members}
+
+    def fail(msg):
+        return LineResult(i, raw, "error", error=msg, block=handle), owned()
+
+    if block.problem:
+        return fail(block.problem)
+    for node in block.nodes():
+        used |= refs(node).units
+    from . import symbolic   # sympy, imported only for a sheet that uses it
+    try:
+        sols = symbolic.solve(block, ev)
+    except Exception as e:
+        return fail(describe(e))
+    if not sols:
+        return fail(f"No solution: sympy finds none for {', '.join(block.unknowns)}")
+    if block.pick is not None and block.pick > len(sols):
+        n = len(sols)
+        block.errors[block.pick_line] = f"There {'is' if n == 1 else 'are'} only {n} solution{'s' * (n != 1)}"
+        return fail(block.errors[block.pick_line])
+    stale = ev.symbols.tainted(block.nodes())
+
+    def row(sol):
+        return r",\; ".join(f"{fmt.var(k)} = {symbolic.latex(v, ev, fmt)}" for k, v in sol.items())
+
+    def text(sol):
+        return ", ".join(f"{k} = {symbolic.plain(v, fmt)}" for k, v in sol.items())
+    if len(sols) == 1:
+        tex, plain = row(sols[0]), text(sols[0])
+    else:
+        tex = (r"\begin{gathered} " + r" \\ ".join(rf"\text{{({k})}}\quad {row(sol)}" for k, sol in enumerate(sols, 1))
+               + r" \end{gathered}")
+        plain = "; ".join(f"({k}) {text(sol)}" for k, sol in enumerate(sols, 1))
+    warning = ""
+    chosen = sols[0] if len(sols) == 1 else sols[block.pick - 1] if block.pick else None
+    if chosen is None:
+        names = ", ".join(block.unknowns)
+        warning = (f"{len(sols)} solutions, so {names} {'stays a symbol' if len(block.unknowns) == 1 else 'stay symbols'} "
+                   f"below. Add `pick: 1` (or another number) to use one")
+    else:
+        for key, v in chosen.items():   # below the block, the unknowns hold the solution, as after !root
+            if not symbolic.symbols_in(v):
+                v = ev.settle(symbolic.to_quantity(ev, v))
+                ev.symbols.define(key, v, text=fmt.plain(v), stale=stale)
+            elif v != ev.vars.get(key):
+                ev.symbols.define(key, v, text=symbolic.plain(v, fmt), stale=stale)
+    return LineResult(i, raw, "symsolve", stages=[tex], text=plain, block=handle, stale=stale,
+                      warning=warning), owned()
 
 
 def _bare_number(expr):

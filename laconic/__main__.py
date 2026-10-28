@@ -209,7 +209,7 @@ def main():
     for r in results:
         if r.kind == "error":
             print(f"{r.n:>3}  ERROR  {r.error}", file=sys.stderr)
-        elif r.text and r.kind in ("assign", "expr", "regression"):
+        elif r.text and r.kind in ("assign", "expr", "regression", "symsolve"):
             print(f"{r.n:>3}  {r.text}" + ("   (out of date)" if r.stale else ""))
         elif r.solver:
             print(f"{r.n:>3}  {r.text}   ({_STATUS[r.solver.status]})")

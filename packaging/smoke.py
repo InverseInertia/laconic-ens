@@ -34,6 +34,11 @@ try:
                                  headers={"Content-Type": "application/json"})
     out = urllib.request.urlopen(req, timeout=10).read().decode()
     assert "6" in out, out
+    # Symbolic math: sympy is imported only once a sheet declares a symbol, so freezing must keep it.
+    req = urllib.request.Request(base + "/api/eval", data=json.dumps({"text": "$x\n!symsolve x\n  equation: 2*x = 1"}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    rows = json.loads(urllib.request.urlopen(req, timeout=20).read())
+    assert rows[1]["text"] == "x = 1/2", rows[1]
     # A plot draws, and its standalone SVG finds the font file it embeds.
     body = {"text": "!plot sin(x), x = 0 .. 6", "line": 1}
     req = urllib.request.Request(base + "/api/plotimage", data=json.dumps(body).encode(),

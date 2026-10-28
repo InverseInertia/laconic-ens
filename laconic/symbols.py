@@ -7,6 +7,8 @@ records each definition that succeeds), and is the one place the scope rules liv
   again or `!clear` / `!clearf` removes it;
 - a `~` on a definition makes the name global: from then on it is stored as `~name`,
   every use of the name means the global, and `!clear` / `!clearf` keep it;
+- a `$` declares a symbol (`$x`, `~$g` for a global one): a variable whose value is a sympy
+  Symbol, defined, cleared and made global like any other;
 - a function's parameters are local to its line;
 - a solver block defines its unknowns again on its header line, with the stored answer;
 - a line that fails defines nothing.
@@ -51,6 +53,7 @@ class Symbol:
     value: str = ""      # a variable's value, as the sheet prints it
     params: tuple = ()   # a function's parameters
     until: int = None
+    symbol: bool = False # a symbol declared with $ (see symbolic.py), not a value
 
     @property
     def key(self):
@@ -62,7 +65,7 @@ class Symbol:
 
     def to_dict(self):
         return {"id": self.id, "name": self.name, "kind": self.kind, "line": self.line, "until": self.until,
-                "global": self.is_global, "value": self.value, "params": list(self.params)}
+                "global": self.is_global, "value": self.value, "params": list(self.params), "symbol": self.symbol}
 
 
 class SymbolTable:
@@ -81,9 +84,9 @@ class SymbolTable:
     # ---- resolving ----------------------------------------------------------------
     def key(self, name, kind=VARIABLE):
         """The key `name` (written with or without ~) is stored under at the current line.
-        A name that has been made global resolves to the global."""
-        bare = name.lstrip("~")
-        return "~" + bare if name != bare or (kind, bare) in self._first else bare
+        A name that has been made global resolves to the global. A symbol's `$` is no part of it."""
+        bare = name.lstrip("~$")
+        return "~" + bare if name.startswith("~") or (kind, bare) in self._first else bare
 
     def first_global(self, sym):
         """The Symbol that made `sym`'s name global, or None for a name that is not."""
@@ -96,7 +99,7 @@ class SymbolTable:
     def find(self, name, n, kind=None, defining=False):
         """The Symbol `name` (with or without ~) means on line `n`: with `defining`, the one
         that line defines, else the one it can see. `kind` is tried first, then the other."""
-        bare = name.lstrip("~")
+        bare = name.lstrip("~$")
         kinds = (kind, VARIABLE if kind == FUNCTION else FUNCTION) if kind else (VARIABLE, FUNCTION)
         for k in kinds:
             for s in self._by_name.get(bare, ()):
@@ -114,7 +117,9 @@ class SymbolTable:
                 continue
             kind = FUNCTION if line.text[t.end:].lstrip().startswith("(") else VARIABLE
             s = None
-            if i == 0 and d is not None and d.kind in ("assign", "funcdef"):
+            if d is not None and d.kind == "symdef":   # every name on a declaration is declared
+                s = self.find(t.text, line.n, VARIABLE, defining=True)
+            elif i == 0 and d is not None and d.kind in ("assign", "funcdef"):
                 kind = FUNCTION if d.kind == "funcdef" else VARIABLE
                 s = self.find(t.text, line.n, kind, defining=True)
             s = s or self.find(t.text, line.n, kind)
@@ -154,10 +159,12 @@ class SymbolTable:
         return key in self._stale
 
     # ---- defining -----------------------------------------------------------------
-    def define(self, name, value, text="", stale=False):
+    def define(self, name, value, text="", stale=False, symbol=False):
         """Define the variable `name` on the current line as `value` (shown as `text`); `stale`
-        when the value comes from an out-of-date solver result. Returns its Symbol."""
+        when the value comes from an out-of-date solver result; `symbol` for a symbol declared
+        with `$`, whose value is its sympy Symbol. Returns its Symbol."""
         sym = self._bind(name, VARIABLE, text)
+        sym.symbol = symbol
         self._values[sym.key] = value
         (self._stale.add if stale else self._stale.discard)(sym.key)
         return sym
@@ -179,13 +186,13 @@ class SymbolTable:
     def _bind(self, name, kind=VARIABLE, value="", params=()):
         """Record a definition of `name` on the current line and return its Symbol. A `~`
         makes the name global; a name already in use without one cannot become global."""
-        bare = name.lstrip("~")
+        bare, tilde = name.lstrip("~$"), name.startswith("~")
         old = self._live.get((kind, bare))
-        if name != bare and (kind, bare) not in self._first and old is not None:
+        if tilde and (kind, bare) not in self._first and old is not None:
             raise ScopeError(f"'{bare}' is already a non-global {kind}. "
                              f"Define it with ~ the first time, or rename one of them")
         sym = Symbol(len(self.symbols), bare, kind, self.line,
-                     name != bare or (kind, bare) in self._first, value, tuple(params))
+                     tilde or (kind, bare) in self._first, value, tuple(params))
         if old is not None:
             old.until = self.line
         self._live[(kind, bare)] = sym

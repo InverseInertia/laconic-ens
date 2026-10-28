@@ -130,6 +130,9 @@
   }
   #srcMarks.wrapped { white-space: pre-wrap; overflow-wrap: break-word; }
   #srcMarks mark { color: transparent; background: color-mix(in srgb, var(--global) 20%, transparent); border-bottom: 1.5px dotted var(--global); }
+  /* A symbol ($x, see symbolic.py) is underlined with a dashed line in the text's own color. */
+  #srcMarks mark.sym { background: none; border-bottom: 1.5px dashed var(--text-soft); }
+  #srcMarks mark.sym[data-global] { background: color-mix(in srgb, var(--global) 20%, transparent); border-bottom-color: var(--global); }
   #out [data-global] { color: var(--global); border-bottom: 1.5px dotted var(--global); cursor: help; }
   body.globals-off #out [data-global] { color: inherit; border-bottom: 0; cursor: inherit; }
   .row .g-warn { font: 400 12.5px/1.35 var(--sans); color: var(--err); padding: 0 0 3px; }
@@ -496,6 +499,16 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
   data: D                 <i>or two vectors: data: t, s</i>
   r2: R2                  <i>optional: a name for R&sup2;</i></pre>
     <p><code>!regression</code> fits a polynomial by least squares as the sheet runs, with no Run button. Each coefficient gets the units of y / x<sup>k</sup>, and the names it defines hold the fit below the block.</p>
+
+    <h3>Symbolic math <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Symbolic-Math" target="_blank" rel="noopener">Symbolic Math</a></h3>
+    <pre>$m, $a, $F                <i>$ declares symbols; ~$g a global one</i>
+p = m*a                   <i>a symbolic result, shown as math</i>
+!symsolve a               <i>solve for symbols with sympy, as you type</i>
+  equation: F = m*a       <i>below the block, a = F/m</i>
+m = 2'kg
+F = 10'N
+acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
+    <p>A symbolic result has no units: numbers without units go into it, and a number with units is an error until every symbol in the expression has a value, when it is worked out with units as usual. With several solutions, <code>pick: 2</code> chooses the one the unknowns hold below the block.</p>
 
     <h3>Output and export <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Output-and-Export" target="_blank" rel="noopener">Output and Export</a></h3>
     <ul>
@@ -1048,6 +1061,10 @@ chip.onclick = () => { markGlobals.checked = true; markGlobals.onchange(); };
 const symbols = () => Symbols.table(last);
 // name -> the symbol that made it global, for each global the last evaluation found.
 const globalDefs = () => Symbols.globals(symbols());
+function symbolTitle(name) {
+  const d = symbols().find((s) => s.symbol && s.name === name);
+  return d ? `Symbol ${name}, declared on line ${d.line}` : `Symbol ${name}`;
+}
 function globalTitle(name) {
   const d = globalDefs().get(name);
   return d ? `Global ${d.kind} ~${name}, defined on line ${d.line}` : `Global ~${name}`;
@@ -1062,16 +1079,25 @@ function paintGlobals() {
   paintSrcMarks();
 }
 // The marks come from the last evaluation, so a line edited since then is left unmarked until the next one.
+// Globals are tinted; symbols ($x) get a dashed underline; a global symbol both.
+function srcMarksOf(r, table) {
+  const at = new Map();
+  for (const [c, len, name] of Symbols.marks(r, table)) at.set(c, {c, len, global: name, symbol: null});
+  for (const [c, len, name] of Symbols.symbolMarks(r, table)) at.set(c, {...(at.get(c) || {c, len, global: null}), symbol: name});
+  return [...at.values()].sort((a, b) => a.c - b.c);
+}
 function paintSrcMarks() {
   const text = src.value.split("\n"), rows = Rows.current(last, text), table = symbols();
   const lines = text.map((line, i) => {
-    const r = rows[i], marks = r ? Symbols.marks(r, table) : [];
+    const r = rows[i], marks = r ? srcMarksOf(r, table) : [];
     if (!marks.length) return document.createTextNode(line + "\n");
     const f = document.createDocumentFragment();
     let pos = 0;
-    for (const [c, len, name] of marks) {
+    for (const {c, len, global, symbol} of marks) {
       f.append(line.slice(pos, c));
-      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len); m.dataset.global = name;
+      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len);
+      if (global) m.dataset.global = global;
+      if (symbol) { m.classList.add("sym"); m.dataset.symbol = symbol; }
       f.append(m); pos = c + len;
     }
     f.append(line.slice(pos) + "\n");
@@ -1090,7 +1116,7 @@ new ResizeObserver(syncSrcMarks).observe(src);
 // The marks sit under the textarea, so the pointer never reaches them; look underneath it instead.
 src.addEventListener("mousemove", (ev) => {
   const m = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.parentElement === srcMarks && el.tagName === "MARK");
-  const title = m ? globalTitle(m.dataset.global) : "";
+  const title = !m ? "" : m.dataset.global ? globalTitle(m.dataset.global) : symbolTitle(m.dataset.symbol);
   if (src.title !== title) src.title = title;
 });
 

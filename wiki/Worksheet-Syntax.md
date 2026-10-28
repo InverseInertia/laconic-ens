@@ -16,6 +16,7 @@ z = 3 + 4i   v = 10'V∠30'deg   complex numbers (see Complex Numbers)
 σ_max = 3   T_∞ = 300'K        Greek letters and subscripts in names
 'smoot = 1.7018'm              define a unit (see Units)
 ~g = 9.81'm / 's^2             global variable (see below)
+$a, $x   q = a*x^2            symbols, and an expression over them (see Symbolic Math)
 x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 u& = 3                         bar over a variable
 ```
@@ -62,6 +63,10 @@ A mark typed right after a name puts an accent over it in the typeset view and t
 | `&` | bar (a mean value) | `u&` | `\bar{u}` |
 
 Marks combine (``v`! `` is `\vec{\dot{v}}`). With a subscript the mark goes at the end and sits over the base letter: `F_x!` is `\vec{F}_{x}`. `x`, `x!`, `x@` and `x&` are four different variables.
+
+## Symbols
+
+A `$` in front of a name declares it a symbol, on a line of its own: `$x`, or `$a, $b, $c`. An expression over symbols is worked out by sympy and shown as math, and `!symsolve x` solves equations for them. Later uses are the plain name, `x`. A symbol can be global too: `~$g`, the `~` first. See [Symbolic Math](Symbolic-Math).
 
 ## Global variables
 

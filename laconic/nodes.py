@@ -90,6 +90,12 @@ class UnitDef:
 
 
 @dataclass(frozen=True)
+class SymDef:
+    """`$a, $b` or `~$g`: declares symbols. `names` are as written without the `$` (a global keeps its ~)."""
+    names: tuple
+
+
+@dataclass(frozen=True)
 class ExprStmt:
     expr: Any
 

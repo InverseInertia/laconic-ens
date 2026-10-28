@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .blockedit import BlockEditor
+from .evaluator import is_symbolic
 from .nodes import BinOp
 from .parser import ParseError, parse_expr
 from .sheettext import is_name
@@ -308,6 +309,20 @@ def _qdigest(q):
     return [str(q.units), list(mag.shape), hashlib.sha256(blob).hexdigest()]
 
 
+def _digest_value(ev, key):
+    """A variable's value as hashable text. A symbolic one (symbolic.py) is digested as the number
+    it stands for when its symbols have values, so a change to those makes the result out of date."""
+    v = ev.vars[key]
+    if not is_symbolic(v):
+        return _qdigest(v)
+    from . import symbolic
+    try:
+        return _qdigest(symbolic.numeric(ev, key, v, ev.vars))
+    except Exception:
+        import sympy
+        return ["symbolic", sympy.srepr(v)]
+
+
 def digest(block, ev, unknowns):
     """A short hash of everything the solver reads: the block's own lines, the starting values,
     every variable and function they reach, the units they use. The stored result is current
@@ -316,7 +331,7 @@ def digest(block, ev, unknowns):
     deps, funcs, units = {}, {}, {}
     for kind, key, extra in ev.symbols.reach(block.nodes()):
         if kind == "var" and key in ev.vars and key not in own:
-            deps[key] = _qdigest(ev.vars[key])
+            deps[key] = _digest_value(ev, key)
         elif kind == "func":
             funcs[key] = [list(extra[0]), repr(extra[1])]
         elif kind == "unit":
@@ -382,6 +397,9 @@ class Problem:
             if key not in ev.vars:
                 raise SolverError(f"'{name}' needs a starting value: define it above the block, e.g. {name} = 1")
             q = ev.vars[key]
+            if is_symbolic(q):
+                raise SolverError(f"'{name}' is symbolic; the solver needs a number to start from. Define "
+                                  f"{name} = 1 above the block, or solve for it with !symsolve")
             if np.iscomplexobj(q.magnitude):
                 raise SolverError(f"The starting value of '{name}' is complex; the solver works with real numbers")
             mag = np.asarray(q.magnitude, dtype=float)
