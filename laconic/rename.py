@@ -5,6 +5,7 @@ metre) alone, and renaming `'smoot` leaves a variable `smoot` alone. The result 
 Edit (blockedit.py) per use, against the text it was given."""
 from .blockedit import Edit, newline
 from .evaluator import CONSTANTS, UNIT_NAME_RE, Evaluator
+from .functions import FUNCTIONS
 from .sheettext import is_name, scan
 
 
@@ -18,7 +19,7 @@ class RenameWarning(RenameError):
 
 
 def _builtins():
-    return {n[3:] for n in dir(Evaluator) if n.startswith("fn_")} | set(CONSTANTS)
+    return set(FUNCTIONS) | set(CONSTANTS)
 
 
 def _tokens(text, kind):

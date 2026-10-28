@@ -3,27 +3,9 @@ from functools import lru_cache
 
 from . import catalogue, solver
 from .commands import COMMANDS
-from .evaluator import CONSTANTS, Evaluator, registry
+from .evaluator import CONSTANTS, registry
+from .functions import FUNCTIONS
 from .si import reduce_si
-
-# Signature shown next to each function. Anything missing shows just its name.
-_SIGNATURES = {
-    "sqrt": "sqrt(x)", "abs": "abs(x)", "floor": "floor(x)", "ceil": "ceil(x)",
-    "heaviside": "heaviside(x)", "step": "step(x)", "heav": "heav(x)", "sin": "sin(angle)", "cos": "cos(angle)", "tan": "tan(angle)",
-    "asin": "asin(x)", "acos": "acos(x)", "atan": "atan(x)", "exp": "exp(x)", "ln": "ln(x)",
-    "log10": "log10(x)", "det": "det(A)", "inv": "inv(A)", "transpose": "transpose(A)",
-    "norm": "norm(x)", "identity": "identity(n)", "solve": "solve(A, b)",
-    "idx": "idx(A, i)", "elem": "elem(A, i, j)", "row": "row(A, i)", "col": "col(A, j)",
-    "rows": "rows(A)", "cols": "cols(A)", "length": "length(A)", "trace": "trace(A)",
-    "rank": "rank(A)", "cond": "cond(A)", "pinv": "pinv(A)", "diag": "diag(A)",
-    "zeros": "zeros(rows, cols)", "ones": "ones(rows, cols)", "lstsq": "lstsq(A, b)",
-    "chol": "chol(A)", "eigvals": "eigvals(A)", "eigvecs": "eigvecs(A)", "svdvals": "svdvals(A)",
-    "dot": "dot(a, b)", "cross": "cross(a, b)", "kron": "kron(A, B)",
-    "hstack": "hstack(A, B, ...)", "vstack": "vstack(A, B, ...)",
-    "sum": "sum(A)", "mean": "mean(A)", "min": "min(A)", "max": "max(A)",
-    "re": "re(z)", "im": "im(z)", "conj": "conj(z)", "arg": "arg(z)",
-    "props": 'props("D", "T", T, "P", p, "Water")',
-}
 
 # Offered first, and the ones that get SI prefixes spelled out (kN, mm, GPa).
 _COMMON = ("m s kg g A K mol cd N Pa J W Hz C V ohm F H S Wb T L Wh bar eV rad deg degC degF "
@@ -72,11 +54,10 @@ def _units():
 
 def vocabulary(global_units=()):
     """Everything the editor completes from, for this instance."""
-    funcs = sorted(n[3:] for n in dir(Evaluator) if n.startswith("fn_"))
     return {
         "units": _units(),
         "globalUnits": [[n, d] for n, d in global_units],
-        "functions": [[f, _SIGNATURES.get(f, f)] for f in funcs],
+        "functions": [[f, FUNCTIONS[f].signature] for f in sorted(FUNCTIONS)],
         "constants": sorted(CONSTANTS),
         "commands": [[c.name, c.summary] for c in COMMANDS],
         "solver": {
