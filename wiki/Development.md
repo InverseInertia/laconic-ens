@@ -25,6 +25,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_shortcuts.js` | the shortcut table, and that the wiki lists its Ctrl/Alt keys |
 | `node tests/test_layout.js` | when the page stacks or goes side by side, and when it offers to stop switching |
 | `node tests/test_rows.js` | the row model: what the results pane shows for each kind of line |
+| `node tests/test_matrixview.js` | collapsing large matrices, against the vectors the documents are held to |
 | `node tests/test_mathfit.js` | when a formula too wide for its room is shrunk or wrapped (the drawing is tested in Chromium) |
 | `node tests/test_unitbrowser.js` | the units dialog: search, tag filters, adding and removing your tags |
 | `node tests/test_symbols.js` | reading the symbol table out of the eval rows |
@@ -40,8 +41,9 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `test_lineresult.py` | the line result interface, the block lookups, and the contract on the `/api/eval` row shape (it also runs `rows.js` over real rows) |
 | `test_editing_node.py` | runs the Node suites from pytest |
 | `test_solver.py`, `test_solverjobs.py` | solver blocks, the solve session, and the worker process with its runner |
+| `test_regression.py`, `matrix_vectors.json` | `!regression` blocks (the fit, units, errors, exports), and large matrices collapsed in documents; the vectors are shared with `test_matrixview.js` |
 | `test_install_linux.py` | `packaging/install-linux.sh` run in a throwaway home folder with a stand-in program and a stand-in `curl` serving fake releases: the launcher it writes, what `--uninstall` removes, installing and updating to the latest release, `--release`, what it does offline or when a download fails, stopping a LENS still running from the install folder, and installer 1.0.0 updating through `packaging/v1-bridge.sh` |
-| `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
+| `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py`, `test_regression_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
 
 Browser tests are skipped unless `playwright` is installed (`pip install playwright`; set `CHROMIUM_PATH` to use an existing browser). One test compiles an exported document with plots and is skipped unless `pdflatex` (with pgfplots and siunitx v3) is installed.
 

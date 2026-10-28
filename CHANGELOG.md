@@ -11,6 +11,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### New
 - **LENS is open source under the MIT License.** The Windows and Linux installs now include it as `LICENSE.txt`, next to `THIRD-PARTY-NOTICES.txt` with the licenses of the Python libraries bundled with LENS. (#116)
+- **Polynomial regression**: a `!regression a, b, c` block with `data: D` fits y = a + b·x + c·x² by least squares to points given as a matrix with an x row and a y row (one column per point), or as two vectors, `data: t, s`. Each coefficient gets the units of y / xᵏ, the names hold the fit for the lines below, `r2: R2` names R², and one name with `degree: 3` holds every coefficient as a vector. The fit is worked out as you type, with no Run button, and the row shows the fitted polynomial. (#113)
+- **Large matrices are shown collapsed**: a matrix with more than 8 rows or columns shows its first and last few with ⋯ and ⋮ between, and a **Show all** button under it shows it whole. The LaTeX, Markdown and PDF exports print it collapsed too; a line's LaTeX snippet keeps it whole. (#113)
 
 ### Changes
 - Math keys and suggestions now work in a plot note's position, `at (x, y)`, and math keys are off on a solver's `method:` line, matching what the sheet treats as math. (#116)

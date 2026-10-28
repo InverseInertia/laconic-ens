@@ -14,7 +14,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `unitdef`, `funcdef`, `assign`, `expr`, a block header (`plot`, `solver`) or a line a block owns (`plotopt`, `solveropt`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
 
 **Block**
-: A header line (`!plot`, `!root`, `!minimize`, `!maximize`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result.
+: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py`.
 
 **Owner**
 : The block a line belongs to (a header owns itself), or none.
@@ -52,7 +52,13 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : On a block header's result, the sheettext **Block** it starts, whether the block drew or failed. `sheet.block_at(text, line)` finds a block by its header, and `sheet.solver_blocks(text)` finds every solver block. Both read the text to find the blocks and run the sheet only as far as they need (`evaluate(..., until=)`).
 
 **Payload**
-: The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) or `r.solver` (`SolverPayload`: status, hash, values, stored record). On every other line both are None, a failed block header included.
+: The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) `r.solver` (`SolverPayload`: status, hash, values, stored record) or `r.regression` (`RegressionPayload`: degree, points, R², the polynomial, values). On every other line each is None, a failed block header included.
+
+**Regression block**
+: `!regression a, b, c` with a `data:` line: a least-squares polynomial through points, the columns of a 2-row matrix (x row, y row) or two vectors. The header names the coefficients, lowest power first, or one name holds them all as a vector (with `degree:`). It is fitted every time the sheet runs, so it has no stored result and no Run; it defines its names (and the `r2:` name) like an assignment.
+
+**Collapsed matrix**
+: A matrix with more than 8 rows or columns, shown by its first 3 and last 2 rows and columns with ⋮, ⋯ and ⋱ between: in the results pane until the row's button shows it whole (`static/matrixview.js`), and always in a document (`exports.collapse_matrices`). A line's LaTeX snippet keeps it whole.
 
 **Note**
 : A warning the evaluator raises while it runs a line (`Evaluator.note`): the line works but may not do what was meant, such as `*` with an offset unit. Notes are cleared before each line, kept once each, and name the user function they come from; `sheet.py` joins them to the line's own **warning** (a block's go on its header). A failed line shows its error alone.
@@ -61,7 +67,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : A line result as `/api/eval` sends it (`to_json()`): the common fields, plus `plot` or `solver` for those kinds and `snippet` in the LaTeX view. `tests/test_lineresult.py` pins its shape.
 
 **Row model**
-: What the results pane shows for one row: its lines, class names, a typed body (text, math, error, plot, solver or snippet), the warning, the stale mark and the Copy text. `static/rows.js` builds it from a row with one table from line kind to body; option lines map to no row of their own.
+: What the results pane shows for one row: its lines, class names, a typed body (text, math, error, plot, solver or snippet; math with a **collapsed matrix** carries the toggle that shows it whole), the warning, the stale mark and the Copy text. `static/rows.js` builds it from a row with one table from line kind to body; option lines map to no row of their own.
 
 ## Name scope (`symbols.py`)
 
@@ -116,7 +122,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Function registry** (`laconic/functions.py`, `FUNCTIONS`): the one place a built-in function is declared, by `@builtin` on its `Evaluator.fn_*` method: its signature, LaTeX form and other names. Evaluation, suggestions, Rename and the LaTeX printer read it.
 
-**Statement**: a command that begins a plot or solver block (`!plot`, `!root`, `!minimize`, `!maximize`). It is listed in the registry for suggestions and help, but its lines are run by `plotspec.py` and `solver.py`.
+**Statement**: a command that begins a plot or solver block (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`). It is listed in the registry for suggestions and help, but its lines are run by `plotspec.py`, `solver.py` and `regression.py`.
 
 **Sheet mode** (`SheetMode`): the state commands change as a sheet runs top to bottom: angle unit, assume (reduce to SI), short (final result only), display precision (significant figures, decimal places, trailing zeros), plot defaults, and the names removed by `!clear` / `!clearf`. Each run starts with a fresh one; only commands write it, and the evaluator, `Fmt` and the plot builder read it.
 

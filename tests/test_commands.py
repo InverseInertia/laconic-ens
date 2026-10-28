@@ -47,6 +47,8 @@ CASES = {
     "root": ("x = 1\n!root x\n  equation: x = 2", 2, None, lambda rs: rs[1].kind == "solver"),
     "minimize": ("x = 1\n!minimize x\n  objective: (x - 2)^2", 2, None, lambda rs: rs[1].kind == "solver"),
     "maximize": ("x = 1\n!maximize x\n  objective: -(x - 2)^2", 2, None, lambda rs: rs[1].kind == "solver"),
+    "regression": ("D = [0, 1, 2; 1, 3, 5]\n!regression a, b\n  data: D", 2, None,
+                   lambda rs: rs[1].kind == "regression"),
 }
 
 # A bad line for each argument rule, and what its error says.
@@ -71,8 +73,8 @@ def test_command(command):
     if text is not None:
         assert (rs[n - 1].kind, rs[n - 1].text) == ("command", text)
     assert after(rs)
-    if command.name in ("root", "minimize", "maximize"):
-        return                      # a bare `!root` is still a solver block, reported by solver.py
+    if command.name in ("root", "minimize", "maximize", "regression"):
+        return                      # a bare `!root` is still a block, reported by solver.py or regression.py
     line, error = (f(command) for f in BAD[type(command.args)])
     r = run(line)[0]
     assert r.kind == "error" and error in r.error

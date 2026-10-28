@@ -11,7 +11,8 @@ const row = (kind, extra = {}) => ({ n: 1, end: 1, kind, source: '', text: '', l
 const body = (r, view) => R.model(r, { view }).body;
 
 // --- what each kind shows ---------------------------------------------------------------------
-eq(body(row('assign', { latex: 'x = 2' })), { type: 'tex', tex: 'x = 2', rows: ['x = 2'] }, 'a calculation is typeset');
+eq(body(row('assign', { latex: 'x = 2' })), { type: 'tex', tex: 'x = 2', rows: ['x = 2'], matrix: null }, 'a calculation is typeset');
+eq(body(row('regression', { latex: 'a = 1' })).type, 'tex', 'so is a regression block');
 eq(body(row('assign', { latex: 'x = 1 + 1 = 2', latex_rows: ['x = 1 + 1', '= 2'] })).rows, ['x = 1 + 1', '= 2'],
   'with its stages, one per row, for a narrow pane');
 eq(body(row('unitdef', { latex: '1 = 2' })).type, 'tex', 'so is a unit definition');
@@ -41,6 +42,16 @@ eq(body(row('solver', { snippet: 'S', solver: {} }), 'latex').solver, true, 'a s
 eq(body(row('error', { snippet: '% bad', error: 'Bad' }), 'latex').type, 'error', 'an error is shown, not its snippet');
 eq(body(row('blank', { snippet: null }), 'latex').type, 'text', 'a line without a snippet shows as usual');
 eq(body(row('assign', { latex: 'x = 2', snippet: 'x = 2' }), 'typeset').type, 'tex', 'only in the LaTeX view');
+
+// --- large matrices --------------------------------------------------------------------------
+const wide = (k) => '\\begin{bmatrix} ' + Array.from({ length: k }, (_, i) => i + 1).join(' & ') + ' \\end{bmatrix}';
+const big = row('assign', { n: 7, latex: 'D = ' + wide(12), latex_rows: ['D = ' + wide(12)] });
+const shut = body(big);
+eq(shut.tex, 'D = \\begin{bmatrix} 1 & 2 & 3 & \\cdots & 11 & 12 \\end{bmatrix}', 'a wide matrix shows its ends');
+eq([shut.rows, shut.matrix], [[shut.tex], { size: '1 \u00d7 12', expanded: false }], 'and offers to show it whole');
+const open = R.model(big, { expanded: new Set([7]) }).body;
+eq([open.tex, open.matrix.expanded], [big.latex, true], 'an expanded line shows it whole');
+eq(body(row('assign', { latex: wide(8) })).matrix, null, 'a matrix of 8 columns is shown whole');
 
 // --- the row that shows a line ----------------------------------------------------------------
 const shown = [{ line: 1, end: 1 }, { line: 2, end: 5 }, { line: 4, end: 4 }, { line: 6, end: 6 }];

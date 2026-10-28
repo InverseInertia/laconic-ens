@@ -30,6 +30,14 @@ A .* B     A ./ B              elementwise
 
 Entries may be complex (see [Complex Numbers](Complex-Numbers)), and `eigvals` and `eigvecs` return complex eigenvalues and eigenvectors when the matrix has them. `min` and `max` need real entries.
 
+To fit a polynomial to points held in a matrix (an x row and a y row, one column per point), use a `!regression` block; see [Solving and Optimizing](Solving-and-Optimizing#regression).
+
+## Large matrices
+
+A matrix with more than 8 rows or columns is shown collapsed in the results pane: its first 3 and last 2 rows and columns, with ⋮, ⋯ and ⋱ standing for the rest. The button under it (**Show all 2 × 120**) shows it whole, and **Collapse** puts it back; the choice holds for that line while you edit. Only the display changes: the value is the whole matrix.
+
+The LaTeX, Markdown and PDF exports print large matrices collapsed the same way, so a page of data does not run off the page. A single line's LaTeX snippet (the LaTeX view and its Copy button) keeps the matrix whole.
+
 ## Indexing keys
 
 Ctrl+[ wraps the term on the left (or the highlight) in `idx( , )`, and Ctrl+Shift+[ in `elem( , , )`, with the caret in the first index slot.

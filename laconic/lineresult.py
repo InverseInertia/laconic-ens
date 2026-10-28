@@ -11,8 +11,9 @@ Every result answers one small interface, whatever its kind:
     r.block                          its block handle: the sheettext Block a header starts, else None
     r.symbols                        its part of the symbol table (see symbols.py)
 
-What only one kind has is its payload, behind `r.plot` (PlotPayload) or `r.solver`
-(SolverPayload); both are None on every other line, a block header that failed included.
+What only one kind has is its payload, behind `r.plot` (PlotPayload), `r.solver`
+(SolverPayload) or `r.regression` (RegressionPayload); each is None on every other line, a block
+header that failed included.
 
 `r.to_json()` is the row `/api/eval` sends. Its shape is pinned by tests/test_lineresult.py,
 so a change to it is a deliberate one; static/rows.js is the page's reader of it."""
@@ -77,6 +78,22 @@ class SolverPayload:
 
 
 @dataclass
+class RegressionPayload:
+    """A `!regression` block that fitted (see sheet._run_regression): what it defines, and how well
+    the polynomial fits. It is worked out every time the sheet runs, so it is never out of date
+    by itself; the row is `stale` when its data reads an out-of-date solver result."""
+    names: list             # the coefficient names, lowest power first (or one vector's name)
+    degree: int
+    points: int
+    r2: float
+    model: str              # the fitted polynomial, typeset: y = a + b x + ...
+    values: list            # {name, lhs, rhs, latex} for each coefficient, then R²
+
+    def to_json(self):
+        return {"names": self.names, "degree": self.degree, "points": self.points, "r2": self.r2}
+
+
+@dataclass
 class LineResult:
     n: int
     source: str
@@ -88,7 +105,7 @@ class LineResult:
     warning: str = ""       # shown under the result: the line works but may not do what was meant
     stale: bool = False     # reads a value from a solver whose result is out of date
     block: object = None    # a block header: the sheettext Block it starts, drawn or failed
-    payload: object = None  # PlotPayload or SolverPayload
+    payload: object = None  # PlotPayload, SolverPayload or RegressionPayload
     symbols: dict = None    # this line's part of the symbol table
 
     @property
@@ -112,6 +129,10 @@ class LineResult:
         return self.payload if isinstance(self.payload, SolverPayload) else None
 
     @property
+    def regression(self):
+        return self.payload if isinstance(self.payload, RegressionPayload) else None
+
+    @property
     def latex(self):
         parts = [p for p in ([self.lhs] if self.lhs else []) + self.stages if p]
         return " = ".join(parts)
@@ -133,4 +154,6 @@ class LineResult:
             row["plot"] = self.plot.to_json()
         if self.solver:
             row["solver"] = self.solver.to_json()
+        if self.regression:
+            row["regression"] = self.regression.to_json()
         return row

@@ -57,6 +57,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `solver.py` | `!root` / `!minimize` / `!maximize`: block parsing, the input hash, the scipy calls, the stored `#@ result` line (written through the block editor) |
 | `solvesession.py` | The solve session: which blocks need solving, running one behind a runner seam (in-process `solve`, or the worker's `Jobs.run`), run or verify, and storing a result in every block whose inputs hash the same. The server, the worker and `lens --solve` call it |
 | `solverjobs.py` | The worker process that runs a solve, so it can be interrupted; `Jobs.run` is its runner for the solve session |
+| `regression.py` | `!regression`: block parsing and the least-squares polynomial fit, with each coefficient's units. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
@@ -93,6 +94,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `shortcuts.js` | The keyboard shortcut table, as data; the page renders it under Settings → Reference, with the command rows `server.py` fills in from `commands.py` |
 | `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server. Reads the plot payload's spec |
 | `solverview.js` | The Run / Interrupt / Verify / Log strip under solver blocks. Reads the solver payload |
+| `matrixview.js` | Large matrices in the results pane: a matrix of more than 8 rows or columns collapsed to its corners, by the rule `exports.collapse_matrices` uses for documents (`tests/matrix_vectors.json` holds the two together). `rows.js` asks it; the page draws the button that shows the matrix whole |
 | `vendor/` | KaTeX, and d3-zoom with d3-scale and dependencies (see `vendor/d3/README.md`) |
 | `fonts/` | IBM Plex and OCR-A, self-hosted |
 | `example.lens` | The sheet the page opens with |
