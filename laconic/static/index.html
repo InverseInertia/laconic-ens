@@ -148,6 +148,9 @@
   .row.comment .body { font: 400 14px/var(--row) var(--sans); color: var(--text-soft); }
   .row.error .body { font: 400 13px/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
   .row.error .src { color: var(--text-soft); display: block; }
+  /* Math is fitted to this box (mathfit.js); the margin is room to spare, so a pane narrowed a little
+     more before the next fit does not push a shrunk formula past its row and show a scroll bar (#104). */
+  .row .math { margin-right: 12px; }
   .row .katex-display { margin: 0; text-align: left; }
   .row .katex-display > .katex { text-align: left; }
   .row .katex { font-size: 1.12em; }

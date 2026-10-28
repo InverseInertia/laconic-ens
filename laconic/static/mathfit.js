@@ -6,7 +6,9 @@
  * after a relation or a binary operator (= and +), and a row that still does not fit is shrunk.
  * CSS zoom (unlike transform) changes the layout box, so what follows takes the fitted size and
  * the PDF's page breaks are worked out from it. Fitting again at another width (the pane was
- * resized) can go back to the formula as it was.
+ * resized) can go back to the formula as it was. The width is the .math element's: the results
+ * pane leaves room to spare at its right (index.html), so the pane can narrow a little before the
+ * next fit without a shrunk formula running past its row.
  *
  *   choose(natural, room)       pure: 'fit', 'shrink' or 'wrap' for a formula `natural` px wide
  *                               in `room` px. Runs under Node for tests.
@@ -82,7 +84,9 @@
     els.forEach((el, i) => {
       const room = rooms[i];
       if (!room) return;
-      [...el.children].forEach((k, j) => { if (widths[i][j] > room) k.style.zoom = String(room / widths[i][j]); });
+      // A pixel short of the room: the widths read are whole pixels and KaTeX's boxes end a fraction
+      // of one past them, so fitted to the room exactly some ran past it and their row scrolled (#104).
+      [...el.children].forEach((k, j) => { if (widths[i][j] > room) k.style.zoom = String((room - 1) / widths[i][j]); });
     });
   }
 
