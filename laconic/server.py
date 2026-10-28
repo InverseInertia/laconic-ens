@@ -159,15 +159,15 @@ def export_pdf(sheet: Sheet):
     """The sheet as a PDF, printed by a headless Chromium (see pdfdoc.py). 501 when there is no
     such browser or it fails; the page then prints /api/export/print with the browser's own dialog."""
     try:
-        return Response(_export(sheet, "pdf", timeout=30), media_type="application/pdf")
+        return Response(_export(sheet, "pdf"), media_type="application/pdf")
     except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
         raise HTTPException(501, str(e))
 
 
 @app.post("/api/export/print", response_class=HTMLResponse)
 def export_print(sheet: Sheet):
-    """The printable document, opening the print dialog by itself."""
-    return _export(sheet, "html", assets="/static", autoprint=True)
+    """The printable document, for the page to print from a hidden frame of its own (no pop-up)."""
+    return _export(sheet, "html", assets="/static")
 
 
 def _export(sheet, fmt, **opts):

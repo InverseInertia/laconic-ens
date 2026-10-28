@@ -38,7 +38,7 @@ def test_solver_values_and_their_notes():
 def test_each_format_gets_its_flavour():
     assert "\\qty{2}{\\meter}" in export("x = 2'm", "tex", title="t")
     assert export("x = 2'm", "md") == "$$\nx = 2\\,\\mathrm{m}\n$$\n"
-    assert "data-tex=\"x = 2\\,\\mathrm{m}\"" in export("x = 2'm", "html", autoprint=True)
+    assert "data-tex=\"x = 2\\,\\mathrm{m}\"" in export("x = 2'm", "html")
 
 
 def test_runs_are_shared_by_flavour():

@@ -122,7 +122,7 @@ def run(text, fmt, global_units=None, runs=None):
 
 def export(text, fmt, title=None, global_units=None, runs=None, **opts):
     """The sheet `text` as `fmt`: "tex" (a complete document), "md" (an Obsidian note), "html"
-    (the printable page; `assets`, `autoprint` as pdfdoc.page takes them) or "pdf" (that page
+    (the printable page; `assets` as pdfdoc.page takes it) or "pdf" (that page
     printed, as bytes; `timeout`). A PDF needs a Chromium-family browser: pdfdoc.NoBrowser
     (a RuntimeError) when there is none."""
     ws = run(text, fmt, global_units, runs)

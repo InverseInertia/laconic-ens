@@ -58,11 +58,59 @@ def test_plots_are_inline_svg():
     assert '<div class="block plot"><svg' in out
 
 
-def test_assets_and_autoprint():
+def test_assets_and_no_print_of_its_own():
+    """The page prints the served document from a hidden frame (#102), so no document calls
+    print() itself, and none waits on a timer."""
     local = doc("x = 1")
-    assert pdfdoc.STATIC.as_uri() + "/vendor/katex/katex.min.js" in local and "print()" not in local
-    served = doc("x = 1", assets="/static/", autoprint=True)
-    assert 'src="/static/vendor/katex/katex.min.js"' in served and "print()" in served
+    assert pdfdoc.STATIC.as_uri() + "/vendor/katex/katex.min.js" in local
+    served = doc("x = 1", assets="/static/")
+    assert 'src="/static/vendor/katex/katex.min.js"' in served
+    for out in (local, served):
+        assert "print()" not in out and "setTimeout" not in out
+
+
+def test_headless_command_skips_browser_startup_work(tmp_path):
+    cmd = pdfdoc.command("chrome", tmp_path / "s.html", tmp_path / "s.pdf", tmp_path / "p")
+    assert cmd[0] == "chrome" and cmd[-1] == (tmp_path / "s.html").as_uri()
+    assert f"--print-to-pdf={tmp_path / 's.pdf'}" in cmd and f"--user-data-dir={tmp_path / 'p'}" in cmd
+    # A built-in field trial config stalled the command-line print until it was killed (#102).
+    assert "--disable-field-trial-config" in cmd and "--disable-background-networking" in cmd
+    budget = [int(a.split("=")[1]) for a in cmd if a.startswith("--virtual-time-budget=")]
+    assert budget and budget[0] <= 1000
+
+
+def _fake_browser(tmp_path, body):
+    exe = tmp_path / "fakechrome"
+    exe.write_text("#!/bin/sh\n" + body)
+    exe.chmod(0o755)
+    return str(exe)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="a shell script stands in for the browser")
+def test_pdf_runs_the_browser_once_and_returns_what_it_printed(monkeypatch, tmp_path):
+    log = tmp_path / "args"
+    exe = _fake_browser(tmp_path, f"""echo "$@" >> {log}
+for a in "$@"; do case "$a" in --print-to-pdf=*) printf '%%PDF-1.4 fake' > "${{a#--print-to-pdf=}}";; esac; done
+""")
+    monkeypatch.setenv("LENS_CHROMIUM", exe)
+    assert pdfdoc.pdf("<p>x") == b"%PDF-1.4 fake"
+    assert len(log.read_text().splitlines()) == 1 and "--disable-field-trial-config" in log.read_text()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="a shell script stands in for the browser")
+def test_a_stalled_or_failing_browser_is_a_501_for_the_page_to_fall_back_on(monkeypatch, tmp_path):
+    monkeypatch.setenv("LENS_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("LENS_CHROMIUM", _fake_browser(tmp_path, "exec sleep 30\n"))
+    with pytest.raises(subprocess.TimeoutExpired):
+        pdfdoc.pdf("<p>x", timeout=0.5)
+    monkeypatch.setattr(pdfdoc, "TIMEOUT", 0.5)
+    with pytest.raises(server.HTTPException) as e:
+        server.export_pdf(Sheet(text="x = 1"))
+    assert e.value.status_code == 501
+    monkeypatch.setenv("LENS_CHROMIUM", _fake_browser(tmp_path, "exit 0\n"))   # starts, writes nothing
+    with pytest.raises(server.HTTPException) as e:
+        server.export_pdf(Sheet(text="x = 1"))
+    assert e.value.status_code == 501 and "did not write a PDF" in e.value.detail
 
 
 def test_lens_chromium_names_the_browser(monkeypatch, tmp_path):
@@ -81,7 +129,8 @@ def test_no_browser(monkeypatch, tmp_path):
     with pytest.raises(server.HTTPException) as e:
         server.export_pdf(Sheet(text="x = 1"))
     assert e.value.status_code == 501
-    assert "print()" in server.export_print(Sheet(text="x = 1", title="t"))
+    printable = server.export_print(Sheet(text="x = 1", title="t"))
+    assert 'src="/static/vendor/katex/katex.min.js"' in printable and "print()" not in printable
 
 
 def test_cli_without_a_browser(monkeypatch, tmp_path):

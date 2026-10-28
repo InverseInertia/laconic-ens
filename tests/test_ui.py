@@ -504,6 +504,34 @@ def test_long_equations_are_fitted_to_the_results_pane(page):
     page.wait_for_selector(".row[data-line='4'] .math.wrapped")
 
 
+def test_a_shrunk_equation_is_fitted_again_before_the_narrower_pane_is_painted(page):
+    """#104: narrowing the pane refits a shrunk formula in the same frame, so no scroll bar
+    flashes under it while the old zoom is still on."""
+    terms = " + ".join(f"a * b / c * {i}" for i in range(1, 4))
+    reset(page, f"a = 1.5'm\nb = 2.25'm\nc = 3'm\nw = {terms}")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_function("document.querySelectorAll('#out .row').length === 4")
+    page.evaluate("document.fonts.ready")
+    page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    fit = {f["line"]: f for f in page.evaluate(FIT)}
+    assert fit[4]["zoomed"] and not fit[4]["wrapped"] and not fit[4]["scrolls"]
+    # An observer made after the page's runs after its fit, just before paint: what it sees is painted.
+    seen = page.evaluate("""() => new Promise((done) => {
+      const out = document.querySelector('#out'), body = document.querySelector(".row[data-line='4'] .body");
+      const before = out.clientWidth, seen = [];
+      const ro = new ResizeObserver(() => seen.push({width: out.clientWidth, scrolls: body.scrollWidth > body.clientWidth + 1}));
+      ro.observe(out);
+      requestAnimationFrame(() => {
+        document.querySelector('main').style.setProperty('--split', '45%');
+        requestAnimationFrame(() => requestAnimationFrame(() => { ro.disconnect(); done({before, seen}); }));
+      });
+    })""")
+    narrower = [s for s in seen["seen"] if s["width"] < seen["before"]]
+    assert narrower and not any(s["scrolls"] for s in narrower)
+    fit = {f["line"]: f for f in page.evaluate(FIT)}
+    assert fit[4]["zoomed"] and not fit[4]["wrapped"] and not fit[4]["scrolls"]   # still shrunk, not wrapped
+
+
 def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, sheets):
     """#49: `lens --window sheet.lens` (a double-clicked file) opens that sheet, and Save writes it."""
     sheet = tmp_path / "beam.lens"
@@ -567,3 +595,54 @@ def test_export_menu_downloads_latex_and_markdown(page):
     page.click("#exportBtn")
     page.click("#out")
     assert page.is_hidden("#exportList")
+
+
+def test_pdf_export_shows_progress_and_prints_from_a_hidden_frame(page, monkeypatch):
+    """Without a headless browser on the server, Export -> PDF prints from a hidden frame on the
+    page: no pop-up window (which the browser may block once the click's activation has run out),
+    the Export button is busy meanwhile and ignores more clicks, and the next export goes
+    straight to the print dialog (#102)."""
+    from laconic import pdfdoc
+    monkeypatch.setattr(pdfdoc, "find_chromium", lambda: None)
+    reset(page, "## Loads\nF = 2'kN * 3")
+    page.evaluate("""() => {
+      window.__opened = 0; window.__prints = [];
+      window.open = () => { window.__opened++; return null; };
+      window.__api = [];
+      const f = window.fetch;
+      window.fetch = (u, o) => { window.__api.push(String(u)); return f(u, o); };
+      new MutationObserver(() => {
+        for (const fr of document.querySelectorAll('iframe.printFrame'))
+          if (!fr.__hooked && fr.contentWindow) { fr.__hooked = true; fr.addEventListener('load', () => {
+            fr.contentWindow.print = () => window.__prints.push(fr.contentDocument.querySelectorAll('.math .katex').length); }); }
+      }).observe(document.body, {childList: true});
+    }""")
+    page.click("#exportBtn")
+    page.click("#exportPdf")
+    assert page.get_attribute("#exportBtn", "aria-busy") == "true" and page.is_disabled("#exportBtn")
+    page.evaluate("document.querySelector('#exportPdf').click()")   # a second run while busy does nothing
+    page.wait_for_function("window.__prints.length > 0")
+    page.wait_for_function("document.querySelector('#exportBtn').getAttribute('aria-busy') === 'false'")
+    assert page.evaluate("window.__prints") == [1]   # one print, with the math already typeset
+    assert page.evaluate("window.__opened") == 0
+    assert page.evaluate("window.__api.filter(u => u.includes('/api/export/'))") == ["/api/export/pdf", "/api/export/print"]
+    assert page.is_enabled("#exportBtn") and "Export" in page.inner_text("#exportBtn")
+    page.click("#exportBtn")
+    page.click("#exportPdf")
+    page.wait_for_function("window.__prints.length > 1")
+    assert page.evaluate("window.__api.filter(u => u.includes('/api/export/'))")[2:] == ["/api/export/print"]
+
+
+def test_export_menu_stays_in_the_window_when_the_toolbar_wraps(page):
+    """#103: a wrapped toolbar can put Export at the start of a row, and the list, hanging from
+    the button's right edge, ran off the left of the window."""
+    page.click("#exportBtn")
+    assert page.evaluate("document.querySelector('#exportList').getBoundingClientRect().right"
+                         " === document.querySelector('#exportBtn').getBoundingClientRect().right")  # unchanged at a normal width
+    inside = ("(() => { const r = document.querySelector('#exportList').getBoundingClientRect();"
+              " return r.left >= 0 && r.right <= document.documentElement.clientWidth; })()")
+    for w in range(200, 1000, 10):
+        page.set_viewport_size({"width": w, "height": 700})
+        if page.is_hidden("#exportList"):
+            page.click("#exportBtn")
+        page.wait_for_function(inside, timeout=2000)   # the toolbar rewraps a frame or two after the resize
