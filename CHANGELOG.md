@@ -19,6 +19,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - A failed plot image export, or a failed save back to the file LENS was opened with, now shows the server's message instead of raw JSON or "undefined". (#116)
 
 ### Fixes
+- A long equation shrunk to fit the results pane no longer keeps a scroll bar under it at some pane widths, so the bar no longer comes and goes while you resize the window or the split. Math now leaves a little room at the right of the pane, so a pane narrowed during a resize does not show a scroll bar before the equation is shrunk to the new width. (#104)
 - Resetting the Greek table no longer brings back a copy an older version left in the browser. (#116)
 - Help no longer says the theme is kept per browser; settings are stored on this machine for every browser. (#116)
 - `lens FILE --solve` stores an answer in every solver block with the same inputs, as the page does. The second of two identical blocks no longer stays NOT SOLVED. (#116)
