@@ -597,6 +597,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 
 <script src="/static/vendor/d3/d3.min.js"></script>
 <script src="/static/symbols.js"></script>
+<script src="/static/api.js"></script>
 <script src="/static/rows.js"></script>
 <script src="/static/mathfit.js"></script>
 <script src="/static/editing.js"></script>
@@ -624,10 +625,9 @@ const prefs = (() => { try { return JSON.parse($("#prefs").textContent); } catch
 let prefsPending = {}, prefsBusy = false;
 function flushPrefs() {
   if (prefsBusy || !Object.keys(prefsPending).length) return;
-  const body = JSON.stringify({prefs: prefsPending});
+  const body = {prefs: prefsPending};
   prefsPending = {}; prefsBusy = true;
-  fetch("/api/prefs", {method: "PUT", headers: {"Content-Type": "application/json"}, body, keepalive: true})
-    .catch(() => {}).finally(() => { prefsBusy = false; flushPrefs(); });
+  Api.send("/api/prefs", body).catch(() => {}).finally(() => { prefsBusy = false; flushPrefs(); });
 }
 function savePref(k, v) { prefs[k] = v; prefsPending[k] = v; flushPrefs(); }
 window.addEventListener("pagehide", () => { prefsBusy = false; flushPrefs(); });
@@ -659,10 +659,9 @@ let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
 let tableText = null;   // the text `last` was evaluated from
 let acWaiting = false;  // or {force}: suggestions were made from an older table, and how they were asked for
 
-const post = (path, extra = {}) => fetch(path, {
-  method: "POST", headers: {"Content-Type": "application/json"},
-  body: JSON.stringify({text: src.value, title: nameEl.value, view, wrap, ...extra}),
-});
+// The sheet as the export, save and eval endpoints take it.
+const sheetBody = (extra = {}) => ({text: src.value, title: nameEl.value, view, wrap, ...extra});
+const post = (path, extra) => Api.request(path, sheetBody(extra));
 
 // The server tags global names with \htmlData{global=name}; that is the only HTML command it emits.
 const KATEX_OPTS = {displayMode: true, throwOnError: false,
@@ -810,8 +809,7 @@ async function save(as) {
     render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
     write: async (h, text) => {
       if (h.server) {
-        const r = await (await fetch(openedApi("/api/opened/save"), {method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({text})})).json();
+        const r = await Api.json(openedApi("/api/opened/save"), {text});
         if (!r.ok) throw new Error(r.error);
         return;
       }
@@ -906,12 +904,7 @@ function applyEdits(base, edits, asked = false) {
 async function patchPlot(line, patch) {
   const text = src.value;
   let res;
-  try {
-    res = await (await fetch("/api/plotedit", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({text, line, patch}),
-    })).json();
-  } catch { say("Could not reach the server"); return false; }
+  try { res = await Api.json("/api/plotedit", {text, line, patch}); } catch (e) { say(e.message); return false; }
   if (!res.ok) { say(res.error); return false; }
   if (!applyEdits(text, res.edits)) { say("The sheet changed meanwhile, so the plot was not changed"); return false; }
   // The moved plot becomes the focused line, so the redraw keeps it in view rather than
@@ -920,11 +913,7 @@ async function patchPlot(line, patch) {
   return true;
 }
 
-async function plotSvg(line) {
-  const res = await post("/api/plotimage", {line});
-  if (!res.ok) throw new Error(await res.text());
-  return res.text();
-}
+const plotSvg = (line) => Api.text("/api/plotimage", sheetBody({line}));
 
 async function plotPng(line, scale = 3) {
   const url = URL.createObjectURL(new Blob([await plotSvg(line)], {type: "image/svg+xml"}));
@@ -1166,13 +1155,13 @@ let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands:
 let ac = null, acSkip = false;
 
 async function loadVocab() {
-  try { vocab = {...await (await fetch("/api/vocab")).json(), props: vocab.props}; } catch {}
+  try { vocab = {...await Api.json("/api/vocab"), props: vocab.props}; } catch {}
 }
 // props() keys and fluids need CoolProp on the server, which takes seconds to import, so they are
 // fetched the first time a props string is typed; the list opens when they arrive.
 let propsLoading = null;
 function loadProps() {
-  propsLoading ??= fetch("/api/vocab/props").then((r) => r.json()).then((p) => { vocab.props = p; })
+  propsLoading ??= Api.json("/api/vocab/props").then((p) => { vocab.props = p; })
     .catch(() => { propsLoading = null; });
   return propsLoading;
 }
@@ -1434,7 +1423,7 @@ function buildThemeForm() {
 buildThemeForm();
 applyTheme();
 // Inline the logo so it can read the theme's CSS variables; the <img> stays if this fails.
-fetch("/static/logo.svg").then((r) => r.text()).then((t) => {
+Api.text("/static/logo.svg").then((t) => {
   const svg = new DOMParser().parseFromString(t, "image/svg+xml").documentElement;
   if (svg.nodeName !== "svg") return;
   svg.setAttribute("class", "logo"); svg.setAttribute("aria-hidden", "true");
@@ -1475,17 +1464,17 @@ $("#solverLogCopy").onclick = () => copyText($("#solverLogText").textContent, "C
 // A run belongs to this page: when it goes away the worker should not keep computing for nobody.
 addEventListener("pagehide", () => {
   const a = Solvers.active;
-  if (a) navigator.sendBeacon(`/api/solve/${a.job}/interrupt`, new Blob(["{}"], {type: "application/json"}));
+  if (a) Api.beacon(`/api/solve/${a.job}/interrupt`, {});
 });
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
 // Worked examples come from the program itself, so they are there however it was installed.
-fetch("/api/examples").then((r) => r.json()).then((list) => {
+Api.json("/api/examples").then((list) => {
   for (const ex of list) {
     const li = document.createElement("li"), b = document.createElement("button");
     b.textContent = "Open"; b.setAttribute("aria-label", `Open example ${ex.title}`);
     b.onclick = async () => {
       if (src.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
-      const text = await (await fetch(`/api/examples/${ex.name}`)).text();
+      const text = await Api.text(`/api/examples/${ex.name}`);
       load(text, ex.name);
       $("#helpDlg").close();
     };
@@ -1510,9 +1499,8 @@ function readGreek() {
 let greekTimer = 0;
 function saveGreek(value) {
   clearTimeout(greekTimer);
-  greekTimer = setTimeout(() => fetch("/api/greek", {
-    method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({greek: value}),
-  }).catch(() => say("Could not save the Greek table to the server")), 300);
+  greekTimer = setTimeout(() => Api.send("/api/greek", {greek: value})
+    .catch(() => say("Could not save the Greek table to the server")), 300);
 }
 function greekRow(k = "", v = "") {
   const row = document.createElement("div"); row.className = "g-row";
@@ -1566,11 +1554,8 @@ $("#renameForm").addEventListener("submit", async (ev) => {
   const text = src.value;
   let res;
   try {
-    res = await (await fetch("/api/rename", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({text, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value}),
-    })).json();
-  } catch { err.textContent = "Could not reach the server"; err.hidden = false; return; }
+    res = await Api.json("/api/rename", {text, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value});
+  } catch (e) { err.textContent = e.message; err.hidden = false; return; }
   if (res.warning) {
     // Standard unit: show the warning and let the same button confirm the swap.
     err.textContent = res.warning; err.hidden = false;
@@ -1595,7 +1580,7 @@ async function openUnits() {
   $("#unitsDlg").showModal();
   if (!ub.data) $("#ubList").replaceChildren(Object.assign(document.createElement("p"), {className: "note ub-empty", textContent: "Loading units\u2026"}));
   try {
-    ub.data = await (await fetch("/api/unitbrowse")).json();
+    ub.data = await Api.json("/api/unitbrowse");
     ub.userTags = ub.data.userTags;
   } catch { say("Could not load the units"); return; }
   if (ub.tag && !UnitBrowser.tagList(ub.data, ub.userTags).includes(ub.tag)) ub.tag = null;
@@ -1653,7 +1638,7 @@ function unitBrowseRow(row) {
 async function saveTags(tags) {
   let res;
   try {
-    res = await (await fetch("/api/tags", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({tags})})).json();
+    res = await Api.json("/api/tags", {tags}, "PUT");
   } catch { say("Could not save the tags"); return; }
   if (!res.ok) { say(res.error); return; }
   ub.userTags = res.tags;
@@ -1694,7 +1679,7 @@ function emptyNote() {
 }
 async function loadUnits() {
   let units = [];
-  try { units = (await (await fetch("/api/settings")).json()).units; } catch {}
+  try { units = (await Api.json("/api/settings")).units; } catch {}
   $("#unitRows").replaceChildren(...units.map((u) => unitRow(u.name, u.definition)));
   emptyNote();
 }
@@ -1708,9 +1693,7 @@ $("#unitSave").onclick = async () => {
   const keep = units.map((u, i) => [u, rows[i]]).filter(([u]) => u.name || u.definition);
   let res;
   try {
-    res = await (await fetch("/api/units", {
-      method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({units: keep.map(([u]) => u)}),
-    })).json();
+    res = await Api.json("/api/units", {units: keep.map(([u]) => u)}, "PUT");
   } catch { say("Could not save the units"); return; }
   if (!res.ok) {
     keep.forEach(([u, row], i) => {
@@ -1726,7 +1709,7 @@ $("#unitSave").onclick = async () => {
 
 // Tell the server this page is open, so the packaged app can quit when it is closed.
 const clientId = Math.random().toString(36).slice(2);
-const beat = (path) => navigator.sendBeacon(path, new Blob([JSON.stringify({ id: clientId })], { type: "application/json" }));
+const beat = (path) => Api.beacon(path, {id: clientId});
 beat("/api/ping");
 setInterval(() => beat("/api/ping"), 5000);
 window.addEventListener("pagehide", () => beat("/api/bye"));
@@ -1738,23 +1721,23 @@ window.addEventListener("load", () => {
 
 // Greek table and global units live on the server. A table saved in this browser by an
 // older build is sent up once and then forgotten, so nothing is lost and a reset stays reset.
+// Resolves to the settings, or null.
 async function loadSettings() {
-  try {
-    const cfg = await (await fetch("/api/settings")).json();
-    const old = store.get("greek", null);
-    if (cfg.greek) greek = cfg.greek;
-    else if (old && typeof old === "object") {
-      greek = old;
-      const res = await fetch("/api/greek", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({greek})});
-      if (!res.ok) return;
-    }
-    for (const prefix of ["lens:", "calcsheet:", "laconic:"]) try { localStorage.removeItem(prefix + "greek"); } catch {}
-  } catch {}
+  let cfg;
+  try { cfg = await Api.json("/api/settings"); } catch { return null; }
+  const old = store.get("greek", null);
+  if (cfg.greek) greek = cfg.greek;
+  else if (old && typeof old === "object") {
+    greek = old;
+    try { if (!(await Api.send("/api/greek", {greek})).ok) return cfg; } catch { return cfg; }
+  }
+  for (const prefix of ["lens:", "calcsheet:", "laconic:"]) try { localStorage.removeItem(prefix + "greek"); } catch {}
+  return cfg;
 }
 
 // Button icons are files under static/icons/, inlined so they take the button's text color.
 for (const el of document.querySelectorAll("[data-icon]")) {
-  fetch(`/static/icons/${el.dataset.icon}.svg`).then((r) => r.text()).then((svg) => {
+  Api.text(`/static/icons/${el.dataset.icon}.svg`).then((svg) => {
     el.innerHTML = svg;
     el.firstElementChild.setAttribute("aria-hidden", "true");
   }).catch(() => {});
@@ -1771,7 +1754,7 @@ function openedApi(path) {
 // the edits made since (they are in the stored text) and still saves to that file.
 async function openStartFile() {
   let o;
-  try { o = await (await fetch(openedApi("/api/opened"))).json(); } catch { return false; }
+  try { o = await Api.json(openedApi("/api/opened")); } catch { return false; }
   if (!o.file) return false;
   if (o.error) { say(o.error); return false; }
   const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true} : null);
@@ -1784,19 +1767,16 @@ async function openStartFile() {
 }
 
 (async () => {
-  await Promise.all([loadSettings(), loadVocab()]);
+  const [cfg] = await Promise.all([loadSettings(), loadVocab()]);
   if (!(await openStartFile())) {
     const text = store.get("text", null);
-    src.value = text ?? await (await fetch("/static/example.lens")).text();
+    src.value = text ?? await Api.text("/static/example.lens");
   }
   wrap = store.get("wrap", "inline");
   $("#wrap").value = wrap;
   setView(store.get("view", "typeset"), false);
   // The first time LENS opens on this machine, show the welcome and help window.
-  try {
-    const cfg = await (await fetch("/api/settings")).json();
-    if (!cfg.welcomed) { $("#helpDlg").showModal(); fetch("/api/welcomed", {method: "PUT"}).catch(() => {}); }
-  } catch {}
+  if (cfg && !cfg.welcomed) { $("#helpDlg").showModal(); Api.send("/api/welcomed").catch(() => {}); }
 })();
 </script>
 </body>

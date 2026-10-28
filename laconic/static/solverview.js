@@ -34,15 +34,7 @@ const Solvers = (() => {
 
   function init(h) { host = h; }
 
-  async function api(path, body, method = "POST") {
-    const res = await fetch(path, {
-      method, headers: {"Content-Type": "application/json"}, body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    let data = null;
-    try { data = await res.json(); } catch {}
-    if (!res.ok) throw new Error((data && data.detail) || `Request failed (${res.status})`);
-    return data;
-  }
+  const api = (path, body, method) => Api.json(path, body, method);   // api.js: an HTTP error throws its detail
 
   // ---- what to say about a block ------------------------------------------------------------
   function status(r) {
