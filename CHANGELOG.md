@@ -15,6 +15,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Codec** theme preset: mint text on near-black paper, with amber globals. Pick it in Settings → Theme. (#112)
 - **A bar over a variable**: type `&` after a name, as with the dot, arrow and hat marks: `u&` is ū, `F_x&` is F̄ₓ, and it combines with the others (``v&` `` is a dotted v̄). `u&` is a variable of its own, apart from `u`. (#111)
 - **∀ for volume**: a name spelled `forall` typesets as ∀, the struck-through V some fluid mechanics texts use for volume so that V can stay velocity, with subscripts and marks like any name (`forall_cv`). (#111)
+- **Strain units**: a unit typed over itself, such as `'mm/'mm` or `'in/'in`, now stays a unit ratio instead of cancelling to a plain number, with or without `!noassume`. Write `0.002'mm/'mm`, or convert a computed strain with `-> 'mm/'mm`; it shows as `0.0025 mm/mm` and drops out when multiplied by another unit (`e * 200'GPa` is a stress). (#114)
 
 ### Changes
 - Math keys and suggestions now work in a plot note's position, `at (x, y)`, and math keys are off on a solver's `method:` line, matching what the sheet treats as math. (#116)

@@ -33,6 +33,8 @@ def _units():
             out.append([text, detail, int(common)])
 
     for key in sorted(names, key=lambda k: (len(k), k)):
+        if catalogue.is_ratio(key):   # mm/mm is typed as 'mm/'mm, not as a unit of its own
+            continue
         try:
             detail = catalogue.detail(key) or ureg.get_name(key)
             if catalogue.is_constant(key):   # its description and value, so `gas` or `boltz` finds it

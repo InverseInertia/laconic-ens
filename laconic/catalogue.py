@@ -12,9 +12,12 @@ The families:
 - constants with subscripted symbols (g_0, m_e, N_A, µ_0)
 - Pint units siunitx lacks, which the export declares itself
 - offset temperatures ('degC, 'degF, 'degRe), which mean something else after * or /
-- frequencies: Hz as cycles per second and rad/s as an angle per time, 2π apart once a sheet says so (!freq)"""
+- frequencies: Hz as cycles per second and rad/s as an angle per time, 2π apart once a sheet says so (!freq)
+- unit ratios ('mm/'mm, 'in/'in): a unit over itself, a dimensionless unit of its own (a strain)
+  instead of cancelling, kept on a result that is only that ratio"""
 import math
 import re
+import threading
 from functools import lru_cache
 
 # ISO 4217 codes. Each is a dimension of its own: exchange rates change, so 'USD + 'EUR is an
@@ -105,7 +108,7 @@ def _is_money(name):
 
 
 def reduce(q, ureg):
-    """A result in an offset temperature, percent or a currency in the form it is shown in,
+    """A result in an offset temperature, percent, a unit ratio or a currency in the form it is shown in,
     or None when no family here claims it and the plain SI reduction applies."""
     names = [n for n, _ in q.unit_items()]
     if any(n in KEPT_TEMPERATURES for n in names):
@@ -113,6 +116,8 @@ def reduce(q, ureg):
     if len(names) == 1 and names[0] in SHOWN_AS_CELSIUS:
         return q.to("degC")
     if dict(q.unit_items()) == {"percent": 1}:   # 5'% + 2'% stays 7 %; '% * 'N or '%^2 drops it
+        return q
+    if ratio_base(q.units):                      # 0.002 mm/mm stays a strain
         return q
     money = [n for n, _ in q.unit_items() if _is_money(n)]
     if not money:
@@ -181,6 +186,57 @@ def frequency_note(src, dst, ureg, freq):
         return ""
     return ("SI writes Hz and rad/s both as 1/s, so this converts 1 Hz to 1 rad/s. Put !freq hz "
             "or !freq rad above to read Hz as cycles per second, 1 Hz = 2π rad/s")
+
+
+# A unit over itself, typed as 'mm/'mm: Pint cancels it to nothing, but a strain is read in mm/mm
+# or in/in. Each such ratio is a dimensionless unit of its own, worth exactly 1, named
+# millimeter_per_millimeter with the symbol mm/mm, and defined the first time a sheet types it.
+_RATIO = re.compile(r"(\w+)_per_\1")
+_RATIO_LOCK = threading.Lock()   # the shared registry gains a ratio while another page may be reading
+
+
+def is_ratio(name):
+    """True if `name` is the Pint name of a unit ratio such as millimeter_per_millimeter."""
+    return bool(_RATIO.fullmatch(name))
+
+
+def ratio(ureg, units):
+    """The unit ratio `units`/`units` ('mm/'mm), or None when `units` is not one plain unit with a
+    dimension: '%/'%, 'rad/'rad, constants and offset temperatures still cancel."""
+    items = list(units._units.items())
+    if len(items) != 1 or items[0][1] != 1:
+        return None
+    name = items[0][0]
+    if (name in OFFSET_TEMPERATURES or name in _constant_units(ureg) or is_ratio(name)
+            or ureg.Quantity(1, name).dimensionless):
+        return None
+    full = f"{name}_per_{name}"
+    with _RATIO_LOCK:
+        if full not in ureg._units:
+            symbol = ureg.get_symbol(name)
+            ureg.define(f"{full} = {name} / {name} = {symbol}/{symbol}")
+    return ureg.Unit(full)
+
+
+def ratio_base(units):
+    """The unit a unit ratio is made of (millimeter for mm/mm), or None if `units` is not
+    exactly one unit ratio."""
+    items = list(units._units.items())
+    m = _RATIO.fullmatch(items[0][0]) if len(items) == 1 and items[0][1] == 1 else None
+    return m.group(1) if m else None
+
+
+def settle_ratio(q):
+    """A unit ratio stays only on a result that is that ratio alone: 0.002'mm/'mm is
+    0.002 mm/mm, but times 200'GPa it is 0.4 GPa, and a ratio squared is a plain number."""
+    if ratio_base(q.units) or not any(is_ratio(n) for n, _ in q.unit_items()):
+        return q
+    ureg = q._REGISTRY
+    rest = ureg.Unit("dimensionless")
+    for n, e in q.unit_items():
+        if not is_ratio(n):
+            rest *= ureg.Unit(n) ** e
+    return q.to(rest)
 
 
 def is_constant(spelling):

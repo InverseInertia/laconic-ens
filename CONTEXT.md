@@ -134,7 +134,9 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Unit catalogue** (`laconic/catalogue.py`): the one module that knows about the unit families needing more than Pint gives. Other modules ask it rather than keeping their own lists.
 
-**Unit family**: a group of units that share one policy in the catalogue: currencies, percent, physical constants, constants with subscripted symbols, Pint units siunitx lacks.
+**Unit family**: a group of units that share one policy in the catalogue: currencies, percent, unit ratios, physical constants, constants with subscripted symbols, Pint units siunitx lacks.
+
+**Unit ratio**: a unit typed over itself ('mm/'mm, 'in/'in), as for a strain. Pint would cancel it; the catalogue makes it a dimensionless unit of its own worth 1 (`millimeter_per_millimeter`, shown `mm/mm`), kept on a result that is only that ratio and dropped from any other.
 
 **Currency**: a unit named by its ISO 4217 code ('USD, 'EUR). Each is a dimension of its own, so currencies never convert into each other; an exchange rate is an ordinary variable.
 

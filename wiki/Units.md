@@ -95,6 +95,23 @@ fn = wn -> 'Hz                 0.3183 Hz
 
 `*` and `/` (and `.*`, `./`) read an offset unit as an absolute temperature in kelvin, so `35 * 'degF` is 35 × 255.93 K = 8957 K, not 35 °F, and `10'W/'degC` is per 274.15 K, not per degree. The line still runs, with a warning that says so and suggests `35'degF` for a temperature or `'delta_degF` for a difference (write `10'W/'delta_degC`). The same goes for a variable holding a temperature (`T * 2`). The warning appears on the line that runs the arithmetic: a function's definition shows none, and a line that calls it shows the warning with the function's name (`In f(): ...`). A plot or solver block shows it once on its header. A conversion such as `-> 'degF` never warns.
 
+## Strain and other unit ratios
+
+A unit divided by itself would cancel to a plain number, but a strain is read in mm/mm or in/in. So a unit typed over itself stays a ratio: `'mm/'mm`, `'in/'in`, `'m/'m`.
+
+```
+e = 0.002'mm/'mm                     0.002 mm/mm
+e = 0.5'mm / 200'mm -> 'mm/'mm       0.0025 mm/mm
+e = 0.5'in / 200'in -> 'in/'in       0.0025 in/in
+s = e * 200'GPa                      5e8 Pa
+```
+
+- A ratio is worth exactly 1, so it can be converted into another ratio (`e -> 'in/'in`) and multiplies like a plain number.
+- Like `'%`, a result whose only unit is a ratio keeps it (`2 * e` is `0.005 mm/mm`), with or without `!noassume`. Anything else drops it: `e * 200'GPa` is a stress, and `e^2` is a plain number.
+- Only a unit typed over the same typed unit makes a ratio. `0.5'mm / 200'mm` computes a value, so it is a plain `0.0025` until you convert it with `-> 'mm/'mm`, and `L / 'mm` still strips a length to a number of millimetres.
+- Two different units never cancel, so `-> 'um/'m` (microstrain) already works: `2500 µm/m`.
+- In the export a ratio is siunitx's `\per`: `\qty{0.002}{\milli\meter\per\milli\meter}`.
+
 ## Percent and currencies
 
 `'%` is a dimensionless unit worth 0.01: `20'% * 50'N` is `10 N`, and `0.05 -> '%` is `5 %`. A result whose only unit is `'%` keeps it (`5'% + 2'%` is `7 %`). Anything else drops it (`50'% * 50'%` is `0.25`). `5%` without the apostrophe is an error that shows the right spelling. In the export it is siunitx's `\percent`.
