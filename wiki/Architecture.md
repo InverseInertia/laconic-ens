@@ -66,8 +66,8 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `server.py` | FastAPI app. It writes the preference keys (`settings.PREFS`) into the page |
 | `opened.py` | The sheets this server's windows are opened on (the start file, and sheets another launch handed over, by token), and which may be written back (`.lens` only) |
 | `markdown.py` | Export elements to a Markdown note in Obsidian's style: `$$` math in the live preview's flavour, plots as embedded SVG |
-| `pdfdoc.py` | Export elements to a plain, page-broken HTML document, printed to PDF by a Chromium-family browser |
-| `browser.py` | Finds a Chromium-family browser for the app window and the PDF export, the user's default first; `LENS_CHROMIUM` overrides |
+| `pdfdoc.py` | Export elements to a plain, page-broken HTML document. The page prints it from a hidden frame with the browser's print dialog; the CLI's `--pdf` prints it with a headless Chromium-family browser |
+| `browser.py` | Finds a Chromium-family browser for the app window and the CLI's PDF export, the user's default first; `LENS_CHROMIUM` overrides |
 | `instance.py` | One LENS at a time on the same port: a second launch hands its window (and sheet) to the running one |
 | `fileassoc.py` | `lens --register-files` / `--unregister-files`: the `.lens` file type on Windows, under `HKEY_CURRENT_USER` |
 | `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
@@ -114,7 +114,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | `GET /` | the page, with the command help rows filled in from the registry and the version (`_version.py`) in the header and Help |
 | `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex` (and `latex_rows`, the same one stage per row), `error`, `warning`, `stale`, its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line |
 | `POST /api/export` | complete `.tex` document |
-| `POST /api/export/md`, `POST /api/export/pdf`, `POST /api/export/print` | Markdown note; PDF (501 without a Chromium-family browser); the printable document, which opens the print dialog itself |
+| `POST /api/export/md`, `POST /api/export/pdf`, `POST /api/export/print` | Markdown note; PDF printed by a headless browser (501 without a Chromium-family browser; the app does not use it); the printable document, which the app's Export → PDF prints from a hidden frame |
 | `POST /api/save` | source with needed unit definitions appended |
 | `POST /api/rename` | rename a name or unit; returns edits (one per use) or a warning/error |
 | `POST /api/plotedit` | edits to one plot's option lines for a pan, zoom or reset (runs the sheet only as far as the plot) |

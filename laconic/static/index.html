@@ -77,7 +77,7 @@
   #exportList[hidden] { display: none; }
   #exportList button { width: auto; border: 0; padding: 6px 12px; text-align: left; }
   #exportBtn[aria-busy=true] { cursor: progress; }
-  /* The printable document the PDF export falls back to (printFrame): laid out wider than a page's
+  /* The printable document the PDF export prints (printFrame): laid out wider than a page's
      column, out of sight. */
   iframe.printFrame { position: fixed; left: -10000px; top: 0; width: 900px; height: 600px; border: 0; }
   .ico { width: 18px; height: 18px; display: block; margin: 0 auto; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
@@ -495,7 +495,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
     <ul>
       <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped: inline, <code>\[ \]</code> or <code>align*</code>.</li>
       <li><strong>Export &rarr; LaTeX document</strong> writes a complete <code>.tex</code> document (siunitx v3 or newer; <code>pgfplots</code> when a sheet has plots).</li>
-      <li><strong>Export &rarr; PDF</strong> writes a plain PDF of the results, broken into pages so no calculation is split. It needs Chrome, Chromium or Edge; without one, the print dialog opens instead.</li>
+      <li><strong>Export &rarr; PDF</strong> opens the print dialog on a plain copy of the results, broken into pages so no calculation is split; choose <strong>Save as PDF</strong> there. <code>lens sheet.lens --pdf out.pdf</code> writes the same PDF from the command line (it needs Chrome, Chromium or Edge).</li>
       <li><strong>Export &rarr; Markdown note</strong> writes a <code>.md</code> note for Obsidian: headings, comments as text, each calculation as a <code>$$</code> block and plots as images. Commands such as <code>!clear</code> are left out.</li>
       <li><code>!sigfigs n</code>, <code>!sigfigsbig n</code>, <code>!decplace n</code> and <code>!short</code> change how results are printed, never their values.</li>
       <li>From the command line, <code>lens sheet.lens --tex out.tex</code> and <code>--md out.md</code> write the same files, and <code>--plots DIR</code> writes each plot as SVG.</li>
@@ -876,11 +876,12 @@ async function exportAs(path, ext, type) {
 }
 $("#export").onclick = () => exportAs("/api/export", ".tex", "application/x-tex");
 $("#exportMd").onclick = () => exportAs("/api/export/md", ".md", "text/markdown");
-// PDF: printed on the server by a headless Chromium and downloaded; failing that, this browser's
-// own print dialog (Save as PDF), printed from a hidden frame on this page. No new window is opened,
-// so no pop-up permission is needed however long the server took (#102). The Export button shows
-// the export is running, and a second click meanwhile does nothing.
-let pdfBusy = false, serverPdf = true;   // serverPdf: false once the server could not print, for this session
+// PDF: this browser's own print dialog (Save as PDF), printed from a hidden frame on this page.
+// The server only builds the printable document, so no headless browser is started for each
+// export (#102), and no new window is opened, so no pop-up permission is needed. The Export
+// button shows the export is running until the dialog opens, and a second click meanwhile does
+// nothing. (`lens FILE --pdf` still prints with a headless browser: it has no page.)
+let pdfBusy = false;
 function printFrame(html) {
   for (const old of document.querySelectorAll("iframe.printFrame")) old.remove();
   return new Promise((resolve, reject) => {
@@ -910,11 +911,6 @@ $("#exportPdf").onclick = async () => {
   const status = $("#status");
   clearTimeout(statusTimer); status.textContent = "Making the PDF…";
   try {
-    if (serverPdf) {
-      const r = await post("/api/export/pdf");
-      if (r.ok) { downloadBlob(stem() + ".pdf", await r.blob()); say("PDF saved"); return; }
-      serverPdf = false;
-    }
     const r = await post("/api/export/print");
     if (!r.ok) throw new Error(`the server answered ${r.status}`);
     status.textContent = "Opening the print dialog: choose Save as PDF";
