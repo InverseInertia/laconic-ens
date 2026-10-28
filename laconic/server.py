@@ -2,7 +2,6 @@
 edit; for worksheet-sized documents that takes a few milliseconds. Settings
 (Greek table, global units, display preferences) live on the server, in `settings.py`."""
 import json
-import secrets
 import subprocess
 import threading
 from pathlib import Path
@@ -13,18 +12,22 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import document, evaluate as evaluate_sheet, markdown, pdfdoc, snippet
-from .sheet import block_at, solver_blocks
+from . import evaluate as evaluate_sheet, snippet
+from .exports import export as export_sheet
+from .sheet import block_at
+from .sheettext import scan
 from . import settings, unittags
 from .blockedit import to_json
 from ._version import label as version_label
 from .commands import help_rows
 from .evaluator import check_units
 from .lifecycle import lifecycle
+from .opened import sheets, writable
 from .plotopts import PlotError, apply_patch
 from .rename import RenameError, RenameWarning, rename
-from .solver import SolverError, set_option, write_result
+from .solver import SolverError, set_option
 from .solverjobs import Busy, jobs
+from . import solvesession
 from .vocab import props_vocabulary, vocabulary
 
 app = FastAPI(title="laconic")
@@ -32,10 +35,8 @@ STATIC = Path(__file__).parent / "static"
 HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 VERSION_MARKER = "{{version}}"  # in index.html; replaced with the program's version (_version.py)
 PREFS_MARKER = "{{prefs}}"      # in index.html; replaced with the stored display preferences (settings.py)
+PREF_KEYS_MARKER = "{{prefkeys}}"  # in index.html; replaced with the preference keys (settings.PREFS)
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
-OPENED = None   # Path of the worksheet the program was started with (`lens --window FILE`), set by __main__
-OPEN_WINDOW = None  # set by __main__ when serving: opens a window on a path of this server ("/?sheet=...")
-HANDED = {}     # token -> Path: sheets other launches handed to this server, each in a window of its own
 
 
 class Client(BaseModel):
@@ -123,7 +124,7 @@ def index():
     # "<" escaped, so no value can close the script element it sits in.
     prefs = json.dumps(settings.load()["prefs"]).replace("<", "\\u003c")
     return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
-                        .replace(PREFS_MARKER, prefs))
+                        .replace(PREFS_MARKER, prefs).replace(PREF_KEYS_MARKER, json.dumps(list(settings.PREFS))))
 
 
 def _run(sheet, siunitx):
@@ -144,23 +145,21 @@ def evaluate(sheet: Sheet):
 
 @app.post("/api/export", response_class=PlainTextResponse)
 def export(sheet: Sheet):
-    ws = _run(sheet, True)
-    return document(ws.results, title=sheet.title, declarations=ws.declarations)
+    return _export(sheet, "tex")
 
 
 @app.post("/api/export/md", response_class=PlainTextResponse)
 def export_md(sheet: Sheet):
     """The sheet as a Markdown note in Obsidian's style (see markdown.py)."""
-    return markdown(_run(sheet, False).results, title=sheet.title)
+    return _export(sheet, "md")
 
 
 @app.post("/api/export/pdf")
 def export_pdf(sheet: Sheet):
     """The sheet as a PDF, printed by a headless Chromium (see pdfdoc.py). 501 when there is no
     such browser or it fails; the page then prints /api/export/print with the browser's own dialog."""
-    doc = pdfdoc.page(_run(sheet, False).results, title=sheet.title)
     try:
-        return Response(pdfdoc.pdf(doc), media_type="application/pdf")
+        return Response(_export(sheet, "pdf"), media_type="application/pdf")
     except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
         raise HTTPException(501, str(e))
 
@@ -168,7 +167,12 @@ def export_pdf(sheet: Sheet):
 @app.post("/api/export/print", response_class=HTMLResponse)
 def export_print(sheet: Sheet):
     """The printable document, for the page to print from a hidden frame of its own (no pop-up)."""
-    return pdfdoc.page(_run(sheet, False).results, title=sheet.title, assets="/static")
+    return _export(sheet, "html", assets="/static")
+
+
+def _export(sheet, fmt, **opts):
+    """The sheet as `fmt`, in the flavour of math that format needs (see exports.py)."""
+    return export_sheet(sheet.text, fmt, title=sheet.title, global_units=settings.global_units(), **opts)
 
 
 @app.post("/api/save", response_class=PlainTextResponse)
@@ -255,11 +259,9 @@ def solve_interrupt(job_id: str):
 def solve_store(body: SolveStoreBody):
     """Write a finished result into every block whose inputs hash to the record's hash. If the
     sheet was edited while the job ran, no block matches and nothing is written."""
-    h = body.record.get("hash")
-    hits = [r.n for r in solver_blocks(body.text, settings.global_units()) if r.solver.hash == h]
+    edits, hits = solvesession.store(body.text, body.record, settings.global_units())
     if not hits:
         return {"ok": False, "error": "The inputs changed while the solver was running, so its result was not stored"}
-    edits = [e for n in hits for e in write_result(body.text, n, body.record)]   # all against body.text
     return {"ok": True, "edits": to_json(body.text, edits), "lines": hits}
 
 
@@ -290,33 +292,26 @@ def put_welcomed():
     return {"ok": True}
 
 
-def _opened(sheet):
-    """The file a window opened on: the program's own (no `sheet`), or one handed over by
-    another launch. A window opened with `?sheet=` (empty) or an unknown token has none."""
-    return OPENED if sheet is None else HANDED.get(sheet)
-
-
 @app.get("/api/opened")
 def get_opened(sheet: str | None = None):
-    """The worksheet the window was opened on, or {} when there is none. `writable` is
-    False for a .cs or .txt file, which is read but never overwritten (as in savefile.js)."""
-    path = _opened(sheet)
+    """The worksheet the window was opened on (opened.py), or {} when there is none. `writable`
+    is False for a .cs or .txt file, which is read but never overwritten."""
+    path = sheets.get(sheet)
     if path is None:
         return {}
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         return {"file": path.name, "error": f"Could not open {path.name}: {e}"}
-    return {"file": path.name, "path": str(path), "text": text,
-            "writable": path.suffix.lower() == ".lens"}
+    return {"file": path.name, "path": str(path), "text": text, "writable": writable(path)}
 
 
 @app.post("/api/opened/save")
 def save_opened(body: TextBody, sheet: str | None = None):
     """Writes the worksheet back to the file the window was opened on: the only file on
     disk the page can write to by name."""
-    path = _opened(sheet)
-    if path is None or path.suffix.lower() != ".lens":
+    path = sheets.get(sheet)
+    if path is None or not writable(path):
         raise HTTPException(409, "no .lens file to save to")
     try:
         with open(path, "w", encoding="utf-8", newline="") as f:   # keep the text's line endings
@@ -327,10 +322,9 @@ def save_opened(body: TextBody, sheet: str | None = None):
 
 
 def _example_title(path):
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("##"):
-            return line.lstrip("#").strip()
-    return path.stem
+    """The example's first heading, or its file name."""
+    heading = next((ln for ln in scan(path.read_text(encoding="utf-8")).lines if ln.kind == "heading"), None)
+    return heading.text.strip().lstrip("#").strip() if heading else path.stem
 
 
 @app.get("/api/examples")
@@ -411,13 +405,9 @@ def hello():
 def open_window(body: WindowBody):
     """Another launch of LENS found this one running and hands its window over: open one here,
     on the same port, so the page finds this browser's stored presets."""
-    if OPEN_WINDOW is None:
+    if not sheets.opens_windows:
         raise HTTPException(409, "this server does not open windows")
-    if body.path:
-        token = secrets.token_urlsafe(12)   # not guessable, so no other page can ask for the file
-        HANDED[token] = Path(body.path).resolve()
-    else:
-        token = ""
+    path = sheets.hand(body.path)
     lifecycle.expect()
-    OPEN_WINDOW(f"/?sheet={token}")
+    sheets.show(path)
     return {"ok": True}

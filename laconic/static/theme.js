@@ -1,5 +1,6 @@
 /* The page theme: fonts, colors and editor paper, as data and pure functions.
- * The page owns the form and localStorage; it applies what these return.
+ * The page owns the form and applies what these return; the server keeps the theme with the
+ * other display preferences (laconic/settings.py).
  * Runs under Node for tests.
  *
  *   FONTS_SANS, FONTS_MONO   [label, CSS font-family] choices, chosen by index

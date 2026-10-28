@@ -49,4 +49,10 @@ eq(R.at(shown, 3).line, 2, 'an option line: its block');
 eq(R.at(shown, 4).line, 4, 'a wrong option line has its own row');
 eq(R.at(shown, 9), null, 'past the end');
 
+// --- the common fields, for code that reads rows --------------------------------------------
+const solver = row('solver', { n: 3, end: 4, source: '  !root x  ', stale: true, solver: {} });
+eq([R.line(solver), R.head(solver), R.stale(solver), R.stale(row('assign'))], [3, '!root x', true, false], 'line, head, stale');
+const rs = [row('assign', { n: 1, source: 'x = 1' }), row('assign', { n: 2, source: 'y = x' })];
+eq(R.current(rs, ['x = 1', 'y = x + 1', 'z = 2']), [rs[0], null, null], 'a row only while its line reads the same');
+
 console.log(`${n} row model checks passed`);

@@ -291,13 +291,13 @@ def test_the_warning_names_the_user_function_it_comes_from():
 
 def test_plots_and_solver_blocks_warn_once_on_their_header():
     from laconic.blockedit import apply
-    from laconic.sheet import solve_block
+    from laconic import solvesession
     from laconic.solver import write_result
     plot = run("!plot x * 'degC, x = 0 .. 1")[0]
     assert plot.kind == "plot" and plot.warning.count("absolute temperature") == 1
     text = "x = 1\n!root x\n  equation: x * 'degC = 300'K\ny = x"
     assert run(text)[1].warning.count("absolute temperature") == 1
-    out = solve_block(text, 2, log=lambda *a: None)
+    out = solvesession.solve(text, 2, log=lambda *a: None)
     solved = run(apply(text, write_result(text, 2, out["record"])))
     assert solved[1].kind == "solver" and "absolute temperature" in solved[1].warning   # still shown once stored
     assert solved[-1].warning == ""
@@ -310,14 +310,21 @@ def test_the_catalogue_lists_every_offset_unit():
     temps = [n for n in ureg._units if ureg.Quantity(1, n).dimensionality == {"[temperature]": 1}]
     offset = {n for n in temps if ureg.Quantity(0, n).to_base_units().magnitude != 0}
     assert {str(ureg.parse_units(n)) for n in offset} == set(OFFSET_TEMPERATURES)
+    from laconic.catalogue import KEPT_TEMPERATURES, SHOWN_AS_CELSIUS
+    assert set(KEPT_TEMPERATURES + SHOWN_AS_CELSIUS) <= set(OFFSET_TEMPERATURES)
 
 
 # ---- physical constants ------------------------------------------------------------
 def test_the_constants_have_their_codata_values():
+    # CODATA 2022, the set Pint's constants file follows (its m_e, m_p, eps_0 and mu_0 differ from
+    # CODATA 2018's by more than 1e-10). hbar and sigma are exact: more digits than CODATA prints.
     expected = {"R": 8.31446261815324, "N_A": 6.02214076e23, "k_B": 1.380649e-23, "c": 299792458,
-                "h_P": 6.62607015e-34, "e": 1.602176634e-19, "G_N": 6.6743e-11, "g_0": 9.80665}
+                "h_P": 6.62607015e-34, "hbar": 1.054571817646e-34, "e": 1.602176634e-19,
+                "sigma": 5.670374419184e-8, "G_N": 6.6743e-11, "g_0": 9.80665,
+                "eps_0": 8.8541878188e-12, "mu_0": 1.25663706127e-6,
+                "m_e": 9.1093837139e-31, "m_p": 1.67262192595e-27}
     spellings = [s for s, _, _ in catalogue.CONSTANTS]
-    assert len(set(spellings)) == len(spellings) and set(expected) <= set(spellings)
+    assert len(set(spellings)) == len(spellings) and set(expected) | {"Av"} == set(spellings)
     ws = evaluate("\n".join(f"x = 1'{s}" for s in spellings))
     assert all(r.kind == "assign" for r in ws.results), [r.error for r in ws.results]
     ureg = registry()

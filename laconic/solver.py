@@ -16,19 +16,19 @@ The numerics are scipy's (`scipy.optimize.root`, `brentq`, `minimize`), run on p
 unit each unknown was started in. Evaluating a sheet never runs a solver, since that can be slow:
 it hashes everything the solver reads and compares that with the `#@ result` line stored inside
 the block. Same hash, the stored answer is current; different, it is out of date. Running is done
-on request (see solverjobs.py) and the answer is written back into the block as a result line, so
+on request (see solvesession.py) and the answer is written back into the block as a result line, so
 the worksheet file alone carries it."""
 import hashlib
 import json
 import math
 import time
 import warnings
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from .blockedit import BlockEditor
-from .nodes import BinOp, Call, Name, UnitLit
+from .nodes import BinOp
 from .parser import ParseError, parse_expr
 from .sheettext import is_name
 
@@ -77,10 +77,6 @@ LOG_TRACE_LINES = 120                      # evaluations written to the log befo
 
 class SolverError(Exception):
     pass
-
-
-class StopSolve(Exception):
-    """Raised inside a sheet run once the requested block has been solved, to skip the rest."""
 
 
 # ---- parsing a block --------------------------------------------------------------------------
@@ -226,7 +222,7 @@ def parse_block(block):
             except ValueError:
                 b.stored, b.stored_note = None, f"the result on line {n} could not be read"
             continue
-        if raw.strip().startswith("#"):
+        if line.comment:
             continue
         try:
             if not o:
@@ -298,51 +294,6 @@ def _split_top(s):
 
 
 # ---- what a block reads: dependencies, the hash, out-of-date tracking ------------------------
-def refs(node):
-    """(variable names, called function names, unit names) used anywhere under `node`."""
-    names, calls, units = set(), set(), set()
-    todo = [node]
-    while todo:
-        n = todo.pop()
-        if isinstance(n, Name):
-            names.add(n.name)
-        elif isinstance(n, UnitLit):
-            units.add(n.unit)
-        elif isinstance(n, Call):
-            calls.add(n.func)
-            todo.extend(n.args)
-        elif is_dataclass(n) and not isinstance(n, type):
-            todo.extend(getattr(n, f.name) for f in fields(n))
-        elif isinstance(n, (tuple, list)):
-            todo.extend(n)
-    return names, calls, units
-
-
-def _reach(ev, nodes, local=()):
-    """Walk `nodes` and the bodies of the user functions they call. Yields (kind, key, extra)."""
-    seen, todo = set(), [(n, frozenset(local)) for n in nodes]
-    while todo:
-        node, loc = todo.pop()
-        names, calls, units = refs(node)
-        for u in units:
-            yield "unit", u, None
-        for nm in names:
-            if nm not in loc:
-                yield "var", ev.vkey(nm), None
-        for fn in calls:
-            fk = ev.fkey(fn)
-            if fk in ev.funcs and fk not in seen:
-                seen.add(fk)
-                params, body = ev.funcs[fk]
-                yield "func", fk, (params, body)
-                todo.append((body, frozenset(params)))
-
-
-def tainted(ev, nodes, local=()):
-    """True if evaluating `nodes` reads a value that came from an out-of-date solver."""
-    return bool(ev.stale) and any(k == "var" and key in ev.stale for k, key, _ in _reach(ev, nodes, local))
-
-
 def _qdigest(q):
     """A quantity as hashable text. Values are cut to 12 significant digits, so a last-bit
     difference in a library (another machine, another BLAS) does not make a result look stale.
@@ -363,7 +314,7 @@ def digest(block, ev, unknowns):
     exactly when its hash equals this."""
     own = {u.key for u in unknowns}
     deps, funcs, units = {}, {}, {}
-    for kind, key, extra in _reach(ev, block.nodes()):
+    for kind, key, extra in ev.symbols.reach(block.nodes()):
         if kind == "var" and key in ev.vars and key not in own:
             deps[key] = _qdigest(ev.vars[key])
         elif kind == "func":
@@ -518,7 +469,7 @@ class Problem:
     def set_x(self, x):
         for u in self.unknowns:
             seg = np.asarray(x[u.off:u.off + u.size], dtype=float)
-            self.ev.vars[u.key] = self.ev.Q(float(seg[0]) if u.shape == () else seg.reshape(u.shape), u.units)
+            self.ev.symbols.trial(u.key, self.ev.Q(float(seg[0]) if u.shape == () else seg.reshape(u.shape), u.units))
 
     def where(self, x):
         parts = []
@@ -803,11 +754,3 @@ def set_option(text, header, key, value):
         ed.set(key, value)
     return ed.edits()
 
-
-# ---- one run request, threaded through a sheet evaluation -------------------------------------------
-class SolveRequest:
-    """Asks `evaluate` to solve the block on `line` instead of reading its stored result.
-    `mode` is "run" or "verify" (run, then compare with what is stored)."""
-    def __init__(self, line, log, mode="run"):
-        self.line, self.log, self.mode = line, log, mode
-        self.outcome = None

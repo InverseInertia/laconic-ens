@@ -66,7 +66,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 ## Name scope (`symbols.py`)
 
 **Symbol table**
-: Which variables and functions each line of a sheet can see. Built once in `sheet.evaluate` as the sheet runs, and the one place the scope rules are applied: the `~` global marker, `!clear` / `!clearf`, local parameters, solver unknowns, and a failed line defining nothing. The evaluator only asks it for a name's key. Each eval row carries its line's part of it (`symbols`); `static/symbols.js` reads it there for the editor.
+: Which variables and functions each line of a sheet can see. Built once in `sheet.evaluate` as the sheet runs, and the one place the scope rules are applied: the `~` global marker, `!clear` / `!clearf`, local parameters, solver unknowns, and a failed line defining nothing. It also holds each key's current value or function body and whether it is stale, so defining a name, clearing it and binding a solver unknown are one call each. The evaluator only asks it for a name's key and value. Each eval row carries its line's part of it (`symbols`); `static/symbols.js` reads it there for the editor.
 
 **Symbol**
 : One successful definition of a name: its kind (variable or function), whether it is global, the line that defines it, the last line it is **visible** on, a variable's **value** as the sheet prints it and a function's parameters.
@@ -79,6 +79,15 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Use**
 : A name on a line that means a symbol: the one its line defines, else the visible one. A function's parameters are local and mean none. The editor marks the uses of globals.
+
+**Stale value**
+: A value read from a solver result that is out of date. The symbol table answers whether an expression reads one (`tainted`), and a line that does is shown stale.
+
+**Solve session** (`solvesession.py`)
+: Finds the solver blocks that need solving, runs or verifies one through a **runner** (in this process, or the worker's `Jobs.run`), and stores the result in every block whose inputs hash the same. The page and `lens --solve` both go through it.
+
+**Export element** (`exports.py`)
+: What a line result becomes in any export: a heading, paragraph, error, figure or math rows. The `.tex`, Markdown and PDF writers only render elements.
 
 ## Editing the text (`blockedit.py`)
 
@@ -104,6 +113,8 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Command registry** (`laconic/commands.py`, `COMMANDS`): the one place a command is declared, with its name, argument rule, summary, help row and effect. The dispatcher, the "Unknown command" message, the editor's command suggestions and the page's help rows are generated from it.
 
 **Argument rule**: what may follow a command's name: nothing (`!clear`), a whole number in a range (`!sigfigs n`), the rest of the line (`!plotspec`), or a statement that starts a block.
+
+**Function registry** (`laconic/functions.py`, `FUNCTIONS`): the one place a built-in function is declared, by `@builtin` on its `Evaluator.fn_*` method: its signature, LaTeX form and other names. Evaluation, suggestions, Rename and the LaTeX printer read it.
 
 **Statement**: a command that begins a plot or solver block (`!plot`, `!root`, `!minimize`, `!maximize`). It is listed in the registry for suggestions and help, but its lines are run by `plotspec.py` and `solver.py`.
 
@@ -137,7 +148,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 - **File handle**: the file a sheet was opened from or last saved to, as given by the browser's File System Access API. Only a `.lens` file gets one; a `.cs` or `.txt` file is read but never overwritten. Renaming the sheet drops it. See `laconic/static/savefile.js`. A sheet the program was started with (`lens --window FILE`, a double-clicked file) gets a stand-in handle that the server writes through (`/api/opened/save`).
 - **Save / Save As**: Save writes to the file handle when there is one and the browser grants permission, and otherwise asks for a file. Save As always asks. Without the File System Access API, both download a copy.
-- **Theme**: fonts, the color set and the editor paper style, kept in browser storage. See `laconic/static/theme.js`.
+- **Theme**: fonts, the color set and the editor paper style, kept with the other display preferences in the settings file (`settings.PREFS`). See `laconic/static/theme.js`.
 - **Preset**: a named color set (LENS blueprint, Engineering paper, White paper, Dark, Canoe Dark, Chalcedony Dark). Colors that match none are "Custom".
 - **Readable theme**: one whose text and paper colors have a WCAG contrast ratio of at least 3:1. A stored theme that is not readable is replaced by the default colors on load, with a note.
 - **Version** (`laconic/_version.py`): the program's version, written there and nowhere else. `0+dev` in the repository, shown as `dev`; a release build stamps it with the tag's version, shown as `v0.2.0` beside the title and in Help.

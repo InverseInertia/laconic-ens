@@ -117,26 +117,10 @@ _STATUS = {"valid": "solved", "stale": "OUT OF DATE: run with --solve", "none": 
 
 
 def _solve_all(path, text, units):
-    """Solve the blocks that are not up to date, top to bottom (a later block may read an earlier
-    one's answer), and write each result into the file as it arrives."""
-    from .blockedit import apply
-    from .sheet import solve_block, solver_blocks
-    from .solver import write_result
-
-    done = set()
-    while True:
-        todo = [r for r in solver_blocks(text, units) if r.solver.status != "valid" and r.solver.hash not in done]
-        if not todo:
-            return text
-        r = todo[0]
-        done.add(r.solver.hash)
-        print(f"{r.n:>3}  solving {r.source.strip()}", file=sys.stderr)
-        out = solve_block(text, r.n, units, log=lambda m: print("       " + m, file=sys.stderr))
-        if not out["ok"]:
-            print(f"{r.n:>3}  FAILED  {out['message']}", file=sys.stderr)
-            continue
-        text = apply(text, write_result(text, r.n, out["record"]))
-        path.write_text(text, encoding="utf-8")
+    """Solve the blocks that are not up to date (see solvesession.solve_all), writing the file
+    each time an answer is stored."""
+    from .solvesession import solve_all
+    return solve_all(text, units, saved=lambda t: path.write_text(t, encoding="utf-8"))
 
 
 def main():
@@ -182,37 +166,35 @@ def main():
             threading.Thread(target=_launch, args=(url, a.app)).start()
         import uvicorn
         from . import server
+        from .opened import sheets
         if a.file:
-            server.OPENED = Path(a.file).resolve()
+            sheets.start(a.file)
         # Another launch of the packaged app hands its window to this server (instance.py).
-        server.OPEN_WINDOW = lambda path: threading.Thread(target=_launch, args=(url + path, a.app)).start()
+        sheets.serve(lambda path: threading.Thread(target=_launch, args=(url + path, a.app)).start())
         threading.Thread(target=_warm, daemon=True).start()
         uvicorn.Server(uvicorn.Config(server.app, log_level="warning")).run(sockets=[sock])
         return
     if not a.file:
         ap.error("give a worksheet file or use --serve")
 
-    from . import document, evaluate, markdown
+    from .exports import export, run
 
     text = Path(a.file).read_text(encoding="utf-8")
     units = settings.global_units()
     if a.solve:
         text = _solve_all(Path(a.file), text, units)
-    ws = evaluate(text, siunitx=bool(a.tex), global_units=units)
-    results = ws.results
+    # Each export runs the sheet in the flavour its format needs; `runs` makes each flavour once.
+    runs, title = {}, Path(a.file).stem
+    results = run(text, "tex" if a.tex else "md", units, runs).results
     if a.tex:
-        Path(a.tex).write_text(document(results, title=Path(a.file).stem, declarations=ws.declarations),
-                               encoding="utf-8")
+        Path(a.tex).write_text(export(text, "tex", title, units, runs), encoding="utf-8")
         print(f"wrote {a.tex}")
-    # The Markdown and PDF math is the live view's flavour, not siunitx, so it needs a run of its own.
-    live = evaluate(text, global_units=units).results if a.tex and (a.md or a.pdf) else results
     if a.md:
-        Path(a.md).write_text(markdown(live, title=Path(a.file).stem), encoding="utf-8")
+        Path(a.md).write_text(export(text, "md", title, units, runs), encoding="utf-8")
         print(f"wrote {a.md}")
     if a.pdf:
-        from . import pdfdoc
         try:
-            Path(a.pdf).write_bytes(pdfdoc.pdf(pdfdoc.page(live, title=Path(a.file).stem)))
+            Path(a.pdf).write_bytes(export(text, "pdf", title, units, runs))
         except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
             sys.exit(f"PDF export failed: {e}")
         print(f"wrote {a.pdf}")

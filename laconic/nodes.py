@@ -1,5 +1,6 @@
 """AST node types. One tree feeds both the evaluator and the LaTeX printer."""
-from dataclasses import dataclass
+from collections import namedtuple
+from dataclasses import dataclass, fields, is_dataclass
 from typing import Any
 
 
@@ -118,3 +119,32 @@ def is_literal(n):
             return has_implicit(n.operand)
         return isinstance(n, BinOp) and (has_implicit(n.left) or has_implicit(n.right))
     return count(n) == 1 and has_implicit(n)
+
+
+def walk(node):
+    """`node` and every node under it, in no particular order: the one walk of the tree. Tuples and
+    lists (a call's arguments, a matrix's rows) are looked into but not yielded."""
+    todo = [node]
+    while todo:
+        n = todo.pop()
+        if isinstance(n, (tuple, list)):
+            todo.extend(n)
+        elif is_dataclass(n) and not isinstance(n, type):
+            yield n
+            todo.extend(getattr(n, f.name) for f in fields(n))
+
+
+Refs = namedtuple("Refs", "names calls units")
+
+
+def refs(node):
+    """The variable names, called function names and unit names used anywhere under `node`, as sets."""
+    out = Refs(set(), set(), set())
+    for n in walk(node):
+        if isinstance(n, Name):
+            out.names.add(n.name)
+        elif isinstance(n, UnitLit):
+            out.units.add(n.unit)
+        elif isinstance(n, Call):
+            out.calls.add(n.func)
+    return out

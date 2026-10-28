@@ -40,7 +40,8 @@ _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
 
 # Option values that are expressions. Everything else under a block (titles, colours, methods)
-# is text, so a rename leaves it alone.
+# is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
+# (static/editing.js isTextAt; tests/sheettext_vectors.json holds the two together).
 PLOT_LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")
 SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds")
 
@@ -127,6 +128,7 @@ class Line:
     spans: tuple = ()   # (start, end) of each part that holds expressions
     option: Option = None   # under a block: the parsed option line
     result: str = None      # under a solver: the JSON of a stored `#@ result` line
+    comment: bool = False   # a `#` line (comment, heading or meta), also when a block owns it
     definition: Definition = None
 
     @property
@@ -251,6 +253,7 @@ def scan(text):
     for n, (t, eol) in enumerate(_split(text), 1):
         s = t.strip()
         line = Line(n, t, eol, _kind(s))
+        line.comment = line.kind in ("heading", "meta", "comment")
         if cur and cur.kind == "solver" and t[:1] in (" ", "\t") and s:
             m = _RESULT_RE.match(t)
             line.result = m.group(1) if m else None

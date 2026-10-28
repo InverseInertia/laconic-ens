@@ -61,7 +61,7 @@ When a gesture ends, the new range is written under the plot as `xview:` and `yv
 
 An axis range has three layers: `xview` over `xlim` over automatic limits from the data. When a zoom narrows the view, the curve is sampled over the visible window again, so it stays smooth. The grid is hidden while you drag.
 
-The text of titles, labels and notes is edited in the editor with the math keys off on those lines.
+The text of titles, labels and notes is edited in the editor with the math keys off on those lines; a note's position, `at (x, y)`, is an expression and keeps them.
 
 ## Axis labels and the frame
 

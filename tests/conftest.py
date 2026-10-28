@@ -44,3 +44,11 @@ def page(server):
         pg.evaluate("localStorage.clear()")
         yield pg
         browser.close()
+
+
+@pytest.fixture()
+def sheets():
+    """The server's opened sheets (opened.py), forgotten again after the test."""
+    from laconic.opened import sheets
+    yield sheets
+    sheets.clear()

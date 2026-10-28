@@ -1,7 +1,10 @@
 """The API endpoints, called as plain functions (no HTTP client needed)."""
+import json
+
 import pytest
 
 from laconic import server, settings
+from laconic.opened import sheets
 from laconic.commands import COMMANDS, help_rows
 from laconic.server import GreekBody, Sheet, TagsBody, UnitRow, UnitsBody
 
@@ -9,7 +12,8 @@ from laconic.server import GreekBody, Sheet, TagsBody, UnitRow, UnitsBody
 @pytest.fixture(autouse=True)
 def config(tmp_path, monkeypatch):
     monkeypatch.setenv("LENS_CONFIG_DIR", str(tmp_path))
-    return tmp_path
+    yield tmp_path
+    sheets.clear()
 
 
 def put_units(*pairs):
@@ -136,21 +140,21 @@ def test_welcomed_flag_is_remembered(config):
     assert server.get_settings()["welcomed"] is True
 
 
-def test_opened_sheet_is_served_and_saved_back(tmp_path, monkeypatch):
+def test_opened_sheet_is_served_and_saved_back(tmp_path):
     assert server.get_opened() == {}
     sheet = tmp_path / "beam.lens"
     sheet.write_text("x = 2\n", encoding="utf-8")
-    monkeypatch.setattr(server, "OPENED", sheet)
+    sheets.start(sheet)
     got = server.get_opened()
     assert got["file"] == "beam.lens" and got["text"] == "x = 2\n" and got["writable"] is True
     assert server.save_opened(server.TextBody(text="x = 3\r\n")) == {"ok": True}
     assert sheet.read_bytes() == b"x = 3\r\n"
 
 
-def test_an_opened_txt_file_is_read_but_never_written(tmp_path, monkeypatch):
+def test_an_opened_txt_file_is_read_but_never_written(tmp_path):
     sheet = tmp_path / "old.txt"
     sheet.write_text("x = 2", encoding="utf-8")
-    monkeypatch.setattr(server, "OPENED", sheet)
+    sheets.start(sheet)
     assert server.get_opened()["writable"] is False
     with pytest.raises(server.HTTPException):
         server.save_opened(server.TextBody(text="y"))
@@ -161,16 +165,15 @@ def test_hello_names_the_program():
     assert server.hello()["app"] == "lens"
 
 
-def test_a_handed_over_sheet_opens_in_a_window_of_its_own(tmp_path, monkeypatch):
+def test_a_handed_over_sheet_opens_in_a_window_of_its_own(tmp_path):
     """Another launch hands its sheet to this server: the new window reads and saves that sheet,
     while a window without ?sheet= still has the one the program was started with."""
     start, other = tmp_path / "start.lens", tmp_path / "other.lens"
     start.write_text("a = 1\n", encoding="utf-8")
     other.write_text("b = 2\n", encoding="utf-8")
     opened = []
-    monkeypatch.setattr(server, "OPENED", start)
-    monkeypatch.setattr(server, "HANDED", {})
-    monkeypatch.setattr(server, "OPEN_WINDOW", opened.append)
+    sheets.start(start)
+    sheets.serve(opened.append)
     assert server.open_window(server.WindowBody(path=str(other))) == {"ok": True}
     token = opened[0].removeprefix("/?sheet=")
     assert token and server.get_opened(token)["text"] == "b = 2\n"
@@ -180,17 +183,16 @@ def test_a_handed_over_sheet_opens_in_a_window_of_its_own(tmp_path, monkeypatch)
     assert server.get_opened("not-a-token") == {}
 
 
-def test_a_handed_over_launch_without_a_sheet_opens_an_empty_window(monkeypatch, tmp_path):
+def test_a_handed_over_launch_without_a_sheet_opens_an_empty_window(tmp_path):
     opened = []
-    monkeypatch.setattr(server, "OPENED", tmp_path / "start.lens")
-    monkeypatch.setattr(server, "OPEN_WINDOW", opened.append)
+    sheets.start(tmp_path / "start.lens")
+    sheets.serve(opened.append)
     server.open_window(server.WindowBody())
     assert opened == ["/?sheet="]
     assert server.get_opened("") == {}
 
 
-def test_a_server_that_opens_no_windows_says_so(monkeypatch):
-    monkeypatch.setattr(server, "OPEN_WINDOW", None)
+def test_a_server_that_opens_no_windows_says_so():
     with pytest.raises(server.HTTPException):
         server.open_window(server.WindowBody())
 
@@ -202,6 +204,12 @@ def test_display_preferences_are_merged_and_written_into_the_page():
     assert server.get_settings()["prefs"] == {"theme": {"bg": "plain"}, "wrapText": True}
     assert '<script type="application/json" id="prefs">{"theme": {"bg": "plain"}, "wrapText": true}</script>' \
         in server.index().body.decode()
+
+
+def test_the_page_gets_the_preference_keys_from_the_settings_module():
+    """One list (settings.PREFS) says which settings the page keeps on the server."""
+    keys = json.dumps(list(settings.PREFS))
+    assert f'<script type="application/json" id="prefKeys">{keys}</script>' in server.index().body.decode()
 
 
 def test_a_stored_preference_cannot_close_the_script_it_is_written_into():

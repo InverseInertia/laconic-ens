@@ -107,6 +107,23 @@ def test_a_worker_that_dies_is_reported(sleepy):
     assert wait(sleepy, job, seconds=10).state == "failed" and "stopped unexpectedly" in job.error
 
 
+def test_the_worker_is_a_runner_for_a_solve_session(pool):
+    from laconic.solvesession import solve_all
+    twins = ROOT + "a = x\n" + ROOT + "b = x\n"
+    log = []
+    text = solve_all(twins, [], runner=pool.run, log=log.append)
+    assert [r.solver.status for r in evaluate(text).results if r.solver] == ["valid", "valid"]
+    assert any("converged" in m for m in log) and sum("solving" in m for m in log) == 1
+
+
+def test_a_stopped_run_is_a_failed_outcome(sleepy, monkeypatch):
+    monkeypatch.setattr(solverjobs, "STARTUP_SLACK", 100.0)
+    log = []
+    out = sleepy.run(SLOW, 2, [], log.append)
+    assert out["ok"] is False and out["record"] is None and "1 s limit" in out["message"]
+    assert log[0] == "started"
+
+
 def test_a_line_that_is_not_a_block_is_refused(pool):
     with pytest.raises(Exception, match="not a !root"):
         pool.start(ROOT, 1, "run", [])

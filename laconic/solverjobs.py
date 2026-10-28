@@ -7,15 +7,15 @@ time. The page starts a job, polls it for new log lines, and may interrupt it; a
 its block's `timeout:` is stopped the same way.
 
 The worker only computes: it returns the result record and the page decides whether to write it
-into the worksheet (the text may have changed in the meantime)."""
+into the worksheet (the text may have changed in the meantime). `Jobs.run` is the same worker as a
+solve session's runner (see solvesession.py): it waits for the job and returns its outcome."""
 import multiprocessing
 import os
 import threading
 import time
 import uuid
 
-from . import solver
-from .sheettext import scan
+from . import solvesession
 
 STARTUP_SLACK = 30.0     # seconds a fresh worker may take to start before the job's own clock begins
 MAX_LOG_LINES = 5000
@@ -37,7 +37,6 @@ def _worker(conn):
                 os._exit(0)
     threading.Thread(target=orphaned, daemon=True).start()
     from .evaluator import registry
-    from .sheet import solve_block
     registry()
     while True:
         try:
@@ -48,8 +47,8 @@ def _worker(conn):
             return
         conn.send(("begin", None))   # the block's timeout counts from here, not from worker start-up
         try:
-            out = solve_block(job["text"], job["line"], job["units"], log=lambda m: conn.send(("log", m)),
-                              mode=job["mode"])
+            out = solvesession.solve(job["text"], job["line"], job["units"], log=lambda m: conn.send(("log", m)),
+                                     mode=job["mode"])
             conn.send(("done", out))
         except BaseException as e:   # reported to the page; the worker stays up for the next job
             conn.send(("error", f"{type(e).__name__}: {e}"))
@@ -129,10 +128,7 @@ class Jobs:
     def start(self, text, line, mode, units):
         """Begin solving the block on `line`. Raises Busy if a job is already running and
         SolverError if the line is not a runnable block."""
-        block = scan(text).block(line)
-        if block is None or block.kind != "solver":
-            raise solver.SolverError(f"Line {line} is not a !root, !minimize or !maximize line")
-        timeout = solver.parse_block(block).timeout
+        timeout = solvesession.block(text, line).timeout
         with self._lock:
             if self.current is not None and self.current.state == "running":
                 raise Busy("Another solver is still running. Interrupt it or wait for it to finish")
@@ -145,6 +141,21 @@ class Jobs:
                 del self._jobs[old]
             threading.Thread(target=self._pump, args=(job, self._proc, self._conn), daemon=True).start()
         return job
+
+    def run(self, text, line, units, log, mode="run"):
+        """Solve the block on `line` in the worker and wait for it: a solve session's runner. The
+        log lines are passed on as they arrive; a job that is stopped or fails returns a failed outcome."""
+        job, seen = self.start(text, line, mode, units), 0
+        while True:
+            done = job.state != "running"
+            for m in job.log[seen:]:
+                log(m)
+            seen = len(job.log)
+            if done:
+                # A killed job (interrupt, timeout) has no outcome; its last log line says why.
+                why = job.error or (job.log[-1] if job.log else job.state)
+                return job.outcome or {"ok": False, "message": why, "record": None}
+            time.sleep(0.05)
 
     def get(self, job_id):
         return self._jobs.get(job_id)

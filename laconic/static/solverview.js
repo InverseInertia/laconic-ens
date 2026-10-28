@@ -34,15 +34,7 @@ const Solvers = (() => {
 
   function init(h) { host = h; }
 
-  async function api(path, body, method = "POST") {
-    const res = await fetch(path, {
-      method, headers: {"Content-Type": "application/json"}, body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    let data = null;
-    try { data = await res.json(); } catch {}
-    if (!res.ok) throw new Error((data && data.detail) || `Request failed (${res.status})`);
-    return data;
-  }
+  const api = (path, body, method) => Api.json(path, body, method);   // api.js: an HTTP error throws its detail
 
   // ---- what to say about a block ------------------------------------------------------------
   function status(r) {
@@ -127,8 +119,8 @@ const Solvers = (() => {
   /* The body of a solver row: header, the values, the control strip. */
   function build(r, {values = true} = {}) {
     const s = r.solver;
-    const box = el("div", "solver-box" + (r.stale ? " is-stale" : ""));
-    box.append(el("div", "s-head", r.source.trim()));
+    const box = el("div", "solver-box" + (Rows.stale(r) ? " is-stale" : ""));
+    box.append(el("div", "s-head", Rows.head(r)));
     if (values) {
       const vals = el("div", "s-values");
       for (const v of s.values) {
@@ -147,8 +139,8 @@ const Solvers = (() => {
     const s = r.solver;
     if (active) { host.say("Another solver is running"); return; }
     if (auto) tried.add(s.hash);
-    const {job} = await api("/api/solve/start", {text: host.text(), line: r.n, mode});
-    active = {job, hash: s.hash, line: r.n, mode, since: 0, t0: Date.now()};
+    const {job} = await api("/api/solve/start", {text: host.text(), line: Rows.line(r), mode});
+    active = {job, hash: s.hash, line: Rows.line(r), mode, since: 0, t0: Date.now()};
     const prev = runs.get(s.hash);
     runs.set(s.hash, {state: "running", log: [], message: "", verified: mode === "verify" ? null : prev && prev.verified});
     repaint();
@@ -222,7 +214,7 @@ const Solvers = (() => {
 
   async function setAuto(r, on) {
     const text = host.text();
-    const res = await api("/api/solveedit", {text, line: r.n, autorun: on});
+    const res = await api("/api/solveedit", {text, line: Rows.line(r), autorun: on});
     if (!res.ok) throw new Error(res.error);
     if (!host.edit(text, res.edits)) throw new Error("The sheet changed meanwhile; try again");
   }
@@ -251,7 +243,7 @@ const Solvers = (() => {
   // ---- the log dialog ------------------------------------------------------------------------------
   function logText(r) {
     const s = r.solver, run = runs.get(s.hash), st = status(r);
-    const out = [`Line ${r.n}: ${r.source.trim()}`, `Status: ${st.text}`, `Inputs hash: ${s.hash}   Method: ${s.method}   Time limit: ${s.timeout} s`, ""];
+    const out = [`Line ${Rows.line(r)}: ${Rows.head(r)}`, `Status: ${st.text}`, `Inputs hash: ${s.hash}   Method: ${s.method}   Time limit: ${s.timeout} s`, ""];
     if (run && run.log.length) out.push(...run.log);
     else if (s.record) {
       out.push("Nothing has run in this page yet. What the worksheet stores for this block:", "",
@@ -275,7 +267,7 @@ const Solvers = (() => {
 
   function openLog(r) {
     logHash = r.solver.hash;
-    $("#solverLogTitle").textContent = `Solver log · line ${r.n}`;
+    $("#solverLogTitle").textContent = `Solver log · line ${Rows.line(r)}`;
     $("#solverLogDlg").showModal();
     fillLog();
   }

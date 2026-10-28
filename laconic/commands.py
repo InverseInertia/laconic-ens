@@ -111,17 +111,12 @@ def _cleared(gone, kept):
 
 def _clear(mode, ev, _):
     gone, kept = ev.symbols.clear(VARIABLE)
-    for n in gone:
-        del ev.vars[n]
     mode.cleared.update(gone)
-    ev.stale -= set(gone)
     return _cleared(gone, kept)
 
 
 def _clearf(mode, ev, _):
     gone, kept = ev.symbols.clear(FUNCTION)
-    for n in gone:
-        del ev.funcs[n]
     mode.cleared_funcs.update(gone)
     return _cleared(gone, kept)
 

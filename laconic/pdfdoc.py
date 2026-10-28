@@ -1,6 +1,6 @@
 """Line results -> a plain, page-broken HTML document, and that document -> a PDF.
 
-The document is one column of blocks, one block per line result: headings, comment paragraphs,
+The document is one column of blocks, one block per export element (exports.py): headings, comment paragraphs,
 calculations (KaTeX, one row per stage aligned at the equals signs), plots (inline SVG) and
 errors. Laconic does no typesetting of its own: each block is marked as a unit that may not be
 split, headings stay with what follows them, and a calculation wider than the page is shrunk or
@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from . import browser
+from .exports import OUT_OF_DATE, Error, Figure, Heading, Paragraph, elements
 from .markdown import plain_math
 
 STATIC = Path(__file__).parent / "static"
@@ -69,43 +70,33 @@ def _esc(s):
     return html.escape(s, quote=True)
 
 
-def _math(n, rows, note="", flat=None):
-    """A calculation: `rows` aligned at their `&`, or, in a column too narrow for them, `flat`
-    wrapped one per row (by default the same rows without the alignment mark)."""
-    rows = [plain_math(r) for r in rows]
+def _math(e):
+    """A calculation: its rows aligned at their `&`, or, in a column too narrow for them, its
+    flat rows wrapped one per row."""
+    rows = [plain_math(r) for r in e.rows]
     tex = rows[0].replace("&", "", 1) if len(rows) == 1 else "\\begin{aligned}" + " \\\\ ".join(rows) + "\\end{aligned}"
-    flat = json.dumps([plain_math(r) for r in flat] if flat is not None else [r.replace("&", "", 1) for r in rows])
-    out = (f'<div class="block"><div class="calc"><span class="ln">{n}</span>'
+    flat = json.dumps([plain_math(r) for r in e.flat])
+    out = (f'<div class="block"><div class="calc"><span class="ln">{e.n}</span>'
            f'<div class="math" data-tex="{_esc(tex)}" data-rows="{_esc(flat)}"></div></div>')
-    return out + (f'<div class="note">{_esc(note)}</div>' if note else "") + "</div>"
+    return out + (f'<div class="note">{_esc(e.note)}</div>' if e.note else "") + "</div>"
 
 
 def _callout(kind, title, body=""):
     return f'<div class="block callout {kind}"><b>{_esc(title)}</b>{_esc(body)}</div>'
 
 
-def block(r):
-    """The HTML for one line result, or None for a line the document leaves out."""
-    if r.kind == "heading":
-        return f"<h2>{_esc(r.text)}</h2>"
-    if r.kind == "comment":
-        return f"<p>{_esc(r.text)}</p>"
-    if r.kind == "error":
-        return _callout("error", f"Line {r.n}", r.error)
-    if r.plot:
-        svg = re.sub(r"^<\?xml[^>]*\?>\s*", "", r.plot.image(uid=r.n))   # inline in HTML: no XML declaration
+def block(e):
+    """The HTML for one export element (see exports.py)."""
+    if isinstance(e, Heading):
+        return f"<h2>{_esc(e.text)}</h2>"
+    if isinstance(e, Paragraph):   # a comment over several lines stays one paragraph
+        return "<p>" + "<br>".join(_esc(line) for line in e.lines) + "</p>"
+    if isinstance(e, Error):
+        return _callout("error", f"Line {e.n}", e.message)
+    if isinstance(e, Figure):
+        svg = re.sub(r"^<\?xml[^>]*\?>\s*", "", e.plot.image(uid=e.n))   # inline in HTML: no XML declaration
         return f'<div class="block plot">{svg}</div>'   # the picture carries its title
-    if r.solver:
-        math = _math(r.n, [f"{v['lhs']} &= {v['rhs']}" for v in r.solver.values])
-        if not r.solver.current:
-            math = _callout("warning", "Out of date",
-                            "This solver result is out of date or was never run; the values may be starting values.") + math
-        return math
-    if r.kind in ("assign", "expr", "funcdef", "unitdef"):
-        rows = [f"{r.lhs} &= {r.stages[0]}" if r.lhs else f"&{r.stages[0]}"]
-        note = r.warning or ("Reads an out-of-date solver result." if r.stale else "")
-        return _math(r.n, rows + [f"&= {s}" for s in r.stages[1:]], note, flat=r.latex_rows)
-    return None
+    return (_callout("warning", *OUT_OF_DATE) if e.out_of_date else "") + _math(e)
 
 
 def page(results, title=None, assets=None):
@@ -113,16 +104,7 @@ def page(results, title=None, assets=None):
     served at; by default the folder itself, as a file:// URL, for printing on this machine.
     The page prints the served one itself, from a hidden frame, once its fonts are in."""
     assets = (assets or STATIC.as_uri()).rstrip("/")
-    body, prev = ([f"<h1>{_esc(title)}</h1>"] if title else []), None
-    for r in results:
-        x = block(r)
-        if x is None:
-            continue
-        if r.kind == "comment" and prev == "comment":
-            body[-1] = body[-1][:-4] + "<br>" + x[3:]   # a comment over several lines stays one paragraph
-        else:
-            body.append(x)
-        prev = r.kind
+    body = ([f"<h1>{_esc(title)}</h1>"] if title else []) + [block(e) for e in elements(results)]
     footer = (title or "LENS worksheet").replace("\\", "\\\\").replace('"', '\\"')
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>{_esc(title or "LENS worksheet")}</title>

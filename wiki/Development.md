@@ -17,7 +17,9 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_editing.js` | math keys and selections |
 | `node tests/test_autocomplete.js` | suggestions |
 | `node tests/test_paste.js` | table paste |
-| `node tests/test_sheettext.js` | the editor's lexer against the shared vectors |
+| `node tests/test_sheettext.js` | the editor's lexer, where math keys are off, and the name F2 fills in, against the shared vectors |
+| `node tests/test_api.js` | the server client: the two ways the server refuses, an unreachable server, keepalive saves |
+| `node tests/test_prefs.js` | where each setting is kept, one save at a time, sending an older build's preferences up once |
 | `node tests/test_savefile.js` | which file Save and Save As write, and the download fallback |
 | `node tests/test_theme.js` | theme loading, contrast check, presets |
 | `node tests/test_shortcuts.js` | the shortcut table, and that the wiki lists its Ctrl/Alt keys |
@@ -25,16 +27,19 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_rows.js` | the row model: what the results pane shows for each kind of line |
 | `node tests/test_mathfit.js` | when a formula too wide for its room is shrunk or wrapped (the drawing is tested in Chromium) |
 | `node tests/test_unitbrowser.js` | the units dialog: search, tag filters, adding and removing your tags |
+| `node tests/test_symbols.js` | reading the symbol table out of the eval rows |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 
 | File | Covers |
 |---|---|
 | `test_laconic.py`, `test_units.py` | evaluation, LaTeX, custom units |
-| `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py` | one module each |
+| `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py`, `test_blockedit.py`, `test_commands.py`, `test_symbols.py`, `test_markdown.py`, `test_pdfdoc.py`, `test_fileassoc.py`, `test_instance.py`, `test_exports.py`, `test_functions.py` | one module each |
+| `test_complex.py` | complex numbers |
+| `test_release_notes.py`, `test_stamp_changelog.py` | the release scripts in `packaging/` that read and stamp `CHANGELOG.md` |
 | `test_sheettext.py`, `sheettext_vectors.json` | line kinds, blocks, spans and tokens; the vectors are shared with `test_sheettext.js` |
 | `test_lineresult.py` | the line result interface, the block lookups, and the contract on the `/api/eval` row shape (it also runs `rows.js` over real rows) |
 | `test_editing_node.py` | runs the Node suites from pytest |
-| `test_solver.py`, `test_solverjobs.py` | solver blocks and the worker process |
+| `test_solver.py`, `test_solverjobs.py` | solver blocks, the solve session, and the worker process with its runner |
 | `test_install_linux.py` | `packaging/install-linux.sh` run in a throwaway home folder with a stand-in program and a stand-in `curl` serving fake releases: the launcher it writes, what `--uninstall` removes, installing and updating to the latest release, `--release`, what it does offline or when a download fails, stopping a LENS still running from the install folder, and installer 1.0.0 updating through `packaging/v1-bridge.sh` |
 | `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
 
@@ -50,11 +55,11 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 
 ## Adding things
 
-- **A built-in function:** add an `fn_name` method to `Evaluator` (it is picked up by suggestions and Rename's reserved-name list automatically). Add a signature to `_SIGNATURES` in `vocab.py`, LaTeX in `Printer.call` if it should typeset specially, and a row to [Matrices](Matrices) or [Worksheet Syntax](Worksheet-Syntax).
-- **A command:** handle it in `_run_command` in `sheet.py` and list it in `COMMANDS` in `vocab.py`.
+- **A built-in function:** add an `fn_name` method to `Evaluator` with `@builtin("name(x)")` above it. That one line gives its signature in suggestions and makes it a reserved name for Rename. If it should typeset specially, add `tex=` (a format string: `{0}` is the first argument, `{0:atom}` puts it in parentheses unless it binds tightly; `binds=` and `args=` as in `functions.py`); another name for it goes in `aliases=`. Add a row to [Matrices](Matrices) or [Worksheet Syntax](Worksheet-Syntax).
+- **A command:** add one entry to `COMMANDS` in `commands.py`: its name, argument rule, summary, help row and effect. Suggestions, the help rows and the unknown-command message are generated from it.
 - **A plot option:** add it to the tables at the top of `plotopts.py`, resolve it in `plotspec.py`, and draw it in `plotsvg.py` and `plotpgf.py`.
 - **A field on the eval rows:** add it to `LineResult` (or to a payload, if only one kind has it) and to `to_json`, update the expected shape in `test_lineresult.py`, and read it in `rows.js` (or the payload's own reader: `plotview.js`, `solverview.js`).
-- **A physical constant:** add a line to `CONSTANTS` in `catalogue.py`: the spelling a sheet types, what it is, and `None` when Pint already knows that spelling (`'R`, `'c`). For a spelling Pint lacks, the third item is the Pint definition that adds it: `"@alias planck_constant = h_P"` for another name of a Pint constant, or `"Av = avogadro_number"` for a new unit with its own symbol. The editor's suggestions, the *constants* tag in the units dialog and the "show its value" rule pick it up from there. Add its row to the table in [Units](Units), and its value to `test_the_constants_have_their_codata_values` in `tests/test_units.py`.
+- **A physical constant:** add a line to `CONSTANTS` in `catalogue.py`: the spelling a sheet types, what it is, and `None` when Pint already knows that spelling (`'R`, `'c`). For a spelling Pint lacks, the third item is the Pint definition that adds it: `"@alias planck_constant = h_P"` for another name of a Pint constant, or `"Av = avogadro_number"` for a new unit with its own symbol. The editor's suggestions, the *constants* tag in the units dialog and the "show its value" rule pick it up from there. Add its row to the table in [Units](Units), and its CODATA 2022 value (Pint's) to `test_the_constants_have_their_codata_values` in `tests/test_units.py`, which fails for a constant without one.
 - **A standard unit tag:** add it to `STANDARD_TAGS` in `unittags.py`, as a list of unit spellings and Pint dimensions in brackets (`"[pressure]"`); the order there is the order of the dialog's tag buttons. Add a unit to an existing tag the same way. List the tag in [Units](Units).
 - **A unit that needs special handling** (its own dimension, a reduction rule, an export spelling, an error or hint): add it to the unit catalogue, `catalogue.py`. A currency is one entry in `CURRENCIES`.
 

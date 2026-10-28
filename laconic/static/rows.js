@@ -18,6 +18,14 @@
  *     copy         the LaTeX a Copy button copies, or null
  *   at(models, n)      the model whose row shows line n: the row of that line, else the block's
  *                      row that owns it, else null
+ *
+ * And the common fields, for code that works on rows rather than models (solverview.js, plots,
+ * the editor's marks):
+ *   line(row)          the line it is for (a block's header line)
+ *   head(row)          that line as typed, trimmed
+ *   stale(row)         it uses a solver result that is out of date
+ *   current(rows, lines)  for each line of the editor's text (lines[i] is line i + 1), its row
+ *                      while the line still reads as it did when the row was made, else null
  */
 (function (root) {
   'use strict';
@@ -58,7 +66,16 @@
     return models.find((m) => m.line === n) || models.find((m) => m.line <= n && n <= m.end) || null;
   }
 
-  const api = { model, at };
+  const line = (r) => r.n;
+  const head = (r) => r.source.trim();
+  const stale = (r) => !!r.stale;
+
+  function current(rows, lines) {
+    const byLine = new Map(rows.map((r) => [r.n, r]));
+    return lines.map((l, i) => { const r = byLine.get(i + 1); return r && r.source === l ? r : null; });
+  }
+
+  const api = { model, at, line, head, stale, current };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Rows = api;
 })(typeof window !== 'undefined' ? window : globalThis);

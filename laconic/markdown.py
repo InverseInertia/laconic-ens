@@ -5,6 +5,8 @@ The math is the live preview's flavour (`\\mathrm{kN}`, not siunitx), which Math
 as it is; commands such as `!clear` and the option lines of a block are left out."""
 import base64
 
+from .exports import OUT_OF_DATE, Error, Figure, Heading, Paragraph, elements
+
 _TAG = "\\htmlData{"
 
 
@@ -42,40 +44,24 @@ def _callout(kind, title, body=""):
     return f"> [!{kind}] {title}" + "".join(f"\n> {l}" for l in body.splitlines())
 
 
-def block(r):
-    """The Markdown for one line result, or None for a line the note leaves out."""
-    if r.kind == "heading":
-        return "## " + r.text
-    if r.kind == "comment":
-        return r.text
-    if r.kind == "error":
-        return _callout("error", f"Line {r.n}", r.error)
-    if r.plot:
-        title = r.plot.spec.get("title") or f"Plot, line {r.n}"
-        data = base64.b64encode(r.plot.image(uid=r.n).encode("utf-8")).decode("ascii")
+def block(e):
+    """The Markdown for one export element (see exports.py)."""
+    if isinstance(e, Heading):
+        return "## " + e.text
+    if isinstance(e, Paragraph):
+        return "\n".join(e.lines)       # a comment that runs over several lines stays one paragraph
+    if isinstance(e, Error):
+        return _callout("error", f"Line {e.n}", e.message)
+    if isinstance(e, Figure):
+        title = e.plot.spec.get("title") or f"Plot, line {e.n}"
+        data = base64.b64encode(e.plot.image(uid=e.n).encode("utf-8")).decode("ascii")
         return f"![{title}](data:image/svg+xml;base64,{data})"
-    if r.solver:
-        math = _math([f"{v['lhs']} &= {v['rhs']}" for v in r.solver.values])
-        if not r.solver.current:
-            math = _callout("warning", "Out of date",
-                            "This solver result is out of date or was never run; the values may be starting values.") + "\n\n" + math
-        return math
-    if r.kind in ("assign", "expr", "funcdef", "unitdef"):
-        rows = [f"{r.lhs} &= {r.stages[0]}" if r.lhs else f"&{r.stages[0]}"]
-        return _math(rows + [f"&= {s}" for s in r.stages[1:]])
-    return None
+    math = _math(e.rows)
+    if e.out_of_date:
+        math = _callout("warning", *OUT_OF_DATE) + "\n\n" + math
+    return math
 
 
 def markdown(results, title=None):
     """The whole sheet as one Markdown note. Run the sheet without siunitx for it."""
-    out, prev = ([f"# {title}"] if title else []), None
-    for r in results:
-        x = block(r)
-        if x is None:
-            continue
-        if r.kind == "comment" and prev == "comment":
-            out[-1] += "\n" + x        # a comment that runs over several lines stays one paragraph
-        else:
-            out.append(x)
-        prev = r.kind
-    return "\n\n".join(out) + "\n"
+    return "\n\n".join(([f"# {title}"] if title else []) + [block(e) for e in elements(results)]) + "\n"

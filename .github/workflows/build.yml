@@ -62,6 +62,7 @@ jobs:
           app="$HOME/.local/share/laconic-lens"
           python packaging/smoke.py "$app/lens" "$(python -c 'from laconic._version import label; print(label())')"
           ls "$app"/examples/*.lens > /dev/null
+          grep -q "MIT License" "$app/LICENSE.txt" && grep -q "^numpy " "$app/THIRD-PARTY-NOTICES.txt"
           grep -qx "Exec=\"$app/lens\" --window %f" "$HOME/.local/share/applications/laconic-lens.desktop"
           sh "$kit/install-linux.sh" --uninstall
           test ! -e "$app" && test ! -e "$HOME/.local/share/applications/laconic-lens.desktop"
@@ -85,6 +86,8 @@ jobs:
           if ((Get-ItemProperty 'HKCU:\Software\Classes\.lens').'(default)' -ne 'LaconicLens.Worksheet') { throw ".lens files are not set to open in LENS" }
           if ((Get-ItemProperty 'HKCU:\Software\Classes\LaconicLens.Worksheet\shell\open\command').'(default)' -ne "`"$app\lens.exe`" --window `"%1`"") { throw "wrong open command for .lens files" }
           if (-not (Test-Path "$app\examples\*.lens")) { throw "no example worksheets installed" }
+          if (-not (Select-String -Quiet "MIT License" "$app\LICENSE.txt")) { throw "LICENSE.txt not installed" }
+          if (-not (Select-String -Quiet "^numpy " "$app\THIRD-PARTY-NOTICES.txt")) { throw "THIRD-PARTY-NOTICES.txt not installed" }
           Wait-Process -Name lens -Timeout 30 -ErrorAction SilentlyContinue   # the solver worker, after the smoke test's server
           # The uninstaller restarts itself from a temporary folder, so wait for the files to go.
           Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait

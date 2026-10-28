@@ -7,7 +7,7 @@ from .markdown import markdown
 # launcher can hand a window to a running LENS, and the server can start the browser, without
 # waiting for them.
 _LAZY = {"LineResult": "lineresult", "Worksheet": "sheet", "evaluate": "sheet", "run": "sheet",
-         "document": "latex", "snippet": "latex"}
+         "document": "latex", "snippet": "latex", "export": "exports"}
 
 
 def __getattr__(name):
@@ -18,4 +18,4 @@ def __getattr__(name):
     return value
 
 
-__all__ = ["run", "evaluate", "document", "snippet", "markdown", "LineResult", "Worksheet"]
+__all__ = ["run", "evaluate", "export", "document", "snippet", "markdown", "LineResult", "Worksheet"]

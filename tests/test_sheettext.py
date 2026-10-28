@@ -62,6 +62,12 @@ def test_line_kinds_and_owners(text, expected):
         assert not b or b.lines[0].n == b.header and l in b.lines
 
 
+def test_a_comment_keeps_saying_so_when_a_block_owns_it():
+    sheet = scan("# top\n!root x\n  equation: x = 1\n  # aside\n  #@ result {}\n  ## head")
+    assert [l.comment for l in sheet.lines] == [True, False, False, True, True, True]
+    assert sheet.line(4).kind == "solveropt" and sheet.line(5).result == "{}"
+
+
 def _spans(line):
     return [line.text[a:b] for a, b in line.spans]
 
@@ -121,3 +127,25 @@ def test_tokens_stay_inside_the_expressions_and_uses_skip_parameters():
                                   ("1a", False), ("'m", False), ("a b", False), ("", False)])
 def test_is_name(s, ok):
     assert is_name(s) is ok
+
+
+@pytest.mark.parametrize("case", VECTORS["names_at"], ids=lambda c: f"{c['text']}@{c['caret']}")
+def test_the_name_at_a_caret_is_one_this_lexer_finds(case):
+    """F2 fills the rename dialog with the name at the caret (Editing.nameAt): the name or unit
+    token the caret is in or next to, none on a comment, heading or meta line."""
+    text, caret = case["text"], case["caret"]
+    line = scan(text).line(text.count("\n", 0, caret) + 1)
+    col = caret - (text.rfind("\n", 0, caret) + 1)
+    found = [] if line.kind in ("comment", "heading", "meta") else \
+        [t.text for t in tokenize(line.text) if t.kind in ("name", "unit") and t.start <= col <= t.end]
+    assert (found[0] if found else "") == case["name"]
+
+
+@pytest.mark.parametrize("case", VECTORS["text_at"], ids=lambda c: f"{c['text']}@{c['caret']}")
+def test_prose_is_outside_every_expression_span(case):
+    """Where the editor turns math keys off (Editing.isTextAt) is outside every expression span,
+    and where it keeps them on is inside one."""
+    text, caret = case["text"], case["caret"]
+    line = scan(text).line(text.count("\n", 0, caret) + 1)
+    col = caret - (text.rfind("\n", 0, caret) + 1)
+    assert (not any(a <= col <= b for a, b in line.spans)) == case["prose"]

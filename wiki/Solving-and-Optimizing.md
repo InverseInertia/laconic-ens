@@ -62,7 +62,7 @@ Any line computed from an out-of-date block (and any plot) gets a ⚠ beside it,
 ## Command line
 
 ```
-lens sheet.lens --solve      # run every block that is not up to date, top to bottom, and write the results into the file
+lens sheet.lens --solve      # run every block that is not up to date, top to bottom, and write the results into the file (every block with the same inputs gets the result)
 lens sheet.lens              # print each block with its status
 ```
 
