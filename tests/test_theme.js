@@ -51,6 +51,7 @@ eq(T.fromSaved({ sans: 2, mono: 3, bg: 'dots', colors: T.PRESETS.Dark }).theme,
 
 // Presets, and the live warning.
 eq(T.presetOf({ ...T.PRESETS.Dark }), 'Dark', 'preset found');
+eq(T.presetOf({ ...T.PRESETS.Codec }), 'Codec', 'Codec preset found');
 eq(T.presetOf({ ...T.PRESETS.Dark, paper: T.PRESETS.Dark.paper.toUpperCase() }), 'Dark', 'case of the hex digits ignored');
 eq(T.presetOf({ ...T.PRESETS.Dark, err: '#ff0000' }), 'custom', 'one color off is custom');
 eq(T.warning(T.PRESETS['White paper']), '', 'no warning when readable');

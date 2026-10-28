@@ -11,6 +11,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### New
 - **LENS is open source under the MIT License.** The Windows and Linux installs now include it as `LICENSE.txt`, next to `THIRD-PARTY-NOTICES.txt` with the licenses of the Python libraries bundled with LENS. (#116)
+- **Codec** theme preset: mint text on near-black paper, with amber globals. Pick it in Settings → Theme. (#112)
 
 ### Changes
 - Math keys and suggestions now work in a plot note's position, `at (x, y)`, and math keys are off on a solver's `method:` line, matching what the sheet treats as math. (#116)

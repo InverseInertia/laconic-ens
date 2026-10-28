@@ -41,6 +41,7 @@
     'Dark': { paper: '#1e2127', text: '#d9dde3', ink: '#d9dde3', grid: '#2c313a', rule: '#444b57', err: '#ff7b72', global: '#6fd3b8' },
     'Canoe Dark': { paper: '#120a02', text: '#f5cca3', ink: '#ff4d00', grid: '#2e1a05', rule: '#ff4d00', err: '#ff1100', global: '#7ee0c3' },
     'Chalcedony Dark': { paper: '#000000', text: '#1d5ec1', ink: '#1b5cc1', grid: '#323339', rule: '#1b5cc1', err: '#e33129', global: '#361086' },
+    'Codec': { paper: '#050d0d', text: '#8fe3c8', ink: '#0f2a28', grid: '#2c5a55', rule: '#4fd1b5', err: '#e8321e', global: '#ffb347' },
   };
   const BACKGROUNDS = ['grid', 'lines', 'dots', 'plain'];
   // Below this ratio text is hard to read on its paper.
