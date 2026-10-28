@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.4.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.1) (2026-10-28)
+
 ### Fixes
 - **Export → PDF shows that it is working and never asks to allow pop-ups.** The Export button reads *Exporting PDF…* until the PDF is ready; clicking again meanwhile does nothing. When LENS cannot print the PDF itself, the print dialog opens on the same page (choose **Save as PDF**) instead of in a pop-up window the browser could block, and later exports go straight to it. A Chromium build that stalled the PDF print until it timed out now prints normally. (#102)
 - **Linux: updating from v0.3.6 works again.** The `lens-install-linux.sh` you got with v0.3.6 or earlier looked for a single-file program that releases no longer have, so running it again failed to update, even after removing LENS. From the next release it installs that release with the new installer, and `lens-install-linux-v2.sh` still works as before. The installer also stops a LENS left running from the old install, which would otherwise open in place of the new one, so the menu kept showing the old version. (#101)
