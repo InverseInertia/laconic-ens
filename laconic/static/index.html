@@ -66,6 +66,10 @@
     background: var(--paper-deep); border: 1px solid var(--ink); }
   #exportList[hidden] { display: none; }
   #exportList button { width: auto; border: 0; padding: 6px 12px; text-align: left; }
+  #exportBtn[aria-busy=true] { cursor: progress; }
+  /* The printable document the PDF export falls back to (printFrame): laid out wider than a page's
+     column, out of sight. */
+  iframe.printFrame { position: fixed; left: -10000px; top: 0; width: 900px; height: 600px; border: 0; }
   .ico { width: 18px; height: 18px; display: block; margin: 0 auto; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; stroke-linecap: round; }
   .texLogo .katex { font-size: 1em; }
   button {
@@ -844,15 +848,55 @@ async function exportAs(path, ext, type) {
 }
 $("#export").onclick = () => exportAs("/api/export", ".tex", "application/x-tex");
 $("#exportMd").onclick = () => exportAs("/api/export/md", ".md", "text/markdown");
-// PDF: printed on the server by a headless Chromium; failing that, the browser's own print dialog.
+// PDF: printed on the server by a headless Chromium and downloaded; failing that, this browser's
+// own print dialog (Save as PDF), printed from a hidden frame on this page. No new window is opened,
+// so no pop-up permission is needed however long the server took (#102). The Export button shows
+// the export is running, and a second click meanwhile does nothing.
+let pdfBusy = false, serverPdf = true;   // serverPdf: false once the server could not print, for this session
+function printFrame(html) {
+  for (const old of document.querySelectorAll("iframe.printFrame")) old.remove();
+  return new Promise((resolve, reject) => {
+    const f = document.createElement("iframe");
+    f.className = "printFrame"; f.tabIndex = -1; f.setAttribute("aria-hidden", "true");
+    f.onload = () => {
+      const w = f.contentWindow;
+      w.addEventListener("afterprint", () => setTimeout(() => f.remove()), {once: true});
+      // The frame typesets its math as it loads and fits it again once its fonts are in (pdfdoc.py);
+      // that fit was queued first, so it has run when this does.
+      w.document.fonts.ready.then(() => { w.focus(); w.print(); resolve(); }, reject);
+    };
+    f.srcdoc = html;
+    document.body.append(f);
+  });
+}
+function exportBusy(on) {
+  pdfBusy = on;
+  const b = $("#exportBtn");
+  b.disabled = on; b.setAttribute("aria-busy", String(on));
+  b.innerHTML = on ? "Exporting PDF&hellip;" : "Export &#9662;";
+}
 $("#exportPdf").onclick = async () => {
   showExports(false);
-  const r = await post("/api/export/pdf");
-  if (r.ok) return downloadBlob(stem() + ".pdf", await r.blob());
-  const w = window.open("", "_blank");
-  if (!w) return alert("Allow pop-ups for this page to print a PDF");
-  w.document.write(await (await post("/api/export/print")).text());
-  w.document.close();
+  if (pdfBusy) return;
+  exportBusy(true);
+  const status = $("#status");
+  clearTimeout(statusTimer); status.textContent = "Making the PDF…";
+  try {
+    if (serverPdf) {
+      const r = await post("/api/export/pdf");
+      if (r.ok) { downloadBlob(stem() + ".pdf", await r.blob()); say("PDF saved"); return; }
+      serverPdf = false;
+    }
+    const r = await post("/api/export/print");
+    if (!r.ok) throw new Error(`the server answered ${r.status}`);
+    status.textContent = "Opening the print dialog: choose Save as PDF";
+    await printFrame(await r.text());
+    say("");
+  } catch (e) {
+    say(`PDF export failed: ${e.message}`);
+  } finally {
+    exportBusy(false);
+  }
 };
 async function openFile() {
   if (!window.showOpenFilePicker) return $("#file").click();
