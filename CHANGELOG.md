@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **LENS is open source under the MIT License.** The Windows and Linux installs now include it as `LICENSE.txt`, next to `THIRD-PARTY-NOTICES.txt` with the license of every library bundled with LENS.
+
 ## [v0.4.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.1) (2026-10-28)
 
 ### Fixes

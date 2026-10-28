@@ -1,5 +1,7 @@
 # PyInstaller spec: build with `pyinstaller packaging/lens.spec` from anywhere.
 import os
+import shutil
+import subprocess
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
@@ -28,3 +30,8 @@ exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="lens",
           console=sys.platform != "win32",  # no console window on Windows
           upx=False, icon=icon)
 coll = COLLECT(exe, a.binaries, a.datas, name="lens", upx=False)
+# Beside the program: LENS's own license, and the licenses of everything bundled with it
+# (packaging/notices.py), which the installers install with it.
+shutil.copy(os.path.join(ROOT, "LICENSE"), os.path.join(DISTPATH, "lens", "LICENSE.txt"))
+subprocess.run([sys.executable, os.path.join(SPECPATH, "notices.py"),
+                os.path.join(DISTPATH, "lens", "THIRD-PARTY-NOTICES.txt")], check=True)
