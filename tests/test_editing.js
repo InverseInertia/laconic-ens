@@ -40,6 +40,7 @@ function sim(src, keys, ctx) {
 const ctrl = (key) => ({ key, ctrl: true });
 let n = 0;
 function eq(actual, expected, label) { assert.strictEqual(actual, expected, label); n++; }
+function deq(actual, expected, label) { assert.deepStrictEqual(actual, expected, label); n++; }
 function selEdit(t, s, e, fn) { const r = fn(t, s, e); return t.slice(0, r.from) + r.insert + t.slice(r.to); }
 
 // --- slash: fraction -----------------------------------------------------------
@@ -352,6 +353,35 @@ eq(merged('ab|c', []), null, 'no edits, no change');
 eq(merged('ab|c', [{ from: 1, to: 2, insert: 'b' }]), null, 'an edit that changes nothing');
 const m = E.merge('a = 1\nb = a\n', [{ from: 0, to: 1, insert: 'c' }, { from: 10, to: 11, insert: 'c' }], 0);
 eq(`${m.from} ${m.to} ${JSON.stringify(m.insert)}`, '0 11 "c = 1\\nb = c"', 'one edit over the span the edits cover');
+
+// applyEdits: the server's edits made in the editor, through an adapter that logs how.
+function editorOn(text, caret, elsewhere = false) {
+  const log = [];
+  return {
+    log,
+    text: () => text, caret: () => caret, elsewhere: () => elsewhere,
+    place: (r) => log.push(['place', r.from, r.to, r.insert]),
+    apply: (r) => log.push(['apply', r.from, r.to, r.insert]),
+  };
+}
+{
+  const ed = editorOn('x = 1', 0);
+  deq([E.applyEdits(ed, 'x = 2', [{ from: 4, to: 5, insert: '3' }]), ed.log], [false, []], 'edits for a text that has changed are not made');
+  deq([E.applyEdits(ed, 'x = 1', [{ from: 4, to: 5, insert: '3' }]), ed.log], [true, [['apply', 4, 5, '3']]], 'edits for this text join the undo stack');
+  ed.log.length = 0;
+  deq([E.applyEdits(ed, 'x = 1', [{ from: 4, to: 5, insert: '1' }]), ed.log], [true, []], 'nothing to change is still a success');
+  const busy = editorOn('L = 1\nA = L', 0, true);
+  E.applyEdits(busy, 'L = 1\nA = L', [{ from: 0, to: 1, insert: 'w' }, { from: 10, to: 11, insert: 'w' }]);
+  deq(busy.log, [['place', 0, 11, 'w = 1\nA = w']], 'typing elsewhere: placed without taking the focus, as one edit');
+  busy.log.length = 0;
+  E.applyEdits(busy, 'L = 1\nA = L', [{ from: 0, to: 1, insert: 'w' }], true);
+  deq(busy.log, [['apply', 0, 1, 'w']], 'an edit the user asked for takes the focus wherever it is');
+}
+
+// nameAt with text highlighted (the caret cases are in sheettext_vectors.json, checked against the server's lexer).
+eq(E.nameAt('F = w * L', 8, 9), 'L', 'a highlighted name');
+eq(E.nameAt("F = 12'kN", 6, 9), "'kN", 'a highlighted unit');
+eq(E.nameAt('F = w * L', 4, 9), 'w', 'a highlight that is not one name: the name at its start');
 
 // Tab / Shift+Tab: the selection is marked [ ... ], a bare caret |.
 function indented(src, out) {

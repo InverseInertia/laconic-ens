@@ -1,5 +1,5 @@
 {
-  "about": "Shared test vectors for the worksheet lexer and line shapes. tests/test_sheettext.py checks laconic/sheettext.py against them and tests/test_sheettext.js checks the editor's copies in static/ (editing.js tokens and isTok, autocomplete.js definition and solverBlock), so the two sides cannot drift apart. A token is [kind, column, text].",
+  "about": "Shared test vectors for the worksheet lexer and line shapes. tests/test_sheettext.py checks laconic/sheettext.py against them and tests/test_sheettext.js checks the editor's copies in static/ (editing.js tokens, isTok and nameAt, autocomplete.js definition and solverBlock), so the two sides cannot drift apart. A token is [kind, column, text]. names_at: the name or unit at a caret, which F2 fills in for a rename.",
   "tokens": [
     {"line": "x = 1", "tokens": [["name", 0, "x"], ["num", 4, "1"]]},
     {"line": "F = 12'kN * 2.5e-3'm", "tokens": [["name", 0, "F"], ["num", 4, "12"], ["unit", 6, "'kN"], ["num", 12, "2.5e-3"], ["unit", 18, "'m"]]},
@@ -39,5 +39,16 @@
     {"text": "!maximize q\n  objective: q\n\n  equation: q", "line": 4, "block": null},
     {"text": "!root x\n  equation: x = 1\ny = 2", "line": 3, "block": null},
     {"text": "!plot f(x), x = 0 .. 1\n  xlim: 0 .. 1", "line": 2, "block": null}
+  ],
+  "names_at": [
+    {"text": "σ_max = 3", "caret": 2, "name": "σ_max"},
+    {"text": "p = 5'%", "caret": 7, "name": "'%"},
+    {"text": "F = 12'kN", "caret": 6, "name": "'kN"},
+    {"text": "F = 12'kN", "caret": 5, "name": ""},
+    {"text": "t = \"L\"", "caret": 6, "name": ""},
+    {"text": "L = 4.5'm\nA = L * 2", "caret": 15, "name": "L"},
+    {"text": "x = 1\n# x is", "caret": 9, "name": ""},
+    {"text": "## x\nx = 1", "caret": 3, "name": ""},
+    {"text": "~g = 9.81'm/'s^2", "caret": 1, "name": "~g"}
   ]
 }

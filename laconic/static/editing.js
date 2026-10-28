@@ -8,7 +8,12 @@
  * {message} reports something without editing.
  *
  * `merge` turns the edits the server sends (a plot view, a stored solver result, a rename)
- * into one such edit.
+ * into one such edit, and `applyEdits` makes them in the editor through an adapter:
+ *   editor.text(), editor.caret()   the editor's text and caret
+ *   editor.elsewhere()              the user is typing in another field (a dialog, the name box)
+ *   editor.place(r)                 make edit r without taking the focus or joining the undo stack
+ *   editor.apply(r)                 make edit r in the editor's undo stack
+ * `nameAt` is the name or unit the rename dialog starts with (F2).
  *
  * The page applies edits; the same functions run under Node for tests.
  */
@@ -80,6 +85,33 @@
     }
     if (insert === t.slice(from, to)) return null;
     return edit(from, to, insert, moved);
+  }
+
+  // The server's edits against `base`, made in the editor as one edit, so one Ctrl+Z takes them
+  // back. If the text changed while the server was working, the edits no longer fit: nothing is
+  // made and this says false. An edit made while the user types somewhere else does not take the
+  // focus, unless `asked` (an edit the user asked for in a dialog, such as a rename).
+  function applyEdits(editor, base, edits, asked = false) {
+    if (editor.text() !== base) return false;
+    const r = merge(base, edits, editor.caret());
+    if (!r) return true;
+    if (!asked && editor.elsewhere()) editor.place(r);
+    else editor.apply(r);
+    return true;
+  }
+
+  // The name or unit at the selection, as the server's lexer reads it: the highlighted text when
+  // it is one whole name or unit, else the one the caret is in or next to. "" on a comment line,
+  // or where there is none.
+  function nameAt(t, s, e) {
+    const named = (tok) => tok.kind === 'name' || tok.kind === 'unit';
+    const sel = t.slice(s, e);
+    const whole = tokens(sel);
+    if (sel && whole.length === 1 && whole[0].text === sel && named(whole[0])) return sel;
+    const ls = lineStartOf(t, s), line = t.slice(ls, lineEndOf(t, s));
+    if (line.trimStart().startsWith('#')) return '';
+    const at = tokens(line).filter(named).find((tok) => s - ls >= tok.start && s - ls <= tok.start + tok.text.length);
+    return at ? at.text : '';
   }
 
   // ---- bracket helpers (always limited to one line) -----------------------
@@ -713,7 +745,7 @@
   }
 
   const api = {
-    DEFAULT_GREEK, charAction, keyAction, indentLines, merge,
+    DEFAULT_GREEK, charAction, keyAction, indentLines, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
     isTextLine: isComment,

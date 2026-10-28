@@ -132,36 +132,15 @@ def test_f2_renames_the_name_at_the_caret(page):
 
 
 def test_an_edit_the_user_asked_for_joins_the_undo_stack_wherever_the_focus_is(page):
-    # Right after a dialog closes, some browsers leave the focus in its field (#75).
+    # Right after a dialog closes, some browsers leave the focus in its field (#75). When server
+    # edits are made, and which way, is tested in test_editing.js; the name F2 fills in, in
+    # test_sheettext.py and test_sheettext.js.
     reset(page, "L = 1\nA = L")
     page.focus("#name")
     assert page.evaluate("applyEdits('L = 1\\nA = L', [{from: 0, to: 1, insert: 'w'}, {from: 10, to: 11, insert: 'w'}], true)")
     assert value(page) == "w = 1\nA = w"
     page.keyboard.press("Control+z")
     assert value(page) == "L = 1\nA = L"
-
-
-def test_server_edits_for_a_text_that_has_changed_are_not_made(page):
-    reset(page, "x = 1")
-    assert page.evaluate("applyEdits('x = 2', [{from: 4, to: 5, insert: '3'}])") is False
-    assert value(page) == "x = 1"
-    assert page.evaluate("applyEdits('x = 1', [{from: 4, to: 5, insert: '3'}])") is True
-    assert value(page) == "x = 3"
-
-
-@pytest.mark.parametrize("text,caret,name", [
-    ("σ_max = 3", 2, "σ_max"),          # the page reads names with the server's lexer, Greek included
-    ("p = 5'%", 7, "'%"),
-    ("F = 12'kN", 6, "'kN"),             # between the number and its unit, the unit is the name
-    ('t = "L"', 6, ""),                  # text is not a name
-])
-def test_f2_reads_the_name_at_the_caret_like_the_server(page, text, caret, name):
-    reset(page, text)
-    select(page, caret, caret)
-    page.keyboard.press("F2")
-    page.wait_for_selector("#renameDlg[open]")
-    assert page.input_value("#renameOld") == name
-    page.keyboard.press("Escape")
 
 
 def test_alt_z_toggles_wrapping(page):
