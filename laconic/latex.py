@@ -476,9 +476,6 @@ def escape(text):
     return "".join(_TEX_SPECIAL.get(c, c) for c in text)
 
 
-WRAPS = ("inline", "display", "align")
-
-
 def snippet(r, wrap="inline"):
     """The LaTeX for one worksheet line. `wrap` chooses how a calculation is
     wrapped: "inline" is bare math for pasting into $...$ or \\(...\\),
