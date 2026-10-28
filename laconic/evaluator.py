@@ -382,7 +382,17 @@ class Evaluator:
         v, mark = self.eval(n.expr, scope), len(self.notes)
         target = self.eval(n.target, scope)
         del self.notes[mark:]   # a target such as 'degF/'s only names units
-        return v.to(target.units)
+        out = v.to(target.units)
+        freq, has_pi = self.mode.freq, "pi" in refs(n.expr).names   # 2*pi*f: the sheet does the 2π itself
+        if not has_pi:
+            self.note(catalogue.frequency_note(v.units, target.units, self.ureg, freq))
+        factor = catalogue.cycle_factor(v.units, target.units, self.ureg, freq)
+        if factor == 1:
+            return out
+        if has_pi:   # 2*pi*f -> 'rad/'s below !freq counts the 2π twice
+            self.note("-> puts in the 2π between Hz and rad/s itself (1 Hz = 2π rad/s), "
+                      "so a pi in the expression counts it twice")
+        return out * factor
 
     def ev_Call(self, n, scope):
         args = [a.value if isinstance(a, Str) else self.eval(a, scope) for a in n.args]

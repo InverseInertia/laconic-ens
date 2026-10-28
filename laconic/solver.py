@@ -327,6 +327,8 @@ def digest(block, ev, unknowns):
     parts = {"v": RECORD_VERSION, "kind": block.kind, "unknowns": block.unknowns, "angle": ev.mode.angle,
              "lines": block.canon, "start": [_qdigest(ev.vars[u.key]) for u in unknowns],
              "vars": deps, "funcs": funcs, "units": units}
+    if ev.mode.freq != "si":   # !freq changes what -> gives; left out by default so stored results stay valid
+        parts["freq"] = ev.mode.freq
     blob = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(blob).hexdigest()[:12]
 

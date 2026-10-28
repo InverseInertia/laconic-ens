@@ -190,7 +190,7 @@ class Builder:
         if first is None:
             ydisp = ev.Q(1).units
         else:
-            ydisp = reduce_si(first, ev.ureg).units if ev.mode.assume else first.units
+            ydisp = reduce_si(first, ev.ureg, ev.mode.freq).units if ev.mode.assume else first.units
         if "yunit" in block and first is not None:
             ydisp = self.unit_option(at["yunit"], block["yunit"], first.units) or ydisp
         elif "yunit" in block:

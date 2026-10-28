@@ -84,6 +84,7 @@ A line starting with `!` is a command. It affects every line below it.
 | `!short` / `!long` | show only each line's final result / full steps again |
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |
+| `!freq hz\|rad\|si` | Hz is cycles per second, so `->` between Hz and rad/s puts in the 2π, and 1/s results show in Hz / rad/s; `si` (default) keeps 1 Hz = 1 rad/s, see [Units](Units#frequencies-hz-and-rads) |
 | `!complex rect\|polar\|real` | show complex results as `3 + 4i` (default) or `5∠53.13°`, or make any complex result an error, see [Complex Numbers](Complex-Numbers) |
 | `!plot ...` | draw a graph, see [Plots](Plots) |
 | `!plotspec key: value` | default plot option for the plots below, see [Plots](Plots) |
