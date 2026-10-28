@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Changes
+- **Scroll bars follow your theme**: the scroll bars under long lines of math, in the editor and in dialogs take their colors from the theme (its Rules color on a slightly deeper paper) instead of the browser's defaults, for every preset and for custom and shared themes. (#99)
+
 ### Fixes
 - **No scroll bar flicker when a long equation is shrunk to fit.** Making the results pane narrower (the window, the split or the layout) no longer flashes a scroll bar under an equation for a moment while it is shrunk to the new width. (#104)
 
