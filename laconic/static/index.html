@@ -305,6 +305,12 @@
   .help a.wiki { float: right; font: 400 12px var(--sans); letter-spacing: 0; text-transform: none; }
   .help ul.examples { list-style: none; padding-left: 0; }
   .help ul.examples li { display: flex; align-items: center; gap: 10px; }
+  #changelog { margin-top: 24px; padding-top: 4px; border-top: 1px solid var(--rule); }
+  #changelog h3 { margin-top: 14px; }
+  #changelog h4 { margin: 16px 0 4px; font: 600 15px var(--sans); }
+  #changelog h4 a { text-decoration: none; }
+  #changelog h5 { margin: 8px 0 4px; font: 600 12px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); }
+  #changelog ul ul { margin: 4px 0 0; }
   @media (max-width: 560px) { .help .welcome { flex-direction: column; text-align: center; } }
   .u-empty { color: var(--text-soft); font-size: 13.5px; }
 
@@ -406,7 +412,7 @@
       <div id="helpLogo"><img src="/static/logo.svg" alt=""></div>
       <div>
         <h1 id="helpTitle">Welcome to LENS</h1>
-        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a></p>
+        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a> &middot; <a href="#changelog" id="changelogLink">Changelog</a></p>
         <p>The Laconic Engineering Notebook System: a units-aware worksheet. Type one expression per line on the left and the typeset result appears on the right as you type. Copy LaTeX line by line, or export a whole document.</p>
         <p>Worksheets are plain-text <code>.lens</code> files, so they diff and merge in git. Units are marked with an apostrophe (<code>'kN</code>), so a bare name is always a variable.</p>
         <p><a href="https://github.com/inverseinertia/laconic-ens/wiki" target="_blank" rel="noopener">Read the full documentation on the wiki &rarr;</a></p>
@@ -514,6 +520,11 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 
     <h3>Settings <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Settings" target="_blank" rel="noopener">Settings</a></h3>
     <p>Settings has five parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). Settings are stored on this machine, so every browser shows the same ones, and the command line uses the same global units. Press <kbd>F1</kbd> any time to bring this window back.</p>
+
+    <section id="changelog" aria-labelledby="changelogTitle">
+      <h3 id="changelogTitle">Changelog <a class="wiki" href="#helpTitle" id="changelogTop">Back to top</a></h3>
+      <!-- changelog: rendered from CHANGELOG.md by server.py -->
+    </section>
   </div>
 </dialog>
 
@@ -1520,6 +1531,9 @@ addEventListener("pagehide", () => {
   if (a) Api.beacon(`/api/solve/${a.job}/interrupt`, {});
 });
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
+// The changelog links scroll Help, without touching the address.
+$("#changelogLink").onclick = (ev) => { ev.preventDefault(); $("#changelog").scrollIntoView({block: "start", behavior: "smooth"}); };
+$("#changelogTop").onclick = (ev) => { ev.preventDefault(); $("#helpDlg .dlg-body").scrollTo({top: 0, behavior: "smooth"}); };
 // Worked examples come from the program itself, so they are there however it was installed.
 Api.json("/api/examples").then((list) => {
   for (const ex of list) {

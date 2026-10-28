@@ -11,6 +11,7 @@ ROOT = os.path.dirname(SPECPATH)  # SPECPATH is the directory holding this file
 ICON = os.path.join(SPECPATH, "icon.png")  # rendered from laconic/static/logo.svg; PyInstaller converts it (needs Pillow)
 datas = [(os.path.join(ROOT, "laconic", "static"), "laconic/static"),
          (os.path.join(ROOT, "laconic", "examples"), "laconic/examples"),
+         (os.path.join(ROOT, "CHANGELOG.md"), "laconic"),  # shown in Help (laconic/changelog.py)
          (os.path.join(SPECPATH, "file-icon.ico"), ".")] + collect_data_files("pint")  # see laconic/fileassoc.py
 
 a = Analysis(

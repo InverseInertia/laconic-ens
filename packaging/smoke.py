@@ -22,6 +22,9 @@ try:
     else:
         sys.exit("server did not start")
     assert "{{version}}" not in page, "version marker left in the page"
+    # Help ends with the changelog, which the build copies into the program (laconic/changelog.py).
+    assert "<h4>" in page.split('id="changelog"')[1] and "not included in this copy" not in page, \
+        "Help has no changelog"
     if len(sys.argv) > 2:
         assert f'id="version">{sys.argv[2]}<' in page, f"page does not show version {sys.argv[2]}"
     for path in ("/static/vendor/katex/katex.min.js", "/static/vendor/d3/d3.min.js", "/static/plotview.js",

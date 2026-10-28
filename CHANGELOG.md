@@ -11,6 +11,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### New
 - **Spellcheck in comments and headings**: with the caret on a comment, heading or plot title line, the browser's spellchecker underlines misspelt words; it stays off while you edit calculations, so names and units are not marked. (#121)
+- **Changelog in Help**: the bottom of the Help window lists what changed in each release, and the **Changelog** link beside the version at the top jumps to it. (#122)
 
 ## [v0.4.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.5) (2026-10-28)
 

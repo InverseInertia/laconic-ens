@@ -327,6 +327,21 @@ def test_pasted_table_becomes_matrix(page):
     assert value(page) == "# note "
 
 
+def test_help_ends_with_the_changelog_and_the_link_scrolls_to_it(page):
+    page.click("#helpBtn")
+    page.wait_for_selector("#helpDlg[open]")
+    url = page.url
+    assert page.locator("#changelog h4").count() > 0
+    assert page.evaluate("document.querySelector('#helpDlg .dlg-body').lastElementChild.id") == "changelog"
+    page.click("#changelogLink")
+    page.wait_for_function("""() => { const b = document.querySelector('#helpDlg .dlg-body').getBoundingClientRect(),
+        t = document.querySelector('#changelog').getBoundingClientRect(); return Math.abs(t.top - b.top) < 40; }""")
+    assert page.url == url   # the address is left alone
+    page.click("#changelogTop")
+    page.wait_for_function("document.querySelector('#helpDlg .dlg-body').scrollTop == 0")
+    page.click("#helpDlg .close")
+
+
 def test_help_dialog_opens_and_links_to_keys(page):
     page.click("#helpBtn")
     page.wait_for_selector("#helpDlg[open]")
