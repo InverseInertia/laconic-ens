@@ -161,7 +161,7 @@ def test_props_vocabulary_lists_keys_and_fluids():
 
 def test_examples_are_served_from_the_package(config):
     names = [e["name"] for e in server.list_examples()]
-    assert {"beam", "plots", "solve"} <= set(names)
+    assert {"beam", "plots", "solve", "symbolic"} <= set(names)
     assert "L = 4.5'm" in server.get_example("beam").body.decode()
     with pytest.raises(Exception):
         server.get_example("../settings")

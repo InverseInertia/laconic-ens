@@ -1,6 +1,6 @@
 # Solving and Optimizing
 
-`!root`, `!minimize` and `!maximize` find unknowns with scipy (`scipy.optimize.root`, `brentq` and `minimize`). A block names the unknowns and lists its equations or objective on indented lines below it. The starting values are ordinary variables defined above the block, and they carry the units. `!regression` fits a polynomial to points; see [Regression](#regression).
+`!root`, `!minimize` and `!maximize` find unknowns with scipy (`scipy.optimize.root`, `brentq` and `minimize`). A block names the unknowns and lists its equations or objective on indented lines below it. The starting values are ordinary variables defined above the block, and they carry the units. `!regression` fits a polynomial to points; see [Regression](#regression). To solve equations for symbols, giving formulas rather than numbers, use `!symsolve`; see [Symbolic Math](Symbolic-Math).
 
 ```
 x = 1'm                              starting values
@@ -101,4 +101,4 @@ lens sheet.lens              # print each block with its status
 
 A solver run is a worker process started with `multiprocessing` (spawn). A script that imports `laconic.server` itself needs the usual `if __name__ == "__main__":` guard. The standalone programs handle this themselves.
 
-`laconic/examples/solve.lens` is a worked sheet.
+`laconic/examples/solve.lens` is a worked sheet; `laconic/examples/symbolic.lens` solves symbolically (see [Symbolic Math](Symbolic-Math)).

@@ -35,12 +35,18 @@
   const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@&]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
   const MAX = 8;
-  const SOLVER_HEAD = /^\s*!(root|minimize|maximize|regression)\b(.*)$/;
+  const SOLVER_HEAD = /^\s*!(root|minimize|maximize|regression|symsolve)\b(.*)$/;
+  const SYMDEF_RE = /^~?\$/;
 
-  // What a trimmed line defines: {kind: 'unitdef' | 'funcdef' | 'assign', name, params}, or null.
+  // What a trimmed line defines: {kind: 'unitdef' | 'funcdef' | 'assign' | 'symdef', name, params}, or null.
+  // A symbol declaration (`$a, $b`) defines every name on it; `name` is the first, as written.
   // As laconic/sheettext.py's definition() for whole lines (tests/sheettext_vectors.json), but a
   // line being typed counts before its body or with half its parameters.
   function definition(s) {
+    if (SYMDEF_RE.test(s)) {
+      const names = Editing.tokens(s).filter((t) => t.kind === 'name').map((t) => t.text);
+      return { kind: 'symdef', name: names.length ? names[0] : s, params: [], names };
+    }
     let m = UNITDEF_RE.exec(s);
     if (m) return { kind: 'unitdef', name: m[1], params: [], body: m[2] };
     m = FUNC_RE.exec(s);
@@ -162,6 +168,7 @@
     if (!isPlot && !block && !before.includes('=') && after.includes('=')) return null;
     if (t[s - 1] === "'") return { kind: 'unit', start: s, end: e, query, tilde: false };
     const tilde = t[s - 1] === '~';
+    if (t[s - 1] === '$') return null;                         // a symbol being declared: a new name
     if (!force && query.length < 2) return null;
     return { kind: 'name', start: tilde ? s - 1 : s, end: e, query, tilde };
   }

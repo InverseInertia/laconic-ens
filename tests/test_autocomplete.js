@@ -36,6 +36,14 @@ function pick(src, opts, extras) {
 // the caret on line `n` of a sheet the fixture table describes
 const below = (n, typed) => '\n'.repeat(n - 1) + typed;
 
+// --- symbols -----------------------------------------------------------------------
+eq(at('$ab|').ctx, null, 'a symbol being declared is a new name: nothing to offer');
+eq(at('$ab, ~$cd|').ctx, null, 'nor for a global one');
+eq(A.definition('$a, ~$b'), { kind: 'symdef', name: '$a', params: [], names: ['$a', '~$b'] }, 'a declaration defines every name on it');
+eq(at('!symsolve Lm|').ctx.only, ['variable'], 'a symbolic solve names its unknowns: variables (symbols) above');
+eq(A.solverBlock('!symsolve x\n  equation: x = 1', 12), { kind: 'symsolve', unknowns: ['x'] }, 'and is a block');
+eq(at('!symsolve x\n  equation: L|', { force: true }).ctx.kind, 'name', 'its equations are math');
+
 // --- no popup inside the text of a plot option -------------------------------------
 eq(at('!plot f(x), x = 0 .. 1\n  title: Mom|').ctx, null, 'no suggestions in a plot title');
 eq(at('!plot f(x), x = 0 .. 1\n  note: "Mom" at (Lm|, 2)').ctx.query, 'Lm', 'but a note\'s position is an expression');

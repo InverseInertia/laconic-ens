@@ -31,6 +31,8 @@ def block(text, line):
         raise SolverError(f"Line {line} is not a !root, !minimize or !maximize line")
     if b.command == "regression":
         raise SolverError(f"Line {line} is a !regression, which is fitted as the sheet runs and needs no solving")
+    if b.command == "symsolve":
+        raise SolverError(f"Line {line} is a !symsolve, which is solved as the sheet runs and needs no Run")
     return solver.parse_block(b)
 
 

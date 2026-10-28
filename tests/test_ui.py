@@ -444,6 +444,22 @@ def test_globals_are_marked_and_get_their_tilde(page):
     assert page.is_checked("#markGlobals") and page.is_hidden("#globalsChip")
 
 
+def test_symbols_are_marked_and_their_results_typeset(page):
+    reset(page, "$a, ~$g\ny = a*g\n!symsolve a\n  equation: y = 2\nz = a")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector("#out .row[data-line='3'] [data-global='g']")   # the evaluation is on screen
+    assert "symbols a, ~g" in page.inner_text("#out .row[data-line='1']")
+    # the solve's row typesets a = 2/g, with g tagged as the global it is
+    assert page.locator("#out .row[data-line='3'] .katex .mfrac").count() == 1
+    assert page.locator("#out .row[data-line='3'] [data-global='g']").count() == 1
+    page.wait_for_selector("#srcMarks mark.sym")
+    marks = page.evaluate("[...document.querySelectorAll('#srcMarks mark.sym')].map(m => [m.textContent, m.dataset.global || ''])")
+    assert marks[:4] == [["$a", ""], ["~$g", "g"], ["a", ""], ["g", "g"]]
+    page.keyboard.type("\n$g")            # the editor never puts a ~ inside a declaration
+    page.keyboard.press("Enter")
+    assert value(page).endswith("\n$g\n")
+
+
 def test_each_kind_of_line_shows_its_row(page):
     """What the results pane shows for each kind of line (static/rows.js, drawn by index.html)."""
     text = "## Loads\n!sigfigs 3\nx = 2'm\nnope +\n!plot x, x = 0 .. 1\n  grid: off\n  bad: 1\ny = 1\n!root y\n  equation: y^2 = 2"

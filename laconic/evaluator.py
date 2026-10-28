@@ -88,6 +88,12 @@ def _array(m):
     return m if np.iscomplexobj(m) else m.astype(float)
 
 
+def is_symbolic(v):
+    """A value that is a sympy expression (a symbol, or an expression over symbols; see
+    symbolic.py) rather than a Quantity. Checked without importing sympy."""
+    return not isinstance(v, pint.Quantity)
+
+
 def is_complex(q):
     return np.iscomplexobj(q.magnitude)
 
@@ -232,11 +238,14 @@ class Evaluator:
         return self.Q(n.value)
 
     def ev_Name(self, n, scope):
-        if n.name in scope:
-            return scope[n.name]
         key = self.vkey(n.name)
-        if key in scope:
-            return scope[key]
+        for k in (n.name, key):
+            if k in scope:
+                v = scope[k]
+                if is_symbolic(v):   # what it stands for here: its symbols must have values
+                    from . import symbolic
+                    return symbolic.numeric(self, n.name, v, scope)
+                return v
         if n.name in CONSTANTS:
             return self.Q(CONSTANTS[n.name])
         if n.name in self.mode.cleared:
@@ -758,6 +767,7 @@ class Evaluator:
         for name in refs(expr).names if expr is not None else ():
             if name == "∞":
                 return True
-            if self.is_var(name) and np.any(np.isinf(_array(self.vars[self.vkey(name)].magnitude))):
+            v = self.vars.get(self.vkey(name))
+            if v is not None and not is_symbolic(v) and np.any(np.isinf(_array(v.magnitude))):
                 return True
         return False

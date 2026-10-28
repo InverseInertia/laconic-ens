@@ -25,4 +25,16 @@ eq(S.marks(ROWS[3], T), [[4, 1, 'g']], 'marks: uses of globals only');
 eq(S.marks(ROWS[0], T), [], 'not of other names');
 eq(S.marks({ n: 9 }, T), [], 'a row without a table');
 
+// "$x, ~$g\ny = x*g": a symbol and a global symbol (declared with $)
+const SROWS = [
+  { n: 1, symbols: { defines: [{ ...sym(0, 'x', 1, null, false), symbol: true }, { ...sym(1, 'g', 1, null, true), symbol: true }],
+    uses: [[0, 2, 0], [4, 3, 1]] } },
+  { n: 2, symbols: { defines: [sym(2, 'y', 2, null, false)], uses: [[0, 1, 2], [4, 1, 0], [6, 1, 1]] } },
+];
+const ST = S.table(SROWS);
+eq(S.symbolMarks(SROWS[1], ST), [[4, 1, 'x'], [6, 1, 'g']], 'symbol marks: uses of symbols, global or not');
+eq(S.symbolMarks(SROWS[0], ST), [[0, 2, 'x'], [4, 3, 'g']], 'a declaration marks its names, $ and all');
+eq(S.marks(SROWS[1], ST), [[6, 1, 'g']], 'a global symbol is a global too');
+eq(S.symbolMarks(ROWS[3], T), [], 'no symbols, no marks');
+
 console.log(`${n} symbol table checks passed`);
