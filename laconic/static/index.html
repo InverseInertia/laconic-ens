@@ -1122,7 +1122,8 @@ src.addEventListener("dblclick", () => {
 });
 
 // ---- suggestions -----------------------------------------------------------------
-// ac = null when closed, else {ctx, items, index, moved, wrap: [from, to] | null, query}
+// ac = null when closed, else the open list. What it holds and what keys do to it are in
+// autocomplete.js; this draws it and makes the edits.
 const acEl = $("#ac"), suggest = $("#suggest");
 suggest.checked = store.get("suggest", true);
 suggest.onchange = () => { store.set("suggest", suggest.checked); if (!suggest.checked) acClose(); src.focus(); };
@@ -1185,21 +1186,21 @@ function acShow(next) {
   if (!next.items.length) return acClose();
   ac = next; acPaint();
 }
+const acEnv = () => ({vocab, symbols: symbols()});
 // Called after edits and when asked by hand. Nothing happens when suggestions are off,
 // when text is highlighted, or when there is nothing at the caret to complete.
 function acUpdate(force = false) {
-  if (!suggest.checked && !force) return acClose();
-  if (src.selectionStart !== src.selectionEnd) return acClose();
-  const text = src.value, ctx = Autocomplete.context(text, src.selectionStart, {force});
-  if (!ctx) return acClose();
-  if (ctx.kind === "prop" && !vocab.props) {
+  const text = src.value;
+  const next = Autocomplete.open(text, src.selectionStart, src.selectionEnd,
+    {force, enabled: suggest.checked, fresh: tableText === text}, acEnv());
+  if (!next) return acClose();
+  if (next.props) {
     acClose();
     loadProps().then(() => { if (vocab.props && src.value === text && document.activeElement === src) acUpdate(force); });
     return;
   }
-  const items = Autocomplete.candidates(ctx, vocab, text, {symbols: symbols()});
-  acShow({ctx, items, index: 0, moved: false, wrap: null, query: ""});
-  acWaiting = ctx.kind === "name" && tableText !== text && {force};
+  acShow(next);
+  acWaiting = next.stale && {force};
 }
 // Names come from the symbol table of the last evaluation. When that was of older text, the
 // suggestions are worked out again once the evaluation of this text arrives.
@@ -1213,43 +1214,23 @@ function acOpenByHand() {
   const range = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
   if (!range) { say("Highlight something on one line to wrap it"); return; }
   src.setSelectionRange(range[0], range[1]);
-  wrapRefresh({wrap: range, query: "", index: 0, moved: true});
-}
-function wrapRefresh(st) {
-  const ctx = {kind: "name", start: st.wrap[0], end: st.wrap[0], query: st.query, tilde: false};
-  const items = Autocomplete.candidates(ctx, {functions: vocab.functions, constants: [], units: [], commands: []}, src.value,
-    {max: 24, kinds: ["function"], symbols: symbols()});
-  if (!items.length && st.query) return say("No function starts with that");
-  acShow({ctx, items, index: Math.min(st.index, Math.max(items.length - 1, 0)), moved: true, wrap: st.wrap, query: st.query});
+  acShow(Autocomplete.wrapping(src.value, range, "", 0, acEnv()));
 }
 function acAccept() {
-  const c = ac.items[ac.index], text = src.value;
-  if (ac.wrap) {
-    const r = Editing.wrapWithCall(text, ac.wrap[0], ac.wrap[1], c.insert);
-    acClose();
-    if (r) { acSkip = true; apply(r); }
-    return;
-  }
-  const r = Autocomplete.accept(text, ac.ctx, c);
-  acClose(); acSkip = true; apply(r);
+  const r = Autocomplete.pick(src.value, ac);
+  acClose();
+  if (r) { acSkip = true; apply(r); }
 }
 // Keys while the list is open. Returns true when the key was used.
 function acKey(ev) {
-  if (!ac || ev.ctrlKey || ev.metaKey) return false;
-  if (ev.altKey) { acClose(); return false; }
-  const k = ev.key, n = ac.items.length;
-  const eat = () => { ev.preventDefault(); return true; };
-  if (ac.wrap) {
-    if (k.length === 1 && !ev.altKey) { wrapRefresh({...ac, query: ac.query + k, index: 0}); return eat(); }
-    if (k === "Backspace") { wrapRefresh({...ac, query: ac.query.slice(0, -1), index: 0}); return eat(); }
-  }
-  if (k === "ArrowDown" && !ev.altKey) { ac.index = (ac.index + 1) % n; ac.moved = true; acPaint(); return eat(); }
-  if (k === "ArrowUp" && !ev.altKey) { ac.index = (ac.index + n - 1) % n; ac.moved = true; acPaint(); return eat(); }
-  if (k === "Tab" && !ev.shiftKey) { acAccept(); return eat(); }
-  if (k === "Enter" && (ac.moved || ac.wrap)) { acAccept(); return eat(); }
-  if (k === "Escape") { acClose(); return eat(); }
-  if (["Enter", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(k)) acClose();
-  return false;
+  if (!ac) return false;
+  const a = Autocomplete.key(ac, ev.key, {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}, src.value, acEnv());
+  if (a.use) ev.preventDefault();
+  if (a.message) say(a.message);
+  if (a.accept) acAccept();
+  else if (a.close) acClose();
+  else if (a.list) acShow(a.list);
+  return a.use;
 }
 src.addEventListener("blur", acClose);
 src.addEventListener("click", acClose);

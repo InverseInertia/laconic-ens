@@ -9,6 +9,17 @@
  *                                        come from extras.symbols, the last symbol table
  *   accept(text, ctx, candidate)         the edit that inserts one
  *
+ * The open list, {ctx, items, index, moved, wrap: [from, to] | null, query, stale}, and what keys
+ * do to it, are here too; the page draws it and passes `env` = {vocab, symbols}:
+ *   open(text, s, e, {force, enabled, fresh}, env)
+ *       the list for the caret (its items may be none), null for no list, or {props: true} when
+ *       vocab.props must be fetched first. `stale`: names came from the symbol table of other text
+ *       (`fresh` false), so ask again once this text's arrives
+ *   wrapping(text, wrap, query, index, env)  Ctrl+Space over a highlight: functions to wrap it in
+ *   key(list, key, mods, text, env)  what a key does: {use} whether it is spent on the list, and
+ *       one of {list} (the list after it), {accept}, {close} or {message}
+ *   pick(text, list)                 the edit for the chosen item, or null
+ *
  * Besides names, units and commands it completes, from vocab.solver: the option keys, `method:`
  * and `autorun:` values and unknown names of a `!root` / `!minimize` / `!maximize` block; and,
  * from vocab.props (fetched separately, it needs CoolProp), the quoted keys and fluid of props().
@@ -16,6 +27,7 @@
 (function (root) {
   'use strict';
   const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
+  const Editing = typeof module !== 'undefined' && module.exports ? require('./editing.js') : root.Editing;
 
   const WORD = /[\p{L}\p{N}_°∞]/u;
   const NAME_START = '[\\p{L}_](?:_∞|[\\p{L}\\p{N}_])*';
@@ -270,7 +282,53 @@
     return { from: ctx.start, to: ctx.end, insert: cand.insert, caret: ctx.start + cand.insert.length };
   }
 
-  const api = { unitDefs, definition, solverBlock, context, candidates, accept };
+  // ---- the open list ------------------------------------------------------------------
+  function open(t, s, e, opts, env) {
+    const force = !!opts.force;
+    if ((!opts.enabled && !force) || s !== e) return null;
+    const ctx = context(t, s, { force });
+    if (!ctx) return null;
+    if (ctx.kind === 'prop' && !env.vocab.props) return { props: true };
+    const items = candidates(ctx, env.vocab, t, { symbols: env.symbols });
+    return { ctx, items, index: 0, moved: false, wrap: null, query: '', stale: ctx.kind === 'name' && !opts.fresh };
+  }
+
+  function wrapping(t, wrap, query, index, env) {
+    const ctx = { kind: 'name', start: wrap[0], end: wrap[0], query, tilde: false };
+    const items = candidates(ctx, { functions: env.vocab.functions, constants: [], units: [], commands: [] }, t,
+      { max: 24, kinds: ['function'], symbols: env.symbols });
+    return { ctx, items, index: Math.min(index, Math.max(items.length - 1, 0)), moved: true, wrap, query, stale: false };
+  }
+
+  // Arrows choose; Tab accepts, and Enter once an item was chosen (else it ends the line). While
+  // wrapping, typed characters filter the functions.
+  function key(list, k, mods, t, env) {
+    if (mods.ctrl || mods.meta) return { use: false };
+    if (mods.alt) return { use: false, close: true };
+    const n = list.items.length;
+    const requery = (query) => {
+      const next = wrapping(t, list.wrap, query, 0, env);
+      return !next.items.length && query ? { use: true, message: 'No function starts with that' } : { use: true, list: next };
+    };
+    if (list.wrap) {
+      if (k.length === 1) return requery(list.query + k);
+      if (k === 'Backspace') return requery(list.query.slice(0, -1));
+    }
+    if (k === 'ArrowDown') return { use: true, list: { ...list, index: (list.index + 1) % n, moved: true } };
+    if (k === 'ArrowUp') return { use: true, list: { ...list, index: (list.index + n - 1) % n, moved: true } };
+    if (k === 'Tab' && !mods.shift) return { use: true, accept: true };
+    if (k === 'Enter' && (list.moved || list.wrap)) return { use: true, accept: true };
+    if (k === 'Escape') return { use: true, close: true };
+    if (['Enter', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(k)) return { use: false, close: true };
+    return { use: false };
+  }
+
+  function pick(t, list) {
+    const c = list.items[list.index];
+    return list.wrap ? Editing.wrapWithCall(t, list.wrap[0], list.wrap[1], c.insert) : accept(t, list.ctx, c);
+  }
+
+  const api = { unitDefs, definition, solverBlock, context, candidates, accept, open, wrapping, key, pick };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Autocomplete = api;
 })(typeof window !== 'undefined' ? window : globalThis);

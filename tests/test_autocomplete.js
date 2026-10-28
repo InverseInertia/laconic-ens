@@ -184,4 +184,50 @@ eq(at('x = foo("D|').ctx, null, 'nothing in strings elsewhere');
 eq(at('x = props(min("D|').ctx, null, 'nor in a nested call');
 eq(A.candidates(at('r = props("|').ctx, { ...vocab, props: undefined }, 'r = props("'), [], 'nothing until the props list has arrived');
 
+// --- the open list: when it opens, and what keys do to it --------------------------
+{
+  const env = { vocab, symbols: TABLE };
+  const on = { enabled: true, fresh: true };
+  const open = (src, opts = on) => { const { text, pos } = at(src); return A.open(text, pos, pos, opts, env); };
+  const list = open(below(8, 'x = del|'));
+  eq([list.items.map((c) => c.insert), list.index, list.moved, list.wrap, list.stale], [['delta_max'], 0, false, null, false], 'a list for the caret');
+  eq(open('x = del|', { ...on, enabled: false }), null, 'suggestions off: no list');
+  eq(open('x = d|', { ...on, enabled: false, force: true }) !== null, true, 'Ctrl+Space opens one even so');
+  eq(A.open('x = delta', 4, 9, on, env), null, 'not over highlighted text');
+  eq(open('# del|'), null, 'nothing on a comment');
+  eq(open('x = del|', { ...on, fresh: false }).stale, true, 'names from an older table: ask again when it arrives');
+  eq(open("x = 1'|", { ...on, fresh: false }).stale, false, 'units do not wait for the table');
+  eq(A.open('r = props("', 11, 11, on, { vocab: { ...vocab, props: undefined }, symbols: TABLE }), { props: true }, 'props keys are fetched first');
+
+  const mods = { ctrl: false, alt: false, shift: false, meta: false };
+  const key = (l, k, m = {}, text = '') => A.key(l, k, { ...mods, ...m }, text, env);
+  const two = { ...list, items: [{ insert: 'a' }, { insert: 'b' }] };
+  eq(key(two, 'ArrowDown').list.index, 1, 'down');
+  eq(key(two, 'ArrowUp').list.index, 1, 'up wraps round');
+  eq(key(two, 'ArrowDown').list.moved, true, 'an arrow counts as choosing');
+  eq(key(two, 'Tab'), { use: true, accept: true }, 'Tab accepts');
+  eq(key(two, 'Tab', { shift: true }), { use: false }, 'Shift+Tab is left to the editor');
+  eq(key(two, 'Enter'), { use: false, close: true }, 'Enter ends the line unless an item was chosen');
+  eq(key({ ...two, moved: true }, 'Enter'), { use: true, accept: true }, 'Enter accepts a chosen item');
+  eq(key(two, 'Escape'), { use: true, close: true }, 'Escape closes');
+  eq(key(two, 'Home'), { use: false, close: true }, 'moving away closes, and moves');
+  eq(key(two, 'x'), { use: false }, 'typing goes to the editor');
+  eq(key(two, 'z', { ctrl: true }), { use: false }, 'Ctrl keys go to the editor, the list stays');
+  eq(key(two, 'ArrowUp', { alt: true }), { use: false, close: true }, 'Alt keys close it');
+
+  // Wrapping a highlight in a function: typing filters the functions.
+  const text = 'y = a+b';
+  const w = A.wrapping(text, [4, 7], '', 0, env);
+  eq([w.items.map((c) => c.insert), w.moved, w.wrap], [['sin', 'sqrt', 'solve'], true, [4, 7]], 'every function, chosen by default');
+  const s1 = key(w, 's', {}, text).list;
+  eq([s1.query, s1.items.length], ['s', 3], 'typed letters filter');
+  const sq = key(s1, 'q', {}, text).list;
+  eq(sq.items.map((c) => c.insert), ['sqrt'], 'narrower');
+  eq(key(sq, 'x', {}, text), { use: true, message: 'No function starts with that' }, 'a letter that matches none is refused');
+  eq(key(sq, 'Backspace', {}, text).list.query, 's', 'Backspace widens again');
+  eq(key(sq, 'Enter', {}, text), { use: true, accept: true }, 'Enter wraps');
+  eq(A.pick(text, sq), { from: 4, to: 7, insert: 'sqrt(a+b)', caret: 13 }, 'the highlight wrapped in the call');
+  eq(A.pick('x = del', { ...list, ctx: A.context('x = del', 7) }), { from: 4, to: 7, insert: 'delta_max', caret: 13 }, 'a pick inserts the item');
+}
+
 console.log(`${n} autocomplete checks passed`);
