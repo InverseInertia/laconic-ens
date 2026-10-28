@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.4.2](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.2) (2026-10-28)
+
 ### Changes
 - **Scroll bars follow your theme**: the scroll bars under long lines of math, in the editor and in dialogs take their colors from the theme (its Rules color on a slightly deeper paper) instead of the browser's defaults, for every preset and for custom and shared themes. (#99)
 
