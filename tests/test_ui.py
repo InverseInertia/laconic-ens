@@ -589,6 +589,42 @@ def test_export_menu_downloads_latex_and_markdown(page):
     assert page.is_hidden("#exportList")
 
 
+def test_pdf_export_shows_progress_and_prints_from_a_hidden_frame(page, monkeypatch):
+    """Without a headless browser on the server, Export -> PDF prints from a hidden frame on the
+    page: no pop-up window (which the browser may block once the click's activation has run out),
+    the Export button is busy meanwhile and ignores more clicks, and the next export goes
+    straight to the print dialog (#102)."""
+    from laconic import pdfdoc
+    monkeypatch.setattr(pdfdoc, "find_chromium", lambda: None)
+    reset(page, "## Loads\nF = 2'kN * 3")
+    page.evaluate("""() => {
+      window.__opened = 0; window.__prints = [];
+      window.open = () => { window.__opened++; return null; };
+      window.__api = [];
+      const f = window.fetch;
+      window.fetch = (u, o) => { window.__api.push(String(u)); return f(u, o); };
+      new MutationObserver(() => {
+        for (const fr of document.querySelectorAll('iframe.printFrame'))
+          if (!fr.__hooked && fr.contentWindow) { fr.__hooked = true; fr.addEventListener('load', () => {
+            fr.contentWindow.print = () => window.__prints.push(fr.contentDocument.querySelectorAll('.math .katex').length); }); }
+      }).observe(document.body, {childList: true});
+    }""")
+    page.click("#exportBtn")
+    page.click("#exportPdf")
+    assert page.get_attribute("#exportBtn", "aria-busy") == "true" and page.is_disabled("#exportBtn")
+    page.evaluate("document.querySelector('#exportPdf').click()")   # a second run while busy does nothing
+    page.wait_for_function("window.__prints.length > 0")
+    page.wait_for_function("document.querySelector('#exportBtn').getAttribute('aria-busy') === 'false'")
+    assert page.evaluate("window.__prints") == [1]   # one print, with the math already typeset
+    assert page.evaluate("window.__opened") == 0
+    assert page.evaluate("window.__api.filter(u => u.includes('/api/export/'))") == ["/api/export/pdf", "/api/export/print"]
+    assert page.is_enabled("#exportBtn") and "Export" in page.inner_text("#exportBtn")
+    page.click("#exportBtn")
+    page.click("#exportPdf")
+    page.wait_for_function("window.__prints.length > 1")
+    assert page.evaluate("window.__api.filter(u => u.includes('/api/export/'))")[2:] == ["/api/export/print"]
+
+
 def test_export_menu_stays_in_the_window_when_the_toolbar_wraps(page):
     """#103: a wrapped toolbar can put Export at the start of a row, and the list, hanging from
     the button's right edge, ran off the left of the window."""
