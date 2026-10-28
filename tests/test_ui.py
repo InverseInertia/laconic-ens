@@ -132,36 +132,15 @@ def test_f2_renames_the_name_at_the_caret(page):
 
 
 def test_an_edit_the_user_asked_for_joins_the_undo_stack_wherever_the_focus_is(page):
-    # Right after a dialog closes, some browsers leave the focus in its field (#75).
+    # Right after a dialog closes, some browsers leave the focus in its field (#75). When server
+    # edits are made, and which way, is tested in test_editing.js; the name F2 fills in, in
+    # test_sheettext.py and test_sheettext.js.
     reset(page, "L = 1\nA = L")
     page.focus("#name")
     assert page.evaluate("applyEdits('L = 1\\nA = L', [{from: 0, to: 1, insert: 'w'}, {from: 10, to: 11, insert: 'w'}], true)")
     assert value(page) == "w = 1\nA = w"
     page.keyboard.press("Control+z")
     assert value(page) == "L = 1\nA = L"
-
-
-def test_server_edits_for_a_text_that_has_changed_are_not_made(page):
-    reset(page, "x = 1")
-    assert page.evaluate("applyEdits('x = 2', [{from: 4, to: 5, insert: '3'}])") is False
-    assert value(page) == "x = 1"
-    assert page.evaluate("applyEdits('x = 1', [{from: 4, to: 5, insert: '3'}])") is True
-    assert value(page) == "x = 3"
-
-
-@pytest.mark.parametrize("text,caret,name", [
-    ("σ_max = 3", 2, "σ_max"),          # the page reads names with the server's lexer, Greek included
-    ("p = 5'%", 7, "'%"),
-    ("F = 12'kN", 6, "'kN"),             # between the number and its unit, the unit is the name
-    ('t = "L"', 6, ""),                  # text is not a name
-])
-def test_f2_reads_the_name_at_the_caret_like_the_server(page, text, caret, name):
-    reset(page, text)
-    select(page, caret, caret)
-    page.keyboard.press("F2")
-    page.wait_for_selector("#renameDlg[open]")
-    assert page.input_value("#renameOld") == name
-    page.keyboard.press("Escape")
 
 
 def test_alt_z_toggles_wrapping(page):
@@ -307,7 +286,8 @@ def test_theme_yaml_export_and_import(page):
 
 def test_display_preferences_follow_the_server_not_the_browser(page):
     """The browser's storage belongs to one port; preferences kept on the server look the same on
-    any port LENS runs on, which a cleared browser stands in for here."""
+    any port LENS runs on, which a cleared browser stands in for here. Where each setting goes, and
+    sending up what an older build kept in the browser, are tested in test_prefs.js."""
     page.uncheck("#suggest")
     page.click("#viewLatex")
     page.evaluate("localStorage.clear()")
@@ -318,17 +298,18 @@ def test_display_preferences_follow_the_server_not_the_browser(page):
     page.click("#viewTypeset")
 
 
-def test_preferences_an_older_build_kept_in_the_browser_are_sent_up_once(page):
+def test_a_greek_table_an_older_build_kept_in_the_browser_is_sent_up_once(page):
     from laconic import settings
-    page.evaluate("localStorage.setItem('lens:mathkeys', 'false')")
+    settings.save_greek(None)
+    page.evaluate("localStorage.setItem('lens:greek', JSON.stringify({j: 'ϑ'}))")
+    page.reload()
+    page.wait_for_function("localStorage.getItem('lens:greek') === null")
+    assert settings.load()["greek"] == {"j": "ϑ"}
+    settings.save_greek(None)       # a reset stays reset: the browser's copy is gone
     page.reload()
     page.wait_for_function("document.querySelector('#src').value.length > 0")
-    assert not page.is_checked("#mathkeys")
-    for _ in range(50):
-        if settings.load()["prefs"].get("mathkeys") is False:
-            break
-        page.wait_for_timeout(100)
-    assert settings.load()["prefs"]["mathkeys"] is False
+    page.wait_for_timeout(300)
+    assert settings.load()["greek"] is None
 
 
 PASTE = """
@@ -523,12 +504,11 @@ def test_long_equations_are_fitted_to_the_results_pane(page):
     page.wait_for_selector(".row[data-line='4'] .math.wrapped")
 
 
-def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, monkeypatch):
+def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, sheets):
     """#49: `lens --window sheet.lens` (a double-clicked file) opens that sheet, and Save writes it."""
-    from laconic import server
     sheet = tmp_path / "beam.lens"
     sheet.write_text("x = 2\n", encoding="utf-8")
-    monkeypatch.setattr(server, "OPENED", sheet)
+    sheets.start(sheet)
     page.reload()
     page.wait_for_function("document.querySelector('#src').value.startsWith('x = 2')")
     assert page.input_value("#name") == "beam"
@@ -549,7 +529,7 @@ def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_pat
     assert page.get_attribute("#save", "title") == "Save to beam.lens (Ctrl+S)"
 
 
-def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(page, server, tmp_path, monkeypatch):
+def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(page, server, tmp_path, sheets):
     """A second launch hands its sheet to the running LENS, which opens it on the same port
     (so the window has this browser's presets) and saves back to that sheet, not the first one."""
     from laconic import server as app_module
@@ -557,8 +537,8 @@ def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(pa
     first.write_text("a = 1\n", encoding="utf-8")
     second.write_text("b = 2\n", encoding="utf-8")
     opened = []
-    monkeypatch.setattr(app_module, "OPENED", first)
-    monkeypatch.setattr(app_module, "OPEN_WINDOW", opened.append)
+    sheets.start(first)
+    sheets.serve(opened.append)
     app_module.open_window(app_module.WindowBody(path=str(second)))
     page.goto(server + opened[0])
     page.wait_for_function("document.querySelector('#src').value.startsWith('b = 2')")

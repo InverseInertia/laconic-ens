@@ -33,6 +33,7 @@
   const buttonTitle = (handle) => (handle ? `Save to ${handle.name} (Ctrl+S)` : 'Save the worksheet (Ctrl+S)');
 
   // A .cs or .txt file is only read; saving it writes a new .lens file instead of overwriting it.
+  // The server keeps the same rule for a sheet the program opened (laconic/opened.py).
   const opened = (fileName, handle = null) =>
     ({ name: fileName.replace(EXT, ''), handle: handle && /\.lens$/i.test(fileName) ? handle : null });
 

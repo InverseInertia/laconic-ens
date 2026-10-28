@@ -478,7 +478,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
     </ul>
 
     <h3>Editor shortcuts <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Editor-Shortcuts" target="_blank" rel="noopener">Editor Shortcuts</a></h3>
-    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines and on the text lines under a plot.</p>
+    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines and on the text under a plot or solver: titles, labels, a note's text, the method.</p>
     <ul>
       <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot. With text highlighted, they apply to the whole terms it touches.</li>
       <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
@@ -489,7 +489,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
     <p><button id="helpKeys">All keyboard shortcuts</button></p>
 
     <h3>Settings <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Settings" target="_blank" rel="noopener">Settings</a></h3>
-    <p>Settings has five parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). The Greek table and global units are stored on this machine, for every browser and the command line; the theme is kept per browser. Press <kbd>F1</kbd> any time to bring this window back.</p>
+    <p>Settings has five parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). Settings are stored on this machine, so every browser shows the same ones, and the command line uses the same global units. Press <kbd>F1</kbd> any time to bring this window back.</p>
   </div>
 </dialog>
 
@@ -597,6 +597,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 
 <script src="/static/vendor/d3/d3.min.js"></script>
 <script src="/static/symbols.js"></script>
+<script src="/static/api.js"></script>
 <script src="/static/rows.js"></script>
 <script src="/static/mathfit.js"></script>
 <script src="/static/editing.js"></script>
@@ -606,63 +607,36 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 <script src="/static/autocomplete.js"></script>
 <script src="/static/unitbrowser.js"></script>
 <script src="/static/theme.js"></script>
+<script type="application/json" id="prefKeys">{{prefkeys}}</script>
 <script type="application/json" id="prefs">{{prefs}}</script>
+<script src="/static/prefs.js"></script>
 <script src="/static/savefile.js"></script>
 <script src="/static/shortcuts.js"></script>
 <script src="/static/layout.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
-// Display preferences live in the server's settings.json, so they are the same whatever port the
-// page is on; the server writes them into the page, so they can be read before anything draws.
-// Other settings live in this browser under "lens:". Older builds used "calcsheet:" and "laconic:",
-// read as a fallback.
-const PREF_KEYS = ["theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest", "layout", "autoLayout", "layoutAsk"];
-const prefs = (() => { try { return JSON.parse($("#prefs").textContent); } catch { return {}; } })();
-// One save at a time; what changes meanwhile goes in the next, so a color picker, which saves the
-// theme on every move, sends a few requests rather than hundreds. keepalive: a reload or a closed
-// window does not cancel a save on its way.
-let prefsPending = {}, prefsBusy = false;
-function flushPrefs() {
-  if (prefsBusy || !Object.keys(prefsPending).length) return;
-  const body = JSON.stringify({prefs: prefsPending});
-  prefsPending = {}; prefsBusy = true;
-  fetch("/api/prefs", {method: "PUT", headers: {"Content-Type": "application/json"}, body, keepalive: true})
-    .catch(() => {}).finally(() => { prefsBusy = false; flushPrefs(); });
-}
-function savePref(k, v) { prefs[k] = v; prefsPending[k] = v; flushPrefs(); }
-window.addEventListener("pagehide", () => { prefsBusy = false; flushPrefs(); });
-const store = {
-  get(k, d) {
-    if (PREF_KEYS.includes(k) && k in prefs) return prefs[k];
-    for (const prefix of ["lens:", "calcsheet:", "laconic:"]) {
-      try {
-        const raw = localStorage.getItem(prefix + k);
-        if (raw === null) continue;
-        try { return JSON.parse(raw); } catch { return raw; }
-      } catch {}
-    }
-    return d;
+// Where each setting is kept: display preferences on the server, the rest in this browser
+// (prefs.js). The server writes the preference keys and their values into the page.
+const pageData = (id, d) => { try { return JSON.parse($(id).textContent); } catch { return d; } };
+const store = Prefs.store({
+  keys: pageData("#prefKeys", []),
+  values: pageData("#prefs", {}),
+  storage: {
+    getItem: (k) => localStorage.getItem(k),
+    setItem: (k, v) => localStorage.setItem(k, v),
+    removeItem: (k) => localStorage.removeItem(k),
   },
-  set(k, v) {
-    if (PREF_KEYS.includes(k)) { savePref(k, v); return; }
-    try { localStorage.setItem("lens:" + k, JSON.stringify(v)); } catch {}
-  },
-};
-// Preferences an older build kept in this browser are sent up once, so nothing is lost.
-for (const k of PREF_KEYS) {
-  if (k in prefs) continue;
-  const v = store.get(k, null);
-  if (v !== null) savePref(k, v);
-}
+  send: (prefs) => Api.send("/api/prefs", {prefs}),   // keepalive: a reload or a closed window does not cancel it
+});
+window.addEventListener("pagehide", () => store.flush());
 const src = $("#src"), out = $("#out"), nameEl = $("#name");
 let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
 let tableText = null;   // the text `last` was evaluated from
 let acWaiting = false;  // or {force}: suggestions were made from an older table, and how they were asked for
 
-const post = (path, extra = {}) => fetch(path, {
-  method: "POST", headers: {"Content-Type": "application/json"},
-  body: JSON.stringify({text: src.value, title: nameEl.value, view, wrap, ...extra}),
-});
+// The sheet as the export, save and eval endpoints take it.
+const sheetBody = (extra = {}) => ({text: src.value, title: nameEl.value, view, wrap, ...extra});
+const post = (path, extra) => Api.request(path, sheetBody(extra));
 
 // The server tags global names with \htmlData{global=name}; that is the only HTML command it emits.
 const KATEX_OPTS = {displayMode: true, throwOnError: false,
@@ -810,8 +784,7 @@ async function save(as) {
     render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
     write: async (h, text) => {
       if (h.server) {
-        const r = await (await fetch(openedApi("/api/opened/save"), {method: "POST", headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({text})})).json();
+        const r = await Api.json(openedApi("/api/opened/save"), {text});
         if (!r.ok) throw new Error(r.error);
         return;
       }
@@ -877,27 +850,27 @@ document.addEventListener("keydown", (ev) => {
 
 // ---- edits from the server -----------------------------------------------------
 // The plot, solver and rename endpoints answer with edits against the text they were sent
-// (laconic/blockedit.py). They go in here, as one edit, so one Ctrl+Z takes them back. If the text
-// changed while the server was working, the edits no longer fit: nothing is made and this says false.
-// `asked` is for an edit the user asked for in a dialog (rename): it always takes the focus.
-function applyEdits(base, edits, asked = false) {
-  if (src.value !== base) return false;
-  const r = Editing.merge(base, edits, src.selectionStart);
-  if (!r) return true;
-  // An edit made while the user is typing somewhere else (a dialog, the name box) must not take the
-  // focus; it goes in without joining the editor's undo stack. Otherwise it joins that stack.
-  const other = document.activeElement;
-  if (!asked && other && other !== src && other !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(other.tagName)) {
+// (laconic/blockedit.py); Editing.applyEdits decides whether and how they go in, through this
+// adapter onto the editor. False when the text changed meanwhile and nothing was made.
+const editor = {
+  text: () => src.value,
+  caret: () => src.selectionStart,
+  elsewhere: () => {
+    const o = document.activeElement;
+    return !!o && o !== src && o !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(o.tagName);
+  },
+  place: (r) => {
     src.setRangeText(r.insert, r.from, r.to, "preserve");
     src.setSelectionRange(r.caret, r.caret);
     src.dispatchEvent(new Event("input", {bubbles: true}));
-    return true;
-  }
-  src.focus({preventScroll: true});   // so the edit joins the editor's undo stack
-  acSkip = true;
-  apply(r);
-  return true;
-}
+  },
+  apply: (r) => {
+    src.focus({preventScroll: true});   // so the edit joins the editor's undo stack
+    acSkip = true;
+    apply(r);
+  },
+};
+const applyEdits = (base, edits, asked = false) => Editing.applyEdits(editor, base, edits, asked);
 
 // ---- plots -----------------------------------------------------------------
 // The picture is drawn on the server from the worksheet text. Dragging or zooming it
@@ -906,12 +879,7 @@ function applyEdits(base, edits, asked = false) {
 async function patchPlot(line, patch) {
   const text = src.value;
   let res;
-  try {
-    res = await (await fetch("/api/plotedit", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({text, line, patch}),
-    })).json();
-  } catch { say("Could not reach the server"); return false; }
+  try { res = await Api.json("/api/plotedit", {text, line, patch}); } catch (e) { say(e.message); return false; }
   if (!res.ok) { say(res.error); return false; }
   if (!applyEdits(text, res.edits)) { say("The sheet changed meanwhile, so the plot was not changed"); return false; }
   // The moved plot becomes the focused line, so the redraw keeps it in view rather than
@@ -920,11 +888,7 @@ async function patchPlot(line, patch) {
   return true;
 }
 
-async function plotSvg(line) {
-  const res = await post("/api/plotimage", {line});
-  if (!res.ok) throw new Error(await res.text());
-  return res.text();
-}
+const plotSvg = (line) => Api.text("/api/plotimage", sheetBody({line}));
 
 async function plotPng(line, scale = 3) {
   const url = URL.createObjectURL(new Blob([await plotSvg(line)], {type: "image/svg+xml"}));
@@ -951,14 +915,15 @@ function plotBody(r) {
     b.onclick = async (ev) => { ev.stopPropagation(); try { await fn(); } catch (e) { say(e.message || "Failed"); } };
     tools.append(b);
   };
-  if (r.plot.moved) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(r.n, {xview: null, yview: null}));
-  btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${r.n}.svg`, await plotSvg(r.n), "image/svg+xml"));
-  btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${r.n}.png`, await plotPng(r.n)));
+  const n = Rows.line(r);
+  if (r.plot.moved) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(n, {xview: null, yview: null}));
+  btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${n}.svg`, await plotSvg(n), "image/svg+xml"));
+  btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${n}.png`, await plotPng(n)));
   const hint = document.createElement("span"); hint.className = "hint";
   hint.textContent = "Drag to pan \u00b7 Ctrl+wheel to zoom \u00b7 double-click to reset";
   tools.append(hint);
   box.append(wrap, tools);
-  PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(r.n, patch));
+  PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(n, patch));
   return box;
 }
 
@@ -988,9 +953,9 @@ function paintGlobals() {
 }
 // The marks come from the last evaluation, so a line edited since then is left unmarked until the next one.
 function paintSrcMarks() {
-  const rows = new Map(last.map((r) => [r.n, r])), table = symbols();
-  const lines = src.value.split("\n").map((line, i) => {
-    const r = rows.get(i + 1), marks = r && r.source === line ? Symbols.marks(r, table) : [];
+  const text = src.value.split("\n"), rows = Rows.current(last, text), table = symbols();
+  const lines = text.map((line, i) => {
+    const r = rows[i], marks = r ? Symbols.marks(r, table) : [];
     if (!marks.length) return document.createTextNode(line + "\n");
     const f = document.createDocumentFragment();
     let pos = 0;
@@ -1041,8 +1006,7 @@ $("#viewTypeset").onclick = () => setView("typeset");
 $("#viewLatex").onclick = () => setView("latex");
 
 // ---- math keys -----------------------------------------------------------
-let greek = store.get("greek", null);
-if (!greek || typeof greek !== "object") greek = { ...Editing.DEFAULT_GREEK };
+let greek = { ...Editing.DEFAULT_GREEK };   // the server's table replaces it once it arrives (loadSettings)
 const mathKeys = $("#mathkeys");
 mathKeys.checked = store.get("mathkeys", true);
 mathKeys.onchange = () => { store.set("mathkeys", mathKeys.checked); src.focus(); };
@@ -1148,10 +1112,7 @@ function shrinkSelection() {
   src.setSelectionRange(t[0], t[1]);
   markActive();
 }
-const onCommentLine = () => {
-  const ls = src.value.lastIndexOf("\n", src.selectionStart - 1) + 1;
-  return Editing.isTextLine(src.value, ls);
-};
+const onCommentLine = () => Editing.isTextAt(src.value, src.selectionStart);
 src.addEventListener("dblclick", () => {
   if (!mathKeys.checked || onCommentLine()) return;
   const n = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
@@ -1159,7 +1120,8 @@ src.addEventListener("dblclick", () => {
 });
 
 // ---- suggestions -----------------------------------------------------------------
-// ac = null when closed, else {ctx, items, index, moved, wrap: [from, to] | null, query}
+// ac = null when closed, else the open list. What it holds and what keys do to it are in
+// autocomplete.js; this draws it and makes the edits.
 const acEl = $("#ac"), suggest = $("#suggest");
 suggest.checked = store.get("suggest", true);
 suggest.onchange = () => { store.set("suggest", suggest.checked); if (!suggest.checked) acClose(); src.focus(); };
@@ -1167,13 +1129,13 @@ let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands:
 let ac = null, acSkip = false;
 
 async function loadVocab() {
-  try { vocab = {...await (await fetch("/api/vocab")).json(), props: vocab.props}; } catch {}
+  try { vocab = {...await Api.json("/api/vocab"), props: vocab.props}; } catch {}
 }
 // props() keys and fluids need CoolProp on the server, which takes seconds to import, so they are
 // fetched the first time a props string is typed; the list opens when they arrive.
 let propsLoading = null;
 function loadProps() {
-  propsLoading ??= fetch("/api/vocab/props").then((r) => r.json()).then((p) => { vocab.props = p; })
+  propsLoading ??= Api.json("/api/vocab/props").then((p) => { vocab.props = p; })
     .catch(() => { propsLoading = null; });
   return propsLoading;
 }
@@ -1222,21 +1184,21 @@ function acShow(next) {
   if (!next.items.length) return acClose();
   ac = next; acPaint();
 }
+const acEnv = () => ({vocab, symbols: symbols()});
 // Called after edits and when asked by hand. Nothing happens when suggestions are off,
 // when text is highlighted, or when there is nothing at the caret to complete.
 function acUpdate(force = false) {
-  if (!suggest.checked && !force) return acClose();
-  if (src.selectionStart !== src.selectionEnd) return acClose();
-  const text = src.value, ctx = Autocomplete.context(text, src.selectionStart, {force});
-  if (!ctx) return acClose();
-  if (ctx.kind === "prop" && !vocab.props) {
+  const text = src.value;
+  const next = Autocomplete.open(text, src.selectionStart, src.selectionEnd,
+    {force, enabled: suggest.checked, fresh: tableText === text}, acEnv());
+  if (!next) return acClose();
+  if (next.props) {
     acClose();
     loadProps().then(() => { if (vocab.props && src.value === text && document.activeElement === src) acUpdate(force); });
     return;
   }
-  const items = Autocomplete.candidates(ctx, vocab, text, {symbols: symbols()});
-  acShow({ctx, items, index: 0, moved: false, wrap: null, query: ""});
-  acWaiting = ctx.kind === "name" && tableText !== text && {force};
+  acShow(next);
+  acWaiting = next.stale && {force};
 }
 // Names come from the symbol table of the last evaluation. When that was of older text, the
 // suggestions are worked out again once the evaluation of this text arrives.
@@ -1250,43 +1212,23 @@ function acOpenByHand() {
   const range = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
   if (!range) { say("Highlight something on one line to wrap it"); return; }
   src.setSelectionRange(range[0], range[1]);
-  wrapRefresh({wrap: range, query: "", index: 0, moved: true});
-}
-function wrapRefresh(st) {
-  const ctx = {kind: "name", start: st.wrap[0], end: st.wrap[0], query: st.query, tilde: false};
-  const items = Autocomplete.candidates(ctx, {functions: vocab.functions, constants: [], units: [], commands: []}, src.value,
-    {max: 24, kinds: ["function"], symbols: symbols()});
-  if (!items.length && st.query) return say("No function starts with that");
-  acShow({ctx, items, index: Math.min(st.index, Math.max(items.length - 1, 0)), moved: true, wrap: st.wrap, query: st.query});
+  acShow(Autocomplete.wrapping(src.value, range, "", 0, acEnv()));
 }
 function acAccept() {
-  const c = ac.items[ac.index], text = src.value;
-  if (ac.wrap) {
-    const r = Editing.wrapWithCall(text, ac.wrap[0], ac.wrap[1], c.insert);
-    acClose();
-    if (r) { acSkip = true; apply(r); }
-    return;
-  }
-  const r = Autocomplete.accept(text, ac.ctx, c);
-  acClose(); acSkip = true; apply(r);
+  const r = Autocomplete.pick(src.value, ac);
+  acClose();
+  if (r) { acSkip = true; apply(r); }
 }
 // Keys while the list is open. Returns true when the key was used.
 function acKey(ev) {
-  if (!ac || ev.ctrlKey || ev.metaKey) return false;
-  if (ev.altKey) { acClose(); return false; }
-  const k = ev.key, n = ac.items.length;
-  const eat = () => { ev.preventDefault(); return true; };
-  if (ac.wrap) {
-    if (k.length === 1 && !ev.altKey) { wrapRefresh({...ac, query: ac.query + k, index: 0}); return eat(); }
-    if (k === "Backspace") { wrapRefresh({...ac, query: ac.query.slice(0, -1), index: 0}); return eat(); }
-  }
-  if (k === "ArrowDown" && !ev.altKey) { ac.index = (ac.index + 1) % n; ac.moved = true; acPaint(); return eat(); }
-  if (k === "ArrowUp" && !ev.altKey) { ac.index = (ac.index + n - 1) % n; ac.moved = true; acPaint(); return eat(); }
-  if (k === "Tab" && !ev.shiftKey) { acAccept(); return eat(); }
-  if (k === "Enter" && (ac.moved || ac.wrap)) { acAccept(); return eat(); }
-  if (k === "Escape") { acClose(); return eat(); }
-  if (["Enter", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(k)) acClose();
-  return false;
+  if (!ac) return false;
+  const a = Autocomplete.key(ac, ev.key, {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}, src.value, acEnv());
+  if (a.use) ev.preventDefault();
+  if (a.message) say(a.message);
+  if (a.accept) acAccept();
+  else if (a.close) acClose();
+  else if (a.list) acShow(a.list);
+  return a.use;
 }
 src.addEventListener("blur", acClose);
 src.addEventListener("click", acClose);
@@ -1370,7 +1312,7 @@ const endDrag = (ev) => {
 };
 splitEl.addEventListener("pointerup", endDrag);
 splitEl.addEventListener("pointercancel", endDrag);
-splitEl.addEventListener("dblclick", () => { try { localStorage.removeItem("lens:" + splitKey()); } catch {} setSplit(null); });
+splitEl.addEventListener("dblclick", () => { store.remove(splitKey()); setSplit(null); });
 splitEl.addEventListener("keydown", (ev) => {
   const dir = {ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1}[ev.key];
   if (!dir) return;
@@ -1435,7 +1377,7 @@ function buildThemeForm() {
 buildThemeForm();
 applyTheme();
 // Inline the logo so it can read the theme's CSS variables; the <img> stays if this fails.
-fetch("/static/logo.svg").then((r) => r.text()).then((t) => {
+Api.text("/static/logo.svg").then((t) => {
   const svg = new DOMParser().parseFromString(t, "image/svg+xml").documentElement;
   if (svg.nodeName !== "svg") return;
   svg.setAttribute("class", "logo"); svg.setAttribute("aria-hidden", "true");
@@ -1476,17 +1418,17 @@ $("#solverLogCopy").onclick = () => copyText($("#solverLogText").textContent, "C
 // A run belongs to this page: when it goes away the worker should not keep computing for nobody.
 addEventListener("pagehide", () => {
   const a = Solvers.active;
-  if (a) navigator.sendBeacon(`/api/solve/${a.job}/interrupt`, new Blob(["{}"], {type: "application/json"}));
+  if (a) Api.beacon(`/api/solve/${a.job}/interrupt`, {});
 });
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
 // Worked examples come from the program itself, so they are there however it was installed.
-fetch("/api/examples").then((r) => r.json()).then((list) => {
+Api.json("/api/examples").then((list) => {
   for (const ex of list) {
     const li = document.createElement("li"), b = document.createElement("button");
     b.textContent = "Open"; b.setAttribute("aria-label", `Open example ${ex.title}`);
     b.onclick = async () => {
       if (src.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
-      const text = await (await fetch(`/api/examples/${ex.name}`)).text();
+      const text = await Api.text(`/api/examples/${ex.name}`);
       load(text, ex.name);
       $("#helpDlg").close();
     };
@@ -1506,14 +1448,13 @@ function readGreek() {
     const [k, v] = row.querySelectorAll("input");
     if (k.value && v.value) next[k.value] = v.value;
   }
-  greek = next; store.set("greek", greek); saveGreek(greek);
+  greek = next; saveGreek(greek);
 }
 let greekTimer = 0;
 function saveGreek(value) {
   clearTimeout(greekTimer);
-  greekTimer = setTimeout(() => fetch("/api/greek", {
-    method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({greek: value}),
-  }).catch(() => say("Could not save the Greek table to the server")), 300);
+  greekTimer = setTimeout(() => Api.send("/api/greek", {greek: value})
+    .catch(() => say("Could not save the Greek table to the server")), 300);
 }
 function greekRow(k = "", v = "") {
   const row = document.createElement("div"); row.className = "g-row";
@@ -1529,24 +1470,11 @@ function greekRow(k = "", v = "") {
 }
 function buildGreek() { $("#greekRows").replaceChildren(...Object.entries(greek).map(([k, v]) => greekRow(k, v))); }
 $("#greekAdd").onclick = () => { const r = greekRow(); $("#greekRows").append(r); r.querySelector("input").focus(); };
-$("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; store.set("greek", null); saveGreek(null); buildGreek(); };
+$("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; saveGreek(null); buildGreek(); };
 
 // ---- rename symbol -----------------------------------------------------------------
-function nameAtCaret() {
-  const t = src.value, p = src.selectionStart;
-  const sel = t.slice(src.selectionStart, src.selectionEnd);
-  const named = (tok) => tok.kind === "name" || tok.kind === "unit";
-  const whole = Editing.tokens(sel);
-  if (sel && whole.length === 1 && whole[0].text === sel && named(whole[0])) return sel;
-  const ls = t.lastIndexOf("\n", p - 1) + 1;
-  let le = t.indexOf("\n", p); if (le < 0) le = t.length;
-  const line = t.slice(ls, le);
-  if (line.trimStart().startsWith("#")) return "";
-  const at = Editing.tokens(line).filter(named).find((tok) => p - ls >= tok.start && p - ls <= tok.start + tok.text.length);
-  return at ? at.text : "";
-}
 function openRename() {
-  $("#renameOld").value = nameAtCaret();
+  $("#renameOld").value = Editing.nameAt(src.value, src.selectionStart, src.selectionEnd);
   $("#renameNew").value = "";
   $("#renameErr").hidden = true;
   $("#renameConfirm").value = "";
@@ -1567,11 +1495,8 @@ $("#renameForm").addEventListener("submit", async (ev) => {
   const text = src.value;
   let res;
   try {
-    res = await (await fetch("/api/rename", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({text, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value}),
-    })).json();
-  } catch { err.textContent = "Could not reach the server"; err.hidden = false; return; }
+    res = await Api.json("/api/rename", {text, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value});
+  } catch (e) { err.textContent = e.message; err.hidden = false; return; }
   if (res.warning) {
     // Standard unit: show the warning and let the same button confirm the swap.
     err.textContent = res.warning; err.hidden = false;
@@ -1596,7 +1521,7 @@ async function openUnits() {
   $("#unitsDlg").showModal();
   if (!ub.data) $("#ubList").replaceChildren(Object.assign(document.createElement("p"), {className: "note ub-empty", textContent: "Loading units\u2026"}));
   try {
-    ub.data = await (await fetch("/api/unitbrowse")).json();
+    ub.data = await Api.json("/api/unitbrowse");
     ub.userTags = ub.data.userTags;
   } catch { say("Could not load the units"); return; }
   if (ub.tag && !UnitBrowser.tagList(ub.data, ub.userTags).includes(ub.tag)) ub.tag = null;
@@ -1654,7 +1579,7 @@ function unitBrowseRow(row) {
 async function saveTags(tags) {
   let res;
   try {
-    res = await (await fetch("/api/tags", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({tags})})).json();
+    res = await Api.json("/api/tags", {tags}, "PUT");
   } catch { say("Could not save the tags"); return; }
   if (!res.ok) { say(res.error); return; }
   ub.userTags = res.tags;
@@ -1695,7 +1620,7 @@ function emptyNote() {
 }
 async function loadUnits() {
   let units = [];
-  try { units = (await (await fetch("/api/settings")).json()).units; } catch {}
+  try { units = (await Api.json("/api/settings")).units; } catch {}
   $("#unitRows").replaceChildren(...units.map((u) => unitRow(u.name, u.definition)));
   emptyNote();
 }
@@ -1709,9 +1634,7 @@ $("#unitSave").onclick = async () => {
   const keep = units.map((u, i) => [u, rows[i]]).filter(([u]) => u.name || u.definition);
   let res;
   try {
-    res = await (await fetch("/api/units", {
-      method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({units: keep.map(([u]) => u)}),
-    })).json();
+    res = await Api.json("/api/units", {units: keep.map(([u]) => u)}, "PUT");
   } catch { say("Could not save the units"); return; }
   if (!res.ok) {
     keep.forEach(([u, row], i) => {
@@ -1727,7 +1650,7 @@ $("#unitSave").onclick = async () => {
 
 // Tell the server this page is open, so the packaged app can quit when it is closed.
 const clientId = Math.random().toString(36).slice(2);
-const beat = (path) => navigator.sendBeacon(path, new Blob([JSON.stringify({ id: clientId })], { type: "application/json" }));
+const beat = (path) => Api.beacon(path, {id: clientId});
 beat("/api/ping");
 setInterval(() => beat("/api/ping"), 5000);
 window.addEventListener("pagehide", () => beat("/api/bye"));
@@ -1738,18 +1661,24 @@ window.addEventListener("load", () => {
 });
 
 // Greek table and global units live on the server. A table saved in this browser by an
-// older build is sent up once, so nothing is lost.
+// older build is sent up once and then forgotten, so nothing is lost and a reset stays reset.
+// Resolves to the settings, or null.
 async function loadSettings() {
-  try {
-    const cfg = await (await fetch("/api/settings")).json();
-    if (cfg.greek) greek = cfg.greek;
-    else if (store.get("greek", null)) saveGreek(greek);
-  } catch {}
+  let cfg;
+  try { cfg = await Api.json("/api/settings"); } catch { return null; }
+  const old = store.get("greek", null);
+  if (cfg.greek) greek = cfg.greek;
+  else if (old && typeof old === "object") {
+    greek = old;
+    try { if (!(await Api.send("/api/greek", {greek})).ok) return cfg; } catch { return cfg; }
+  }
+  store.remove("greek");
+  return cfg;
 }
 
 // Button icons are files under static/icons/, inlined so they take the button's text color.
 for (const el of document.querySelectorAll("[data-icon]")) {
-  fetch(`/static/icons/${el.dataset.icon}.svg`).then((r) => r.text()).then((svg) => {
+  Api.text(`/static/icons/${el.dataset.icon}.svg`).then((svg) => {
     el.innerHTML = svg;
     el.firstElementChild.setAttribute("aria-hidden", "true");
   }).catch(() => {});
@@ -1766,7 +1695,7 @@ function openedApi(path) {
 // the edits made since (they are in the stored text) and still saves to that file.
 async function openStartFile() {
   let o;
-  try { o = await (await fetch(openedApi("/api/opened"))).json(); } catch { return false; }
+  try { o = await Api.json(openedApi("/api/opened")); } catch { return false; }
   if (!o.file) return false;
   if (o.error) { say(o.error); return false; }
   const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true} : null);
@@ -1779,19 +1708,16 @@ async function openStartFile() {
 }
 
 (async () => {
-  await Promise.all([loadSettings(), loadVocab()]);
+  const [cfg] = await Promise.all([loadSettings(), loadVocab()]);
   if (!(await openStartFile())) {
     const text = store.get("text", null);
-    src.value = text ?? await (await fetch("/static/example.lens")).text();
+    src.value = text ?? await Api.text("/static/example.lens");
   }
   wrap = store.get("wrap", "inline");
   $("#wrap").value = wrap;
   setView(store.get("view", "typeset"), false);
   // The first time LENS opens on this machine, show the welcome and help window.
-  try {
-    const cfg = await (await fetch("/api/settings")).json();
-    if (!cfg.welcomed) { $("#helpDlg").showModal(); fetch("/api/welcomed", {method: "PUT"}).catch(() => {}); }
-  } catch {}
+  if (cfg && !cfg.welcomed) { $("#helpDlg").showModal(); Api.send("/api/welcomed").catch(() => {}); }
 })();
 </script>
 </body>

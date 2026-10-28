@@ -40,7 +40,8 @@ _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
 
 # Option values that are expressions. Everything else under a block (titles, colours, methods)
-# is text, so a rename leaves it alone.
+# is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
+# (static/editing.js isTextAt; tests/sheettext_vectors.json holds the two together).
 PLOT_LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")
 SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds")
 

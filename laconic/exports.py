@@ -11,7 +11,7 @@ flavour of math each format needs (siunitx for .tex, the live view's for the res
 
 This module stays cheap to import (the writers import it); the sheet and the writers are
 loaded when `export` runs."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # What the Markdown and PDF writers say about a solver block whose result cannot be trusted.
 OUT_OF_DATE = ("Out of date", "This solver result is out of date or was never run; the values may be starting values.")

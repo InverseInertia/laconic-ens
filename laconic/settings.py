@@ -15,6 +15,7 @@ from pathlib import Path
 _lock = threading.Lock()
 
 # The page's display preferences: what each holds is the page's business (theme.js checks a theme).
+# The server writes this list into the page (prefs.js reads it), so it is kept only here.
 PREFS = ("theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest", "layout", "autoLayout", "layoutAsk")
 
 

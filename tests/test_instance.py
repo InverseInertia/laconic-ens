@@ -1,8 +1,16 @@
 """The packaged app reuses a running LENS, or the port the last one had (instance.py)."""
 import socket
 
+import pytest
+
 from laconic import instance
-from laconic import server as app_module
+from laconic.opened import sheets
+
+
+@pytest.fixture(autouse=True)
+def fresh_sheets():
+    yield
+    sheets.clear()
 
 
 def _port(url):
@@ -45,19 +53,17 @@ def test_skips_a_port_another_program_holds():
         assert instance.claim(ports=[taken, free]) == free
 
 
-def test_hands_the_sheet_to_a_running_lens(server, monkeypatch, tmp_path):
+def test_hands_the_sheet_to_a_running_lens(server, tmp_path):
     sheet = tmp_path / "beam.lens"
     sheet.write_text("x = 1\n", encoding="utf-8")
     opened = []
-    monkeypatch.setattr(app_module, "OPEN_WINDOW", opened.append)
-    monkeypatch.setattr(app_module, "HANDED", {})
+    sheets.serve(opened.append)
     free = _free_port()
     assert instance.claim(str(sheet), ports=[free, _port(server)]) is None
     token = opened[0].removeprefix("/?sheet=")
-    assert app_module.HANDED[token] == sheet.resolve()
+    assert sheets.get(token) == sheet.resolve()
 
 
-def test_a_lens_that_will_not_open_a_window_is_passed_over(server, monkeypatch):
-    monkeypatch.setattr(app_module, "OPEN_WINDOW", None)
+def test_a_lens_that_will_not_open_a_window_is_passed_over(server):
     free = _free_port()
     assert instance.claim(ports=[_port(server), free]) == free
