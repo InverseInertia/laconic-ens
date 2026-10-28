@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Fixes
+- **After an update the app window works again**: in the Chromium app window, an update could leave the button icons missing, Help not opening and every button except Save doing nothing, because the browser kept running the previous version's scripts against the new page. LENS now names its files by version and has the browser check them with LENS each time, so an update takes effect at once. If an update before this one left the window broken, this update fixes it too. (#119)
+
 ## [v0.4.4](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.4) (2026-10-28)
 
 ### New
