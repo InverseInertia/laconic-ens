@@ -221,6 +221,51 @@ def test_percent_is_a_unit_worth_a_hundredth():
     assert r"\%" in last("x = 5'%").latex
 
 
+# ---- unit ratios: strain in mm/mm (#114) ----------------------------------------------
+def test_a_unit_over_itself_stays_a_unit_ratio():
+    # #114: 'mm/'mm cancelled to a bare 1 with or without !noassume
+    assert last("'mm/'mm").text == "1 mm/mm"
+    assert last("e = 0.002'mm/'mm").text == "e = 0.002 mm/mm"
+    assert last("e = 0.5'mm / 200'mm -> 'mm/'mm").text == "e = 0.0025 mm/mm"
+    assert last("e = 0.5'in / 200'in -> 'in/'in").text == "e = 0.0025 in/in"
+    assert last("e = 0.5'mm / 200'mm -> 'um/'m").text == "e = 2500 μm/m"
+    assert last("!noassume\ne = 0.002'mm/'mm").text == "e = 0.002 mm/mm"
+    assert last("!noassume\n!assume\n'mm/'mm").text == "1 mm/mm"
+
+
+def test_a_unit_ratio_is_a_plain_number_in_arithmetic():
+    sheet = "e = 0.5'mm / 200'mm -> 'mm/'mm\n"
+    assert last(sheet + "e").text == "0.0025 mm/mm"
+    assert last(sheet + "2 * e + 0.001").text == "0.006 mm/mm"     # still only a ratio
+    assert last(sheet + "s = e * 200'GPa").text == "s = 5e8 Pa"
+    assert last("!noassume\n" + sheet + "s = e * 200'GPa").text == "s = 0.5 GPa"
+    assert last(sheet + "e^2").text == "6.25e-6"
+    assert last(sheet + "e -> 'in/'in").text == "0.0025 in/in"
+
+
+def test_only_a_typed_unit_over_itself_makes_a_ratio():
+    assert last("e = 0.5'mm / 200'mm").text == "e = 0.0025"     # computed: still cancels
+    assert last("L = 5'mm\nn = L / 'mm").text == "n = 5"        # the way to strip a unit
+    assert last("x = '%/'%").text == "x = 1"
+    assert last("x = 'R/'R").text == "x = 1"
+
+
+def test_a_unit_ratio_prints_as_the_unit_over_itself():
+    assert r"0.002\,\mathrm{mm}/\mathrm{mm}" in last("e = 0.002'mm/'mm").latex
+    ws = evaluate("e = 0.002'mm/'mm\nf = 0.002'ft/'ft", siunitx=True)
+    assert r"\qty{0.002}{\milli\meter\per\milli\meter}" in ws.results[0].latex
+    assert r"\qty{0.002}{\foot\per\foot}" in ws.results[1].latex
+    assert r"\DeclareSIUnit{\foot}" in "\n".join(ws.declarations)
+    assert not any("_per_" in d for d in ws.declarations)
+
+
+def test_unit_ratios_are_not_suggested_as_units():
+    from laconic.vocab import _units
+    run("'mm/'mm")
+    _units.cache_clear()
+    assert not any(catalogue.is_ratio(u[0]) for u in _units())
+
+
 def test_percent_and_dollar_without_a_unit_mark_say_how_to_write_them():
     assert "5'%" in last("x = 5%").error
     assert "'USD" in last("x = $5").error

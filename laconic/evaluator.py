@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .commands import SheetMode
 from .symbols import FUNCTION, VARIABLE, SymbolTable
-from .nodes import BinOp, Name, Str, UnitLit, refs
+from .nodes import BinOp, Implicit, Name, Str, UnitLit, refs
 from . import props as _props
 from . import catalogue
 from .functions import FUNCTIONS, builtin
@@ -294,6 +294,9 @@ class Evaluator:
         if op == "/":
             if _ndim(b) >= 1:
                 raise EvalError("Cannot divide by a matrix. Use solve(A, b) or inv(A)")
+            ratio = self._typed_ratio(n, a, b)
+            if ratio is not None:   # 'mm/'mm, 0.002'mm/'mm: a strain, not a bare number
+                return self.Q(a.magnitude / b.magnitude, ratio)
             return a / b
         if op == ".*":
             return self._shape_guard(lambda: a * b, a, b, ".*")
@@ -302,6 +305,14 @@ class Evaluator:
         if op == "^":
             return self.power(a, b)
         raise EvalError(f"Unknown operator {op}")
+
+    def _typed_ratio(self, n, a, b):
+        """The unit ratio for a typed unit over the same typed unit, `'mm/'mm` or
+        `0.002'mm/'mm`, else None: `L/'mm` and `0.5'mm/200'mm` still cancel to a number."""
+        left = n.left.factors[0] if isinstance(n.left, Implicit) and len(n.left.factors) == 1 else n.left
+        if isinstance(n.right, UnitLit) and isinstance(left, UnitLit) and a.units == b.units:
+            return catalogue.ratio(self.ureg, b.units)
+        return None
 
     def _shape_guard(self, fn, a, b, op):
         try:

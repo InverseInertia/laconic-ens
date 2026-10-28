@@ -248,6 +248,10 @@ class Fmt:
     def unit(self, units):
         if units == self._dimless:
             return ""
+        base = catalogue.ratio_base(units)   # mm/mm, a unit ratio: the unit over itself
+        if base:
+            u = self.unit(self.ureg.Unit(base))
+            return f"{u}\\per{u}" if self.siunitx else f"{u}/{u}"
         if self.siunitx:
             m = re.fullmatch(r"\\si\[\]\{(.*)\}", format(units, "Lx"))
             if not m:

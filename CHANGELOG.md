@@ -11,6 +11,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### New
 - **LENS is open source under the MIT License.** The Windows and Linux installs now include it as `LICENSE.txt`, next to `THIRD-PARTY-NOTICES.txt` with the licenses of the Python libraries bundled with LENS. (#116)
+- **Strain units**: a unit typed over itself, such as `'mm/'mm` or `'in/'in`, now stays a unit ratio instead of cancelling to a plain number, with or without `!noassume`. Write `0.002'mm/'mm`, or convert a computed strain with `-> 'mm/'mm`; it shows as `0.0025 mm/mm` and drops out when multiplied by another unit (`e * 200'GPa` is a stress). (#114)
 
 ### Changes
 - Math keys and suggestions now work in a plot note's position, `at (x, y)`, and math keys are off on a solver's `method:` line, matching what the sheet treats as math. (#116)
