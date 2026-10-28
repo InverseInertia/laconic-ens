@@ -65,9 +65,6 @@ document.fonts.ready.then(() => MathFit.fitAll(document, true));
 """
 
 
-_AUTOPRINT = "document.fonts.ready.then(() => setTimeout(() => print(), 100));"
-
-
 def _esc(s):
     return html.escape(s, quote=True)
 
@@ -111,10 +108,10 @@ def block(r):
     return None
 
 
-def page(results, title=None, assets=None, autoprint=False):
+def page(results, title=None, assets=None):
     """The whole sheet as one HTML document. `assets` is the URL the package's static folder is
     served at; by default the folder itself, as a file:// URL, for printing on this machine.
-    `autoprint` opens the browser's print dialog once the math is laid out."""
+    The page prints the served one itself, from a hidden frame, once its fonts are in."""
     assets = (assets or STATIC.as_uri()).rstrip("/")
     body, prev = ([f"<h1>{_esc(title)}</h1>"] if title else []), None
     for r in results:
@@ -136,7 +133,7 @@ def page(results, title=None, assets=None, autoprint=False):
 <style>{_STYLE % {"title": footer}}</style></head>
 <body>
 {chr(10).join(body)}
-<script>{_SCRIPT}{_AUTOPRINT if autoprint else ""}</script>
+<script>{_SCRIPT}</script>
 </body></html>
 """
 
@@ -150,7 +147,31 @@ class NoBrowser(RuntimeError):
     pass
 
 
-def pdf(doc, timeout=60):
+# What the headless browser is started with, besides its profile and the files. It is a browser
+# of its own for one page, so everything a browser does at startup for a person is left out:
+# field trials (a test or unbranded build's built-in trial config can stall the command-line print
+# until it is killed, #102), background fetches, component updates, sync and extensions.
+# The virtual time budget is virtual: it lets the page's own timers and font callbacks (the
+# second fit in _SCRIPT) run before the print, and costs no real time on an idle page.
+FLAGS = ("--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+         "--no-pdf-header-footer", "--disable-field-trial-config", "--disable-background-networking",
+         "--disable-component-update", "--disable-sync", "--disable-extensions", "--mute-audio",
+         "--virtual-time-budget=1000", "--allow-file-access-from-files")
+
+# A healthy print takes about a second; this is only the most a stalled browser may cost before
+# the page falls back to its own print dialog.
+TIMEOUT = 20
+
+
+def command(exe, src, out, profile):
+    """The command line that prints file `src` to `out` with browser `exe` and a fresh `profile`."""
+    cmd = [exe, *FLAGS, f"--user-data-dir={profile}", f"--print-to-pdf={out}", Path(src).as_uri()]
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        cmd.insert(1, "--no-sandbox")   # Chromium refuses to run as root with its sandbox
+    return cmd
+
+
+def pdf(doc, timeout=None):
     """`doc` (from page()) printed to PDF bytes by a headless Chromium."""
     from .__main__ import _browser_env
     exe = find_chromium()
@@ -162,13 +183,8 @@ def pdf(doc, timeout=60):
         src, out = Path(tmp) / "sheet.html", Path(tmp) / "sheet.pdf"
         src.write_text(doc, encoding="utf-8")
         # A profile of its own, so a browser the user already has open does not take the job over.
-        cmd = [exe, "--headless", "--disable-gpu", "--no-first-run", "--no-pdf-header-footer",
-               f"--user-data-dir={Path(tmp) / 'profile'}", "--virtual-time-budget=10000",
-               "--allow-file-access-from-files", f"--print-to-pdf={out}", src.as_uri()]
-        if hasattr(os, "geteuid") and os.geteuid() == 0:
-            cmd.insert(1, "--no-sandbox")   # Chromium refuses to run as root with its sandbox
-        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                       env=_browser_env(), timeout=timeout, check=False)
+        subprocess.run(command(exe, src, out, Path(tmp) / "profile"), stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, env=_browser_env(), timeout=timeout or TIMEOUT, check=False)
         if not out.is_file() or out.stat().st_size == 0:
             raise RuntimeError(f"{Path(exe).name} did not write a PDF")
         return out.read_bytes()

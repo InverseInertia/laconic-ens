@@ -160,15 +160,15 @@ def export_pdf(sheet: Sheet):
     such browser or it fails; the page then prints /api/export/print with the browser's own dialog."""
     doc = pdfdoc.page(_run(sheet, False).results, title=sheet.title)
     try:
-        return Response(pdfdoc.pdf(doc, timeout=30), media_type="application/pdf")
+        return Response(pdfdoc.pdf(doc), media_type="application/pdf")
     except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
         raise HTTPException(501, str(e))
 
 
 @app.post("/api/export/print", response_class=HTMLResponse)
 def export_print(sheet: Sheet):
-    """The printable document, opening the print dialog by itself."""
-    return pdfdoc.page(_run(sheet, False).results, title=sheet.title, assets="/static", autoprint=True)
+    """The printable document, for the page to print from a hidden frame of its own (no pop-up)."""
+    return pdfdoc.page(_run(sheet, False).results, title=sheet.title, assets="/static")
 
 
 @app.post("/api/save", response_class=PlainTextResponse)
