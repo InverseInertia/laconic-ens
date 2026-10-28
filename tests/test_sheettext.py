@@ -62,6 +62,12 @@ def test_line_kinds_and_owners(text, expected):
         assert not b or b.lines[0].n == b.header and l in b.lines
 
 
+def test_a_comment_keeps_saying_so_when_a_block_owns_it():
+    sheet = scan("# top\n!root x\n  equation: x = 1\n  # aside\n  #@ result {}\n  ## head")
+    assert [l.comment for l in sheet.lines] == [True, False, False, True, True, True]
+    assert sheet.line(4).kind == "solveropt" and sheet.line(5).result == "{}"
+
+
 def _spans(line):
     return [line.text[a:b] for a, b in line.spans]
 

@@ -42,12 +42,7 @@ def reduce_si(q, ureg):
     names = [n for n, _ in q.unit_items()]
     if not names:
         return q
-    # Temperatures: degC stays, degF becomes degC. Kelvin is already SI.
-    if "degree_Fahrenheit" in names and len(names) == 1:
-        return q.to("degC")
-    if "degree_Celsius" in names:
-        return q
-    special = catalogue.reduce(q, ureg)   # percent, currencies
+    special = catalogue.reduce(q, ureg)   # offset temperatures, percent, currencies
     if special is not None:
         return special
     r = q.to_base_units()

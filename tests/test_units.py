@@ -310,6 +310,8 @@ def test_the_catalogue_lists_every_offset_unit():
     temps = [n for n in ureg._units if ureg.Quantity(1, n).dimensionality == {"[temperature]": 1}]
     offset = {n for n in temps if ureg.Quantity(0, n).to_base_units().magnitude != 0}
     assert {str(ureg.parse_units(n)) for n in offset} == set(OFFSET_TEMPERATURES)
+    from laconic.catalogue import KEPT_TEMPERATURES, SHOWN_AS_CELSIUS
+    assert set(KEPT_TEMPERATURES + SHOWN_AS_CELSIUS) <= set(OFFSET_TEMPERATURES)
 
 
 # ---- physical constants ------------------------------------------------------------

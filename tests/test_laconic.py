@@ -193,6 +193,8 @@ def test_reduce_si_on_temperatures():
     u = registry()
     assert str(reduce_si(u.Quantity(68, "degF"), u).units) == "degree_Celsius"
     assert reduce_si(u.Quantity(20, "degC"), u).magnitude == 20
+    assert str(reduce_si(u.Quantity(20, "degF*m"), u).units) == "kelvin * meter"   # only a lone °F
+    assert str(reduce_si(u.Quantity(20, "degRe"), u).units) == "kelvin"
 
 
 # ---- globals and !clear --------------------------------------------------------

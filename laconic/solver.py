@@ -222,7 +222,7 @@ def parse_block(block):
             except ValueError:
                 b.stored, b.stored_note = None, f"the result on line {n} could not be read"
             continue
-        if raw.strip().startswith("#"):
+        if line.comment:
             continue
         try:
             if not o:

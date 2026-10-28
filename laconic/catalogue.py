@@ -72,6 +72,10 @@ _SIUNITX_ALIASES = {"electron_volt": "electronvolt", "astronomical_unit": "astro
 # Offset temperature units by Pint name, with the spelling a sheet types. `35'degF` builds a
 # temperature of 35 °F, but `*` and `/` read 'degF as an absolute temperature, 1 °F = 255.9 K.
 OFFSET_TEMPERATURES = {"degree_Celsius": "degC", "degree_Fahrenheit": "degF", "degree_Reaumur": "degRe"}
+# How a result in one is shown: Celsius stays Celsius, whatever it is combined with; Fahrenheit on
+# its own becomes Celsius. Kelvin is already SI, and anything else (Réaumur) reduces to kelvin.
+KEPT_TEMPERATURES = ("degree_Celsius",)
+SHOWN_AS_CELSIUS = ("degree_Fahrenheit",)
 
 
 def define(ureg):
@@ -99,8 +103,13 @@ def _is_money(name):
 
 
 def reduce(q, ureg):
-    """A result in percent or a currency in the form it is shown in, or None when
-    no family here claims it and the plain SI reduction applies."""
+    """A result in an offset temperature, percent or a currency in the form it is shown in,
+    or None when no family here claims it and the plain SI reduction applies."""
+    names = [n for n, _ in q.unit_items()]
+    if any(n in KEPT_TEMPERATURES for n in names):
+        return q
+    if len(names) == 1 and names[0] in SHOWN_AS_CELSIUS:
+        return q.to("degC")
     if dict(q.unit_items()) == {"percent": 1}:   # 5'% + 2'% stays 7 %; '% * 'N or '%^2 drops it
         return q
     money = [n for n, _ in q.unit_items() if _is_money(n)]
