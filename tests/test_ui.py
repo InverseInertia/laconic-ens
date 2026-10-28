@@ -523,12 +523,11 @@ def test_long_equations_are_fitted_to_the_results_pane(page):
     page.wait_for_selector(".row[data-line='4'] .math.wrapped")
 
 
-def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, monkeypatch):
+def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, sheets):
     """#49: `lens --window sheet.lens` (a double-clicked file) opens that sheet, and Save writes it."""
-    from laconic import server
     sheet = tmp_path / "beam.lens"
     sheet.write_text("x = 2\n", encoding="utf-8")
-    monkeypatch.setattr(server, "OPENED", sheet)
+    sheets.start(sheet)
     page.reload()
     page.wait_for_function("document.querySelector('#src').value.startsWith('x = 2')")
     assert page.input_value("#name") == "beam"
@@ -549,7 +548,7 @@ def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_pat
     assert page.get_attribute("#save", "title") == "Save to beam.lens (Ctrl+S)"
 
 
-def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(page, server, tmp_path, monkeypatch):
+def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(page, server, tmp_path, sheets):
     """A second launch hands its sheet to the running LENS, which opens it on the same port
     (so the window has this browser's presets) and saves back to that sheet, not the first one."""
     from laconic import server as app_module
@@ -557,8 +556,8 @@ def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(pa
     first.write_text("a = 1\n", encoding="utf-8")
     second.write_text("b = 2\n", encoding="utf-8")
     opened = []
-    monkeypatch.setattr(app_module, "OPENED", first)
-    monkeypatch.setattr(app_module, "OPEN_WINDOW", opened.append)
+    sheets.start(first)
+    sheets.serve(opened.append)
     app_module.open_window(app_module.WindowBody(path=str(second)))
     page.goto(server + opened[0])
     page.wait_for_function("document.querySelector('#src').value.startsWith('b = 2')")

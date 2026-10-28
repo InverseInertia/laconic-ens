@@ -182,10 +182,11 @@ def main():
             threading.Thread(target=_launch, args=(url, a.app)).start()
         import uvicorn
         from . import server
+        from .opened import sheets
         if a.file:
-            server.OPENED = Path(a.file).resolve()
+            sheets.start(a.file)
         # Another launch of the packaged app hands its window to this server (instance.py).
-        server.OPEN_WINDOW = lambda path: threading.Thread(target=_launch, args=(url + path, a.app)).start()
+        sheets.serve(lambda path: threading.Thread(target=_launch, args=(url + path, a.app)).start())
         threading.Thread(target=_warm, daemon=True).start()
         uvicorn.Server(uvicorn.Config(server.app, log_level="warning")).run(sockets=[sock])
         return
