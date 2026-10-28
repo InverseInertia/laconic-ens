@@ -11,7 +11,7 @@ from . import catalogue
 from .blockedit import newline
 from .evaluator import EvalError, Evaluator
 from .latex import Fmt, Printer, name_latex
-from .lineresult import LineResult, PlotPayload, SolverPayload
+from .lineresult import LineResult, PlotPayload, RegressionPayload, SolverPayload
 from .nodes import Assign, Convert, FuncDef, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
@@ -20,8 +20,9 @@ from .plotspec import Builder
 from .sheettext import scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import commands, solver
+from . import commands, regression, solver
 from .commands import CommandError
+from .regression import RegressionError
 from .solver import SolverError
 
 
@@ -105,7 +106,8 @@ def _run(text, siunitx=False, global_units=None, until=None):
         elif i in owned:
             results.append(owned.pop(i))
         elif l.kind == "solver":
-            r, owned = _run_solver(i, raw, sheet.block(i), ev, fmt, used)
+            run_block = _run_regression if sheet.block(i).command == "regression" else _run_solver
+            r, owned = run_block(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "plot":
             r, owned = _run_plot(i, raw, sheet.block(i), ev, fmt, used)
@@ -258,6 +260,60 @@ def _run_solver(i, raw, handle, ev, fmt, used):
                       stale=status != "valid" or taint), owned
 
 
+def _run_regression(i, raw, handle, ev, fmt, used):
+    """A `!regression` line with its option lines. Unlike a solver block it is worked out here,
+    every run (a least-squares fit is quick and exact), and defines its coefficients (and R²) for
+    the lines below, as an assignment does."""
+    block = regression.parse_block(handle)
+    owned = {}
+    for l in handle.members:
+        msg = block.errors.get(l.n)
+        owned[l.n] = LineResult(l.n, l.text, "error" if msg else "solveropt", error=msg or "")
+
+    def fail(msg):
+        return LineResult(i, raw, "error", error=msg, block=handle), owned
+
+    if block.problem:
+        return fail(block.problem)
+    for node in block.nodes():
+        used |= refs(node).units
+    try:
+        f = regression.fit(block, ev)
+        stale = ev.symbols.tainted(block.nodes())
+        defined = []
+        for name, q in zip(block.names, f.coefficients):
+            if ev.mode.assume:
+                q = reduce_si(q, ev.ureg)
+            defined.append((ev.symbols.define(name, q, text=fmt.plain(q), stale=stale).key, q))
+        r2 = ev.Q(f.r2, "dimensionless")
+        if block.r2:
+            r2_key = ev.symbols.define(block.r2, r2, text=fmt.plain(r2), stale=stale).key
+    except Exception as e:
+        return fail(describe(e))
+    values = [_value(key, fmt.var(key), fmt.quantity(q)) for key, q in defined]
+    values.append(_value(r2_key if block.r2 else "R²", fmt.var(r2_key) if block.r2 else "R^{2}", fmt.quantity(r2)))
+    plain = [f"{key} = {fmt.plain(q)}" for key, q in defined]
+    plain.append(f"{r2_key if block.r2 else 'R²'} = {fmt.plain(r2)}")
+    model = _polynomial(f, defined, ev, fmt)
+    tex = r"\begin{gathered} " + model + r" \\ " + r",\quad ".join(v["latex"] for v in values) + r" \end{gathered}"
+    info = RegressionPayload(block.names, f.degree, f.points, f.r2, model, values)
+    return LineResult(i, raw, "regression", stages=[tex], block=handle, payload=info, stale=stale,
+                      text="; ".join(plain) + f"  ({regression.describe(f)})"), owned
+
+
+def _polynomial(f, defined, ev, fmt):
+    """The fitted polynomial in the names it defined: `y = a + b x + c x^2`."""
+    x = fmt.var(ev.vkey(f.x_name)) if f.x_name else "x"
+    y = fmt.var(ev.vkey(f.y_name)) if f.y_name else "y"
+    if len(defined) == 1 and f.degree > 0:
+        base = fmt.var(defined[0][0])
+        coeffs = [f"{{{base}}}_{{{k + 1}}}" for k in range(f.degree + 1)]
+    else:
+        coeffs = [fmt.var(key) for key, _ in defined]
+    terms = [c if k == 0 else rf"{c}\,{x}" if k == 1 else rf"{c}\,{{{x}}}^{{{k}}}" for k, c in enumerate(coeffs)]
+    return f"{y} = " + " + ".join(terms)
+
+
 def _value(name, lhs, rhs):
     return {"name": name, "lhs": lhs, "rhs": rhs, "latex": f"{lhs} = {rhs}"}
 
@@ -274,7 +330,7 @@ def block_at(text, line, global_units=None):
 def solver_blocks(text, global_units=None):
     """The results of the solver blocks that read (they carry a SolverPayload), top to bottom. The
     sheet runs only as far as the last block, and not at all when there is none."""
-    ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver"]
+    ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver" and b.command != "regression"]
     if not ends:
         return []
     ws = evaluate(text, global_units=global_units, until=max(ends))
@@ -303,8 +359,9 @@ def _run_line(i, raw, s, ev, fmt, used):
         typed = literal or _bare_number(expr)
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.
+        value = catalogue.settle_ratio(value)   # mm/mm stays only on a result that is only mm/mm
         if ev.mode.assume and not (literal or isinstance(expr, Convert)):
-            value = reduce_si(value, ev.ureg)
+            value = reduce_si(value, ev.ureg, ev.mode.freq)
             if ev.mode.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
                 value = value.to("degree")
         stale = ev.symbols.tainted([expr])
@@ -368,7 +425,7 @@ def _symbols(table, line):
 
 def describe(e):
     """An exception as the message a line shows for it."""
-    if isinstance(e, (ParseError, EvalError, PlotError, SolverError, ScopeError)):
+    if isinstance(e, (ParseError, EvalError, PlotError, SolverError, RegressionError, ScopeError)):
         return str(e)
     if isinstance(e, pint.errors.DimensionalityError):
         dims = [d for dim in (e.dim1, e.dim2) for d in re.findall(r"\[(\w+)\]", str(dim))]

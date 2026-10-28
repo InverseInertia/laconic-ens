@@ -40,6 +40,10 @@ CASES = {
                 "Complex results are shown as magnitude∠angle",
                 lambda rs: shown(rs[2]) == "5∠0.9273 rad" and "allows only real results" in rs[4].error
                 and shown(rs[5]) == "5"),
+    "freq": ("!freq rad\nw = sqrt(4'N/'m / 1'kg)\nw -> 'Hz\n!freq si\n50'Hz -> 'rad/'s", 1,
+             "Hz is cycles per second, 1 Hz = 2π rad/s; a 1/s result is shown in rad/s",
+             lambda rs: rs[1].text == "w = 2 rad/s" and shown(rs[2]) == "0.3183 Hz"
+             and rs[3].text == "Hz and rad/s are both 1/s again, 1 Hz = 1 rad/s" and shown(rs[4]) == "50 rad/s"),
     "plotspec": ("!plotspec grid: off\n!plotspec reset", 1, "Plots below: grid off",
                  lambda rs: rs[1].text == "Plot options are back to the defaults"),
     # Statements: their lines are run by plotspec.py and solver.py, never by the dispatcher.
@@ -47,6 +51,8 @@ CASES = {
     "root": ("x = 1\n!root x\n  equation: x = 2", 2, None, lambda rs: rs[1].kind == "solver"),
     "minimize": ("x = 1\n!minimize x\n  objective: (x - 2)^2", 2, None, lambda rs: rs[1].kind == "solver"),
     "maximize": ("x = 1\n!maximize x\n  objective: -(x - 2)^2", 2, None, lambda rs: rs[1].kind == "solver"),
+    "regression": ("D = [0, 1, 2; 1, 3, 5]\n!regression a, b\n  data: D", 2, None,
+                   lambda rs: rs[1].kind == "regression"),
 }
 
 # A bad line for each argument rule, and what its error says.
@@ -71,8 +77,8 @@ def test_command(command):
     if text is not None:
         assert (rs[n - 1].kind, rs[n - 1].text) == ("command", text)
     assert after(rs)
-    if command.name in ("root", "minimize", "maximize"):
-        return                      # a bare `!root` is still a solver block, reported by solver.py
+    if command.name in ("root", "minimize", "maximize", "regression"):
+        return                      # a bare `!root` is still a block, reported by solver.py or regression.py
     line, error = (f(command) for f in BAD[type(command.args)])
     r = run(line)[0]
     assert r.kind == "error" and error in r.error

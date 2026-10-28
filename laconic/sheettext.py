@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 # A name may hold ∞ as a whole subscript (`v_∞`, `T_∞_0`), the free-stream mark; ∞ on its own is
 # the constant, and not a name.
 IDENT = r"[^\W\d](?:_∞|\w)*"
-NAME = rf"~?{IDENT}[`!@]*"
+NAME = rf"~?{IDENT}[`!@&]*"
 UNIT = r"'(?:(?:[^\W\d]|°)[\w°]*|%)"
 # A trailing i or j makes the number imaginary: 4i, 2.5e3j. `2in` is still a number and a name.
 NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?(?:[ij](?!\w))?"
@@ -34,7 +34,7 @@ _UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 
 _PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
-_SOLVER_RE = re.compile(r"^!(root|minimize|maximize)(?:[ \t]+(.*\S))?[ \t]*$")
+_SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression)(?:[ \t]+(.*\S))?[ \t]*$")
 _PLOT_OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
@@ -43,7 +43,7 @@ _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
 # is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
 # (static/editing.js isTextAt; tests/sheettext_vectors.json holds the two together).
 PLOT_LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")
-SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds")
+SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "r2")
 
 
 @dataclass(frozen=True)
@@ -71,7 +71,7 @@ def tokenize(s, start=0, end=None):
 
 def is_name(s):
     """A variable or function name: letters, digits and _, an optional ~ in front and
-    ` ! @ after."""
+    ` ! @ & after."""
     return bool(_NAME_RE.match(s))
 
 
@@ -156,7 +156,7 @@ class Line:
 class Block:
     """A `!plot` or a solver header and the lines it owns."""
     kind: str           # "plot" or "solver"
-    command: str        # "plot", "root", "minimize" or "maximize"
+    command: str        # "plot", "root", "minimize", "maximize" or "regression"
     args: str           # what follows the command on the header line
     lines: list = field(default_factory=list)   # the header Line, then the owned lines
 

@@ -17,6 +17,7 @@ z = 3 + 4i   v = 10'V∠30'deg   complex numbers (see Complex Numbers)
 'smoot = 1.7018'm              define a unit (see Units)
 ~g = 9.81'm / 's^2             global variable (see below)
 x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
+u& = 3                         bar over a variable
 ```
 
 ## Names and units
@@ -24,7 +25,7 @@ x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 - A **unit** is `'` followed by a Pint unit name: `'kN`, `'mm`, `'degC`, `'°C`, `'ohm`.
 - A bare name is always a variable, so `m` can be a mass while `'m` is the metre.
 - Only a number followed by units may be written without `*`. `3 x` is an error; write `3*x`.
-- Names may use Greek letters and subscripts (`σ_max`, `M_max`). A trailing digit becomes a subscript in the typeset view (`x1` is x₁).
+- Names may use Greek letters and subscripts (`σ_max`, `M_max`). A trailing digit becomes a subscript in the typeset view (`x1` is x₁). Spelled-out Greek names typeset as the letter (`sigma_max` is σ<sub>max</sub>), and `forall` is ∀, the struck-through V some fluid mechanics texts use for volume to keep V for velocity: `forall_cv = 0.2'm^3`.
 - A subscript may be infinity, as in a free-stream `T_∞` or `v_∞`: type `T.8` then Ctrl+G, or spell it `T_inf`. Both show as T<sub>∞</sub> (`T_{\infty}`), but they are two different names, as `sigma` and `σ` are. Only a whole `inf` part counts (`x_info` stays as it is), and ∞ is allowed in a name only right after `_`: `∞` on its own is still the constant.
 - A number ending in `i` or `j` is imaginary: `4i`, `2.5j`. See [Complex Numbers](Complex-Numbers).
 - Constants: `pi`, `e`, and `∞` (Ctrl+G after an `8`). A result may be infinite only when the line uses `∞`, so `1/0` is still an error; `∞ - ∞` and `0*∞` are too.
@@ -58,8 +59,9 @@ A mark typed right after a name puts an accent over it in the typeset view and t
 | backtick | dot (two backticks: double dot) | ``v` `` | `\dot{v}` |
 | `!` | arrow | `F!` | `\vec{F}` |
 | `@` | hat | `a@` | `\hat{a}` |
+| `&` | bar (a mean value) | `u&` | `\bar{u}` |
 
-Marks combine (``v`! `` is `\vec{\dot{v}}`). With a subscript the mark goes at the end and sits over the base letter: `F_x!` is `\vec{F}_{x}`. `x`, `x!` and `x@` are three different variables.
+Marks combine (``v`! `` is `\vec{\dot{v}}`). With a subscript the mark goes at the end and sits over the base letter: `F_x!` is `\vec{F}_{x}`. `x`, `x!`, `x@` and `x&` are four different variables.
 
 ## Global variables
 
@@ -84,6 +86,7 @@ A line starting with `!` is a command. It affects every line below it.
 | `!short` / `!long` | show only each line's final result / full steps again |
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |
+| `!freq hz\|rad\|si` | Hz is cycles per second, so `->` between Hz and rad/s puts in the 2π, and 1/s results show in Hz / rad/s; `si` (default) keeps 1 Hz = 1 rad/s, see [Units](Units#frequencies-hz-and-rads) |
 | `!complex rect\|polar\|real` | show complex results as `3 + 4i` (default) or `5∠53.13°`, or make any complex result an error, see [Complex Numbers](Complex-Numbers) |
 | `!plot ...` | draw a graph, see [Plots](Plots) |
 | `!plotspec key: value` | default plot option for the plots below, see [Plots](Plots) |

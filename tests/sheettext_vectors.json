@@ -11,6 +11,7 @@
     {"line": "v_∞ = 2*T_inf + v_∞_0!", "tokens": [["name", 0, "v_∞"], ["num", 6, "2"], ["name", 8, "T_inf"], ["name", 16, "v_∞_0!"]]},
     {"line": "x = ∞ + x∞", "tokens": [["name", 0, "x"], ["name", 8, "x"]]},
     {"line": "x` + y! + z@", "tokens": [["name", 0, "x`"], ["name", 5, "y!"], ["name", 10, "z@"]]},
+    {"line": "u& * forall_cv& + v&!", "tokens": [["name", 0, "u&"], ["name", 5, "forall_cv&"], ["name", 18, "v&!"]]},
     {"line": "z = 3 + 4i - 2.5e3j", "tokens": [["name", 0, "z"], ["num", 4, "3"], ["num", 8, "4i"], ["num", 13, "2.5e3j"]]},
     {"line": "v = 5'V∠30'deg", "tokens": [["name", 0, "v"], ["num", 4, "5"], ["unit", 5, "'V"], ["num", 8, "30"], ["unit", 10, "'deg"]]},
     {"line": "L = 2in + 3i2", "tokens": [["name", 0, "L"], ["num", 4, "2"], ["name", 5, "in"], ["num", 10, "3"], ["name", 11, "i2"]]},
@@ -23,6 +24,7 @@
     {"line": "x = 1", "def": ["assign", "x", []]},
     {"line": "~g = 9.81'm/'s^2", "def": ["assign", "~g", []]},
     {"line": "x` = 2", "def": ["assign", "x`", []]},
+    {"line": "u& = 2", "def": ["assign", "u&", []]},
     {"line": "σ_max = 3", "def": ["assign", "σ_max", []]},
     {"line": "T_∞ = 300'K", "def": ["assign", "T_∞", []]},
     {"line": "q_∞(h, T_s) = h*(T_s - T_∞)", "def": ["funcdef", "q_∞", ["h", "T_s"]]},
@@ -38,6 +40,7 @@
     {"text": "!minimize d\n  objective: d^2\n  # a note\n  bounds d: 0 .. 1", "line": 4, "block": {"kind": "minimize", "unknowns": ["d"]}},
     {"text": "!maximize q\n  objective: q\n\n  equation: q", "line": 4, "block": null},
     {"text": "!root x\n  equation: x = 1\ny = 2", "line": 3, "block": null},
+    {"text": "D = [0, 1; 1, 3]\n!regression a, b\n  data: D\n  r2: R2", "line": 4, "block": {"kind": "regression", "unknowns": ["a", "b"]}},
     {"text": "!plot f(x), x = 0 .. 1\n  xlim: 0 .. 1", "line": 2, "block": null}
   ],
   "names_at": [

@@ -12,7 +12,7 @@ N/m  m/N  N·m²  Pa·s  W/m²  W/m³  W/(m·K)  J/K  J/(kg·K)  J/(mol·K)  J·
 Anything else stays in reduced base units (`m²/s²`, `kg/m³`). Where one dimension has several common names, the first wins:
 
 - energy and torque are both kg·m²/s², shown as **J** (use `-> 'N * 'm` to keep a torque)
-- 1/s is shown as **Hz**
+- 1/s is shown as **Hz**, or as **rad/s** after `!freq rad` (see [Frequencies](#frequencies-hz-and-rads))
 - kg/s² is shown as **N/m**, and s²/kg as **m/N**
 
 **Not reduced:** an explicit `->` conversion, and a line that is only one typed-in quantity (`E = 200'GPa` stays `200 GPa`). `10'kN / 5'mm` has two numbers, so it is a calculation and comes out as `2000000 N/m`.
@@ -51,7 +51,7 @@ A line that uses a constant shows its value, even a single typed quantity (`3'mo
 | `'k_B` (or `'k`) | Boltzmann constant | 1.380649×10⁻²³ J/K |
 | `'c` | speed of light in vacuum | 299792458 m/s |
 | `'h_P` | Planck constant, shown as *h* (`'h` is the hour, shown as hr) | 6.62607015×10⁻³⁴ J·s |
-| `'hbar` | reduced Planck constant | 1.05457181765×10⁻³⁴ J·s |
+| `'hbar` (or `'ħ`) | reduced Planck constant, h/2π, typeset ħ | 1.05457181765×10⁻³⁴ J·s |
 | `'e` | elementary charge | 1.602176634×10⁻¹⁹ C |
 | `'sigma` | Stefan–Boltzmann constant | 5.67037441918×10⁻⁸ W/(m²·K⁴) |
 | `'G_N` | Newtonian constant of gravitation (`'G` is the gauss) | 6.6743×10⁻¹¹ m³/(kg·s²) |
@@ -61,11 +61,56 @@ A line that uses a constant shows its value, even a single typed quantity (`3'mo
 
 The values are CODATA's, as Pint has them. To ask for another constant, open an issue; [Development](Development) says how to add one.
 
+## Frequencies: Hz and rad/s
+
+SI writes the hertz and the radian per second both as 1/s, because the radian has no dimension. So by default LENS treats them as one unit: `50'Hz -> 'rad/'s` is `50 rad/s`, `3000'rpm -> 'Hz` is `314.2 Hz`, and a result in 1/s, even an angular frequency such as `sqrt(k/m)`, is shown in Hz. A `->` between Hz and an angle per time shows a note saying so.
+
+To have the 2π put in, say what the sheet's frequencies are with `!freq` above them:
+
+| Command | 1/s results are shown as | `->` between Hz and rad/s |
+|---|---|---|
+| `!freq hz` | Hz (cycles per second) | 1 Hz = 2π rad/s |
+| `!freq rad` | rad/s (angular frequency) | 1 Hz = 2π rad/s |
+| `!freq si` (the default) | Hz | 1 Hz = 1 rad/s, as SI has it |
+
+Below `!freq hz` or `!freq rad`, Hz is cycles per second and an angle per time (`'rad/'s`, `'rpm`, `'deg/'s`, `'cycle/'s`) is an angular frequency, so `->` between the two multiplies or divides by 2π:
+
+```
+!freq rad
+f = 50'Hz
+w = f -> 'rad/'s               314.2 rad/s
+n = 3000'rpm -> 'Hz            50 Hz
+wn = sqrt(40'N/'m / 10'kg)     2 rad/s
+fn = wn -> 'Hz                 0.3183 Hz
+```
+
+- A result with Hz in its units stays in Hz, so `2*f` is `100 Hz` below `!freq rad` too. Only a result in plain 1/s, with neither Hz nor an angle in it (`sqrt(k/m)`, `1/T`, `v/r`), takes the unit `!freq` names, and `->` reads it the same way: as cycles per second below `!freq hz` and as rad/s below `!freq rad`.
+- `->` puts in the 2π itself, so write `w = f -> 'rad/'s`, not `2*pi*f -> 'rad/'s`, which counts it twice. A line that does that shows a warning. `2*pi*f` on its own is still `314.2 Hz`, since a number cannot tell LENS that the cycles became radians.
+- Conversions within one kind (`'Hz -> 'kHz`, `'rad/'s -> 'rpm`) are as before.
+- Plots read `!freq` too: below `!freq rad` a y axis in 1/s is labelled rad/s.
+
 ## Temperatures
 
 `'degC`, `'degF` and `'degRe` are offset units: 0 °C is 273.15 K, not 0 K. A number written right before one is a temperature: `T = 35'degF` is 35 °F, and `T -> 'degC` is 1.667 °C. A temperature difference has a unit of its own, `'delta_degC` or `'delta_degF`, and adding one to a temperature gives a temperature (`20'degC + 5'delta_degC` is `25 °C`).
 
 `*` and `/` (and `.*`, `./`) read an offset unit as an absolute temperature in kelvin, so `35 * 'degF` is 35 × 255.93 K = 8957 K, not 35 °F, and `10'W/'degC` is per 274.15 K, not per degree. The line still runs, with a warning that says so and suggests `35'degF` for a temperature or `'delta_degF` for a difference (write `10'W/'delta_degC`). The same goes for a variable holding a temperature (`T * 2`). The warning appears on the line that runs the arithmetic: a function's definition shows none, and a line that calls it shows the warning with the function's name (`In f(): ...`). A plot or solver block shows it once on its header. A conversion such as `-> 'degF` never warns.
+
+## Strain and other unit ratios
+
+A unit divided by itself would cancel to a plain number, but a strain is read in mm/mm or in/in. So a unit typed over itself stays a ratio: `'mm/'mm`, `'in/'in`, `'m/'m`.
+
+```
+e = 0.002'mm/'mm                     0.002 mm/mm
+e = 0.5'mm / 200'mm -> 'mm/'mm       0.0025 mm/mm
+e = 0.5'in / 200'in -> 'in/'in       0.0025 in/in
+s = e * 200'GPa                      5e8 Pa
+```
+
+- A ratio is worth exactly 1, so it can be converted into another ratio (`e -> 'in/'in`) and multiplies like a plain number.
+- Like `'%`, a result whose only unit is a ratio keeps it (`2 * e` is `0.005 mm/mm`), with or without `!noassume`. Anything else drops it: `e * 200'GPa` is a stress, and `e^2` is a plain number.
+- Only a unit typed over the same typed unit makes a ratio. `0.5'mm / 200'mm` computes a value, so it is a plain `0.0025` until you convert it with `-> 'mm/'mm`, and `L / 'mm` still strips a length to a number of millimetres.
+- Two different units never cancel, so `-> 'um/'m` (microstrain) already works: `2500 µm/m`.
+- In the export a ratio is siunitx's `\per`: `\qty{0.002}{\milli\meter\per\milli\meter}`.
 
 ## Percent and currencies
 

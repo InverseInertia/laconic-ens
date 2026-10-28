@@ -166,7 +166,7 @@
   const KINDS = { excel: 'Excel', markdown: 'Markdown', csv: 'CSV', column: 'column' };
   function freeName(t) {
     const used = new Set();
-    for (const m of t.matchAll(/^\s*(~?[\p{L}_](?:_∞|[\p{L}\p{N}_])*)[`!@]*\s*=(?!=)/gmu)) used.add(m[1].replace(/^~/, ''));
+    for (const m of t.matchAll(/^\s*(~?[\p{L}_](?:_∞|[\p{L}\p{N}_])*)[`!@&]*\s*=(?!=)/gmu)) used.add(m[1].replace(/^~/, ''));
     for (const c of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') if (!used.has(c)) return c;
     return 'M';
   }

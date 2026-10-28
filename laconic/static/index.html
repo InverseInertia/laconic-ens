@@ -148,9 +148,14 @@
   .row.comment .body { font: 400 14px/var(--row) var(--sans); color: var(--text-soft); }
   .row.error .body { font: 400 13px/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
   .row.error .src { color: var(--text-soft); display: block; }
+  /* Math is fitted to this box (mathfit.js); the margin is room to spare, so a pane narrowed a little
+     more before the next fit does not push a shrunk formula past its row and show a scroll bar (#104). */
+  .row .math { margin-right: 12px; }
   .row .katex-display { margin: 0; text-align: left; }
   .row .katex-display > .katex { text-align: left; }
   .row .katex { font-size: 1.12em; }
+  .row .mx-toggle { display: block; margin: 0 0 3px; padding: 0 7px; font-size: 12px; border-color: var(--rule); color: var(--text-soft); }
+  .row .mx-toggle:hover { color: var(--paper); border-color: var(--ink); }
   /* A formula too wide for the pane, one stage per row (mathfit.js); a row KaTeX breaks again goes on indented. */
   .row .math.wrapped .wrow { margin: 1px 0 1px 1.5em; text-indent: -1.5em; }
   .row .math.wrapped .wrow .base { margin: .3em 0; }   /* room between wrapped lines of fractions */
@@ -480,6 +485,11 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
   bounds d: 0'm .. 3'm</pre>
     <p>Solvers can be slow, so they never run while you type. Under the block, <strong>Run</strong> solves it, <strong>Interrupt</strong> stops a stuck one, <strong>Auto</strong> re-solves a moment after its inputs change, <strong>Verify</strong> solves again and compares, and <strong>Log</strong> shows what happened. The answer is stored in the block as a <code>#@ result</code> line, so a saved sheet opens with its answers.</p>
     <p>The status under the block is &#10003; up to date, &#9888; out of date, &#9675; not run yet, &#10227; running, or &#10005; failed. Every line computed from an out-of-date block gets a &#9888; too.</p>
+    <pre>D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1] * 'm   <i>one column per point: x row, then y row</i>
+!regression a, b, c       <i>y = a + b x + c x&sup2;, lowest power first</i>
+  data: D                 <i>or two vectors: data: t, s</i>
+  r2: R2                  <i>optional: a name for R&sup2;</i></pre>
+    <p><code>!regression</code> fits a polynomial by least squares as the sheet runs, with no Run button. Each coefficient gets the units of y / x<sup>k</sup>, and the names it defines hold the fit below the block.</p>
 
     <h3>Output and export <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Output-and-Export" target="_blank" rel="noopener">Output and Export</a></h3>
     <ul>
@@ -612,6 +622,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 <script src="/static/vendor/d3/d3.min.js"></script>
 <script src="/static/symbols.js"></script>
 <script src="/static/api.js"></script>
+<script src="/static/matrixview.js"></script>
 <script src="/static/rows.js"></script>
 <script src="/static/mathfit.js"></script>
 <script src="/static/editing.js"></script>
@@ -681,7 +692,10 @@ document.fonts.ready.then(() => MathFit.fitAll(out, true));
 // How each kind of row body is drawn; what goes in it comes from the row model (rows.js).
 const BODY = {
   text: (el, b) => { el.textContent = b.text; },
-  tex: (el, b) => typeset(el, b.tex, b.rows),
+  tex: (el, b, r) => {
+    typeset(el, b.tex, b.rows);
+    if (b.matrix) el.append(matrixToggle(r.n, b.matrix));
+  },
   error: (el, b) => {
     const s = document.createElement("span"); s.className = "src"; s.textContent = b.source;
     el.append(s, b.message);
@@ -694,11 +708,25 @@ const BODY = {
   },
 };
 
+// A large matrix is shown by its corners (matrixview.js); the button under it shows it whole.
+const expanded = new Set();   // lines whose large matrices are shown whole
+function matrixToggle(n, m) {
+  const b = document.createElement("button");
+  b.className = "mx-toggle";
+  b.textContent = m.expanded ? `Collapse ${m.size}` : `Show all ${m.size}`;
+  b.onclick = (ev) => {
+    ev.stopPropagation();
+    if (m.expanded) expanded.delete(n); else expanded.add(n);
+    render(last);
+  };
+  return b;
+}
+
 let shown = [];   // the row models on screen
 function render(rows) {
   last = rows;
   // A block's option lines are part of its row, so they get no row of their own (unless one is wrong).
-  const items = rows.map((r) => [r, Rows.model(r, {view})]).filter(([, m]) => m);
+  const items = rows.map((r) => [r, Rows.model(r, {view, expanded})]).filter(([, m]) => m);
   shown = items.map(([, m]) => m);
   out.replaceChildren(...items.map(([r, m]) => {
     const row = document.createElement("div");

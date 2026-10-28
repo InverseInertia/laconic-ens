@@ -132,6 +132,15 @@ def test_a_plot_row_carries_its_picture_and_spec():
     assert all(isinstance(v, (int, float)) or v is None for v in p["spec"]["series"][0]["y"])
 
 
+def test_a_regression_row_is_typeset_math_with_its_fit():
+    out = rows("D = [0, 1, 2; 1, 3, 5]\n!regression a, b\n  data: D\n")
+    r = out[1]
+    assert set(r) == set(COMMON) | {"regression"} and (r["kind"], r["end"]) == ("regression", 3)
+    assert r["regression"] == {"names": ["a", "b"], "degree": 1, "points": 3, "r2": pytest.approx(1.0)}
+    assert out[2]["kind"] == "solveropt" and "a = " in r["latex"]
+    assert [s["name"] for s in r["symbols"]["defines"]] == ["a", "b"]
+
+
 def test_a_solver_row_carries_its_state():
     s = rows(ROOT)[1]["solver"]
     assert set(s) == SOLVER_KEYS

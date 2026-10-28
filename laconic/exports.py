@@ -11,6 +11,7 @@ flavour of math each format needs (siunitx for .tex, the live view's for the res
 
 This module stays cheap to import (the writers import it); the sheet and the writers are
 loaded when `export` runs."""
+import re
 from dataclasses import dataclass
 
 # What the Markdown and PDF writers say about a solver block whose result cannot be trusted.
@@ -86,18 +87,62 @@ def element(r, commands=False):
         vals = r.solver.values
         return Math(r.n, [aligned(v["lhs"], [v["rhs"]])[0] for v in vals], r",\; ".join(v["latex"] for v in vals),
                     out_of_date=not r.solver.current)
+    if r.regression:
+        fit = r.regression
+        y, poly = fit.model.split(" = ", 1)
+        rows = [aligned(y, [poly])[0]] + [aligned(v["lhs"], [v["rhs"]])[0] for v in fit.values]
+        return Math(r.n, rows, fit.model + r",\quad " + r",\; ".join(v["latex"] for v in fit.values),
+                    note=r.warning or (STALE if r.stale else ""))
     if r.kind in ("assign", "expr", "funcdef", "unitdef"):
         return Math(r.n, aligned(r.lhs, r.stages), r.latex, flat=r.latex_rows,
                     note=r.warning or (STALE if r.stale else ""))
     return None
 
 
+# A matrix with more rows or columns than this is printed collapsed in a document: its first
+# MATRIX_HEAD and last MATRIX_TAIL rows (columns), with ⋮ (⋯) between. static/matrixview.js
+# collapses the results pane's matrices by the same rule; tests/matrix_vectors.json holds both to it.
+MATRIX_LIMIT, MATRIX_HEAD, MATRIX_TAIL = 8, 3, 2
+_BMATRIX = re.compile(r"\\begin\{bmatrix\}((?:(?!\\begin\{).)*?)\\end\{bmatrix\}", re.S)
+
+
+def _keep(items, filler):
+    if len(items) <= MATRIX_LIMIT:
+        return items
+    return items[:MATRIX_HEAD] + [filler] + items[-MATRIX_TAIL:]
+
+
+def collapse_matrices(tex):
+    """`tex` with each matrix too large to read shown by its corners (see MATRIX_LIMIT). A matrix
+    with another inside it is left whole."""
+    def one(m):
+        rows = [re.split(r"\s*&\s*", r.strip()) for r in re.split(r"\s*\\\\\s*", m.group(1).strip())]
+        width = max(len(r) for r in rows)
+        if len(rows) <= MATRIX_LIMIT and width <= MATRIX_LIMIT:
+            return m.group(0)
+        cols = [_keep(r, r"\cdots") for r in rows]
+        gap = _keep([r"\vdots"] * width, r"\ddots")
+        kept = _keep(cols, gap)
+        return r"\begin{bmatrix} " + r" \\ ".join(" & ".join(r) for r in kept) + r" \end{bmatrix}"
+    return _BMATRIX.sub(one, tex)
+
+
+def _collapsed(e):
+    if isinstance(e, Math):
+        e.rows = [collapse_matrices(r) for r in e.rows]
+        e.flat = [collapse_matrices(r) for r in e.flat]
+        e.inline = collapse_matrices(e.inline)
+    return e
+
+
 def elements(results, commands=False):
-    """The sheet's elements in order. Comment lines with nothing shown between them (blank
-    lines, and commands unless they are kept) run on as one paragraph."""
+    """The sheet's elements in order, as a document prints them: a matrix too large to read is
+    collapsed (`collapse_matrices`; a single line's snippet keeps it whole). Comment lines with
+    nothing shown between them (blank lines, and commands unless they are kept) run on as one
+    paragraph."""
     out = []
     for r in results:
-        e = element(r, commands)
+        e = _collapsed(element(r, commands))
         if isinstance(e, Paragraph) and out and isinstance(out[-1], Paragraph):
             out[-1].lines += e.lines
         elif e is not None:

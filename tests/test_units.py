@@ -188,6 +188,17 @@ def test_the_hour_shows_as_hr_and_plancks_constant_as_h():
     assert "ℎ" not in tex    # pdflatex has no glyph for it
 
 
+def test_the_reduced_planck_constant_typesets_as_hbar():
+    # #111: KaTeX and pdflatex both want \hbar, not the text glyph ħ
+    for line in ("x = 'hbar", "x = 2'ħ/'s"):
+        r = last(line)
+        assert r.kind == "assign" and r"\hbar" in r.latex and "ħ" not in r.latex
+    ws = evaluate("E = 2'hbar * 3'Hz", siunitx=True)
+    tex = document(ws.results, declarations=ws.declarations)
+    assert r"\DeclareSIUnit{\diracConstant}{\ensuremath{\mathrm{\hbar }}}" in tex
+    assert "ħ" not in tex
+
+
 def test_every_exported_unit_macro_is_a_name_latex_accepts():
     units = "g0 psi ksi ft inch lbf Btu kWh atm mmHg rpm m_e N_A mu_0 sq_ft Phi_0 R_inf hp"
     ws = evaluate("\n".join(f"x{i} = 1'{u}" for i, u in enumerate(units.split())), siunitx=True)
@@ -219,6 +230,51 @@ def test_percent_is_a_unit_worth_a_hundredth():
     assert last("x = 5'% + 2'%").text == "x = 7 %"      # a lone percent stays percent
     assert last("x = 50'% * 50'%").text == "x = 0.25"   # percent squared does not
     assert r"\%" in last("x = 5'%").latex
+
+
+# ---- unit ratios: strain in mm/mm (#114) ----------------------------------------------
+def test_a_unit_over_itself_stays_a_unit_ratio():
+    # #114: 'mm/'mm cancelled to a bare 1 with or without !noassume
+    assert last("'mm/'mm").text == "1 mm/mm"
+    assert last("e = 0.002'mm/'mm").text == "e = 0.002 mm/mm"
+    assert last("e = 0.5'mm / 200'mm -> 'mm/'mm").text == "e = 0.0025 mm/mm"
+    assert last("e = 0.5'in / 200'in -> 'in/'in").text == "e = 0.0025 in/in"
+    assert last("e = 0.5'mm / 200'mm -> 'um/'m").text == "e = 2500 μm/m"
+    assert last("!noassume\ne = 0.002'mm/'mm").text == "e = 0.002 mm/mm"
+    assert last("!noassume\n!assume\n'mm/'mm").text == "1 mm/mm"
+
+
+def test_a_unit_ratio_is_a_plain_number_in_arithmetic():
+    sheet = "e = 0.5'mm / 200'mm -> 'mm/'mm\n"
+    assert last(sheet + "e").text == "0.0025 mm/mm"
+    assert last(sheet + "2 * e + 0.001").text == "0.006 mm/mm"     # still only a ratio
+    assert last(sheet + "s = e * 200'GPa").text == "s = 5e8 Pa"
+    assert last("!noassume\n" + sheet + "s = e * 200'GPa").text == "s = 0.5 GPa"
+    assert last(sheet + "e^2").text == "6.25e-6"
+    assert last(sheet + "e -> 'in/'in").text == "0.0025 in/in"
+
+
+def test_only_a_typed_unit_over_itself_makes_a_ratio():
+    assert last("e = 0.5'mm / 200'mm").text == "e = 0.0025"     # computed: still cancels
+    assert last("L = 5'mm\nn = L / 'mm").text == "n = 5"        # the way to strip a unit
+    assert last("x = '%/'%").text == "x = 1"
+    assert last("x = 'R/'R").text == "x = 1"
+
+
+def test_a_unit_ratio_prints_as_the_unit_over_itself():
+    assert r"0.002\,\mathrm{mm}/\mathrm{mm}" in last("e = 0.002'mm/'mm").latex
+    ws = evaluate("e = 0.002'mm/'mm\nf = 0.002'ft/'ft", siunitx=True)
+    assert r"\qty{0.002}{\milli\meter\per\milli\meter}" in ws.results[0].latex
+    assert r"\qty{0.002}{\foot\per\foot}" in ws.results[1].latex
+    assert r"\DeclareSIUnit{\foot}" in "\n".join(ws.declarations)
+    assert not any("_per_" in d for d in ws.declarations)
+
+
+def test_unit_ratios_are_not_suggested_as_units():
+    from laconic.vocab import _units
+    run("'mm/'mm")
+    _units.cache_clear()
+    assert not any(catalogue.is_ratio(u[0]) for u in _units())
 
 
 def test_percent_and_dollar_without_a_unit_mark_say_how_to_write_them():
@@ -373,3 +429,47 @@ def test_constants_export_with_declared_macros():
     ws = evaluate("E = 'k_B * 300'K\nx = 2'Av", siunitx=True)
     tex = document(ws.results, declarations=ws.declarations)
     assert r"\DeclareSIUnit" in tex and "\\Av" in tex
+
+
+# ---- frequencies: Hz and rad/s (#115) ------------------------------------------------
+def shown(text):
+    return [r.text.split("= ")[-1] for r in run(text) if r.kind in ("assign", "expr")]
+
+
+@pytest.mark.parametrize("mode", ["hz", "rad"])
+def test_below_freq_hz_is_cycles_per_second_and_conversions_put_in_the_2pi(mode):
+    out = shown(f"!freq {mode}\n50'Hz -> 'rad/'s\n314.159265'rad/'s -> 'Hz\n3000'rpm -> 'Hz\n"
+                "50'Hz -> 'rpm\n5'cycle/'s -> 'Hz\n3'kHz -> 'rad/'ms\n[1, 2]*'Hz -> 'rad/'s\n"
+                "50'Hz -> 'kHz\n30'rad/'s -> 'rpm")
+    assert out == ["314.2 rad/s", "50 Hz", "50 Hz", "3000 rpm", "5 Hz", "18.85 rad/ms",
+                   "[[6.283 12.57]] rad/s", "0.05 kHz", "286.5 rpm"]
+
+
+def test_freq_says_what_a_plain_per_second_result_is():
+    hz = shown("!freq hz\nw = sqrt(4'N/'m / 1'kg)\nw -> 'rad/'s\n1/(2'ms) -> 'rad/'s")
+    rad = shown("!freq rad\nw = sqrt(4'N/'m / 1'kg)\nw -> 'Hz\nw -> 'rad/'s\n1/(2'ms)")
+    assert hz == ["2 Hz", "12.57 rad/s", "3142 rad/s"]
+    assert rad == ["2 rad/s", "0.3183 Hz", "2 rad/s", "500 rad/s"]
+
+
+def test_a_result_in_hz_keeps_hz_below_freq_rad():
+    assert shown("!freq rad\nf = 50'Hz\n2*f\nf + 1/'s\n3'kHz * 2") == ["50 Hz", "100 Hz", "51 Hz", "6000 Hz"]
+
+
+def test_without_freq_hz_and_rad_per_second_are_one_to_one_with_a_note():
+    rs = [r for r in run("50'Hz -> 'rad/'s\n3000'rpm -> 'Hz\n2*pi*50'Hz -> 'rad/'s\nsqrt(4'N/'m / 1'kg)\n"
+                         "50'Hz -> 'kHz") if r.kind == "expr"]
+    assert [r.text for r in rs] == ["50 rad/s", "314.2 Hz", "314.2 rad/s", "2 Hz", "0.05 kHz"]
+    assert "!freq hz or !freq rad" in rs[0].warning and "!freq" in rs[1].warning
+    assert not rs[2].warning and not rs[3].warning and not rs[4].warning   # 2*pi: the sheet did the 2π
+
+
+def test_freq_warns_when_pi_and_the_conversion_both_put_in_the_2pi():
+    r = last("!freq hz\nf = 50'Hz\n2*pi*f -> 'rad/'s")
+    assert r.text == "1974 rad/s" and "counts it twice" in r.warning
+    assert not last("!freq hz\nf = 50'Hz\nf -> 'rad/'s").warning
+
+
+def test_freq_sets_a_plots_y_unit():
+    r = [r for r in run("!freq rad\nf(m) = sqrt(4'N/'m / m)\n!plot f(m), m = 1'kg .. 2'kg") if r.kind == "plot"][0]
+    assert r.plot.spec["y"]["unit"] == "rad/s"

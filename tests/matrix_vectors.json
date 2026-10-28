@@ -1,0 +1,18 @@
+{
+  "about": "Shared test vectors for collapsing large matrices. tests/test_regression.py checks laconic/exports.py (collapse_matrices, the documents' rule) against them and tests/test_matrixview.js checks static/matrixview.js (the results pane's), so the two cannot drift apart. `sizes` are the [rows, columns] of each matrix collapsed.",
+  "cases": [
+    {"tex": "x = 2", "collapsed": "x = 2", "sizes": []},
+    {"tex": "\\begin{bmatrix} 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 \\end{bmatrix}",
+     "collapsed": "\\begin{bmatrix} 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 \\end{bmatrix}", "sizes": []},
+    {"tex": "D = \\begin{bmatrix} 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 10 & 20 & 30 & 40 & 50 & 60 & 70 & 80 & 90 \\end{bmatrix}\\,\\mathrm{m}",
+     "collapsed": "D = \\begin{bmatrix} 1 & 2 & 3 & \\cdots & 8 & 9 \\\\ 10 & 20 & 30 & \\cdots & 80 & 90 \\end{bmatrix}\\,\\mathrm{m}",
+     "sizes": [[2, 9]]},
+    {"tex": "\\begin{bmatrix} 1 \\\\ 2 \\\\ 3 \\\\ 4 \\\\ 5 \\\\ 6 \\\\ 7 \\\\ 8 \\\\ 9 \\\\ 10 \\end{bmatrix}",
+     "collapsed": "\\begin{bmatrix} 1 \\\\ 2 \\\\ 3 \\\\ \\vdots \\\\ 9 \\\\ 10 \\end{bmatrix}", "sizes": [[10, 1]]},
+    {"tex": "\\begin{bmatrix} 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\\\ 7 & 7 & 7 & 7 & 7 & 7 & 7 & 7 & 7 \\end{bmatrix} = \\begin{bmatrix} 1 & 2 \\end{bmatrix}",
+     "collapsed": "\\begin{bmatrix} 1 & 2 & 3 & \\cdots & 8 & 9 \\\\ 1 & 2 & 3 & \\cdots & 8 & 9 \\\\ 1 & 2 & 3 & \\cdots & 8 & 9 \\\\ \\vdots & \\vdots & \\vdots & \\ddots & \\vdots & \\vdots \\\\ 1 & 2 & 3 & \\cdots & 8 & 9 \\\\ 7 & 7 & 7 & \\cdots & 7 & 7 \\end{bmatrix} = \\begin{bmatrix} 1 & 2 \\end{bmatrix}",
+     "sizes": [[9, 9]]},
+    {"tex": "\\begin{bmatrix} \\begin{bmatrix} 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 \\end{bmatrix} & 2 \\end{bmatrix}",
+     "collapsed": "\\begin{bmatrix} \\begin{bmatrix} 1 & 2 & 3 & \\cdots & 8 & 9 \\end{bmatrix} & 2 \\end{bmatrix}", "sizes": [[1, 9]]}
+  ]
+}

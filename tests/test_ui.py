@@ -532,6 +532,32 @@ def test_a_shrunk_equation_is_fitted_again_before_the_narrower_pane_is_painted(p
     assert fit[4]["zoomed"] and not fit[4]["wrapped"] and not fit[4]["scrolls"]   # still shrunk, not wrapped
 
 
+def test_a_shrunk_equation_keeps_room_to_spare_at_every_width(page):
+    """#104: fitted to the full width of its row, a shrunk formula ran a fraction of a pixel past it
+    at some widths, so the row kept a scroll bar there and it came and went as the pane was resized.
+    It is fitted with room to spare at the right, so the pane can narrow a little before the next
+    fit without the row scrolling."""
+    terms = lambda k: " + ".join(f"a * b / c * {i}" for i in range(1, k + 1))
+    reset(page, f"a = 1.5'm\nb = 2.25'm\nc = 3'm\nw = {terms(3)}\nv = {terms(4)}")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_function("document.querySelectorAll('#out .row').length === 5")
+    page.evaluate("document.fonts.ready")
+    spare = """[...document.querySelectorAll('#out .math')].map((m) => ({
+      line: +m.closest('.row').dataset.line, zoomed: [...m.children].some((k) => k.style.zoom),
+      scrolls: m.closest('.body').scrollWidth > m.closest('.body').clientWidth,
+      spare: Math.min(...[...m.children].map((k) => m.closest('.body').getBoundingClientRect().right - k.getBoundingClientRect().right))}))"""
+    zoomed = set()
+    for split in range(64, 18, -1):
+        page.evaluate(f"document.querySelector('main').style.setProperty('--split', '{split}%')")
+        page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+        for f in page.evaluate(spare):
+            assert not f["scrolls"], (split, f)
+            if f["zoomed"]:
+                zoomed.add(f["line"])
+                assert f["spare"] >= 10, (split, f)
+    assert zoomed == {4, 5}   # both were shrunk at some of these widths
+
+
 def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, sheets):
     """#49: `lens --window sheet.lens` (a double-clicked file) opens that sheet, and Save writes it."""
     sheet = tmp_path / "beam.lens"

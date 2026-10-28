@@ -9,6 +9,19 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Hz or rad/s**: `!freq hz` or `!freq rad` says what a sheet's frequencies are. Below either, Hz is cycles per second, so `50'Hz -> 'rad/'s` is `314.2 rad/s`, `3000'rpm -> 'Hz` is `50 Hz` and `314.2'rad/'s -> 'Hz` is `50 Hz`, and a result in 1/s such as `sqrt(k/m)` is shown in Hz or in rad/s as you chose. Without it, Hz and rad/s stay the same unit as in SI (1 Hz = 1 rad/s), and a conversion between them shows a note saying so. (#115)
+- **Codec** theme preset: mint text on near-black paper, with amber globals. Pick it in Settings → Theme. (#112)
+- **A bar over a variable**: type `&` after a name, as with the dot, arrow and hat marks: `u&` is ū, `F_x&` is F̄ₓ, and it combines with the others (``v&` `` is a dotted v̄). `u&` is a variable of its own, apart from `u`. (#111)
+- **∀ for volume**: a name spelled `forall` typesets as ∀, the struck-through V some fluid mechanics texts use for volume so that V can stay velocity, with subscripts and marks like any name (`forall_cv`). (#111)
+- **Strain units**: a unit typed over itself, such as `'mm/'mm` or `'in/'in`, now stays a unit ratio instead of cancelling to a plain number, with or without `!noassume`. Write `0.002'mm/'mm`, or convert a computed strain with `-> 'mm/'mm`; it shows as `0.0025 mm/mm` and drops out when multiplied by another unit (`e * 200'GPa` is a stress). (#114)
+- **Polynomial regression**: a `!regression a, b, c` block with `data: D` fits y = a + b·x + c·x² by least squares to points given as a matrix with an x row and a y row (one column per point), or as two vectors, `data: t, s`. Each coefficient gets the units of y / xᵏ, the names hold the fit for the lines below, `r2: R2` names R², and one name with `degree: 3` holds every coefficient as a vector. The fit is worked out as you type, with no Run button, and the row shows the fitted polynomial. (#113)
+- **Large matrices are shown collapsed**: a matrix with more than 8 rows or columns shows its first and last few with ⋯ and ⋮ between, and a **Show all** button under it shows it whole. The LaTeX, Markdown and PDF exports print it collapsed too; a line's LaTeX snippet keeps it whole. (#113)
+
+### Fixes
+- **The reduced Planck constant `'hbar`** (or `'ħ`) typesets as ħ (`\hbar`) on the page and in the LaTeX export, where it used to show as a text glyph that KaTeX warned about and pdflatex could not print. (#111)
+- A long equation shrunk to fit the results pane no longer keeps a scroll bar under it at some pane widths, so the bar no longer comes and goes while you resize the window or the split. Math now leaves a little room at the right of the pane, so a pane narrowed during a resize does not show a scroll bar before the equation is shrunk to the new width. (#104)
+
 ## [v0.4.3](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.3) (2026-10-28)
 
 ### New

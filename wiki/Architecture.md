@@ -44,7 +44,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `functions.py` | The function registry: each built-in declared once (signature, LaTeX form, aliases) by `@builtin` on its `Evaluator.fn_*` method. The evaluator, suggestions, Rename and the LaTeX printer read it |
 | `symbols.py` | The symbol table: which variables and functions each line sees, with each definition's line, lifetime, value and parameters, and each key's current value or function body and whether it is stale. One deep module behind `define`, `define_function`, `clear`, `key`, `visible`, `uses` and `tainted`, holding the scope rules (`~` globals, `!clear`/`!clearf`, local parameters, solver unknowns, failed lines). Built as the sheet runs; each eval row carries its part |
 | `si.py` | Reduces a result to simplest coherent SI with a familiar name, asking the catalogue how each unit family reduces |
-| `catalogue.py` | The unit catalogue: currencies, percent, physical constants, subscripted constant symbols and the siunitx spellings, and offset temperatures, with each family's dimension, reduction, export macro, editor text and error hint |
+| `catalogue.py` | The unit catalogue: currencies, percent, unit ratios (`'mm/'mm`), physical constants, subscripted constant symbols and the siunitx spellings, and offset temperatures, with each family's dimension, reduction, export macro, editor text and error hint |
 | `latex.py` | AST to LaTeX in two flavors (KaTeX preview, siunitx export); number formatting (`Fmt`, which also hands back the `\DeclareSIUnit` lines for the units a document printed); `snippet` and `document`, which render export elements. A built-in's LaTeX form comes from the function registry |
 | `exports.py` | What a sheet exports as: one element per line result, with what is left out and which comments run on decided once; `export(text, fmt, ...)`, the one entry point, runs the sheet in the flavour each format needs (siunitx for `.tex`, the live view's for Markdown, HTML and PDF). The server and the CLI export through it |
 | `sheet.py` | Runs a worksheet line by line, dispatching on the line kinds from `sheettext`: commands, unit definitions, plots, results, portable save text. Records each definition in the symbol table. `block_at` and `solver_blocks` find blocks by the text and run the sheet only as far as those blocks (`evaluate(..., until=)`); `evaluator_at` gives the evaluator as a line finds it |
@@ -57,6 +57,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `solver.py` | `!root` / `!minimize` / `!maximize`: block parsing, the input hash, the scipy calls, the stored `#@ result` line (written through the block editor) |
 | `solvesession.py` | The solve session: which blocks need solving, running one behind a runner seam (in-process `solve`, or the worker's `Jobs.run`), run or verify, and storing a result in every block whose inputs hash the same. The server, the worker and `lens --solve` call it |
 | `solverjobs.py` | The worker process that runs a solve, so it can be interrupted; `Jobs.run` is its runner for the solve session |
+| `regression.py` | `!regression`: block parsing and the least-squares polynomial fit, with each coefficient's units. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
@@ -93,6 +94,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `shortcuts.js` | The keyboard shortcut table, as data; the page renders it under Settings → Reference, with the command rows `server.py` fills in from `commands.py` |
 | `plotview.js` | Pan and zoom on plots; writes `xview`/`yview` back through the server. Reads the plot payload's spec |
 | `solverview.js` | The Run / Interrupt / Verify / Log strip under solver blocks. Reads the solver payload |
+| `matrixview.js` | Large matrices in the results pane: a matrix of more than 8 rows or columns collapsed to its corners, by the rule `exports.collapse_matrices` uses for documents (`tests/matrix_vectors.json` holds the two together). `rows.js` asks it; the page draws the button that shows the matrix whole |
 | `vendor/` | KaTeX, and d3-zoom with d3-scale and dependencies (see `vendor/d3/README.md`) |
 | `fonts/` | IBM Plex and OCR-A, self-hosted |
 | `example.lens` | The sheet the page opens with |

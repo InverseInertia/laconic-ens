@@ -1,7 +1,7 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
-from . import catalogue, solver
+from . import catalogue, regression, solver
 from .commands import COMMANDS
 from .evaluator import CONSTANTS, registry
 from .functions import FUNCTIONS
@@ -33,6 +33,8 @@ def _units():
             out.append([text, detail, int(common)])
 
     for key in sorted(names, key=lambda k: (len(k), k)):
+        if catalogue.is_ratio(key):   # mm/mm is typed as 'mm/'mm, not as a unit of its own
+            continue
         try:
             detail = catalogue.detail(key) or ureg.get_name(key)
             if catalogue.is_constant(key):   # its description and value, so `gas` or `boltz` finds it
@@ -61,7 +63,8 @@ def vocabulary(global_units=()):
         "constants": sorted(CONSTANTS),
         "commands": [[c.name, c.summary] for c in COMMANDS],
         "solver": {
-            "keys": {kind: [[k, solver.KEY_NOTES[k]] for k in keys] for kind, keys in solver.KEYS.items()},
+            "keys": {**{kind: [[k, solver.KEY_NOTES[k]] for k in keys] for kind, keys in solver.KEYS.items()},
+                     "regression": [[k, regression.KEY_NOTES[k]] for k in regression.KEYS]},
             "methods": {"root": [[m, solver.METHOD_NOTES[m]] for m in solver.ROOT_METHODS],
                         "optimize": [[m, solver.METHOD_NOTES[m]] for m in solver.MIN_METHODS]},
             "choices": {"autorun": [["on", "solve again after the inputs change"], ["off", "only when Run is pressed"]]},
