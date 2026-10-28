@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .commands import SheetMode
 from .symbols import FUNCTION, VARIABLE, SymbolTable
-from .nodes import BinOp, Name, Str, UnitLit
+from .nodes import BinOp, Name, Str, UnitLit, refs
 from . import props as _props
 from . import catalogue
 from .functions import FUNCTIONS, builtin
@@ -100,35 +100,9 @@ def _offset(q, ureg):
 UNIT_NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*\Z")
 
 
-def names_in(node):
-    """Every Name node under `node` (used to keep unit definitions free of variables)."""
-    if isinstance(node, Name):
-        return [node.name]
-    out = []
-    for v in getattr(node, "__dict__", {}).values():
-        for item in (v if isinstance(v, tuple) else (v,)):
-            for x in (item if isinstance(item, tuple) else (item,)):
-                out += names_in(x)
-    return out
-
-
-@lru_cache(maxsize=4)
-def _registry_with(units):
-    """A registry with the instance's global units defined. Built once per distinct
-    list and never mutated afterwards. Returns (registry, valid names, errors)."""
-    ev = Evaluator(fork=True)
-    ok, bad = [], {}
-    for name, definition in units:
-        try:
-            ev.define_unit(name, parse_expr(definition))
-            ok.append(name)
-        except Exception as e:
-            bad[name] = str(e)
-    return ev.ureg, tuple(ok), bad
-
-
-def check_units(units):
-    """Validate (name, definition) pairs in order. Returns one error string or None per pair."""
+def _define_all(units):
+    """Define (name, definition) pairs in order in a private registry. Returns the Evaluator
+    and one error string, or None, per pair."""
     ev = Evaluator(fork=True)
     errors = []
     for name, definition in units:
@@ -137,7 +111,22 @@ def check_units(units):
             errors.append(None)
         except Exception as e:
             errors.append(str(e))
-    return errors
+    return ev, errors
+
+
+@lru_cache(maxsize=4)
+def _registry_with(units):
+    """A registry with the instance's global units defined. Built once per distinct
+    list and never mutated afterwards. Returns (registry, valid names, errors)."""
+    ev, errors = _define_all(units)
+    ok = tuple(name for (name, _), e in zip(units, errors) if e is None)
+    bad = {name: e for (name, _), e in zip(units, errors) if e is not None}
+    return ev.ureg, ok, bad
+
+
+def check_units(units):
+    """Validate (name, definition) pairs in order. Returns one error string or None per pair."""
+    return _define_all(units)[1]
 
 
 class Evaluator:
@@ -156,14 +145,21 @@ class Evaluator:
         self.globals = {n: d for n, d in units if n in ok}   # instance-wide units
         self.custom = dict(self.globals)                     # globals plus this sheet's, name -> definition
         self.Q = self.ureg.Quantity
-        self.vars = {}
-        self.funcs = {}
-        self.symbols = SymbolTable()  # which names each line sees; filled in by sheet.py
-        self.stale = set()     # variable keys whose value comes from a solver result that is out of date
+        self.symbols = SymbolTable()  # which names each line sees, and what each holds; filled in by sheet.py
         self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
         self.notes = []        # warnings for the line being run; sheet.py clears them per line and shows them
         self._calls = []       # the user functions being evaluated, innermost last, to name in a note
         self.nan_hint = None   # why the value being computed may be NaN; read by check_finite
+
+    @property
+    def vars(self):
+        """Variable key -> value, read only: definitions go through the symbol table."""
+        return self.symbols.values
+
+    @property
+    def funcs(self):
+        """Function key -> (params, body), read only."""
+        return self.symbols.functions
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
@@ -192,7 +188,7 @@ class Evaluator:
         if self.is_unit(name):
             means = str(self.ureg.parse_units(name))  # `dsmoot` reads as deci + smoot
             raise EvalError(f"'{name}' is already a unit" + ("" if means == name else f" ({means})"))
-        if names_in(expr):
+        if refs(expr).names:
             raise EvalError("A unit definition can use only numbers and units")
         q = self.eval(expr)
         if _ndim(q) != 0:
@@ -738,7 +734,7 @@ class Evaluator:
         return self.Q(m.real, q.units) if not np.any(m.imag) else q
 
     def uses_infinity(self, expr):
-        for name in names_in(expr) if expr is not None else ():
+        for name in refs(expr).names if expr is not None else ():
             if name == "∞":
                 return True
             if self.is_var(name) and np.any(np.isinf(_array(self.vars[self.vkey(name)].magnitude))):

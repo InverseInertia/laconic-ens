@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from . import evaluate as evaluate_sheet, snippet
 from .exports import export as export_sheet
-from .sheet import block_at, solver_blocks
+from .sheet import block_at
 from . import settings, unittags
 from .blockedit import to_json
 from ._version import label as version_label
@@ -24,8 +24,9 @@ from .evaluator import check_units
 from .lifecycle import lifecycle
 from .plotopts import PlotError, apply_patch
 from .rename import RenameError, RenameWarning, rename
-from .solver import SolverError, set_option, write_result
+from .solver import SolverError, set_option
 from .solverjobs import Busy, jobs
+from . import solvesession
 from .vocab import props_vocabulary, vocabulary
 
 app = FastAPI(title="laconic")
@@ -259,11 +260,9 @@ def solve_interrupt(job_id: str):
 def solve_store(body: SolveStoreBody):
     """Write a finished result into every block whose inputs hash to the record's hash. If the
     sheet was edited while the job ran, no block matches and nothing is written."""
-    h = body.record.get("hash")
-    hits = [r.n for r in solver_blocks(body.text, settings.global_units()) if r.solver.hash == h]
+    edits, hits = solvesession.store(body.text, body.record, settings.global_units())
     if not hits:
         return {"ok": False, "error": "The inputs changed while the solver was running, so its result was not stored"}
-    edits = [e for n in hits for e in write_result(body.text, n, body.record)]   # all against body.text
     return {"ok": True, "edits": to_json(body.text, edits), "lines": hits}
 
 
