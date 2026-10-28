@@ -314,10 +314,15 @@ def test_the_catalogue_lists_every_offset_unit():
 
 # ---- physical constants ------------------------------------------------------------
 def test_the_constants_have_their_codata_values():
+    # CODATA 2022, the set Pint's constants file follows (its m_e, m_p, eps_0 and mu_0 differ from
+    # CODATA 2018's by more than 1e-10). hbar and sigma are exact: more digits than CODATA prints.
     expected = {"R": 8.31446261815324, "N_A": 6.02214076e23, "k_B": 1.380649e-23, "c": 299792458,
-                "h_P": 6.62607015e-34, "e": 1.602176634e-19, "G_N": 6.6743e-11, "g_0": 9.80665}
+                "h_P": 6.62607015e-34, "hbar": 1.054571817646e-34, "e": 1.602176634e-19,
+                "sigma": 5.670374419184e-8, "G_N": 6.6743e-11, "g_0": 9.80665,
+                "eps_0": 8.8541878188e-12, "mu_0": 1.25663706127e-6,
+                "m_e": 9.1093837139e-31, "m_p": 1.67262192595e-27}
     spellings = [s for s, _, _ in catalogue.CONSTANTS]
-    assert len(set(spellings)) == len(spellings) and set(expected) <= set(spellings)
+    assert len(set(spellings)) == len(spellings) and set(expected) | {"Av"} == set(spellings)
     ws = evaluate("\n".join(f"x = 1'{s}" for s in spellings))
     assert all(r.kind == "assign" for r in ws.results), [r.error for r in ws.results]
     ureg = registry()
