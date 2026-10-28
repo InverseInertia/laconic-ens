@@ -13,6 +13,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Scroll bars follow your theme**: the scroll bars under long lines of math, in the editor and in dialogs take their colors from the theme (its Rules color on a slightly deeper paper) instead of the browser's defaults, for every preset and for custom and shared themes. (#99)
 
 ### Fixes
+- In a narrow window, where the toolbar wraps onto several rows, the Export menu opens fully inside the window instead of mostly off its left edge, and it stays inside if you resize the window while it is open. (#103)
 - **Export → PDF shows that it is working and never asks to allow pop-ups.** The Export button reads *Exporting PDF…* until the PDF is ready; clicking again meanwhile does nothing. When LENS cannot print the PDF itself, the print dialog opens on the same page (choose **Save as PDF**) instead of in a pop-up window the browser could block, and later exports go straight to it. A Chromium build that stalled the PDF print until it timed out now prints normally. (#102)
 
 ## [v0.4.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.1) (2026-10-28)

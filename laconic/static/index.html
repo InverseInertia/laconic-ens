@@ -71,8 +71,9 @@
   header button.help { font-weight: 600; }
   header button.wide { width: auto; padding: 3px 10px; }
   .exportMenu { position: relative; }
+  /* Right-aligned under its button; placeExports() slides it back inside the window when the toolbar wraps and leaves the button near the left edge. */
   #exportList { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column;
-    background: var(--paper-deep); border: 1px solid var(--ink); }
+    max-width: calc(100vw - 8px); background: var(--paper-deep); border: 1px solid var(--ink); }
   #exportList[hidden] { display: none; }
   #exportList button { width: auto; border: 0; padding: 6px 12px; text-align: left; }
   #exportBtn[aria-busy=true] { cursor: progress; }
@@ -847,7 +848,20 @@ $("#saveAs").onclick = () => save(true);
 nameEl.addEventListener("input", () => setFile(null));
 // Export menu: one header button, a list of formats under it.
 const exportList = $("#exportList");
-function showExports(open) { exportList.hidden = !open; $("#exportBtn").setAttribute("aria-expanded", String(open)); }
+function showExports(open) {
+  exportList.hidden = !open; $("#exportBtn").setAttribute("aria-expanded", String(open));
+  if (open) placeExports();
+}
+// The list hangs from its button's right edge, which runs off the left of the window when a wrapped
+// toolbar puts the button at the start of a row: move it sideways just enough to keep it all in view.
+function placeExports() {
+  exportList.style.right = "";
+  const r = exportList.getBoundingClientRect(), margin = 4, width = document.documentElement.clientWidth;
+  const dx = r.left < margin ? margin - r.left : r.right > width - margin ? width - margin - r.right : 0;
+  if (dx) exportList.style.right = `${-dx}px`;
+}
+// Watching the header rather than the window: it is measured after the toolbar has rewrapped.
+new ResizeObserver(() => { if (!exportList.hidden) placeExports(); }).observe($("header"));
 $("#exportBtn").onclick = () => showExports(exportList.hidden);
 document.addEventListener("click", (ev) => { if (!ev.target.closest(".exportMenu")) showExports(false); });
 exportList.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { showExports(false); $("#exportBtn").focus(); } });
