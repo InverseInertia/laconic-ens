@@ -304,7 +304,7 @@ def _run_line(i, raw, s, ev, fmt, used):
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.
         if ev.mode.assume and not (literal or isinstance(expr, Convert)):
-            value = reduce_si(value, ev.ureg)
+            value = reduce_si(value, ev.ureg, ev.mode.freq)
             if ev.mode.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
                 value = value.to("degree")
         stale = ev.symbols.tainted([expr])

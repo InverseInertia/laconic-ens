@@ -12,7 +12,7 @@ N/m  m/N  N·m²  Pa·s  W/m²  W/m³  W/(m·K)  J/K  J/(kg·K)  J/(mol·K)  J·
 Anything else stays in reduced base units (`m²/s²`, `kg/m³`). Where one dimension has several common names, the first wins:
 
 - energy and torque are both kg·m²/s², shown as **J** (use `-> 'N * 'm` to keep a torque)
-- 1/s is shown as **Hz**
+- 1/s is shown as **Hz**, or as **rad/s** after `!freq rad` (see [Frequencies](#frequencies-hz-and-rads))
 - kg/s² is shown as **N/m**, and s²/kg as **m/N**
 
 **Not reduced:** an explicit `->` conversion, and a line that is only one typed-in quantity (`E = 200'GPa` stays `200 GPa`). `10'kN / 5'mm` has two numbers, so it is a calculation and comes out as `2000000 N/m`.
@@ -60,6 +60,34 @@ A line that uses a constant shows its value, even a single typed quantity (`3'mo
 | `'m_e`, `'m_p` | electron and proton mass | 9.1093837139×10⁻³¹ kg, 1.67262192595×10⁻²⁷ kg |
 
 The values are CODATA's, as Pint has them. To ask for another constant, open an issue; [Development](Development) says how to add one.
+
+## Frequencies: Hz and rad/s
+
+SI writes the hertz and the radian per second both as 1/s, because the radian has no dimension. So by default LENS treats them as one unit: `50'Hz -> 'rad/'s` is `50 rad/s`, `3000'rpm -> 'Hz` is `314.2 Hz`, and a result in 1/s, even an angular frequency such as `sqrt(k/m)`, is shown in Hz. A `->` between Hz and an angle per time shows a note saying so.
+
+To have the 2π put in, say what the sheet's frequencies are with `!freq` above them:
+
+| Command | 1/s results are shown as | `->` between Hz and rad/s |
+|---|---|---|
+| `!freq hz` | Hz (cycles per second) | 1 Hz = 2π rad/s |
+| `!freq rad` | rad/s (angular frequency) | 1 Hz = 2π rad/s |
+| `!freq si` (the default) | Hz | 1 Hz = 1 rad/s, as SI has it |
+
+Below `!freq hz` or `!freq rad`, Hz is cycles per second and an angle per time (`'rad/'s`, `'rpm`, `'deg/'s`, `'cycle/'s`) is an angular frequency, so `->` between the two multiplies or divides by 2π:
+
+```
+!freq rad
+f = 50'Hz
+w = f -> 'rad/'s               314.2 rad/s
+n = 3000'rpm -> 'Hz            50 Hz
+wn = sqrt(40'N/'m / 10'kg)     2 rad/s
+fn = wn -> 'Hz                 0.3183 Hz
+```
+
+- A result with Hz in its units stays in Hz, so `2*f` is `100 Hz` below `!freq rad` too. Only a result in plain 1/s, with neither Hz nor an angle in it (`sqrt(k/m)`, `1/T`, `v/r`), takes the unit `!freq` names, and `->` reads it the same way: as cycles per second below `!freq hz` and as rad/s below `!freq rad`.
+- `->` puts in the 2π itself, so write `w = f -> 'rad/'s`, not `2*pi*f -> 'rad/'s`, which counts it twice. A line that does that shows a warning. `2*pi*f` on its own is still `314.2 Hz`, since a number cannot tell LENS that the cycles became radians.
+- Conversions within one kind (`'Hz -> 'kHz`, `'rad/'s -> 'rpm`) are as before.
+- Plots read `!freq` too: below `!freq rad` a y axis in 1/s is labelled rad/s.
 
 ## Temperatures
 

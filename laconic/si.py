@@ -3,7 +3,7 @@ a familiar derived-unit name when there is one.
 
 Where one dimension has several common names, the first entry in _PREFERRED
 wins. That is how the ambiguous cases are settled: energy and torque are both
-kg m^2/s^2 and come out as J; 1/s comes out as Hz. An explicit `->` conversion
+kg m^2/s^2 and come out as J; 1/s comes out as Hz (rad/s after `!freq rad`). An explicit `->` conversion
 overrides all of this."""
 from functools import lru_cache
 
@@ -37,8 +37,10 @@ def _table(ureg):
     return table
 
 
-def reduce_si(q, ureg):
-    """Return q expressed in the simplest coherent SI unit."""
+def reduce_si(q, ureg, freq="si"):
+    """Return q expressed in the simplest coherent SI unit. `freq` is the sheet's
+    `!freq` mode: after `!freq rad` a plain 1/s is shown as rad/s, not Hz. A result
+    that has Hz in its units keeps Hz (`2 * 50'Hz` is 100 Hz in any mode)."""
     names = [n for n, _ in q.unit_items()]
     if not names:
         return q
@@ -51,5 +53,7 @@ def reduce_si(q, ureg):
         return ureg.Quantity(r.magnitude)
     if "radian" in items:              # angles and rad/s keep their radians
         return r
+    if freq == "rad" and items == {"second": -1} and not catalogue.has_hertz(q.units, ureg):
+        return r.to("rad/s")
     target = _table(ureg).get(_key(items))
     return r.to(target) if target else r

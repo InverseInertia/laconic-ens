@@ -11,7 +11,9 @@ The families:
 - physical constants ('R, 'k_B, 'h_P), typed as units so they never take a variable's name
 - constants with subscripted symbols (g_0, m_e, N_A, µ_0)
 - Pint units siunitx lacks, which the export declares itself
-- offset temperatures ('degC, 'degF, 'degRe), which mean something else after * or /"""
+- offset temperatures ('degC, 'degF, 'degRe), which mean something else after * or /
+- frequencies: Hz as cycles per second and rad/s as an angle per time, 2π apart once a sheet says so (!freq)"""
+import math
 import re
 from functools import lru_cache
 
@@ -120,6 +122,65 @@ def reduce(q, ureg):
     r = q.to_reduced_units()
     cash = ureg.Unit("*".join(f"{n}**{e}" for n, e in r.unit_items() if n in money))
     return r.to(cash) if (r / ureg.Quantity(1, cash)).dimensionless else r
+
+
+# Frequencies. SI writes Hz and rad/s both as 1/s (the radian is dimensionless), so Pint converts
+# 1 Hz to 1 rad/s and 3000 rpm to 314.2 Hz. `!freq hz` or `!freq rad` (SheetMode.freq) says what
+# the sheet's frequencies are. Below either one, Hz is cycles per second and an angle per time
+# (rad/s, rpm, deg/s, 'cycle/'s) is an angular frequency, so `->` between the two applies the
+# 2π: 1 Hz = 2π rad/s. A plain 1/s, with neither, is cycles per second after `!freq hz` and rad/s
+# after `!freq rad`, and is shown that way. The default, "si", keeps Pint's 1:1.
+CYCLE, ANGLE = "cycle", "angle"
+_PLAIN = {"hz": CYCLE, "rad": ANGLE}
+
+
+def has_hertz(units, ureg):
+    """True if `units` name the hertz, with or without a prefix (Hz, kHz)."""
+    for name, _ in ureg.Quantity(1, units).unit_items():
+        try:
+            if any(base == "hertz" for _, base, _ in ureg.parse_unit_name(name)):
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def frequency_kind(units, ureg, freq):
+    """CYCLE for Hz, ANGLE for an angle per time, the sheet's reading of a plain 1/s, or
+    None when `units` are not a frequency or the sheet has not said (`freq` "si")."""
+    if dict(ureg.Quantity(1, units).dimensionality) != {"[time]": -1}:
+        return None
+    if "radian" in dict(ureg.Quantity(1, units).to_base_units().unit_items()):
+        return ANGLE
+    if has_hertz(units, ureg):
+        return CYCLE
+    return _PLAIN.get(freq)
+
+
+def cycle_factor(src, dst, ureg, freq):
+    """What `->` multiplies by, after Pint's own conversion, from units `src` to `dst`:
+    2π from cycles to an angle, 1/2π back, or 1 when both are the same kind of frequency
+    or the sheet has not said what its frequencies are."""
+    if freq not in _PLAIN:
+        return 1
+    a, b = frequency_kind(src, ureg, freq), frequency_kind(dst, ureg, freq)
+    if a == CYCLE and b == ANGLE:
+        return 2 * math.pi
+    if a == ANGLE and b == CYCLE:
+        return 1 / (2 * math.pi)
+    return 1
+
+
+def frequency_note(src, dst, ureg, freq):
+    """The warning on a `->` between Hz and an angle per time while the sheet has not said
+    what its frequencies are, which Pint converts 1:1. "" otherwise."""
+    if freq in _PLAIN:
+        return ""
+    kinds = {frequency_kind(src, ureg, "si"), frequency_kind(dst, ureg, "si")}
+    if kinds != {CYCLE, ANGLE}:
+        return ""
+    return ("SI writes Hz and rad/s both as 1/s, so this converts 1 Hz to 1 rad/s. Put !freq hz "
+            "or !freq rad above to read Hz as cycles per second, 1 Hz = 2π rad/s")
 
 
 def is_constant(spelling):

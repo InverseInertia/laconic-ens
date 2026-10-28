@@ -26,6 +26,8 @@ class SheetMode:
     sig: int = 4               # significant figures shown (!sigfigs, !sigfigsbig)
     places: int = None         # decimal places shown instead, after !decplace
     keep_zeros: bool = False   # !sigfigsbig: pad to exactly `sig` figures, 2.5 -> 2.500
+    freq: str = "si"           # !freq: "hz" or "rad" reads Hz as cycles per second, 2π rad/s, and
+                               # a plain 1/s as Hz or rad/s; "si" (the default) leaves Hz = rad/s = 1/s
     complex: str = "rect"      # !complex: show complex results as 3 + 4i ("rect") or 5∠53.13° ("polar"),
                                # or allow only real results ("real")
     plotdefs: dict = field(default_factory=dict)   # !plotspec key: value, for the plots below
@@ -150,6 +152,16 @@ def _complex(mode, ev, how):
     return _COMPLEX_TEXT[how]
 
 
+_FREQ_TEXT = {"hz": "Hz is cycles per second, 1 Hz = 2π rad/s; a 1/s result is shown in Hz",
+              "rad": "Hz is cycles per second, 1 Hz = 2π rad/s; a 1/s result is shown in rad/s",
+              "si": "Hz and rad/s are both 1/s again, 1 Hz = 1 rad/s"}
+
+
+def _freq(mode, ev, how):
+    mode.freq = how
+    return _FREQ_TEXT[how]
+
+
 def _plotspec(mode, ev, rest):
     """`!plotspec grid: off` sets an option for every plot below it; `!plotspec reset` clears them."""
     if rest == "reset":
@@ -194,6 +206,11 @@ _COMPLEX_HELP = ("How complex results are shown: <code>rect</code> (the default)
                  "<code>polar</code> gives <code>5∠53.13°</code> with the angle in the trig unit. "
                  "<code>real</code> makes any complex result an error. Write complex numbers as "
                  "<code>3 + 4i</code> (or <code>4j</code>) or <code>5'V∠30'deg</code>")
+_FREQ_HELP = ("What frequencies are. Below <code>!freq hz</code> or <code>!freq rad</code>, Hz is cycles per "
+              "second and <code>-&gt;</code> puts in the 2π: <code>50'Hz -&gt; 'rad/'s</code> is 314.2 rad/s and "
+              "<code>3000'rpm -&gt; 'Hz</code> is 50 Hz. A result in plain 1/s, such as <code>sqrt(k/m)</code>, "
+              "is shown in Hz after <code>hz</code> and in rad/s after <code>rad</code>. <code>si</code>, the "
+              "default, makes Hz, rad/s and 1/s the same unit")
 
 COMMANDS = (
     Command("clear", NoArgs(), "remove all non-global variables", _clear, _CLEAR_HELP),
@@ -218,6 +235,8 @@ COMMANDS = (
             _decplace, _PRECISION_HELP),
     Command("complex", Choice(("rect", "polar", "real")), "show complex results as rect or polar, or allow only real",
             _complex, _COMPLEX_HELP),
+    Command("freq", Choice(("hz", "rad", "si")), "Hz is cycles/s, 2π rad/s; show 1/s results in hz or rad",
+            _freq, _FREQ_HELP),
     Command("plot", Statement("A plot reads `!plot f(x), x = low .. high`"),
             "plot functions: !plot f(x), x = 0 .. 1"),
     Command("plotspec", Text(), "set a plot option for the plots below, e.g. !plotspec grid: off", _plotspec),
