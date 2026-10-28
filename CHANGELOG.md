@@ -11,6 +11,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### New
 - **LENS is open source under the MIT License.** The Windows and Linux installs now include it as `LICENSE.txt`, next to `THIRD-PARTY-NOTICES.txt` with the licenses of the Python libraries bundled with LENS. (#116)
+- **A bar over a variable**: type `&` after a name, as with the dot, arrow and hat marks: `u&` is ū, `F_x&` is F̄ₓ, and it combines with the others (``v&` `` is a dotted v̄). `u&` is a variable of its own, apart from `u`. (#111)
+- **∀ for volume**: a name spelled `forall` typesets as ∀, the struck-through V some fluid mechanics texts use for volume so that V can stay velocity, with subscripts and marks like any name (`forall_cv`). (#111)
+- **The reduced Planck constant `'hbar`** (or `'ħ`) now typesets as ħ (`\hbar`) on the page and in the LaTeX export, where it used to show as a text glyph that KaTeX warned about and pdflatex could not print. (#111)
 
 ### Changes
 - Math keys and suggestions now work in a plot note's position, `at (x, y)`, and math keys are off on a solver's `method:` line, matching what the sheet treats as math. (#116)

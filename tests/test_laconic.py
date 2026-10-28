@@ -251,6 +251,18 @@ def test_accent_marks_after_names():
     assert rs[0].text.startswith("x` = 2")
 
 
+def test_a_bar_mark_puts_a_bar_over_the_name():
+    rs = run("u& = 2'm/'s\nF_x& = 5'kN\nv&` = 1\nu = 3'm/'s\ny = u& + u")
+    assert [r.lhs for r in rs[:3]] == ["\\bar{u}", "\\bar{F}_{x}", "\\dot{\\bar{v}}"]
+    assert rs[4].text == "y = 5 m/s" and "\\bar{u} + u" in rs[4].stages[0]
+
+
+def test_forall_is_the_struck_through_v_for_volume():
+    rs = run("forall_cv = 2'm^3\nforall& = 1\nforall_cv")
+    assert rs[0].lhs == "\\forall_{\\mathrm{cv}}" and rs[1].lhs == "\\bar{\\forall}"
+    assert rs[2].text == "2 m³"
+
+
 def test_accented_name_is_its_own_variable():
     r = last("x = 1\nx! = 2\nx! + x")
     assert r.kind == "expr" and r.text == "3"

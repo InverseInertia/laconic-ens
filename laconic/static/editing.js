@@ -42,7 +42,7 @@
   // classes are spelled out here.
   const W = '[\\p{L}\\p{N}_]', W0 = '[\\p{L}\\p{Nl}\\p{No}_]';
   const TOKEN_RE = new RegExp('("[^"\\n]*")' + `|('(?:(?:${W0}|°)(?:${W}|°)*|%))`
-    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?${W0}(?:_∞|${W})*[\`!@]*)`, 'gu');
+    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?${W0}(?:_∞|${W})*[\`!@&]*)`, 'gu');
   const KINDS = ['text', 'unit', 'num', 'name'];
   // The tokens of one line: [{kind, start, text}], left to right.
   function tokens(line) {
@@ -591,8 +591,8 @@
   // A global is written with its ~ every time, so a plain one is a slip (the sheet warns when
   // one is assigned). When a name is finished, by typing something that cannot continue it, and
   // it is a global the line can see, the ~ goes in front. ctx.symbols is the last symbol table (symbols.js).
-  const MARKS = '`!@';
-  const FUNC_HEAD = /^\s*~?[\p{L}_][\p{L}\p{N}_]*[`!@]*\s*\([^)]*$/u;
+  const MARKS = '`!@&';
+  const FUNC_HEAD = /^\s*~?[\p{L}_][\p{L}\p{N}_]*[`!@&]*\s*\([^)]*$/u;
   function globalStart(t, s, ctx) {
     const symbols = ctx && ctx.symbols;
     if (!symbols || !symbols.length || isIdent(t[s]) || MARKS.includes(t[s] || ' ')) return -1;

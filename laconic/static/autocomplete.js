@@ -32,7 +32,7 @@
   const WORD = /[\p{L}\p{N}_°∞]/u;
   const NAME_START = '[\\p{L}_](?:_∞|[\\p{L}\\p{N}_])*';
   const FUNC_RE = new RegExp('^(~?' + NAME_START + ')\\s*\\(([^)]*)\\)\\s*=(?!=)', 'u');
-  const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@]*)\\s*=(?!=)', 'u');
+  const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@&]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
   const MAX = 8;
   const SOLVER_HEAD = /^\s*!(root|minimize|maximize)\b(.*)$/;
