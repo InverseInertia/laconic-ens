@@ -21,6 +21,9 @@ jobs:
 
   binary:
     needs: test
+    # Not on pushes to main: the PR already built and tested this code, and the binaries would
+    # say "dev", so nothing uses them. Tags build the release; Run workflow builds any branch.
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/')
     strategy:
       fail-fast: false
       matrix:
