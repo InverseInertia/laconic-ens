@@ -57,8 +57,13 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
 | `unittags.py` | The units dialog's tags: the standard tag list (units and Pint dimensions) and the cleaning of the user's tags before they are stored |
-| `settings.py` | The per-user settings file (Greek table, global units, the user's unit tags) |
+| `settings.py` | The per-user settings file (Greek table, global units, the user's unit tags, the page's display preferences including the theme, and whether the welcome was shown) |
 | `server.py` | FastAPI app |
+| `markdown.py` | Line results to a Markdown note in Obsidian's style: `$$` math in the live preview's flavour, plots as embedded SVG |
+| `pdfdoc.py` | Line results to a plain, page-broken HTML document, printed to PDF by a Chromium-family browser |
+| `browser.py` | Finds a Chromium-family browser for the app window and the PDF export, the user's default first; `LENS_CHROMIUM` overrides |
+| `instance.py` | One LENS at a time on the same port: a second launch hands its window (and sheet) to the running one |
+| `fileassoc.py` | `lens --register-files` / `--unregister-files`: the `.lens` file type on Windows, under `HKEY_CURRENT_USER` |
 | `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
 | `__main__.py` | The `lens` command line. `--serve` opens the server's socket and starts the browser before importing the server (about a second), so the browser's first request waits in the socket's queue rather than LENS waiting for anything, and builds the unit registry in the background before the page asks for a result. The package's `__init__` loads its heavy names on first use for the same reason |
 | `_version.py` | The program's version, the one place it is written; the release build stamps it from the tag |
@@ -100,6 +105,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | `GET /` | the page, with the command help rows filled in from the registry and the version (`_version.py`) in the header and Help |
 | `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex` (and `latex_rows`, the same one stage per row), `error`, `warning`, `stale`, its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line |
 | `POST /api/export` | complete `.tex` document |
+| `POST /api/export/md`, `POST /api/export/pdf`, `POST /api/export/print` | Markdown note; PDF (501 without a Chromium-family browser); the printable document, which opens the print dialog itself |
 | `POST /api/save` | source with needed unit definitions appended |
 | `POST /api/rename` | rename a name or unit; returns edits (one per use) or a warning/error |
 | `POST /api/plotedit` | edits to one plot's option lines for a pan, zoom or reset (runs the sheet only as far as the plot) |
@@ -108,8 +114,11 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | `POST /api/solvestore`, `POST /api/solveedit` | edits that write a finished result into its block; toggle `autorun:` |
 | `GET /api/unitbrowse`, `PUT /api/tags` | every unit with its standard tags, the user's tags and the global units, for the units dialog; store the user's tags |
 | `GET /api/settings`, `GET /api/vocab`, `GET /api/vocab/props` | settings, editor vocabulary, props keys and fluids (loaded lazily because it imports CoolProp) |
-| `PUT /api/greek`, `PUT /api/units` | store settings (units only if all valid) |
+| `PUT /api/greek`, `PUT /api/units`, `PUT /api/prefs`, `PUT /api/welcomed` | store settings (units only if all valid), the display preferences, and that the welcome was shown |
+| `GET /api/opened`, `POST /api/opened/save` | the worksheet the window was opened on (`lens --window FILE`), and writing it back to that file |
+| `GET /api/examples`, `GET /api/examples/{name}` | the example worksheets in `laconic/examples/` |
 | `POST /api/ping`, `POST /api/bye` | page lifecycle for the packaged app |
+| `GET /api/hello`, `POST /api/window` | how another launch recognizes a running LENS and hands it the window (`instance.py`) |
 
 Endpoints that change the text return `{"ok": true, "edits": [{"from", "to", "insert"}, ...]}`: edits against the text in the request, not overlapping, with offsets in UTF-16 code units as JavaScript counts them. The page makes them only if its text is still the one it sent.
 

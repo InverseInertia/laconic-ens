@@ -25,12 +25,15 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_rows.js` | the row model: what the results pane shows for each kind of line |
 | `node tests/test_mathfit.js` | when a formula too wide for its room is shrunk or wrapped (the drawing is tested in Chromium) |
 | `node tests/test_unitbrowser.js` | the units dialog: search, tag filters, adding and removing your tags |
+| `node tests/test_symbols.js` | reading the symbol table out of the eval rows |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 
 | File | Covers |
 |---|---|
 | `test_laconic.py`, `test_units.py` | evaluation, LaTeX, custom units |
-| `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py` | one module each |
+| `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py`, `test_blockedit.py`, `test_commands.py`, `test_symbols.py`, `test_markdown.py`, `test_pdfdoc.py`, `test_fileassoc.py`, `test_instance.py` | one module each |
+| `test_complex.py` | complex numbers |
+| `test_release_notes.py`, `test_stamp_changelog.py` | the release scripts in `packaging/` that read and stamp `CHANGELOG.md` |
 | `test_sheettext.py`, `sheettext_vectors.json` | line kinds, blocks, spans and tokens; the vectors are shared with `test_sheettext.js` |
 | `test_lineresult.py` | the line result interface, the block lookups, and the contract on the `/api/eval` row shape (it also runs `rows.js` over real rows) |
 | `test_editing_node.py` | runs the Node suites from pytest |
@@ -51,7 +54,7 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 ## Adding things
 
 - **A built-in function:** add an `fn_name` method to `Evaluator` (it is picked up by suggestions and Rename's reserved-name list automatically). Add a signature to `_SIGNATURES` in `vocab.py`, LaTeX in `Printer.call` if it should typeset specially, and a row to [Matrices](Matrices) or [Worksheet Syntax](Worksheet-Syntax).
-- **A command:** handle it in `_run_command` in `sheet.py` and list it in `COMMANDS` in `vocab.py`.
+- **A command:** add one entry to `COMMANDS` in `commands.py`: its name, argument rule, summary, help row and effect. Suggestions, the help rows and the unknown-command message are generated from it.
 - **A plot option:** add it to the tables at the top of `plotopts.py`, resolve it in `plotspec.py`, and draw it in `plotsvg.py` and `plotpgf.py`.
 - **A field on the eval rows:** add it to `LineResult` (or to a payload, if only one kind has it) and to `to_json`, update the expected shape in `test_lineresult.py`, and read it in `rows.js` (or the payload's own reader: `plotview.js`, `solverview.js`).
 - **A physical constant:** add a line to `CONSTANTS` in `catalogue.py`: the spelling a sheet types, what it is, and `None` when Pint already knows that spelling (`'R`, `'c`). For a spelling Pint lacks, the third item is the Pint definition that adds it: `"@alias planck_constant = h_P"` for another name of a Pint constant, or `"Av = avogadro_number"` for a new unit with its own symbol. The editor's suggestions, the *constants* tag in the units dialog and the "show its value" rule pick it up from there. Add its row to the table in [Units](Units), and its value to `test_the_constants_have_their_codata_values` in `tests/test_units.py`.
