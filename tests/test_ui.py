@@ -667,16 +667,17 @@ def test_pdf_export_shows_progress_and_prints_from_a_hidden_frame(page):
       window.__api = [];
       const f = window.fetch;
       window.fetch = (u, o) => { window.__api.push(String(u)); return f(u, o); };
-      // The page calls print() once the frame's fonts are in, a promise after its load event,
-      // so a stub put in on load is always in place by then.
-      new MutationObserver(() => {
-        for (const fr of document.querySelectorAll('iframe.printFrame'))
-          if (!fr.__hooked) { fr.__hooked = true; fr.addEventListener('load', () => {
-            fr.contentWindow.print = () => window.__prints.push({
-              katex: fr.contentDocument.querySelectorAll('.math .katex').length,
-              fonts: fr.contentDocument.fonts.status,
-              busy: document.querySelector('#exportBtn').getAttribute('aria-busy')}); }); }
-      }).observe(document.body, {childList: true});
+      // The page calls print() from the frame's onload once its fonts are in. When they already
+      // are, that runs as a microtask straight after onload, before any later load listener on
+      // the frame, so the stub goes in from a capture listener, which runs ahead of onload.
+      document.addEventListener('load', e => {
+        const fr = e.target;
+        if (!(fr instanceof HTMLIFrameElement) || !fr.classList.contains('printFrame')) return;
+        fr.contentWindow.print = () => window.__prints.push({
+          katex: fr.contentDocument.querySelectorAll('.math .katex').length,
+          fonts: fr.contentDocument.fonts.status,
+          busy: document.querySelector('#exportBtn').getAttribute('aria-busy')});
+      }, true);
     }""")
     held = []
     page.route("**/api/export/print", lambda route: held.append(route))
