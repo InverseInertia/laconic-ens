@@ -692,11 +692,15 @@ function typeset(el, tex, rows) {
   el.append(m);
   MathFit.set(m, tex, rows || [tex], {katex: KATEX_OPTS, after: titleGlobals});
 }
-// Fit again when the pane's width changes (the window, the split, the layout), once a frame.
-let fitWidth = 0, fitFrame = 0;
+// Fit again when the pane's width changes (the window, the split, the layout). The observer runs
+// once a frame, after layout and before paint, so the fit lands in the frame that changed the
+// width: put off to the next frame, the new width was painted with the old zoom first and a
+// shrunk formula flashed a scroll bar (#104).
+let fitWidth = 0;
 new ResizeObserver(() => {
-  if (out.clientWidth === fitWidth || fitFrame) return;
-  fitFrame = requestAnimationFrame(() => { fitFrame = 0; fitWidth = out.clientWidth; MathFit.fitAll(out); });
+  if (out.clientWidth === fitWidth) return;
+  fitWidth = out.clientWidth;
+  MathFit.fitAll(out);
 }).observe(out);
 document.fonts.ready.then(() => MathFit.fitAll(out, true));
 

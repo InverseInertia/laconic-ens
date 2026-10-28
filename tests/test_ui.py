@@ -523,6 +523,34 @@ def test_long_equations_are_fitted_to_the_results_pane(page):
     page.wait_for_selector(".row[data-line='4'] .math.wrapped")
 
 
+def test_a_shrunk_equation_is_fitted_again_before_the_narrower_pane_is_painted(page):
+    """#104: narrowing the pane refits a shrunk formula in the same frame, so no scroll bar
+    flashes under it while the old zoom is still on."""
+    terms = " + ".join(f"a * b / c * {i}" for i in range(1, 4))
+    reset(page, f"a = 1.5'm\nb = 2.25'm\nc = 3'm\nw = {terms}")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_function("document.querySelectorAll('#out .row').length === 4")
+    page.evaluate("document.fonts.ready")
+    page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    fit = {f["line"]: f for f in page.evaluate(FIT)}
+    assert fit[4]["zoomed"] and not fit[4]["wrapped"] and not fit[4]["scrolls"]
+    # An observer made after the page's runs after its fit, just before paint: what it sees is painted.
+    seen = page.evaluate("""() => new Promise((done) => {
+      const out = document.querySelector('#out'), body = document.querySelector(".row[data-line='4'] .body");
+      const before = out.clientWidth, seen = [];
+      const ro = new ResizeObserver(() => seen.push({width: out.clientWidth, scrolls: body.scrollWidth > body.clientWidth + 1}));
+      ro.observe(out);
+      requestAnimationFrame(() => {
+        document.querySelector('main').style.setProperty('--split', '45%');
+        requestAnimationFrame(() => requestAnimationFrame(() => { ro.disconnect(); done({before, seen}); }));
+      });
+    })""")
+    narrower = [s for s in seen["seen"] if s["width"] < seen["before"]]
+    assert narrower and not any(s["scrolls"] for s in narrower)
+    fit = {f["line"]: f for f in page.evaluate(FIT)}
+    assert fit[4]["zoomed"] and not fit[4]["wrapped"] and not fit[4]["scrolls"]   # still shrunk, not wrapped
+
+
 def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, monkeypatch):
     """#49: `lens --window sheet.lens` (a double-clicked file) opens that sheet, and Save writes it."""
     from laconic import server
