@@ -318,6 +318,20 @@ def test_display_preferences_follow_the_server_not_the_browser(page):
     page.click("#viewTypeset")
 
 
+def test_a_greek_table_an_older_build_kept_in_the_browser_is_sent_up_once(page):
+    from laconic import settings
+    settings.save_greek(None)
+    page.evaluate("localStorage.setItem('lens:greek', JSON.stringify({j: 'ϑ'}))")
+    page.reload()
+    page.wait_for_function("localStorage.getItem('lens:greek') === null")
+    assert settings.load()["greek"] == {"j": "ϑ"}
+    settings.save_greek(None)       # a reset stays reset: the browser's copy is gone
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    page.wait_for_timeout(300)
+    assert settings.load()["greek"] is None
+
+
 def test_preferences_an_older_build_kept_in_the_browser_are_sent_up_once(page):
     from laconic import settings
     page.evaluate("localStorage.setItem('lens:mathkeys', 'false')")
