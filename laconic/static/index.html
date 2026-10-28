@@ -31,6 +31,15 @@
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
+  /* Scroll bars follow the theme: a rule-colored thumb on the deep paper. scrollbar-color is
+     inherited, so this reaches every scrolling area (editor, results, math rows, dialogs, popups). */
+  html { scrollbar-color: var(--rule) var(--paper-deep); }
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar { width: 12px; height: 12px; background: var(--paper-deep); }
+    ::-webkit-scrollbar-thumb { background: var(--rule); border: 3px solid var(--paper-deep); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ink); }
+    ::-webkit-scrollbar-corner { background: var(--paper-deep); }
+  }
   body {
     background: var(--paper);
     color: var(--text);
