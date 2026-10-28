@@ -35,7 +35,7 @@
   const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@&]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
   const MAX = 8;
-  const SOLVER_HEAD = /^\s*!(root|minimize|maximize)\b(.*)$/;
+  const SOLVER_HEAD = /^\s*!(root|minimize|maximize|regression)\b(.*)$/;
 
   // What a trimmed line defines: {kind: 'unitdef' | 'funcdef' | 'assign', name, params}, or null.
   // As laconic/sheettext.py's definition() for whole lines (tests/sheettext_vectors.json), but a
@@ -126,7 +126,8 @@
     const isPlot = /^\s*!plot\s/.test(line);   // a plot statement holds expressions, unlike other commands
     // A solver header names its unknowns: variables defined above.
     if (SOLVER_HEAD.test(line) && !/^\s*!$/.test(before)) {
-      if (/^[\d.]/.test(query) || (!force && query.length < 2)) return null;
+      // A regression's header names new variables, the coefficients it defines: nothing to offer.
+      if (/^[\d.]/.test(query) || (!force && query.length < 2) || SOLVER_HEAD.exec(line)[1] === 'regression') return null;
       return { kind: 'name', start: s, end: e, query, tilde: false, only: ['variable'] };
     }
     const block = solverBlock(t, ls);
@@ -148,7 +149,7 @@
         while (ve > vs && /[ \t]/.test(t[ve - 1])) ve--;
         return { kind: 'choice', start: vs, end: Math.max(ve, pos), query: t.slice(vs, pos), key, block };
       }
-      if (!['equation', 'objective', 'constraint', 'bounds'].includes(key)) return null;
+      if (!['equation', 'objective', 'constraint', 'bounds', 'data', 'r2'].includes(key)) return null;
     }
     if (line.trimStart().startsWith('!') && !isPlot) {
       if (!/^\s*!$/.test(before)) return null;

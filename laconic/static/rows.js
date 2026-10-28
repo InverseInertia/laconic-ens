@@ -3,13 +3,18 @@
  * per-kind table below is the one place that says what each line kind shows. index.html only
  * turns a model into DOM. Runs under Node for tests.
  *
- *   model(row, {view})  null for a line shown inside its block's row (a plot's or solver's
- *                       option lines), else {line, end, cls, body, warning, stale, copy}:
+ *   model(row, {view, expanded})  null for a line shown inside its block's row (a plot's or
+ *                       solver's option lines), else {line, end, cls, body, warning, stale, copy}.
+ *                       `expanded`: a Set of the lines whose large matrices are shown whole:
  *     line, end    the lines the row owns (a block header owns its block)
  *     cls          the row's class names
  *     body         {type: "text", text}             plain text
- *                  {type: "tex", tex, rows}         typeset math, and the same one stage per row
- *                                                   for a pane too narrow for it (mathfit.js)
+ *                  {type: "tex", tex, rows, matrix} typeset math, and the same one stage per row
+ *                                                   for a pane too narrow for it (mathfit.js). A
+ *                                                   matrix too large to read is collapsed to its
+ *                                                   corners (matrixview.js) unless the line is
+ *                                                   expanded; `matrix` is then {size, expanded}
+ *                                                   for the button that toggles it, else null
  *                  {type: "error", source, message} the line as typed and what is wrong
  *                  {type: "plot"} | {type: "solver"} drawn from the row's own payload
  *                  {type: "snippet", text, solver}  the LaTeX view; `solver`: add its controls
@@ -31,7 +36,18 @@
   'use strict';
 
   const text = (r) => ({ type: 'text', text: r.text });
-  const calc = (r) => (r.latex ? { type: 'tex', tex: r.latex, rows: r.latex_rows || [r.latex] } : { type: 'text', text: '' });
+  const MV = root.MatrixView || (typeof require === 'function' ? require('./matrixview.js') : null);
+
+  function calc(r, opts) {
+    if (!r.latex) return { type: 'text', text: '' };
+    const rows = r.latex_rows || [r.latex];
+    const small = MV.collapse(r.latex);
+    if (!small.sizes.length) return { type: 'tex', tex: r.latex, rows, matrix: null };
+    const expanded = !!(opts && opts.expanded && opts.expanded.has(r.n));
+    const matrix = { size: MV.label(small.sizes), expanded };
+    if (expanded) return { type: 'tex', tex: r.latex, rows, matrix };
+    return { type: 'tex', tex: small.tex, rows: rows.map((x) => MV.collapse(x).tex), matrix };
+  }
 
   // line kind -> its body, or null when the line has no row of its own. Other kinds are calculations.
   const BODY = {
@@ -55,7 +71,7 @@
       line: r.n,
       end: r.end,
       cls: (snip ? 'row snip' : 'row ' + r.kind) + (r.stale ? ' stale' : ''),
-      body: snip ? { type: 'snippet', text: r.snippet, solver: !!r.solver } : make(r),
+      body: snip ? { type: 'snippet', text: r.snippet, solver: !!r.solver } : make(r, opts),
       warning: r.warning || '',
       stale: !!r.stale,
       copy: snip ? r.snippet : null,

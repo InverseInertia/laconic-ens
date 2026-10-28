@@ -29,6 +29,8 @@ def block(text, line):
     b = scan(text).block(line)
     if b is None or b.kind != "solver":
         raise SolverError(f"Line {line} is not a !root, !minimize or !maximize line")
+    if b.command == "regression":
+        raise SolverError(f"Line {line} is a !regression, which is fitted as the sheet runs and needs no solving")
     return solver.parse_block(b)
 
 

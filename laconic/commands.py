@@ -246,6 +246,8 @@ COMMANDS = (
             "find the unknowns that minimize an objective: !minimize x"),
     Command("maximize", Statement("A solver block reads `!maximize x`"),
             "find the unknowns that maximize an objective: !maximize x"),
+    Command("regression", Statement("A regression block reads `!regression a, b, c`"),
+            "fit a polynomial to points: !regression a, b, c, then indented data: lines"),
 )
 BY_NAME = {c.name: c for c in COMMANDS}
 

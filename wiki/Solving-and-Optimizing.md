@@ -1,6 +1,6 @@
 # Solving and Optimizing
 
-`!root`, `!minimize` and `!maximize` find unknowns with scipy (`scipy.optimize.root`, `brentq` and `minimize`). A block names the unknowns and lists its equations or objective on indented lines below it. The starting values are ordinary variables defined above the block, and they carry the units.
+`!root`, `!minimize` and `!maximize` find unknowns with scipy (`scipy.optimize.root`, `brentq` and `minimize`). A block names the unknowns and lists its equations or objective on indented lines below it. The starting values are ordinary variables defined above the block, and they carry the units. `!regression` fits a polynomial to points; see [Regression](#regression).
 
 ```
 x = 1'm                              starting values
@@ -58,6 +58,39 @@ The hash covers everything the block reads: its own lines (apart from `timeout:`
 | ✕ Failed, ■ Interrupted | the last run did not store anything. Open the log |
 
 Any line computed from an out-of-date block (and any plot) gets a ⚠ beside it, through variables and user functions alike, and a later block that reads an out-of-date unknown is flagged as built on stale values. Only a result that converged is ever stored. The LaTeX export prints the stored values, with a comment line above any block that is out of date.
+
+## Regression
+
+`!regression` fits a polynomial to points by least squares. It is written like the solver blocks, but a fit is quick and exact, so it is worked out every time the sheet runs: there is no Run button and nothing is stored in the block.
+
+```
+D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1] * 'm      a matrix of points, one column each: the x row, then the y row
+!regression a, b, c                            the coefficients, lowest power first: y = a + b·x + c·x²
+  data: D
+  r2: R2                                       optional: a name for R², the coefficient of determination
+h = a + b*2'm + c*(2'm)^2                      below the block, a, b, c and R2 hold the fit
+
+t = [0, 1, 2, 3] * 's                          x and y in different units: give them as two vectors
+s = [0.1, 4.8, 19.7, 44.0] * 'm
+!regression s0, v0, g2
+  data: t, s                                   s0 in m, v0 in m/s, g2 in m/s²
+
+x = [1, 2, 3, 4, 5]
+y = [2.1, 3.9, 6.2, 7.8, 10.1] * 'N
+!regression p                                  one name: a vector of every coefficient (p_1 is the constant)
+  data: x, y
+  degree: 3
+```
+
+| Option | Meaning |
+|---|---|
+| `data:` | the points: a matrix with 2 rows (x, then y) and one column per point, or two vectors of the same length, `data: x, y` (row or column vectors). Every entry of a matrix shares one dimension, so x and y in different units need the two-vector form. A table pasted the other way up (one row per point) needs `transpose()` |
+| `degree:` | the polynomial's degree, 0 to 20. With several names the degree is one less than their number, and `degree:` may be left out; with one name it is needed |
+| `r2:` | a name for R² (1 − residual sum of squares / total sum of squares) |
+
+The coefficient of xᵏ has the units of y / xᵏ, so the fit is the same whatever units the data is typed in. A single name holds every coefficient as one vector only when x has no units, since otherwise each coefficient has units of its own. Offset temperatures (°C, °F) are fitted in kelvin. A term whose part of y is rounding error (the zero coefficient of an exact fit) is shown as 0.
+
+The row shows the fitted polynomial in the names the data came from (`s = s0 + v0 t + g2 t²`), then each coefficient and R². A fit needs at least degree + 1 different x values; real, finite numbers only. Data that reads an out-of-date solver result makes the fit, and everything computed from it, out of date as well (⚠). The exports print the polynomial and one row per value. Rename (F2) reaches the names in the header, `data:` and `r2:`.
 
 ## Command line
 
