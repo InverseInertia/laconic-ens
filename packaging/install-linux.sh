@@ -1,7 +1,8 @@
 #!/bin/sh
 # Installs LENS for the current user: unpacks the program and copies the icons under ~/.local, adds a
 # launcher entry (.desktop file) to the application menu, and makes .lens files open in LENS
-# with an icon of their own. Any earlier install is removed first, so running it again updates.
+# with an icon of their own. Any earlier install is removed first, and a LENS still running from
+# it is stopped, so running it again updates.
 #
 #   sh lens-install-linux-v2.sh                    install the latest release of LENS
 #   sh lens-install-linux-v2.sh --release 0.3.5    install that release instead
@@ -19,7 +20,7 @@ set -eu
 
 # The installer's own version, numbered apart from LENS's: bump it when this script changes
 # (see wiki/Releases-and-Packaging.md).
-INSTALLER_VERSION="2.0.0"
+INSTALLER_VERSION="2.1.0"
 REPO="inverseinertia/laconic-ens"
 LATEST_API="${LENS_RELEASE_API:-https://api.github.com/repos/$REPO/releases/latest}"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -39,7 +40,30 @@ refresh() {  # rebuild the caches the desktop reads the menu, file types and ico
     command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t "$DATA/icons/hicolor" 2>/dev/null || true
 }
 
+stop_running() {
+    # A LENS left running from the install folder would take every new launch over (instance.py),
+    # so the menu entry would keep showing the old release. Its program may already be deleted
+    # (/proc then shows "<path> (deleted)"), so match the folder, not the file.
+    stopped=""
+    for exe in /proc/[0-9]*/exe; do
+        target="$(readlink "$exe" 2>/dev/null)" || continue
+        case "$target" in "$APP_DIR"/*) ;; *) continue ;; esac
+        pid="${exe#/proc/}"; pid="${pid%/exe}"
+        if kill "$pid" 2>/dev/null; then stopped="$stopped $pid"; fi
+    done
+    [ -n "$stopped" ] || return 0
+    echo "Stopped the LENS that was running."
+    for _ in 1 2 3 4 5; do  # give it up to 5 s to let go of its port
+        alive=""
+        for pid in $stopped; do if [ -d "/proc/$pid" ]; then alive=1; fi; done
+        [ -n "$alive" ] || return 0
+        sleep 1
+    done
+    for pid in $stopped; do kill -9 "$pid" 2>/dev/null || true; done
+}
+
 remove_existing() {
+    stop_running
     rm -f "$DESKTOP" "$ICON" "$MIME_XML" "$FILE_ICON"
     rm -rf "$APP_DIR"
     # the command-line link, only if it points at our binary

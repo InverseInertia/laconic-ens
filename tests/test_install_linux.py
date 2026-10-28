@@ -205,3 +205,62 @@ def test_the_installer_has_a_version_of_its_own(tmp_path, github):
     version = re.search(r'^INSTALLER_VERSION="(\d+\.\d+\.\d+)"$', script, re.M).group(1)
     r, _ = run(tmp_path, "--version")
     assert r.stdout.strip() == f"LENS installer {version}"
+
+
+def bridged_release(github, version):
+    """A release as the release job attaches it: its files, installer 2, and the stamped bridge
+    that copies of installer 1.x download as the program."""
+    release(github, version)
+    d = github / f"v{version}"
+    shutil.copy(ROOT / "packaging" / "install-linux.sh", d / "lens-install-linux-v2.sh")
+    bridge = (ROOT / "packaging" / "v1-bridge.sh").read_text()
+    assert 'VERSION="@VERSION@"\n' in bridge   # what the release job's sed replaces
+    (d / f"lens-{version}-linux-x64").write_text(bridge.replace("@VERSION@", version))
+
+
+def test_installer_1_updates_through_the_bridge(tmp_path, github):
+    """Installer 1.0.0, as v0.3.6 shipped it, looks for a single-file program the releases no
+    longer have (#101); the bridge attached under that name installs the release with installer 2."""
+    shutil.copy(ROOT / "tests" / "install-linux-1.0.0.sh", tmp_path / "dl" / "install-linux.sh")
+    d = github / "v0.3.6"
+    d.mkdir()
+    (d / "lens-0.3.6-linux-x64").write_text(program("0.3.6"))
+    (d / "lens-0.3.6-icon.png").write_bytes(PNG)
+    (d / "lens-0.3.6-file-icon.png").write_bytes(PNG)
+    latest(github, "0.3.6")
+    _, home = run(tmp_path)
+    assert installed(home) == (program("0.3.6"), "0.3.6")
+    bridged_release(github, "0.4.1")
+    latest(github, "0.4.1")
+    r, home = run(tmp_path)
+    assert "needs installer 2" in r.stderr
+    assert installed(home) == (program("0.4.1"), "0.4.1")
+    app = home / ".local/share/laconic-lens"
+    assert [p.name for p in (app / "_internal").iterdir()] == ["lib-0.4.1.so"]
+    assert (app / "examples").is_dir()
+    desktop = (home / ".local/share/applications/laconic-lens.desktop").read_text()
+    assert f'Exec="{app / "lens"}" --window %f' in desktop
+
+
+@pytest.mark.skipif(not Path("/proc/self/exe").exists() or shutil.which("sleep") is None, reason="needs /proc")
+@pytest.mark.parametrize("deleted", [False, True])
+def test_stops_a_lens_still_running_from_the_install_folder(tmp_path, downloads, deleted):
+    """A running LENS takes every new launch over, so the old release would keep showing; it is
+    stopped even when its files were already deleted by hand (#101)."""
+    app = tmp_path / "home" / ".local/share/laconic-lens"
+    app.mkdir(parents=True)
+    shutil.copy(shutil.which("sleep"), app / "lens")
+    old = subprocess.Popen([str(app / "lens"), "300"])
+    elsewhere = subprocess.Popen([shutil.which("sleep"), "300"])
+    try:
+        if deleted:
+            shutil.rmtree(app)
+        r, home = run(tmp_path)
+        assert "Stopped the LENS that was running" in r.stdout
+        assert old.wait(timeout=10) != 0
+        assert elsewhere.poll() is None
+        assert (home / ".local/share/laconic-lens/lens").read_text() == program("own")
+    finally:
+        for p in (old, elsewhere):
+            p.kill()
+            p.wait()
