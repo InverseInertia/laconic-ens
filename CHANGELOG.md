@@ -9,11 +9,13 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Fixes
+- In a narrow window, where the toolbar wraps onto several rows, the Export menu opens fully inside the window instead of mostly off its left edge, and it stays inside if you resize the window while it is open. (#103)
+
 ## [v0.4.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.1) (2026-10-28)
 
 ### Fixes
 - **Linux: updating from v0.3.6 works again.** The `lens-install-linux.sh` you got with v0.3.6 or earlier looked for a single-file program that releases no longer have, so running it again failed to update, even after removing LENS. From the next release it installs that release with the new installer, and `lens-install-linux-v2.sh` still works as before. The installer also stops a LENS left running from the old install, which would otherwise open in place of the new one, so the menu kept showing the old version. (#101)
-- In a narrow window, where the toolbar wraps onto several rows, the Export menu opens fully inside the window instead of mostly off its left edge, and it stays inside if you resize the window while it is open. (#103)
 
 ## [v0.4.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.0) (2026-10-27)
 
