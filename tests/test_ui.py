@@ -286,6 +286,24 @@ def test_theme_settings(page):
     assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 56, 107)"
 
 
+def test_theme_yaml_export_and_import(page):
+    page.click("#settingsBtn")
+    page.wait_for_selector("#settingsDlg[open]")
+    page.select_option("#preset", "Chalcedony Dark")
+    page.click("#themeExport")
+    snippet = page.input_value("#themeYaml")
+    assert "name: Chalcedony Dark" in snippet
+    page.click("#themeReset")
+    page.fill("#themeYaml", snippet)
+    page.click("#themeImport")
+    assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 0, 0)"
+    assert page.input_value("#preset") == "Chalcedony Dark"
+    page.fill("#themeYaml", "colors:\n  paper: nope\n")
+    page.click("#themeImport")
+    page.wait_for_selector("#alertDlg[open]")
+    assert "not a #rrggbb color" in page.text_content("#alertMsg")
+
+
 
 def test_display_preferences_follow_the_server_not_the_browser(page):
     """The browser's storage belongs to one port; preferences kept on the server look the same on
@@ -472,6 +490,37 @@ def test_each_kind_of_line_shows_its_row(page):
     assert page.locator(".row.snip .solver-tools").count() == 1
     assert page.inner_text(".row[data-line='3'] pre").startswith("x =")
     page.click("#viewTypeset")
+
+
+FIT = """[...document.querySelectorAll('#out .math')].map((m) => ({
+    line: +m.closest('.row').dataset.line, wrapped: m.classList.contains('wrapped'),
+    zoomed: [...m.children].some((k) => k.style.zoom),
+    over: [...m.children].some((k) => k.getBoundingClientRect().width > m.getBoundingClientRect().width + 1),
+    scrolls: m.closest('.body').scrollWidth > m.closest('.body').clientWidth + 1}))"""
+
+
+def test_long_equations_are_fitted_to_the_results_pane(page):
+    """A formula too wide for the pane is shrunk or wrapped, as in the PDF export, never scrolled,
+    and fitted again when the pane's width changes."""
+    terms = lambda k: " + ".join(f"a * b / c * {i}" for i in range(1, k + 1))
+    text = f"a = 1.5'm\nb = 2.25'm\nc = 3'm\nw = {terms(6)}\nx = 2'm"
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_function("document.querySelectorAll('#out .row').length === 5")
+    page.evaluate("document.fonts.ready")
+    page.evaluate("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+    fit = {f["line"]: f for f in page.evaluate(FIT)}
+    assert fit[4]["wrapped"] and page.locator(".row[data-line='4'] .wrow").count() == 3   # one row per stage
+    assert not fit[5]["wrapped"] and not fit[5]["zoomed"]                                  # a short one is left alone
+    assert not any(f["over"] or f["scrolls"] for f in fit.values())
+    page.set_viewport_size({"width": 3000, "height": 800})                                 # room for it now
+    page.evaluate("document.querySelector('main').style.setProperty('--split', '15%')")
+    page.wait_for_function("!document.querySelector(\".row[data-line='4'] .math\").classList.contains('wrapped')")
+    assert page.locator(".row[data-line='4'] .wrow").count() == 0
+    assert not any(f["over"] or f["scrolls"] for f in page.evaluate(FIT))
+    page.set_viewport_size({"width": 1200, "height": 800})
+    page.evaluate("document.querySelector('main').style.removeProperty('--split')")
+    page.wait_for_selector(".row[data-line='4'] .math.wrapped")
 
 
 def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_path, monkeypatch):

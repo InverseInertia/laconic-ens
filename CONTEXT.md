@@ -46,7 +46,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : A result owns its own line; a block header's result owns the whole block, header to last line (`n` .. `end`). A block's option lines still get results of their own, but the page shows them inside the header's row unless one is wrong.
 
 **Display parts**
-: What a row can show, the same fields on every result and empty when the line has none: `text` (plain), `latex` (typeset), `error`, `warning` and `stale`.
+: What a row can show, the same fields on every result and empty when the line has none: `text` (plain), `latex` (typeset; `latex_rows` is the same broken one stage per row, for a layout too narrow for it), `error`, `warning` and `stale`.
 
 **Block handle**
 : On a block header's result, the sheettext **Block** it starts, whether the block drew or failed. `sheet.block_at(text, line)` finds a block by its header, and `sheet.solver_blocks(text)` finds every solver block. Both read the text to find the blocks and run the sheet only as far as they need (`evaluate(..., until=)`).
@@ -138,7 +138,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 - **File handle**: the file a sheet was opened from or last saved to, as given by the browser's File System Access API. Only a `.lens` file gets one; a `.cs` or `.txt` file is read but never overwritten. Renaming the sheet drops it. See `laconic/static/savefile.js`. A sheet the program was started with (`lens --window FILE`, a double-clicked file) gets a stand-in handle that the server writes through (`/api/opened/save`).
 - **Save / Save As**: Save writes to the file handle when there is one and the browser grants permission, and otherwise asks for a file. Save As always asks. Without the File System Access API, both download a copy.
 - **Theme**: fonts, the color set and the editor paper style, kept in browser storage. See `laconic/static/theme.js`.
-- **Preset**: a named color set (LENS blueprint, Engineering paper, White paper, Dark, Canoe Dark). Colors that match none are "Custom".
+- **Preset**: a named color set (LENS blueprint, Engineering paper, White paper, Dark, Canoe Dark, Chalcedony Dark). Colors that match none are "Custom".
 - **Readable theme**: one whose text and paper colors have a WCAG contrast ratio of at least 3:1. A stored theme that is not readable is replaced by the default colors on load, with a note.
 - **Version** (`laconic/_version.py`): the program's version, written there and nowhere else. `0+dev` in the repository, shown as `dev`; a release build stamps it with the tag's version, shown as `v0.2.0` beside the title and in Help.
 - **Layout**: side by side (editor left, results right) or stacked (results on top). With automatic switching on, crossing the narrow width (760 px) switches it; Alt+L or Settings → Layout picks one by hand, which holds until the next crossing, or for good with automatic switching off. See `laconic/static/layout.js`.

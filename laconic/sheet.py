@@ -12,7 +12,7 @@ from .blockedit import newline
 from .evaluator import EvalError, Evaluator
 from .latex import Fmt, Printer, name_latex
 from .lineresult import LineResult, PlotPayload, SolverPayload
-from .nodes import Assign, Convert, FuncDef, UnitDef, UnitLit, is_literal
+from .nodes import Assign, Convert, FuncDef, Neg, Num, UnitDef, UnitLit, is_literal
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
@@ -338,6 +338,9 @@ def _run_line(i, raw, s, ev, fmt, used):
         expr = stmt.expr
         value = ev.settle(ev.check_finite(ev.eval(expr), expr))
         literal = is_literal(expr) and not catalogue.holds_constant(value, ev.ureg)
+        # A typed-in quantity or number is shown once, as typed: never rounded to the
+        # sheet's figures, which only apply to what the sheet computes.
+        typed = literal or _bare_number(expr)
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.
         if ev.mode.assume and not (literal or isinstance(expr, Convert)):
@@ -347,20 +350,29 @@ def _run_line(i, raw, s, ev, fmt, used):
         stale = solver.tainted(ev, [expr])
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
-        res = fmt.quantity(value)
-        stages = [res] if literal or ev.mode.short else _dedupe([sym, sub, res])
+        sig = 12 if typed else None
+        res = fmt.quantity(value, sig)
+        plain = fmt.plain(value, sig)
+        stages = [res] if typed or ev.mode.short else _dedupe([sym, sub, res])
         if isinstance(stmt, Assign):
-            name = ev.symbols.bind(stmt.name, value=fmt.plain(value))
+            name = ev.symbols.bind(stmt.name, value=plain)
             key = name.key
             ev.vars[key] = value
             (ev.stale.add if stale else ev.stale.discard)(key)
             return LineResult(i, raw, "assign", lhs=fmt.var(key), stages=stages,
-                              text=f"{key} = {fmt.plain(value)}", stale=stale,
+                              text=f"{key} = {plain}", stale=stale,
                               warning=". ".join(filter(None, [_global_note(stmt.name, name, ev.symbols),
                                                        _imaginary_note(stmt.name, ev.mode)])))
-        return LineResult(i, raw, "expr", stages=stages, text=fmt.plain(value), stale=stale)
+        return LineResult(i, raw, "expr", stages=stages, text=plain, stale=stale)
     except Exception as e:
         return LineResult(i, raw, "error", error=_describe(e))
+
+
+def _bare_number(expr):
+    """`3.14159`, `-2.5`: a real number typed on its own. An imaginary one (`4i`) is
+    left to the usual stages, since `!complex polar` shows it differently from how it was typed."""
+    n = expr.operand if isinstance(expr, Neg) else expr
+    return isinstance(n, Num) and not isinstance(n.value, complex)
 
 
 def _add_notes(r, notes):

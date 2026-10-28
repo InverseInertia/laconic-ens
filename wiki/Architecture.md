@@ -60,7 +60,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `settings.py` | The per-user settings file (Greek table, global units, the user's unit tags) |
 | `server.py` | FastAPI app |
 | `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
-| `__main__.py` | The `lens` command line |
+| `__main__.py` | The `lens` command line. `--serve` opens the server's socket and starts the browser before importing the server (about a second), so the browser's first request waits in the socket's queue rather than LENS waiting for anything, and builds the unit registry in the background before the page asks for a result. The package's `__init__` loads its heavy names on first use for the same reason |
 | `_version.py` | The program's version, the one place it is written; the release build stamps it from the tag |
 
 ## Front end (`laconic/static/`)
@@ -69,6 +69,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 |---|---|
 | `index.html` | The page: layout, styles, dialogs, and the glue script that wires the modules below to the DOM and browser APIs. `render()` draws each row model's body through a small table of body types |
 | `rows.js` | The row model: what the results pane shows for each eval row, from one table of line kind to body, and which row shows a given line. The page's one reader of the rows' common fields |
+| `mathfit.js` | Fitting typeset math to its width: leave it, shrink it, or wrap it one stage per row (`latex_rows`). The results pane and the PDF export (`pdfdoc.py`) both use it |
 | `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits); `merge` turns the server's edits into one such edit |
 | `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table |
 | `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line. An adapter of `symbols.py`; it applies no scope rule of its own |
@@ -97,7 +98,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | Endpoint | Purpose |
 |---|---|
 | `GET /` | the page, with the command help rows filled in from the registry and the version (`_version.py`) in the header and Help |
-| `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex`, `error`, `warning`, `stale`, its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line |
+| `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex` (and `latex_rows`, the same one stage per row), `error`, `warning`, `stale`, its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line |
 | `POST /api/export` | complete `.tex` document |
 | `POST /api/save` | source with needed unit definitions appended |
 | `POST /api/rename` | rename a name or unit; returns edits (one per use) or a warning/error |

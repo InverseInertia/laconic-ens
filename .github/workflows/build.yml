@@ -25,9 +25,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, name: lens-windows-x64 }
+          # Both build a folder, dist/lens. Windows makes the installer from it (packaging/lens.iss);
+          # Linux packs it as the archive install-linux.sh installs.
+          - { os: windows-latest, name: lens-windows-x64, exe: dist/lens/lens.exe, out: dist/lens-install-wizard.exe }
           # Oldest available runner so the binary works on more distros (glibc).
-          - { os: ubuntu-22.04, name: lens-linux-x64 }
+          - { os: ubuntu-22.04, name: lens-linux-x64, exe: dist/lens/lens, out: dist/lens-linux-x64.tar.gz }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,11 +47,54 @@ jobs:
       - run: pyinstaller packaging/lens.spec
       - name: Smoke test (serves the page and the self-hosted assets)
         shell: bash
-        run: python packaging/smoke.py dist/lens* "$(python -c 'from laconic._version import label; print(label())')"
+        run: python packaging/smoke.py ${{ matrix.exe }} "$(python -c 'from laconic._version import label; print(label())')"
+      - name: Pack, install, smoke test and uninstall (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          # tar keeps the executable bits, which upload-artifact would drop.
+          tar -czf dist/lens-linux-x64.tar.gz -C dist lens
+          # Install it as a build of your own: the archive and icons, unversioned, beside the script.
+          kit="$RUNNER_TEMP/kit"; mkdir "$kit"
+          cp packaging/install-linux.sh dist/lens-linux-x64.tar.gz "$kit"
+          cp packaging/icon.png "$kit/lens-icon.png"; cp packaging/file-icon.png "$kit/lens-file-icon.png"
+          export HOME="$RUNNER_TEMP/home"; mkdir "$HOME"
+          sh "$kit/install-linux.sh"
+          app="$HOME/.local/share/laconic-lens"
+          python packaging/smoke.py "$app/lens" "$(python -c 'from laconic._version import label; print(label())')"
+          ls "$app"/examples/*.lens > /dev/null
+          grep -qx "Exec=\"$app/lens\" --window %f" "$HOME/.local/share/applications/laconic-lens.desktop"
+          sh "$kit/install-linux.sh" --uninstall
+          test ! -e "$app" && test ! -e "$HOME/.local/share/applications/laconic-lens.desktop"
+      - name: Build the Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco upgrade innosetup --no-progress -y   # installs it, or updates it to a version that reads lens.iss
+          $version = python -c "from laconic._version import __version__; print(__version__)"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$version" packaging\lens.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Install, smoke test and uninstall (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Start-Process dist\lens-install-wizard.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=assoc' -Wait -PassThru
+          if ($setup.ExitCode) { throw "installer exited with $($setup.ExitCode)" }
+          $app = "$env:LOCALAPPDATA\Programs\LENS"
+          python packaging/smoke.py "$app\lens.exe" (python -c "from laconic._version import label; print(label())")
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ((Get-ItemProperty 'HKCU:\Software\Classes\.lens').'(default)' -ne 'LaconicLens.Worksheet') { throw ".lens files are not set to open in LENS" }
+          if ((Get-ItemProperty 'HKCU:\Software\Classes\LaconicLens.Worksheet\shell\open\command').'(default)' -ne "`"$app\lens.exe`" --window `"%1`"") { throw "wrong open command for .lens files" }
+          if (-not (Test-Path "$app\examples\*.lens")) { throw "no example worksheets installed" }
+          Wait-Process -Name lens -Timeout 30 -ErrorAction SilentlyContinue   # the solver worker, after the smoke test's server
+          # The uninstaller restarts itself from a temporary folder, so wait for the files to go.
+          Start-Process "$app\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path "$app\lens.exe"); $i++) { Start-Sleep 1 }
+          if (Test-Path "$app\lens.exe") { throw "uninstall left lens.exe behind" }
+          if (Test-Path 'HKCU:\Software\Classes\LaconicLens.Worksheet') { throw "uninstall left the .lens file type behind" }
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: dist/lens*
+          path: ${{ matrix.out }}
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -66,9 +111,8 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir release
-          mv artifacts/lens-windows-x64/lens.exe "release/lens-$VERSION-windows-x64.exe"
-          mv artifacts/lens-linux-x64/lens "release/lens-$VERSION-linux-x64"
-          chmod +x "release/lens-$VERSION-linux-x64"  # upload-artifact drops the executable bit
+          mv artifacts/lens-windows-x64/lens-install-wizard.exe "release/lens-$VERSION-windows-x64-install-wizard.exe"
+          mv artifacts/lens-linux-x64/lens-linux-x64.tar.gz "release/lens-$VERSION-linux-x64.tar.gz"
       - uses: actions/checkout@v4
         with: { path: src, fetch-depth: 0 }  # all tags, for the compare link to the previous one
       - name: Release notes from CHANGELOG.md
@@ -77,13 +121,16 @@ jobs:
       - name: Add the Linux installer and its icons
         run: |
           # The installer looks up the latest release when it runs, so it is not stamped and its
-          # name carries no version: .../releases/latest/download/lens-install-linux.sh always
-          # gives the newest one. Its own version is the INSTALLER_VERSION line in the script.
+          # name carries no LENS version, only its own major version (INSTALLER_VERSION in the
+          # script): .../releases/latest/download/lens-install-linux-v2.sh always gives the newest one.
           grep -Eq '^INSTALLER_VERSION="[0-9]+\.[0-9]+\.[0-9]+"$' src/packaging/install-linux.sh
-          cp src/packaging/install-linux.sh release/lens-install-linux.sh
+          cp src/packaging/install-linux.sh release/lens-install-linux-v2.sh
           cp src/packaging/icon.png "release/lens-$VERSION-icon.png"
           cp src/packaging/file-icon.png "release/lens-$VERSION-file-icon.png"
-          chmod +x release/lens-install-linux.sh
+          # Installer 1.x downloads lens-<version>-linux-x64; this stand-in runs installer 2 for it.
+          sed "s/^VERSION=\"@VERSION@\"$/VERSION=\"$VERSION\"/" src/packaging/v1-bridge.sh > "release/lens-$VERSION-linux-x64"
+          grep -qx "VERSION=\"$VERSION\"" "release/lens-$VERSION-linux-x64"
+          chmod +x release/lens-install-linux-v2.sh "release/lens-$VERSION-linux-x64"
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*

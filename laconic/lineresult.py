@@ -7,6 +7,7 @@ Every result answers one small interface, whatever its kind:
     r.kind, r.source                 the line kind (or "error") and the line as typed
     r.text, r.latex, r.error,        its display parts, each empty when the line has none
     r.warning, r.stale
+    r.latex_rows                     `latex` broken one stage per row, for a narrow layout
     r.block                          its block handle: the sheettext Block a header starts, else None
     r.symbols                        its part of the symbol table (see symbols.py)
 
@@ -115,9 +116,18 @@ class LineResult:
         parts = [p for p in ([self.lhs] if self.lhs else []) + self.stages if p]
         return " = ".join(parts)
 
+    @property
+    def latex_rows(self):
+        """`latex` one stage per row, as a layout too narrow for it wraps it: `lhs = first stage`,
+        then `= next stage` and so on. Joined with spaces they are `latex` again."""
+        parts = [p for p in ([self.lhs] if self.lhs else []) + self.stages if p]
+        if self.lhs and len(parts) > 1:
+            parts[:2] = [f"{parts[0]} = {parts[1]}"]
+        return [p if i == 0 else f"= {p}" for i, p in enumerate(parts)]
+
     def to_json(self):
         row = {"n": self.n, "end": self.end, "kind": self.kind, "source": self.source,
-               "text": self.text, "latex": self.latex, "error": self.error, "warning": self.warning,
+               "text": self.text, "latex": self.latex, "latex_rows": self.latex_rows, "error": self.error, "warning": self.warning,
                "stale": self.stale, "symbols": self.symbols}
         if self.plot:
             row["plot"] = self.plot.to_json()

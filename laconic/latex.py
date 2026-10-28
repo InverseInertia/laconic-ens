@@ -76,9 +76,10 @@ _GREEK_CHARS = {
 }
 
 
-# Unit symbols in the .tex preamble go through pdflatex, which wants macros for these.
+# Unit symbols in the .tex preamble go through pdflatex, which wants macros for these
+# (ℎ is Pint's symbol for Planck's constant, an italic h).
 _DECL_GLYPHS = {c: v + " " if v.startswith("\\") else v
-                for c, v in {**_GREEK_CHARS, "µ": "\\mu", "∞": "\\infty"}.items()}
+                for c, v in {**_GREEK_CHARS, "µ": "\\mu", "∞": "\\infty", "ℎ": "\\mathit{h}"}.items()}
 
 
 def _glyph(c):
@@ -212,18 +213,18 @@ class Fmt:
             return ("-" if im < 0 else "") + imag
         return f"{self._si_number(re_, sig)}{'-' if im < 0 else '+'}{imag}"
 
-    def _plain_complex(self, z, spaced=True):
+    def _plain_complex(self, z, spaced=True, sig=None):
         if self.mode.complex == "polar":
             r, a, _, mark = self._polar(z)
-            return f"{self._plain_number(r)}∠{self._plain_number(a)}{mark}"
+            return f"{self._plain_number(r, sig)}∠{self._plain_number(a, sig)}{mark}"
         re_, im = self._split(z)
         if im == 0:
-            return self._plain_number(re_)
-        imag = self._plain_number(abs(im)) + "i"
+            return self._plain_number(re_, sig)
+        imag = self._plain_number(abs(im), sig) + "i"
         if re_ == 0:
             return ("-" if im < 0 else "") + imag
         sign = (" - " if im < 0 else " + ") if spaced else ("-" if im < 0 else "+")
-        return self._plain_number(re_) + sign + imag
+        return self._plain_number(re_, sig) + sign + imag
 
     def number(self, x, sig=None):
         if np.iscomplexobj(x):
@@ -266,61 +267,62 @@ class Fmt:
             self._builtin[name] = "".join(_DECL_GLYPHS.get(c, c) for c in tex)
         return self._macro(name, catalogue.declared_macro(name))
 
-    def quantity(self, q):
-        """Latex for a scalar or matrix Quantity."""
+    def quantity(self, q, sig=None):
+        """Latex for a scalar or matrix Quantity. `sig` as in `_parts`: a typed-in
+        quantity is shown with 12 figures, so it reads as it was typed."""
         u = self.unit(q.units)
         mag = np.asarray(q.magnitude)
         if mag.ndim == 0 and np.iscomplexobj(mag):
-            return self._complex_quantity(complex(mag), q.units, u)
+            return self._complex_quantity(complex(mag), q.units, u, sig)
         if mag.ndim == 0:
             if self.siunitx and u and np.isfinite(mag):   # \qty cannot parse \infty
-                return f"\\qty{{{self._si_number(mag)}}}{{{u}}}"
+                return f"\\qty{{{self._si_number(mag, sig)}}}{{{u}}}"
             if self.siunitx and u:
-                return f"{self.number(mag)}\\,\\unit{{{u}}}"
-            return self.number(mag) + (f"\\,{u}" if u else "")
+                return f"{self.number(mag, sig)}\\,\\unit{{{u}}}"
+            return self.number(mag, sig) + (f"\\,{u}" if u else "")
         mag = np.atleast_2d(mag) if mag.ndim == 1 else mag
         mag = mag.T if np.ndim(q.magnitude) == 1 else mag  # 1-D arrays read as columns
-        body = r" \\ ".join(" & ".join(self.number(v) for v in row) for row in mag)
+        body = r" \\ ".join(" & ".join(self.number(v, sig) for v in row) for row in mag)
         tex = "\\begin{bmatrix} " + body + " \\end{bmatrix}"
         if u:
             tex += f"\\,\\unit{{{u}}}" if self.siunitx else f"\\,{u}"
         return tex
 
-    def _complex_quantity(self, z, units, u):
+    def _complex_quantity(self, z, units, u, sig=None):
         """A complex scalar with its unit: `(3 + 4i) V`, or `5 V∠53.13°` in polar form."""
         if self.mode.complex == "polar":
             r, a, mark, _ = self._polar(z)
-            return f"{self.quantity(self.ureg.Quantity(r, units))}\\angle {self.number(a)}{mark}"
+            return f"{self.quantity(self.ureg.Quantity(r, units), sig)}\\angle {self.number(a, sig)}{mark}"
         re_, im = self._split(z)
         if im == 0:
-            return self.quantity(self.ureg.Quantity(re_, units))
+            return self.quantity(self.ureg.Quantity(re_, units), sig)
         if not u:
-            return self.complex_number(z)
+            return self.complex_number(z, sig)
         if self.siunitx:
-            return f"\\complexqty{{{self._si_complex(z)}}}{{{u}}}"
-        return f"\\left({self.complex_number(z)}\\right)\\,{u}"
+            return f"\\complexqty{{{self._si_complex(z, sig)}}}{{{u}}}"
+        return f"\\left({self.complex_number(z, sig)}\\right)\\,{u}"
 
-    def plain(self, q):
+    def plain(self, q, sig=None):
         mag = np.asarray(q.magnitude)
         u = f"{q.units:~P}"
         if mag.ndim == 0 and np.iscomplexobj(mag):
             z = complex(mag)
             if self.mode.complex == "polar":
                 r, a, _, mark = self._polar(z)
-                return f"{self._plain_number(r)} {u}".strip() + f"∠{self._plain_number(a)}{mark}"
-            text = self._plain_complex(z)
+                return f"{self._plain_number(r, sig)} {u}".strip() + f"∠{self._plain_number(a, sig)}{mark}"
+            text = self._plain_complex(z, sig=sig)
             return f"({text}) {u}" if u and " " in text else f"{text} {u}".strip()
         if mag.ndim == 0:
-            return f"{self._plain_number(mag)} {u}".strip()
-        body = np.array2string(mag, formatter={"all": self._plain_number}, separator=" ")
+            return f"{self._plain_number(mag, sig)} {u}".strip()
+        body = np.array2string(mag, formatter={"all": lambda x: self._plain_number(x, sig)}, separator=" ")
         return body + (f" {u}" if u else "")
 
-    def _plain_number(self, x):
+    def _plain_number(self, x, sig=None):
         if np.iscomplexobj(x):
-            return self._plain_complex(x, spaced=False)
+            return self._plain_complex(x, spaced=False, sig=sig)
         if np.isinf(x):
             return "∞" if x > 0 else "-∞"
-        mant, exp = self._parts(x, None)
+        mant, exp = self._parts(x, sig)
         return mant if exp is None else f"{mant}e{exp}"
 
 

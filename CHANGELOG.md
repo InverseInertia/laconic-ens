@@ -12,6 +12,26 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### Changes
 - **Scroll bars follow your theme**: the scroll bars under long lines of math, in the editor and in dialogs take their colors from the theme (its Rules color on a slightly deeper paper) instead of the browser's defaults, for every preset and for custom and shared themes. (#99)
 
+### Fixes
+- **Linux: updating from v0.3.6 works again.** The `lens-install-linux.sh` you got with v0.3.6 or earlier looked for a single-file program that releases no longer have, so running it again failed to update, even after removing LENS. From the next release it installs that release with the new installer, and `lens-install-linux-v2.sh` still works as before. The installer also stops a LENS left running from the old install, which would otherwise open in place of the new one, so the menu kept showing the old version. (#101)
+
+## [v0.4.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.0) (2026-10-27)
+
+### New
+- **Chalcedony Dark** theme preset: blue on black. (#100)
+- **Share themes as YAML**: Settings → Theme → Share as YAML exports your theme as a YAML snippet, copied to the clipboard, and imports a snippet pasted back in. Fields the snippet leaves out keep their current values, and a snippet with an unknown or invalid field, or unreadable colors, is refused with a note saying why. (#100)
+- **Windows installer**: `lens-<version>-windows-x64-install-wizard.exe` is a setup wizard. It installs LENS for your user (no administrator) with a Start menu entry, an optional desktop shortcut, the example worksheets, and `.lens` files opening in LENS with their own icon. Running a newer one updates LENS, and Settings → Apps removes it. It replaces the single `lens-<version>-windows-x64.exe`, which had to unpack itself every time it started. (#97)
+
+### Changes
+- **The hour prints as `hr`** (`2 hr`, `60 km/hr`) in results, the PDF and the LaTeX export, so it is no longer confused with Planck's constant, which is shown as *h*. Typing `'h` or `'hr` still gives the hour, and `kWh`, `Wh` and `mph` keep their symbols. The LaTeX export also compiles with `'h_P` in it. (#89)
+- **The Linux program is now a folder** (released as `lens-<version>-linux-x64.tar.gz`), so it no longer unpacks itself to a temporary folder each time it starts, which took over a second. `lens-install-linux-v2.sh` installs it as before; download the installer again (version 2.0.0), since earlier copies look for the old single file. (#97)
+- **LENS opens faster**: the window opens while LENS is still loading instead of about two seconds later, and the first result no longer waits for the unit tables to be built. A second launch, or double-clicking a `.lens` file while LENS is running, hands over to the running LENS sooner. (#97)
+
+### Fixes
+- A line that only gives a typed-in number or quantity, such as `L = 12345.678'm` or `x = 3.14159`, shows the number as you typed it instead of rounding it to the sheet's significant figures (`12350 m`, or `3.14159 = 3.142`). The copied text and the value shown for the variable keep it too. Results of calculations are still rounded. (#96)
+- On Linux, the LENS window shows as LENS, with the LENS icon, in the dock, panel and Alt+Tab list again, instead of as your browser. LENS now opens its window with a browser installed from your distribution's packages before a flatpak or snap one (whose windows the desktop always shows as that browser), opens it through XWayland on Wayland, and keeps a separate profile for each browser. (#93)
+- Long calculations in the results pane no longer get a scrollbar: like the PDF export, one a little too wide is shrunk to fit and one much too wide is wrapped one stage per row, and they are fitted again when you resize the pane or the window. (#94)
+
 ## [v0.3.6](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.3.6) (2026-10-27)
 
 ### New

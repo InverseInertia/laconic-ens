@@ -12,6 +12,8 @@
  *   presetOf(colors)         the preset with exactly these colors, or "custom"
  *   warning(colors)          the warning shown while text and paper are too close, or ""
  *   cssVars(theme)           {"--name": value} for the document root
+ *   toYaml(theme)            the theme as a YAML snippet, to copy and share
+ *   fromYaml(text, current)  {theme, error}: a pasted YAML snippet over the current theme
  */
 (function (root) {
   'use strict';
@@ -37,6 +39,7 @@
     'White paper': { paper: '#fbfbf8', text: '#1b1b1b', ink: '#1b1b1b', grid: '#dcdcd4', rule: '#b5b5aa', err: '#b3261e', global: '#0f6e6a' },
     'Dark': { paper: '#1e2127', text: '#d9dde3', ink: '#d9dde3', grid: '#2c313a', rule: '#444b57', err: '#ff7b72', global: '#6fd3b8' },
     'Canoe Dark': { paper: '#120a02', text: '#f5cca3', ink: '#ff4d00', grid: '#2e1a05', rule: '#ff4d00', err: '#ff1100', global: '#7ee0c3' },
+    'Chalcedony Dark': { paper: '#000000', text: '#1d5ec1', ink: '#1b5cc1', grid: '#323339', rule: '#1b5cc1', err: '#e33129', global: '#361086' },
   };
   const BACKGROUNDS = ['grid', 'lines', 'dots', 'plain'];
   // Below this ratio text is hard to read on its paper.
@@ -101,7 +104,79 @@
     return vars;
   }
 
-  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, cssVars };
+  // A snippet names fonts by their label, so it still means the same font if the lists are reordered.
+  function toYaml(theme) {
+    const preset = presetOf(theme.colors);
+    return [
+      '# LENS theme',
+      `name: ${preset === 'custom' ? 'Custom' : preset}`,
+      'fonts:',
+      `  sans: ${FONTS_SANS[theme.sans][0]}`,
+      `  mono: ${FONTS_MONO[theme.mono][0]}`,
+      `background: ${theme.bg}`,
+      'colors:',
+      ...COLOR_FIELDS.map(([k]) => `  ${k}: '${theme.colors[k]}'`),
+      '',
+    ].join('\n');
+  }
+
+  // Reads the snippet toYaml writes: comments, `key: value` lines and one level of nesting. A
+  // value may be quoted or not; an unquoted `#rrggbb` is taken as the color, not as a comment.
+  function parseYaml(text) {
+    const out = {};
+    let section = null;
+    for (const [i, raw] of String(text).split(/\r?\n/).entries()) {
+      if (/^\s*(#|$)/.test(raw)) continue;
+      const m = /^(\s*)([A-Za-z_][\w-]*)\s*:\s*(.*)$/.exec(raw);
+      if (!m) throw new Error(`line ${i + 1} is not \`key: value\`: ${raw.trim()}`);
+      const [, indent, key] = m;
+      let value = m[3];
+      const q = /^(['"])(.*)\1\s*(#.*)?$/.exec(value);
+      if (q) value = q[2];
+      else if (/^#[0-9a-f]{6}\b/i.test(value)) value = value.slice(0, 7);
+      else value = value.replace(/\s+#.*$/, '').trim();
+      if (!indent) {
+        if (value === '') { section = key; out[key] = {}; } else { section = null; out[key] = value; }
+      } else if (section) out[section][key] = value;
+      else throw new Error(`line ${i + 1} is indented but belongs to no section: ${raw.trim()}`);
+    }
+    return out;
+  }
+
+  // Fields the snippet leaves out keep the current theme's values; a field it gets wrong, or text
+  // that can't be read on its paper, rejects the whole snippet so nothing half-applies.
+  function fromYaml(text, current) {
+    let y;
+    try { y = parseYaml(text); } catch (e) { return { theme: null, error: `Not a theme snippet: ${e.message}.` }; }
+    const theme = { ...(current || defaults()), colors: { ...(current || defaults()).colors } };
+    const bad = [];
+    const fonts = y.fonts && typeof y.fonts === 'object' ? y.fonts : {};
+    const font = (list, label, field) => {
+      if (label === undefined) return;
+      const i = list.findIndex(([name]) => name.toLowerCase() === String(label).toLowerCase());
+      if (i < 0) bad.push(`unknown ${field} font "${label}"`); else theme[field] = i;
+    };
+    font(FONTS_SANS, fonts.sans, 'sans');
+    font(FONTS_MONO, fonts.mono, 'mono');
+    if (y.background !== undefined) {
+      if (BACKGROUNDS.includes(y.background)) theme.bg = y.background;
+      else bad.push(`unknown background "${y.background}" (one of ${BACKGROUNDS.join(', ')})`);
+    }
+    const colors = y.colors && typeof y.colors === 'object' ? y.colors : {};
+    for (const [k, v] of Object.entries(colors)) {
+      if (!COLOR_FIELDS.some(([f]) => f === k)) bad.push(`unknown color "${k}"`);
+      else if (!isColor(v)) bad.push(`${k} is not a #rrggbb color: ${v}`);
+      else theme.colors[k] = v.toLowerCase();
+    }
+    if (!y.fonts && y.background === undefined && !y.colors) return { theme: null, error: 'Not a theme snippet: it has no fonts, background or colors.' };
+    if (bad.length) return { theme: null, error: `Theme not imported: ${bad.join('; ')}.` };
+    if (contrast(theme.colors.paper, theme.colors.text) < MIN_CONTRAST) {
+      return { theme: null, error: `Theme not imported: ${warning(theme.colors).replace(/^Warning: /, '').replace(/ On reload.*$/, '')}` };
+    }
+    return { theme, error: '' };
+  }
+
+  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, cssVars, toYaml, fromYaml };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Theme = api;
 })(typeof window !== 'undefined' ? window : globalThis);
