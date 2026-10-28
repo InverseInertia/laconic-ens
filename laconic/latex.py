@@ -12,6 +12,7 @@ from . import catalogue
 from .commands import SheetMode
 from .exports import Error, Figure, Heading, Paragraph, Source, element, elements
 from .evaluator import _TINY, CONSTANTS, EvalError
+from .functions import FUNCTIONS
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Polar,
                     Str, UnitLit, is_literal)
 
@@ -327,11 +328,17 @@ class Fmt:
         return mant if exp is None else f"{mant}e{exp}"
 
 
-_FUNC_TEX = {"sin": r"\sin", "cos": r"\cos", "tan": r"\tan", "asin": r"\arcsin",
-             "acos": r"\arccos", "atan": r"\arctan", "ln": r"\ln", "log10": r"\log_{10}"}
+_BINDS = {"add": ADD, "mul": MUL, "neg": NEG, "pow": POW, "atom": ATOM}
 
 
-_BINARY_TEX = {"dot": r"\cdot", "cross": r"\times", "kron": r"\otimes"}
+class _Arg:
+    """A call's argument as a built-in's LaTeX form uses it (see functions.py): `{0}` as
+    printed, `{0:atom}` in parentheses unless it binds at least that tightly."""
+    def __init__(self, printer, node, tex):
+        self.printer, self.node, self.tex = printer, node, tex
+
+    def __format__(self, binds):
+        return self.printer.child(self.node, _BINDS[binds]) if binds else self.tex
 
 
 class Printer:
@@ -455,45 +462,9 @@ class Printer:
         f, a = n.func, [self.tex(x) for x in n.args]
         if self.ev.fkey(f) in self.ev.funcs:
             return f"{self.fmt.var(self.ev.fkey(f))}\\left({', '.join(a)}\\right)", ATOM
-        if f == "sqrt":
-            return f"\\sqrt{{{a[0]}}}", ATOM
-        if f == "abs":
-            return f"\\left|{a[0]}\\right|", ATOM
-        if f == "floor":
-            return f"\\left\\lfloor {a[0]} \\right\\rfloor", ATOM
-        if f == "ceil":
-            return f"\\left\\lceil {a[0]} \\right\\rceil", ATOM
-        if f in ("heaviside", "step", "heav"):
-            return f"\\operatorname{{H}}\\left({a[0]}\\right)", ATOM
-        if f == "props":
-            return f"\\mathrm{{props}}\\left({', '.join(a)}\\right)", ATOM
-        if f == "exp":
-            return f"e^{{{a[0]}}}", POW
-        if f == "inv":
-            return f"{self.child(n.args[0], ATOM)}^{{-1}}", POW
-        if f == "transpose":
-            return f"{self.child(n.args[0], ATOM)}^{{T}}", POW
-        # Indexing prints as a subscript; the base is braced so subscripts can stack: {A_{i}}_{j}.
-        if f == "idx" and len(a) == 2:
-            return f"{{{self.child(n.args[0], ATOM)}}}_{{{a[1]}}}", ATOM
-        if f == "elem" and len(a) == 3:
-            return f"{{{self.child(n.args[0], ATOM)}}}_{{{a[1]},\\,{a[2]}}}", ATOM
-        if f in ("re", "im", "arg"):
-            return f"\\operatorname{{{f.capitalize()}}}\\left({a[0]}\\right)", ATOM
-        if f == "conj":
-            return f"\\overline{{{a[0]}}}", ATOM
-        if f == "trace":
-            return f"\\operatorname{{tr}}\\left({a[0]}\\right)", ATOM
-        if f in _BINARY_TEX and len(a) == 2:
-            return f"{self.child(n.args[0], MUL)} {_BINARY_TEX[f]} {self.child(n.args[1], MUL)}", MUL
-        if f == "pinv":
-            return f"{self.child(n.args[0], ATOM)}^{{+}}", POW
-        if f == "det":
-            return f"\\det\\left({a[0]}\\right)", ATOM
-        if f == "norm":
-            return f"\\left\\lVert {a[0]} \\right\\rVert", ATOM
-        if f in _FUNC_TEX:
-            return f"{_FUNC_TEX[f]}\\left({a[0]}\\right)", ATOM
+        b = FUNCTIONS.get(f)
+        if b and b.tex and b.args in (None, len(a)):
+            return b.tex.format(*(_Arg(self, x, t) for x, t in zip(n.args, a))), _BINDS[b.binds]
         return f"\\mathrm{{{f}}}\\left({', '.join(a)}\\right)", ATOM
 
 
