@@ -1,4 +1,6 @@
 """The API endpoints, called as plain functions (no HTTP client needed)."""
+import json
+
 import pytest
 
 from laconic import server, settings
@@ -202,6 +204,12 @@ def test_display_preferences_are_merged_and_written_into_the_page():
     assert server.get_settings()["prefs"] == {"theme": {"bg": "plain"}, "wrapText": True}
     assert '<script type="application/json" id="prefs">{"theme": {"bg": "plain"}, "wrapText": true}</script>' \
         in server.index().body.decode()
+
+
+def test_the_page_gets_the_preference_keys_from_the_settings_module():
+    """One list (settings.PREFS) says which settings the page keeps on the server."""
+    keys = json.dumps(list(settings.PREFS))
+    assert f'<script type="application/json" id="prefKeys">{keys}</script>' in server.index().body.decode()
 
 
 def test_a_stored_preference_cannot_close_the_script_it_is_written_into():

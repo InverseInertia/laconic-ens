@@ -307,7 +307,8 @@ def test_theme_yaml_export_and_import(page):
 
 def test_display_preferences_follow_the_server_not_the_browser(page):
     """The browser's storage belongs to one port; preferences kept on the server look the same on
-    any port LENS runs on, which a cleared browser stands in for here."""
+    any port LENS runs on, which a cleared browser stands in for here. Where each setting goes, and
+    sending up what an older build kept in the browser, are tested in test_prefs.js."""
     page.uncheck("#suggest")
     page.click("#viewLatex")
     page.evaluate("localStorage.clear()")
@@ -330,19 +331,6 @@ def test_a_greek_table_an_older_build_kept_in_the_browser_is_sent_up_once(page):
     page.wait_for_function("document.querySelector('#src').value.length > 0")
     page.wait_for_timeout(300)
     assert settings.load()["greek"] is None
-
-
-def test_preferences_an_older_build_kept_in_the_browser_are_sent_up_once(page):
-    from laconic import settings
-    page.evaluate("localStorage.setItem('lens:mathkeys', 'false')")
-    page.reload()
-    page.wait_for_function("document.querySelector('#src').value.length > 0")
-    assert not page.is_checked("#mathkeys")
-    for _ in range(50):
-        if settings.load()["prefs"].get("mathkeys") is False:
-            break
-        page.wait_for_timeout(100)
-    assert settings.load()["prefs"]["mathkeys"] is False
 
 
 PASTE = """

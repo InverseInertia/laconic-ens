@@ -607,53 +607,28 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 <script src="/static/autocomplete.js"></script>
 <script src="/static/unitbrowser.js"></script>
 <script src="/static/theme.js"></script>
+<script type="application/json" id="prefKeys">{{prefkeys}}</script>
 <script type="application/json" id="prefs">{{prefs}}</script>
+<script src="/static/prefs.js"></script>
 <script src="/static/savefile.js"></script>
 <script src="/static/shortcuts.js"></script>
 <script src="/static/layout.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
-// Display preferences live in the server's settings.json, so they are the same whatever port the
-// page is on; the server writes them into the page, so they can be read before anything draws.
-// Other settings live in this browser under "lens:". Older builds used "calcsheet:" and "laconic:",
-// read as a fallback.
-const PREF_KEYS = ["theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest", "layout", "autoLayout", "layoutAsk"];
-const prefs = (() => { try { return JSON.parse($("#prefs").textContent); } catch { return {}; } })();
-// One save at a time; what changes meanwhile goes in the next, so a color picker, which saves the
-// theme on every move, sends a few requests rather than hundreds. keepalive: a reload or a closed
-// window does not cancel a save on its way.
-let prefsPending = {}, prefsBusy = false;
-function flushPrefs() {
-  if (prefsBusy || !Object.keys(prefsPending).length) return;
-  const body = {prefs: prefsPending};
-  prefsPending = {}; prefsBusy = true;
-  Api.send("/api/prefs", body).catch(() => {}).finally(() => { prefsBusy = false; flushPrefs(); });
-}
-function savePref(k, v) { prefs[k] = v; prefsPending[k] = v; flushPrefs(); }
-window.addEventListener("pagehide", () => { prefsBusy = false; flushPrefs(); });
-const store = {
-  get(k, d) {
-    if (PREF_KEYS.includes(k) && k in prefs) return prefs[k];
-    for (const prefix of ["lens:", "calcsheet:", "laconic:"]) {
-      try {
-        const raw = localStorage.getItem(prefix + k);
-        if (raw === null) continue;
-        try { return JSON.parse(raw); } catch { return raw; }
-      } catch {}
-    }
-    return d;
+// Where each setting is kept: display preferences on the server, the rest in this browser
+// (prefs.js). The server writes the preference keys and their values into the page.
+const pageData = (id, d) => { try { return JSON.parse($(id).textContent); } catch { return d; } };
+const store = Prefs.store({
+  keys: pageData("#prefKeys", []),
+  values: pageData("#prefs", {}),
+  storage: {
+    getItem: (k) => localStorage.getItem(k),
+    setItem: (k, v) => localStorage.setItem(k, v),
+    removeItem: (k) => localStorage.removeItem(k),
   },
-  set(k, v) {
-    if (PREF_KEYS.includes(k)) { savePref(k, v); return; }
-    try { localStorage.setItem("lens:" + k, JSON.stringify(v)); } catch {}
-  },
-};
-// Preferences an older build kept in this browser are sent up once, so nothing is lost.
-for (const k of PREF_KEYS) {
-  if (k in prefs) continue;
-  const v = store.get(k, null);
-  if (v !== null) savePref(k, v);
-}
+  send: (prefs) => Api.send("/api/prefs", {prefs}),   // keepalive: a reload or a closed window does not cancel it
+});
+window.addEventListener("pagehide", () => store.flush());
 const src = $("#src"), out = $("#out"), nameEl = $("#name");
 let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
 let tableText = null;   // the text `last` was evaluated from
@@ -1358,7 +1333,7 @@ const endDrag = (ev) => {
 };
 splitEl.addEventListener("pointerup", endDrag);
 splitEl.addEventListener("pointercancel", endDrag);
-splitEl.addEventListener("dblclick", () => { try { localStorage.removeItem("lens:" + splitKey()); } catch {} setSplit(null); });
+splitEl.addEventListener("dblclick", () => { store.remove(splitKey()); setSplit(null); });
 splitEl.addEventListener("keydown", (ev) => {
   const dir = {ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1}[ev.key];
   if (!dir) return;
@@ -1731,7 +1706,7 @@ async function loadSettings() {
     greek = old;
     try { if (!(await Api.send("/api/greek", {greek})).ok) return cfg; } catch { return cfg; }
   }
-  for (const prefix of ["lens:", "calcsheet:", "laconic:"]) try { localStorage.removeItem(prefix + "greek"); } catch {}
+  store.remove("greek");
   return cfg;
 }
 

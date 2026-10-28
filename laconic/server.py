@@ -33,6 +33,7 @@ STATIC = Path(__file__).parent / "static"
 HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 VERSION_MARKER = "{{version}}"  # in index.html; replaced with the program's version (_version.py)
 PREFS_MARKER = "{{prefs}}"      # in index.html; replaced with the stored display preferences (settings.py)
+PREF_KEYS_MARKER = "{{prefkeys}}"  # in index.html; replaced with the preference keys (settings.PREFS)
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
 
 
@@ -121,7 +122,7 @@ def index():
     # "<" escaped, so no value can close the script element it sits in.
     prefs = json.dumps(settings.load()["prefs"]).replace("<", "\\u003c")
     return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
-                        .replace(PREFS_MARKER, prefs))
+                        .replace(PREFS_MARKER, prefs).replace(PREF_KEYS_MARKER, json.dumps(list(settings.PREFS))))
 
 
 def _run(sheet, siunitx):
