@@ -12,6 +12,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### New
 - **LENS is open source under the MIT License.** The Windows and Linux installs now include it as `LICENSE.txt`, next to `THIRD-PARTY-NOTICES.txt` with the licenses of the Python libraries bundled with LENS.
 
+### Fixes
+- `lens FILE --solve` stores an answer in every solver block with the same inputs, as the page does. The second of two identical blocks no longer stays NOT SOLVED.
+
 ## [v0.4.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.1) (2026-10-28)
 
 ### Fixes
