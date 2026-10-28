@@ -16,7 +16,7 @@ The numerics are scipy's (`scipy.optimize.root`, `brentq`, `minimize`), run on p
 unit each unknown was started in. Evaluating a sheet never runs a solver, since that can be slow:
 it hashes everything the solver reads and compares that with the `#@ result` line stored inside
 the block. Same hash, the stored answer is current; different, it is out of date. Running is done
-on request (see solverjobs.py) and the answer is written back into the block as a result line, so
+on request (see solvesession.py) and the answer is written back into the block as a result line, so
 the worksheet file alone carries it."""
 import hashlib
 import json
@@ -77,10 +77,6 @@ LOG_TRACE_LINES = 120                      # evaluations written to the log befo
 
 class SolverError(Exception):
     pass
-
-
-class StopSolve(Exception):
-    """Raised inside a sheet run once the requested block has been solved, to skip the rest."""
 
 
 # ---- parsing a block --------------------------------------------------------------------------
@@ -803,11 +799,3 @@ def set_option(text, header, key, value):
         ed.set(key, value)
     return ed.edits()
 
-
-# ---- one run request, threaded through a sheet evaluation -------------------------------------------
-class SolveRequest:
-    """Asks `evaluate` to solve the block on `line` instead of reading its stored result.
-    `mode` is "run" or "verify" (run, then compare with what is stored)."""
-    def __init__(self, line, log, mode="run"):
-        self.line, self.log, self.mode = line, log, mode
-        self.outcome = None

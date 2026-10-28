@@ -79,13 +79,26 @@ def run(text, siunitx=False, global_units=None):
     return evaluate(text, siunitx, global_units).results
 
 
-def evaluate(text, siunitx=False, global_units=None, solve=None, until=None):
+def evaluate(text, siunitx=False, global_units=None, until=None):
     """`global_units` are the instance's (name, definition) pairs. Units are
     defined before any line is evaluated, so a definition applies to the whole
-    sheet, wherever it sits. `solve` is a SolverRequest: the block it names is solved
-    instead of read, and `solver.StopSolve` ends the run once it is. With `until`, the run
-    stops after that line: nothing below a line changes its result, so this is enough to read
-    a block (its `needed` and `declarations` then cover only the lines that ran)."""
+    sheet, wherever it sits. With `until`, the run stops after that line: nothing below a
+    line changes its result, so this is enough to read a block (its `needed` and
+    `declarations` then cover only the lines that ran)."""
+    return _run(text, siunitx, global_units, until)[0]
+
+
+def evaluator_at(text, line, global_units=None):
+    """The evaluator as line `line` finds it: every line above has run, none from `line` on.
+    What a solve session builds its problem on, so a run sees what the block sees on screen."""
+    ev = _run(text, global_units=global_units, until=line - 1)[1]
+    ev.symbols.line = line
+    ev.notes.clear()
+    return ev
+
+
+def _run(text, siunitx=False, global_units=None, until=None):
+    """Run the sheet. Returns the Worksheet and the evaluator as the last line left it."""
     sheet = scan(text)
     has_defs = any(l.kind == "unitdef" for l in sheet.lines)
     ev = Evaluator(global_units or (), fork=has_defs)
@@ -106,7 +119,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None, until=None):
         elif i in owned:
             results.append(owned.pop(i))
         elif l.kind == "solver":
-            r, owned = _run_solver(i, raw, sheet.block(i), ev, fmt, used, solve)
+            r, owned = _run_solver(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "plot":
             r, owned = _run_plot(i, raw, sheet.block(i), ev, fmt, used)
@@ -134,7 +147,7 @@ def evaluate(text, siunitx=False, global_units=None, solve=None, until=None):
             todo += [m for m in _unit_names(parse_expr(ev.globals[n])) if m in ev.globals]
     ws.needed = [(n, d) for n, d in ev.globals.items() if n in need and n not in here]
     ws.declarations = fmt.declarations()
-    return ws
+    return ws, ev
 
 
 def _define_unit(i, raw, s, ev, fmt, here, used):
@@ -164,7 +177,7 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
         return LineResult(i, raw, "unitdef", lhs="1\\," + fmt.unit_inline(ev.ureg.parse_units(name)),
                           stages=[fmt.quantity(shown)], text=f"1 {name} = {fmt.plain(shown)}")
     except Exception as e:
-        return LineResult(i, raw, "error", error=_describe(e))
+        return LineResult(i, raw, "error", error=describe(e))
 
 
 def _run_command(i, raw, s, ev):
@@ -202,7 +215,7 @@ def _run_plot(i, raw, block, ev, fmt, used):
         b = Builder(ev, fmt, parse)
         spec = b.build(i, series, var, lo, hi, opts)
     except Exception as e:
-        return LineResult(i, raw, "error", error=_describe(e), block=block), owned
+        return LineResult(i, raw, "error", error=describe(e), block=block), owned
     for n, msg in b.errors:
         owned[n] = LineResult(n, src[n], "error", error=msg)
     text = spec["title"] or "plot " + ", ".join(s["label"] for s in spec["series"])
@@ -210,22 +223,18 @@ def _run_plot(i, raw, block, ev, fmt, used):
                       stale=solver.tainted(ev, nodes)), owned
 
 
-def _run_solver(i, raw, handle, ev, fmt, used, solve):
-    """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here:
-    the stored result is compared by hash with the block's current inputs and, fitting or not, its
-    values are what the unknowns hold below (a result that no longer fits is marked out of date, as
-    is everything computed from it). Only a SolveRequest for this very line runs the solver."""
+def _run_solver(i, raw, handle, ev, fmt, used):
+    """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here
+    (that is solvesession.py's): the stored result is compared by hash with the block's current
+    inputs and, fitting or not, its values are what the unknowns hold below (a result that no
+    longer fits is marked out of date, as is everything computed from it)."""
     members, block = handle.members, solver.parse_block(handle)
     owned = {}
     for l in members:
         msg = block.errors.get(l.n)
         owned[l.n] = LineResult(l.n, l.text, "error" if msg else "solveropt", error=msg or "")
-    mine = solve is not None and solve.line == i
 
     def fail(msg):
-        if mine:
-            solve.outcome = {"ok": False, "message": msg, "record": None}
-            raise solver.StopSolve
         ev.stale |= {ev.vkey(n) for n in block.unknowns}   # what reads them below is not trustworthy either
         return LineResult(i, raw, "error", error=msg, block=handle), owned
 
@@ -234,29 +243,17 @@ def _run_solver(i, raw, handle, ev, fmt, used, solve):
     for node in block.nodes():
         used |= _unit_names(node)
     try:
-        prob = solver.prepare(block, ev, _describe)
+        prob = solver.prepare(block, ev, describe)
         h = prob.digest()
     except Exception as e:
-        return fail(_describe(e))
+        return fail(describe(e))
     stored = block.stored
     qs = prob.stored_quantities(stored) if stored is not None else None
     status = "none" if qs is None else ("valid" if stored.get("hash") == h else "stale")
     try:
         prob.probe()   # also when the stored result is current: the line's notes come from this run
     except Exception as e:
-        return fail(_describe(e))
-    if mine:
-        out = prob.solve(solve.log)
-        out["hash"] = h
-        if solve.mode == "verify" and out["record"] is not None:
-            if stored is None or stored.get("hash") != h:
-                out["verify"] = {"same": None, "diff": None,
-                                 "note": "There is no current stored result to compare with. Run it first."}
-            else:
-                same, diff = solver.compare(stored, out["record"])
-                out["verify"] = {"same": same, "diff": diff, "note": ""}
-        solve.outcome = out
-        raise solver.StopSolve
+        return fail(describe(e))
     taint = solver.tainted(ev, block.nodes()) or any(u.key in ev.stale for u in prob.unknowns)
     keys = {u.key for u in prob.unknowns}
     if status != "valid" or taint:
@@ -284,21 +281,6 @@ def _run_solver(i, raw, handle, ev, fmt, used, solve):
 
 def _value(name, lhs, rhs):
     return {"name": name, "lhs": lhs, "rhs": rhs, "latex": f"{lhs} = {rhs}"}
-
-
-def solve_block(text, line, global_units=None, log=print, mode="run"):
-    """Solve the block whose header is on `line` (1-based), in this process. Returns
-    {"ok", "message", "record", "hash", ...}; `record` is what write_result stores. The whole sheet
-    is evaluated up to that line, so upstream blocks use their stored results as they do on screen."""
-    b = scan(text).block(line)
-    if b is None or b.kind != "solver":
-        return {"ok": False, "message": f"Line {line} is not a !root, !minimize or !maximize line", "record": None}
-    req = solver.SolveRequest(line, log, mode)
-    try:
-        evaluate(text, global_units=global_units, solve=req)
-    except solver.StopSolve:
-        pass
-    return req.outcome or {"ok": False, "message": f"Line {line} was not reached", "record": None}
 
 
 def block_at(text, line, global_units=None):
@@ -365,7 +347,7 @@ def _run_line(i, raw, s, ev, fmt, used):
                                                        _imaginary_note(stmt.name, ev.mode)])))
         return LineResult(i, raw, "expr", stages=stages, text=plain, stale=stale)
     except Exception as e:
-        return LineResult(i, raw, "error", error=_describe(e))
+        return LineResult(i, raw, "error", error=describe(e))
 
 
 def _bare_number(expr):
@@ -408,7 +390,8 @@ def _symbols(table, line):
     return {"defines": [s.to_dict() for s in table.defined_on(line.n)], "uses": table.uses(line)}
 
 
-def _describe(e):
+def describe(e):
+    """An exception as the message a line shows for it."""
     if isinstance(e, (ParseError, EvalError, PlotError, SolverError, ScopeError)):
         return str(e)
     if isinstance(e, pint.errors.DimensionalityError):

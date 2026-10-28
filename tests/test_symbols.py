@@ -3,7 +3,8 @@ import pytest
 
 from laconic import solver
 from laconic.blockedit import apply
-from laconic.sheet import evaluate, solve_block
+from laconic import solvesession
+from laconic.sheet import evaluate
 
 
 def visible(text, n):
@@ -52,7 +53,7 @@ def test_each_symbol_records_its_line_value_and_lifetime():
 
 def test_a_solver_unknown_holds_the_stored_answer():
     text = "x = 1\n!root x\n  equation: x^2 = 4\ny = x\n"
-    out = solve_block(text, 2, log=lambda msg: None)
+    out = solvesession.solve(text, 2, log=lambda msg: None)
     ws = evaluate(apply(text, solver.write_result(text, 2, out["record"])))
     x = [s for s in ws.symbols.visible(ws.results[-1].n) if s.name == "x"]
     assert [(s.line, s.value) for s in x] == [(2, "2")]

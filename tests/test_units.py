@@ -291,13 +291,13 @@ def test_the_warning_names_the_user_function_it_comes_from():
 
 def test_plots_and_solver_blocks_warn_once_on_their_header():
     from laconic.blockedit import apply
-    from laconic.sheet import solve_block
+    from laconic import solvesession
     from laconic.solver import write_result
     plot = run("!plot x * 'degC, x = 0 .. 1")[0]
     assert plot.kind == "plot" and plot.warning.count("absolute temperature") == 1
     text = "x = 1\n!root x\n  equation: x * 'degC = 300'K\ny = x"
     assert run(text)[1].warning.count("absolute temperature") == 1
-    out = solve_block(text, 2, log=lambda *a: None)
+    out = solvesession.solve(text, 2, log=lambda *a: None)
     solved = run(apply(text, write_result(text, 2, out["record"])))
     assert solved[1].kind == "solver" and "absolute temperature" in solved[1].warning   # still shown once stored
     assert solved[-1].warning == ""

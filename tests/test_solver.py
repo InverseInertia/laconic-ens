@@ -11,7 +11,7 @@ from laconic import document, evaluate, snippet
 from laconic import solver
 from laconic.blockedit import apply
 from laconic.rename import rename
-from laconic.sheet import solve_block
+from laconic import solvesession
 
 
 def renamed(text, old, new, confirm=False):
@@ -39,7 +39,7 @@ def block(text, kind="solver"):
 def solved(text, line=None, **kw):
     """The text with the first block solved and its result written in."""
     line = line or next(r.n for r in rows(text) if r.kind in ("solver", "error") and r.source.lstrip().startswith("!"))
-    out = solve_block(text, line, log=lambda m: None, **kw)
+    out = solvesession.solve(text, line, log=lambda m: None, **kw)
     assert out["ok"], out["message"]
     return written(text, solver.write_result, line, out["record"])
 
@@ -206,39 +206,39 @@ def test_constraints_need_a_relation_and_equations_cannot_be_inequalities():
 
 # ---- the numerics ----------------------------------------------------------------------------------
 def test_root_in_two_unknowns_keeps_the_units_of_the_start():
-    out = solve_block(ROOT, 3, log=lambda m: None)
+    out = solvesession.solve(ROOT, 3, log=lambda m: None)
     assert out["ok"]
     assert [v["unit"] for v in out["record"]["values"]] == ["meter", "meter"]
     assert out["record"]["resid"] < 1e-9
 
 
 def test_a_bracketed_scalar_root_uses_brentq():
-    out = solve_block("x = 1\n!root x\n  equation: cos(x) = x\n  bounds: 0 .. 1\n", 2, log=lambda m: None)
+    out = solvesession.solve("x = 1\n!root x\n  equation: cos(x) = x\n  bounds: 0 .. 1\n", 2, log=lambda m: None)
     assert out["record"]["method"] == "brentq"
     assert out["record"]["values"][0]["mag"] == pytest.approx(0.7390851332, abs=1e-9)
 
 
 def test_a_bracket_without_a_sign_change_says_so():
-    out = solve_block("x = 1\n!root x\n  equation: x^2 = -1\n  bounds: 0 .. 1\n", 2, log=lambda m: None)
+    out = solvesession.solve("x = 1\n!root x\n  equation: x^2 = -1\n  bounds: 0 .. 1\n", 2, log=lambda m: None)
     assert not out["ok"] and "same sign at both ends" in out["message"]
 
 
 def test_a_matrix_unknown_is_solved_entry_by_entry():
     text = "v = [1; 1]\n!root v\n  equation: [2, 0; 0, 4] * v = [6; 8]\n"
-    out = solve_block(text, 2, log=lambda m: None)
+    out = solvesession.solve(text, 2, log=lambda m: None)
     assert out["ok"] and sum(out["record"]["values"][0]["mag"], []) == pytest.approx([3.0, 2.0])
     assert block(written(text, solver.write_result, 2, out["record"])).solver.status == "valid"
 
 
 def test_least_squares_with_lm_takes_extra_equations():
     text = "x = 1\n!root x\n  method: lm\n  equation: x = 1\n  equation: x = 3\n"
-    out = solve_block(text, 2, log=lambda m: None)
+    out = solvesession.solve(text, 2, log=lambda m: None)
     assert out["record"]["values"][0]["mag"] == pytest.approx(2.0, abs=1e-6)
 
 
 def test_minimize_with_bounds_stops_at_the_bound():
     text = "d = 1'm\n!minimize d\n  objective: (d - 2'm)^2 / 'm^2 + 3\n  bounds d: 0'm .. 1.5'm\n"
-    out = solve_block(text, 2, log=lambda m: None)
+    out = solvesession.solve(text, 2, log=lambda m: None)
     assert out["record"]["values"][0]["mag"] == pytest.approx(1.5, abs=1e-6)
     assert out["record"]["obj"]["mag"] == pytest.approx(3.25)
     assert block(written(text, solver.write_result, 2, out["record"])).text.endswith("minimum = 3.25")
@@ -246,7 +246,7 @@ def test_minimize_with_bounds_stops_at_the_bound():
 
 def test_maximize_reports_the_maximum():
     text = "d = 1'm\n!maximize d\n  objective: 5 - (d - 2'm)^2 / 'm^2\n"
-    out = solve_block(text, 2, log=lambda m: None)
+    out = solvesession.solve(text, 2, log=lambda m: None)
     assert out["record"]["values"][0]["mag"] == pytest.approx(2.0, abs=1e-5)
     assert out["record"]["obj"]["mag"] == pytest.approx(5.0)
 
@@ -254,7 +254,7 @@ def test_maximize_reports_the_maximum():
 def test_constraints_change_the_answer():
     text = ("x = 1\ny = 1\n!minimize x, y\n  objective: x^2 + y^2\n  constraint: x + y = 2\n"
             "  constraint: x >= 1.5\n")
-    out = solve_block(text, 3, log=lambda m: None)
+    out = solvesession.solve(text, 3, log=lambda m: None)
     assert out["record"]["method"] == "SLSQP"
     assert out["record"]["values"][0]["mag"] == pytest.approx(1.5, abs=1e-5)
     assert out["record"]["values"][1]["mag"] == pytest.approx(0.5, abs=1e-5)
@@ -262,13 +262,13 @@ def test_constraints_change_the_answer():
 
 def test_a_run_that_does_not_converge_stores_nothing():
     text = "x = 1\n!root x\n  equation: x^2 = -1\n  maxiter: 5\n"
-    out = solve_block(text, 2, log=lambda m: None)
+    out = solvesession.solve(text, 2, log=lambda m: None)
     assert out["ok"] is False and out["record"] is None and out["message"]
 
 
 def test_leaving_the_domain_is_explained():
     text = "x = 1\n!minimize x\n  objective: ln(x)\n  method: Nelder-Mead\n"
-    out = solve_block(text, 2, log=lambda m: None)
+    out = solvesession.solve(text, 2, log=lambda m: None)
     assert not out["ok"] and "not finite" in out["message"] and "x =" in out["message"]
 
 
@@ -278,25 +278,25 @@ def test_the_objective_must_be_a_single_number():
 
 def test_the_log_says_what_happened():
     lines = []
-    solve_block(ROOT, 3, log=lines.append)
+    solvesession.solve(ROOT, 3, log=lines.append)
     assert lines[0].startswith("!root x, y") and any(l.startswith("converged") for l in lines)
     assert any("result: x = 1.41421 m" in l for l in lines)
 
 
 def test_solving_leaves_the_sheet_untouched():
-    out = solve_block(ROOT, 3, log=lambda m: None)
+    out = solvesession.solve(ROOT, 3, log=lambda m: None)
     assert out["hash"] == block(ROOT).solver.hash    # what a run computes is what the sheet checks
 
 
 def test_verify_compares_with_the_stored_result():
     text = solved(ROOT)
-    out = solve_block(text, 3, log=lambda m: None, mode="verify")
+    out = solvesession.solve(text, 3, log=lambda m: None, mode="verify")
     assert out["verify"]["same"] is True and out["verify"]["diff"] < 1e-9
     tampered = re.sub(r'"mag":1\.41421356\d*', '"mag":1.5', text, count=1)
     assert block(tampered).solver.status == "valid"          # the hash covers inputs, not the answer
-    out = solve_block(tampered, 3, log=lambda m: None, mode="verify")
+    out = solvesession.solve(tampered, 3, log=lambda m: None, mode="verify")
     assert out["verify"]["same"] is False and out["verify"]["diff"] > 1e-3
-    out = solve_block(ROOT, 3, log=lambda m: None, mode="verify")
+    out = solvesession.solve(ROOT, 3, log=lambda m: None, mode="verify")
     assert out["verify"]["same"] is None and "no current stored result" in out["verify"]["note"]
 
 
@@ -310,7 +310,7 @@ def test_autorun_is_a_line_in_the_block_and_turning_it_on_keeps_the_result():
 
 def test_a_result_stored_in_a_crlf_file_reads_back():
     crlf = ROOT.replace("\n", "\r\n")
-    done = written(crlf, solver.write_result, 3, solve_block(crlf, 3, log=lambda m: None)["record"])
+    done = written(crlf, solver.write_result, 3, solvesession.solve(crlf, 3, log=lambda m: None)["record"])
     assert block(done).solver.status == "valid"
 
 
@@ -349,11 +349,34 @@ def test_the_cli_solves_what_is_out_of_date_and_writes_the_file(tmp_path, capsys
     assert _solve_all(path, text, []) == text           # nothing left to do, nothing rewritten
 
 
+TWINS = """x = 1'm
+!root x
+  equation: x^2 = 4'm^2
+a = x
+x = 1'm
+!root x
+  equation: x^2 = 4'm^2
+b = x
+"""
+
+
+def test_the_cli_stores_a_result_in_every_block_with_the_same_inputs(tmp_path, monkeypatch, capsys):
+    # Two blocks that hash the same get one answer, as the page's store gives them.
+    from laconic.__main__ import main
+    path = tmp_path / "twins.lens"
+    path.write_text(TWINS, encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["lens", str(path), "--solve"])
+    main()
+    out = capsys.readouterr().out
+    assert "NOT SOLVED" not in out and out.count("(solved)") == 2
+    assert [r.solver.status for r in rows(path.read_text(encoding="utf-8")) if r.solver] == ["valid", "valid"]
+
+
 # ---- heavier cases (found by stress testing) ---------------------------------------------------------
 def test_a_flat_multiple_root_still_closes_its_bracket():
-    out = solve_block("x = 1\n!root x\n  equation: x^3 = 0\n  bounds: -1 .. 2\n", 2, log=lambda m: None)
+    out = solvesession.solve("x = 1\n!root x\n  equation: x^3 = 0\n  bounds: -1 .. 2\n", 2, log=lambda m: None)
     assert out["ok"] and abs(out["record"]["values"][0]["mag"]) < 1e-6
-    out = solve_block("x = 1\n!root x\n  equation: x^3 = 0\n  bounds: -1 .. 2\n  maxiter: 5\n", 2, log=lambda m: None)
+    out = solvesession.solve("x = 1\n!root x\n  equation: x^3 = 0\n  bounds: -1 .. 2\n  maxiter: 5\n", 2, log=lambda m: None)
     assert not out["ok"] and "did not close within 5 steps" in out["message"]
 
 
@@ -365,7 +388,7 @@ def rosenbrock(n, method):
 
 def test_tnc_gets_an_evaluation_budget_that_fits_finite_differences():
     # scipy's own TNC default (10 n evaluations) stops a 20-variable problem after a few gradients.
-    out = solve_block(rosenbrock(20, "TNC"), 4, log=lambda m: None)
+    out = solvesession.solve(rosenbrock(20, "TNC"), 4, log=lambda m: None)
     assert out["ok"], out["message"]
     assert max(abs(v - 1) for v in sum(out["record"]["values"][0]["mag"], [])) < 1e-3
 

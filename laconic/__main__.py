@@ -117,26 +117,10 @@ _STATUS = {"valid": "solved", "stale": "OUT OF DATE: run with --solve", "none": 
 
 
 def _solve_all(path, text, units):
-    """Solve the blocks that are not up to date, top to bottom (a later block may read an earlier
-    one's answer), and write each result into the file as it arrives."""
-    from .blockedit import apply
-    from .sheet import solve_block, solver_blocks
-    from .solver import write_result
-
-    done = set()
-    while True:
-        todo = [r for r in solver_blocks(text, units) if r.solver.status != "valid" and r.solver.hash not in done]
-        if not todo:
-            return text
-        r = todo[0]
-        done.add(r.solver.hash)
-        print(f"{r.n:>3}  solving {r.source.strip()}", file=sys.stderr)
-        out = solve_block(text, r.n, units, log=lambda m: print("       " + m, file=sys.stderr))
-        if not out["ok"]:
-            print(f"{r.n:>3}  FAILED  {out['message']}", file=sys.stderr)
-            continue
-        text = apply(text, write_result(text, r.n, out["record"]))
-        path.write_text(text, encoding="utf-8")
+    """Solve the blocks that are not up to date (see solvesession.solve_all), writing the file
+    each time an answer is stored."""
+    from .solvesession import solve_all
+    return solve_all(text, units, saved=lambda t: path.write_text(t, encoding="utf-8"))
 
 
 def main():

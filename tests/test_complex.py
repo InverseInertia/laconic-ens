@@ -126,10 +126,10 @@ def test_a_real_plot_keeps_its_gaps():
 
 
 def test_solver_refuses_complex():
-    from laconic.sheet import solve_block
-    out = solve_block("x = 1\n!root x\n  equation: x + 1i = 2", 2, log=lambda m: None)
+    from laconic import solvesession
+    out = solvesession.solve("x = 1\n!root x\n  equation: x + 1i = 2", 2, log=lambda m: None)
     assert not out["ok"] and "real numbers" in out["message"]
-    out = solve_block("x = 1i\n!root x\n  equation: x = 2", 2, log=lambda m: None)
+    out = solvesession.solve("x = 1i\n!root x\n  equation: x = 2", 2, log=lambda m: None)
     assert not out["ok"] and "is complex" in out["message"]
 
 
