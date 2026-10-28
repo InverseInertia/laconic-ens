@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.4.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.1) (2026-10-28)
+
 ### Fixes
 - **Linux: updating from v0.3.6 works again.** The `lens-install-linux.sh` you got with v0.3.6 or earlier looked for a single-file program that releases no longer have, so running it again failed to update, even after removing LENS. From the next release it installs that release with the new installer, and `lens-install-linux-v2.sh` still works as before. The installer also stops a LENS left running from the old install, which would otherwise open in place of the new one, so the menu kept showing the old version. (#101)
 - **No scroll bar flicker when a long equation is shrunk to fit.** Making the results pane narrower (the window, the split or the layout) no longer flashes a scroll bar under an equation for a moment while it is shrunk to the new width. (#104)
