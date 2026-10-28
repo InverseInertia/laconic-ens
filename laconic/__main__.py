@@ -192,27 +192,24 @@ def main():
     if not a.file:
         ap.error("give a worksheet file or use --serve")
 
-    from . import document, evaluate, markdown
+    from .exports import export, run
 
     text = Path(a.file).read_text(encoding="utf-8")
     units = settings.global_units()
     if a.solve:
         text = _solve_all(Path(a.file), text, units)
-    ws = evaluate(text, siunitx=bool(a.tex), global_units=units)
-    results = ws.results
+    # Each export runs the sheet in the flavour its format needs; `runs` makes each flavour once.
+    runs, title = {}, Path(a.file).stem
+    results = run(text, "tex" if a.tex else "md", units, runs).results
     if a.tex:
-        Path(a.tex).write_text(document(results, title=Path(a.file).stem, declarations=ws.declarations),
-                               encoding="utf-8")
+        Path(a.tex).write_text(export(text, "tex", title, units, runs), encoding="utf-8")
         print(f"wrote {a.tex}")
-    # The Markdown and PDF math is the live view's flavour, not siunitx, so it needs a run of its own.
-    live = evaluate(text, global_units=units).results if a.tex and (a.md or a.pdf) else results
     if a.md:
-        Path(a.md).write_text(markdown(live, title=Path(a.file).stem), encoding="utf-8")
+        Path(a.md).write_text(export(text, "md", title, units, runs), encoding="utf-8")
         print(f"wrote {a.md}")
     if a.pdf:
-        from . import pdfdoc
         try:
-            Path(a.pdf).write_bytes(pdfdoc.pdf(pdfdoc.page(live, title=Path(a.file).stem)))
+            Path(a.pdf).write_bytes(export(text, "pdf", title, units, runs))
         except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
             sys.exit(f"PDF export failed: {e}")
         print(f"wrote {a.pdf}")

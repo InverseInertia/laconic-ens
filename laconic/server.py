@@ -13,7 +13,8 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import document, evaluate as evaluate_sheet, markdown, pdfdoc, snippet
+from . import evaluate as evaluate_sheet, snippet
+from .exports import export as export_sheet
 from .sheet import block_at, solver_blocks
 from . import settings, unittags
 from .blockedit import to_json
@@ -144,23 +145,21 @@ def evaluate(sheet: Sheet):
 
 @app.post("/api/export", response_class=PlainTextResponse)
 def export(sheet: Sheet):
-    ws = _run(sheet, True)
-    return document(ws.results, title=sheet.title, declarations=ws.declarations)
+    return _export(sheet, "tex")
 
 
 @app.post("/api/export/md", response_class=PlainTextResponse)
 def export_md(sheet: Sheet):
     """The sheet as a Markdown note in Obsidian's style (see markdown.py)."""
-    return markdown(_run(sheet, False).results, title=sheet.title)
+    return _export(sheet, "md")
 
 
 @app.post("/api/export/pdf")
 def export_pdf(sheet: Sheet):
     """The sheet as a PDF, printed by a headless Chromium (see pdfdoc.py). 501 when there is no
     such browser or it fails; the page then prints /api/export/print with the browser's own dialog."""
-    doc = pdfdoc.page(_run(sheet, False).results, title=sheet.title)
     try:
-        return Response(pdfdoc.pdf(doc, timeout=30), media_type="application/pdf")
+        return Response(_export(sheet, "pdf", timeout=30), media_type="application/pdf")
     except (RuntimeError, subprocess.TimeoutExpired) as e:   # NoBrowser is a RuntimeError
         raise HTTPException(501, str(e))
 
@@ -168,7 +167,12 @@ def export_pdf(sheet: Sheet):
 @app.post("/api/export/print", response_class=HTMLResponse)
 def export_print(sheet: Sheet):
     """The printable document, opening the print dialog by itself."""
-    return pdfdoc.page(_run(sheet, False).results, title=sheet.title, assets="/static", autoprint=True)
+    return _export(sheet, "html", assets="/static", autoprint=True)
+
+
+def _export(sheet, fmt, **opts):
+    """The sheet as `fmt`, in the flavour of math that format needs (see exports.py)."""
+    return export_sheet(sheet.text, fmt, title=sheet.title, global_units=settings.global_units(), **opts)
 
 
 @app.post("/api/save", response_class=PlainTextResponse)

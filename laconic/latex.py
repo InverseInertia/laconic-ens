@@ -10,6 +10,7 @@ import numpy as np
 
 from . import catalogue
 from .commands import SheetMode
+from .exports import Error, Figure, Heading, Paragraph, Source, element, elements
 from .evaluator import _TINY, CONSTANTS, EvalError
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Polar,
                     Str, UnitLit, is_literal)
@@ -512,34 +513,27 @@ def snippet(r, wrap="inline"):
     wrapped: "inline" is bare math for pasting into $...$ or \\(...\\),
     "display" is \\[ ... \\], "align" is an align* block with one row per stage.
     Returns None for blank lines."""
-    if r.kind == "heading":
-        return rf"\subsection*{{{escape(r.text)}}}"
-    if r.kind == "comment":
-        return escape(r.text) + r"\par"
-    if r.kind == "error":
-        return f"% line {r.n}: {r.error}"
-    if r.kind == "command":
-        return f"% {r.source.strip()}"
-    if r.plot:
+    e = element(r, commands=True)
+    return None if e is None else _tex(e, wrap)
+
+
+def _tex(e, wrap):
+    """The LaTeX for one export element (see exports.py)."""
+    if isinstance(e, Heading):
+        return rf"\subsection*{{{escape(e.text)}}}"
+    if isinstance(e, Paragraph):
+        return "\n".join(escape(line) + r"\par" for line in e.lines)
+    if isinstance(e, Error):
+        return f"% line {e.n}: {e.message}"
+    if isinstance(e, Source):
+        return f"% {e.text}"
+    if isinstance(e, Figure):
         from .plotpgf import pgfplots   # imported late: plotpgf uses this module's escape()
-        return pgfplots(r.plot.spec)
-    if r.solver:
-        vals, note = r.solver.values, ""
-        if not r.solver.current:
-            note = f"% line {r.n}: solver result is out of date or not run; values shown may be starting values\n"
-        if wrap == "align":
-            return note + "\\begin{align*}\n" + " \\\\\n".join(f"{v['lhs']} &= {v['rhs']}" for v in vals) + "\n\\end{align*}"
-        body = r",\; ".join(v["latex"] for v in vals)
-        return note + (f"\\[ {body} \\]" if wrap == "display" else body)
-    if r.kind in ("assign", "expr", "funcdef", "unitdef"):
-        if wrap == "align":
-            rows = [f"{r.lhs} &= {r.stages[0]}" if r.lhs else f"&{r.stages[0]}"]
-            rows += [f"&= {s}" for s in r.stages[1:]]
-            return "\\begin{align*}\n" + " \\\\\n".join(rows) + "\n\\end{align*}"
-        if wrap == "display":
-            return "\\[ " + r.latex + " \\]"
-        return r.latex
-    return None
+        return pgfplots(e.plot.spec)
+    note = f"% line {e.n}: solver result is out of date or not run; values shown may be starting values\n" if e.out_of_date else ""
+    if wrap == "align":
+        return note + "\\begin{align*}\n" + " \\\\\n".join(e.rows) + "\n\\end{align*}"
+    return note + (f"\\[ {e.inline} \\]" if wrap == "display" else e.inline)
 
 
 def document(results, title=None, declarations=()):
@@ -552,12 +546,13 @@ def document(results, title=None, declarations=()):
            r"\usepackage{siunitx}  % siunitx v3 or newer (\qty, \unit)",
            r"\sisetup{per-mode=symbol, inter-unit-product=\ensuremath{{\cdot}}}",
            r"\setlength{\parindent}{0pt}"]
-    if any(r.plot for r in results):
+    els = elements(results, commands=True)
+    if any(isinstance(e, Figure) for e in els):
         out += [r"\usepackage{pgfplots}", r"\pgfplotsset{compat=newest}"]
     out += list(declarations)
     out.append(r"\begin{document}")
     if title:
         out.append(rf"\section*{{{escape(title)}}}")
-    out += [x for x in (snippet(r, "align") for r in results) if x is not None]
+    out += [_tex(e, "align") for e in els]
     out.append(r"\end{document}")
     return "\n".join(out) + "\n"
