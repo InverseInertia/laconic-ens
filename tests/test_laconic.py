@@ -17,6 +17,14 @@ def test_variable_m_and_unit_m_coexist():
     assert r.kind == "assign" and "12" in r.text
 
 
+def test_one_walk_finds_the_names_calls_and_units_of_an_expression():
+    from laconic.nodes import refs
+    from laconic.parser import parse_expr, parse_line
+    r = refs(parse_expr("f(a, [b, 2'm; c^2, 'kN]) + 3 d 'mm"))
+    assert r == ({"a", "b", "c", "d"}, {"f"}, {"m", "kN", "mm"})
+    assert refs(parse_line("g(x) = x * h(y)")).calls == {"h"}
+
+
 def test_number_then_variable_is_an_error():
     r = last("x = 3\n3 x")
     assert r.kind == "error" and "Write 3*x" in r.error

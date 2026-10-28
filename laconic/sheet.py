@@ -3,7 +3,7 @@ an error; an error never stops later lines (lines that depend on a failed
 variable fail on their own with 'x is not defined')."""
 import math
 import re
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field
 
 import pint
 
@@ -12,7 +12,7 @@ from .blockedit import newline
 from .evaluator import EvalError, Evaluator
 from .latex import Fmt, Printer, name_latex
 from .lineresult import LineResult, PlotPayload, SolverPayload
-from .nodes import Assign, Convert, FuncDef, Neg, Num, UnitDef, UnitLit, is_literal
+from .nodes import Assign, Convert, FuncDef, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
@@ -30,20 +30,6 @@ def _dedupe(stages):
     for s in stages:
         if s and (not out or s != out[-1]):
             out.append(s)
-    return out
-
-
-def _unit_names(node):
-    """Names of the units used anywhere under `node`."""
-    if isinstance(node, UnitLit):
-        return {node.unit}
-    out = set()
-    if is_dataclass(node):
-        for f in fields(node):
-            out |= _unit_names(getattr(node, f.name))
-    elif isinstance(node, tuple):
-        for x in node:
-            out |= _unit_names(x)
     return out
 
 
@@ -144,7 +130,7 @@ def _run(text, siunitx=False, global_units=None, until=None):
         n = todo.pop()
         if n not in need:
             need.add(n)
-            todo += [m for m in _unit_names(parse_expr(ev.globals[n])) if m in ev.globals]
+            todo += [m for m in refs(parse_expr(ev.globals[n])).units if m in ev.globals]
     ws.needed = [(n, d) for n, d in ev.globals.items() if n in need and n not in here]
     ws.declarations = fmt.declarations()
     return ws, ev
@@ -158,7 +144,7 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
         stmt = parse_line(s)
         if not isinstance(stmt, UnitDef):
             return _run_line(i, raw, s, ev, fmt, used)
-        used |= _unit_names(stmt.expr)
+        used |= refs(stmt.expr).units
         name = stmt.name
         if name in here:
             raise EvalError(f"'{name}' is already defined on line {here[name]}")
@@ -207,7 +193,7 @@ def _run_plot(i, raw, block, ev, fmt, used):
 
     def parse(src):
         node = parse_expr(src)
-        used.update(_unit_names(node))
+        used.update(refs(node).units)
         nodes.append(node)
         return node
     try:
@@ -241,7 +227,7 @@ def _run_solver(i, raw, handle, ev, fmt, used):
     if block.problem:
         return fail(block.problem)
     for node in block.nodes():
-        used |= _unit_names(node)
+        used |= refs(node).units
     try:
         prob = solver.prepare(block, ev, describe)
         h = prob.digest()
@@ -299,7 +285,7 @@ def _run_line(i, raw, s, ev, fmt, used):
     stmt = None
     try:
         stmt = parse_line(s)
-        used |= _unit_names(stmt)
+        used |= refs(stmt).units
         if isinstance(stmt, FuncDef):
             printer = Printer(ev, fmt, local=stmt.params)
             sym = printer.tex(stmt.body)
