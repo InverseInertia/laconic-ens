@@ -915,14 +915,15 @@ function plotBody(r) {
     b.onclick = async (ev) => { ev.stopPropagation(); try { await fn(); } catch (e) { say(e.message || "Failed"); } };
     tools.append(b);
   };
-  if (r.plot.moved) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(r.n, {xview: null, yview: null}));
-  btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${r.n}.svg`, await plotSvg(r.n), "image/svg+xml"));
-  btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${r.n}.png`, await plotPng(r.n)));
+  const n = Rows.line(r);
+  if (r.plot.moved) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(n, {xview: null, yview: null}));
+  btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${n}.svg`, await plotSvg(n), "image/svg+xml"));
+  btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${n}.png`, await plotPng(n)));
   const hint = document.createElement("span"); hint.className = "hint";
   hint.textContent = "Drag to pan \u00b7 Ctrl+wheel to zoom \u00b7 double-click to reset";
   tools.append(hint);
   box.append(wrap, tools);
-  PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(r.n, patch));
+  PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(n, patch));
   return box;
 }
 
@@ -952,9 +953,9 @@ function paintGlobals() {
 }
 // The marks come from the last evaluation, so a line edited since then is left unmarked until the next one.
 function paintSrcMarks() {
-  const rows = new Map(last.map((r) => [r.n, r])), table = symbols();
-  const lines = src.value.split("\n").map((line, i) => {
-    const r = rows.get(i + 1), marks = r && r.source === line ? Symbols.marks(r, table) : [];
+  const text = src.value.split("\n"), rows = Rows.current(last, text), table = symbols();
+  const lines = text.map((line, i) => {
+    const r = rows[i], marks = r ? Symbols.marks(r, table) : [];
     if (!marks.length) return document.createTextNode(line + "\n");
     const f = document.createDocumentFragment();
     let pos = 0;
