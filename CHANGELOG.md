@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Changes
+- **∀ for volume is now typed as the ∀ character**: press Ctrl+G after a `V` (again to go back), and the worksheet keeps the ∀ itself, as in `∀_cv = 0.2'm^3`. A name spelled `forall` is an ordinary name again; replace it with ∀ to keep the symbol. A Greek table you edited earlier needs a `V`→`∀` row, or Reset to defaults. (#126)
+
 ## [v0.4.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.5) (2026-10-28)
 
 ### Fixes

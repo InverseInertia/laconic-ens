@@ -17,8 +17,9 @@ import re
 from dataclasses import dataclass, field
 
 # A name may hold ∞ as a whole subscript (`v_∞`, `T_∞_0`), the free-stream mark; ∞ on its own is
-# the constant, and not a name.
-IDENT = r"[^\W\d](?:_∞|\w)*"
+# the constant, and not a name. ∀, the struck-through V some fluid mechanics texts use for volume,
+# counts as a letter (`∀_cv`).
+IDENT = r"(?:[^\W\d]|∀)(?:_∞|∀|\w)*"
 NAME = rf"~?{IDENT}[`!@&]*"
 UNIT = r"'(?:(?:[^\W\d]|°)[\w°]*|%)"
 # A trailing i or j makes the number imaginary: 4i, 2.5e3j. `2in` is still a number and a name.

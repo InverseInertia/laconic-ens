@@ -73,4 +73,4 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 
 ## Greek table
 
-Ctrl+G uses a Mathcad-style table, editable under Settings → Greek: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν, x→ξ, o→ο, p→π, r→ρ, s→σ, t→τ, u→υ, f→φ, c→χ, y→ψ, w→ω, and `G D Q L X P S F Y W` for Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω. It also maps 8→∞. A table you edited before ∞ was added does not have that row: add it, or press Reset to defaults.
+Ctrl+G uses a Mathcad-style table, editable under Settings → Greek: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν, x→ξ, o→ο, p→π, r→ρ, s→σ, t→τ, u→υ, f→φ, c→χ, y→ψ, w→ω, and `G D Q L X P S F Y W` for Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω. It also maps 8→∞ and V→∀ (the struck-through V for volume). A table you edited before these were added does not have their rows: add them, or press Reset to defaults.

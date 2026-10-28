@@ -258,9 +258,10 @@ def test_a_bar_mark_puts_a_bar_over_the_name():
 
 
 def test_forall_is_the_struck_through_v_for_volume():
-    rs = run("forall_cv = 2'm^3\nforall& = 1\nforall_cv")
+    rs = run("∀_cv = 2'm^3\n∀& = 1\n∀_cv\nforall = 3")
     assert rs[0].lhs == "\\forall_{\\mathrm{cv}}" and rs[1].lhs == "\\bar{\\forall}"
     assert rs[2].text == "2 m³"
+    assert rs[3].lhs == "\\mathrm{forall}"   # the spelled-out word is an ordinary name
 
 
 def test_accented_name_is_its_own_variable():
