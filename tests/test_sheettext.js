@@ -17,7 +17,7 @@ for (const { line, tokens } of V.tokens) {
   // sign, which editing.js keeps with its number on its own (see sign()).
   for (const [kind, , text] of tokens) {
     if (kind === 'text') continue;
-    for (const c of text.replace(/[`!@]+$/u, '').replace(/([eE])[+-]/u, '$1')) assert.ok(E.isTok(c), `${c} in ${text} (${line})`);
+    for (const c of text.replace(/[`!@&]+$/u, '').replace(/([eE])[+-]/u, '$1')) assert.ok(E.isTok(c), `${c} in ${text} (${line})`);
   }
 }
 

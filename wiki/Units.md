@@ -51,7 +51,7 @@ A line that uses a constant shows its value, even a single typed quantity (`3'mo
 | `'k_B` (or `'k`) | Boltzmann constant | 1.380649×10⁻²³ J/K |
 | `'c` | speed of light in vacuum | 299792458 m/s |
 | `'h_P` | Planck constant, shown as *h* (`'h` is the hour, shown as hr) | 6.62607015×10⁻³⁴ J·s |
-| `'hbar` | reduced Planck constant | 1.05457181765×10⁻³⁴ J·s |
+| `'hbar` (or `'ħ`) | reduced Planck constant, h/2π, typeset ħ | 1.05457181765×10⁻³⁴ J·s |
 | `'e` | elementary charge | 1.602176634×10⁻¹⁹ C |
 | `'sigma` | Stefan–Boltzmann constant | 5.67037441918×10⁻⁸ W/(m²·K⁴) |
 | `'G_N` | Newtonian constant of gravitation (`'G` is the gauss) | 6.6743×10⁻¹¹ m³/(kg·s²) |

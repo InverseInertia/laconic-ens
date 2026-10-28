@@ -26,9 +26,12 @@ GREEK = {g: "\\" + g for g in (
 GREEK.update({g: "\\" + g for g in
               "Gamma Delta Theta Lambda Xi Pi Sigma Phi Psi Omega".split()})
 GREEK["varepsilon"] = "\\varepsilon"
+# Not Greek, but typed and typeset the same way: forall is the struck-through V (∀) that some
+# fluid mechanics texts use for volume, to keep V for velocity.
+GREEK["forall"] = "\\forall"
 
 
-_ACCENTS = {"!": "\\vec", "@": "\\hat"}
+_ACCENTS = {"!": "\\vec", "@": "\\hat", "&": "\\bar"}
 _DOTS = {1: "\\dot", 2: "\\ddot"}
 
 
@@ -50,9 +53,9 @@ def name_latex(name):
     """sigma_max -> \\sigma_{\\mathrm{max}}, x1 -> x_{1}, width -> \\mathrm{width}.
     A subscript that is ∞ or the whole word inf is infinity: T_inf -> T_{\\infty}.
     Marks after the name go over the base symbol, with subscripts outside:
-    v` -> \\dot{v}, F_x! -> \\vec{F}_{x}, a@ -> \\hat{a}."""
+    v` -> \\dot{v}, F_x! -> \\vec{F}_{x}, a@ -> \\hat{a}, u& -> \\bar{u}."""
     name = name.lstrip("~")  # the global marker is source-only
-    bare = name.rstrip("`!@")
+    bare = name.rstrip("`!@&")
     marks = name[len(bare):]
     parts = bare.split("_")
     base, subs = parts[0], [p for p in parts[1:] if p]
@@ -78,10 +81,13 @@ _GREEK_CHARS = {
 }
 
 
+# Unit symbols that KaTeX and pdflatex both want as macros: Pint's ħ ('hbar) is \hbar.
+_UNIT_GLYPHS = {"ħ": "\\hbar"}
 # Unit symbols in the .tex preamble go through pdflatex, which wants macros for these
 # (ℎ is Pint's symbol for Planck's constant, an italic h).
 _DECL_GLYPHS = {c: v + " " if v.startswith("\\") else v
-                for c, v in {**_GREEK_CHARS, "µ": "\\mu", "∞": "\\infty", "ℎ": "\\mathit{h}"}.items()}
+                for c, v in {**_GREEK_CHARS, "µ": "\\mu", "∞": "\\infty", "ℎ": "\\mathit{h}",
+                             **_UNIT_GLYPHS}.items()}
 
 
 def _glyph(c):
@@ -253,7 +259,10 @@ class Fmt:
             if not m:
                 return ""
             return re.sub(r"\\([A-Za-z_][A-Za-z0-9_]*)", lambda t: "\\" + self._si_macro(t.group(1)), m.group(1))
-        return catalogue.subscripted(format(units, "~L"), units, self.ureg)
+        tex = catalogue.subscripted(format(units, "~L"), units, self.ureg)
+        for c, macro in _UNIT_GLYPHS.items():
+            tex = tex.replace(f"\\mathrm{{{c}}}", macro)
+        return tex
 
     def _si_macro(self, name):
         if name in self.custom:

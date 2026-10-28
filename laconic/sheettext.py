@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 # A name may hold ∞ as a whole subscript (`v_∞`, `T_∞_0`), the free-stream mark; ∞ on its own is
 # the constant, and not a name.
 IDENT = r"[^\W\d](?:_∞|\w)*"
-NAME = rf"~?{IDENT}[`!@]*"
+NAME = rf"~?{IDENT}[`!@&]*"
 UNIT = r"'(?:(?:[^\W\d]|°)[\w°]*|%)"
 # A trailing i or j makes the number imaginary: 4i, 2.5e3j. `2in` is still a number and a name.
 NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?(?:[ij](?!\w))?"
@@ -71,7 +71,7 @@ def tokenize(s, start=0, end=None):
 
 def is_name(s):
     """A variable or function name: letters, digits and _, an optional ~ in front and
-    ` ! @ after."""
+    ` ! @ & after."""
     return bool(_NAME_RE.match(s))
 
 

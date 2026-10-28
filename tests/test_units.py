@@ -188,6 +188,17 @@ def test_the_hour_shows_as_hr_and_plancks_constant_as_h():
     assert "ℎ" not in tex    # pdflatex has no glyph for it
 
 
+def test_the_reduced_planck_constant_typesets_as_hbar():
+    # #111: KaTeX and pdflatex both want \hbar, not the text glyph ħ
+    for line in ("x = 'hbar", "x = 2'ħ/'s"):
+        r = last(line)
+        assert r.kind == "assign" and r"\hbar" in r.latex and "ħ" not in r.latex
+    ws = evaluate("E = 2'hbar * 3'Hz", siunitx=True)
+    tex = document(ws.results, declarations=ws.declarations)
+    assert r"\DeclareSIUnit{\diracConstant}{\ensuremath{\mathrm{\hbar }}}" in tex
+    assert "ħ" not in tex
+
+
 def test_every_exported_unit_macro_is_a_name_latex_accepts():
     units = "g0 psi ksi ft inch lbf Btu kWh atm mmHg rpm m_e N_A mu_0 sq_ft Phi_0 R_inf hp"
     ws = evaluate("\n".join(f"x{i} = 1'{u}" for i, u in enumerate(units.split())), siunitx=True)
