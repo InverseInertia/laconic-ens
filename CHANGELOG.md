@@ -12,7 +12,13 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### New
 - **LENS is open source under the MIT License.** The Windows and Linux installs now include it as `LICENSE.txt`, next to `THIRD-PARTY-NOTICES.txt` with the licenses of the Python libraries bundled with LENS.
 
+### Changes
+- Math keys and suggestions now work in a plot note's position, `at (x, y)`, and math keys are off on a solver's `method:` line, matching what the sheet treats as math.
+- A failed plot image export, or a failed save back to the file LENS was opened with, now shows the server's message instead of raw JSON or "undefined".
+
 ### Fixes
+- Resetting the Greek table no longer brings back a copy an older version left in the browser.
+- Help no longer says the theme is kept per browser; settings are stored on this machine for every browser.
 - `lens FILE --solve` stores an answer in every solver block with the same inputs, as the page does. The second of two identical blocks no longer stays NOT SOLVED.
 
 ## [v0.4.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.1) (2026-10-28)

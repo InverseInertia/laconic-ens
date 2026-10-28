@@ -4,7 +4,7 @@ The editor is a plain text box with extra keys that edit the source. **Settings 
 
 ## Math keys
 
-These are off on comment lines and on the text lines under a plot (title, labels, notes). The **Math keys** checkbox switches them all off.
+These are off on comment lines, on the text lines under a plot (title, labels, a note's text but not its `at (x, y)`) and on a solver's `method:` line. The **Math keys** checkbox switches them all off.
 
 | Key | Effect |
 |---|---|
