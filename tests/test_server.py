@@ -75,6 +75,39 @@ def test_the_page_shows_the_version_in_the_header_and_help(monkeypatch):
     assert 'id="version">v0.2.0</span>' in server.index().body.decode()
 
 
+def _static(path, headers=()):
+    """GET a file from the page's static files, as the browser would."""
+    import asyncio
+    scope = {"type": "http", "method": "GET", "path": path, "headers": [(k.encode(), v.encode()) for k, v in headers]}
+    mount = next(r for r in server.app.routes if getattr(r, "path", None) == server.ASSETS)
+    return asyncio.run(mount.app.get_response(path.removeprefix(server.ASSETS + "/"), scope))
+
+
+def test_the_page_asks_for_its_files_under_the_version():
+    """#119: after an update Chromium ran the cached scripts of the old version against the new
+    page. The page names its files under a path with the version in it, and is itself never cached."""
+    page = server.index()
+    assert page.headers["cache-control"] == "no-cache"
+    body = page.body.decode()
+    assert server.ASSETS == "/static/dev"
+    assert 'src="/static/dev/api.js"' in body and "`/static/dev/icons/" in body
+    assert '"/static/' not in body.replace('"/static/dev/', "")
+
+
+def test_static_files_are_checked_with_the_server_each_time():
+    """#119: no Last-Modified for a browser to guess a lifetime from; an ETag that changes with
+    the version, and a 304 while it matches."""
+    first = _static(server.ASSETS + "/api.js")
+    assert first.status_code == 200 and first.headers["cache-control"] == "no-cache"
+    assert "last-modified" not in first.headers
+    etag = first.headers["etag"]
+    assert etag.startswith('"dev-')
+    again = _static(server.ASSETS + "/api.js", [("if-none-match", etag)])
+    assert again.status_code == 304 and again.headers["etag"] == etag
+    stale = _static(server.ASSETS + "/api.js", [("if-none-match", etag.replace("dev-", "v0.4.2-"))])
+    assert stale.status_code == 200
+
+
 def test_version_label():
     from laconic._version import label
     assert label("0+dev") == "dev" and label("0.2.0") == "v0.2.0"

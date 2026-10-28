@@ -10,6 +10,9 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
+from starlette.responses import FileResponse
+from starlette.staticfiles import NotModifiedResponse
 from pydantic import BaseModel
 
 from . import evaluate as evaluate_sheet, snippet
@@ -114,17 +117,42 @@ class TagsBody(BaseModel):
     tags: dict[str, list[str]]   # tag -> the units it is on
 
 
-app.mount("/static", StaticFiles(directory=STATIC), name="static")
+class _Static(StaticFiles):
+    """The page's files, which a browser must check with the server before each use (#119).
+    Without a Cache-Control header a browser guesses how long a file stays good from its
+    Last-Modified date, and the files of an installed LENS can carry dates long past (the
+    package's build time), so after an update Chromium kept running the old scripts and
+    styles, from LENS's own profile (see browser.profile_dir), against the new page: no icons,
+    no help, dead buttons. "no-cache" makes it ask each time, a 304 when nothing changed. The
+    ETag carries the version, so an update changes every file's tag even where a file's date
+    and size do not; Last-Modified goes, so no date can answer the browser's question either.
+    The page also names them under ASSETS, a path with the version in it, so a copy an older
+    LENS left in the browser's cache, which the browser may still think good, is never used."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = FileResponse(full_path, status_code=status_code, stat_result=stat_result)
+        response.headers["etag"] = '"%s-%s"' % (version_label(), response.headers["etag"].strip('"'))
+        response.headers["cache-control"] = "no-cache"
+        del response.headers["last-modified"]
+        if self.is_not_modified(response.headers, Headers(scope=scope)):
+            return NotModifiedResponse(response.headers)
+        return response
+
+
+ASSETS = f"/static/{version_label()}"   # where the page asks for its files: see _Static
+app.mount(ASSETS, _Static(directory=STATIC), name="assets")   # before /static, which would take it
+app.mount("/static", _Static(directory=STATIC), name="static")
 
 
 @app.get("/")
 def index():
-    page = (STATIC / "index.html").read_text(encoding="utf-8")
+    page = (STATIC / "index.html").read_text(encoding="utf-8").replace("/static/", ASSETS + "/")
     # In the page, not fetched, so the theme and the rest are there before the page first draws.
     # "<" escaped, so no value can close the script element it sits in.
     prefs = json.dumps(settings.load()["prefs"]).replace("<", "\\u003c")
     return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
-                        .replace(PREFS_MARKER, prefs).replace(PREF_KEYS_MARKER, json.dumps(list(settings.PREFS))))
+                        .replace(PREFS_MARKER, prefs).replace(PREF_KEYS_MARKER, json.dumps(list(settings.PREFS))),
+                        headers={"cache-control": "no-cache"})
 
 
 def _run(sheet, siunitx):

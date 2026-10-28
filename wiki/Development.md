@@ -53,7 +53,7 @@ Browser tests are skipped unless `playwright` is installed (`pip install playwri
 lens --serve --open
 ```
 
-Static files are served from `laconic/static/`; reload the page after editing JS or HTML. Restart for Python changes.
+Static files are served from `laconic/static/`; reload the page after editing JS or HTML. The page asks for them under `/static/<version>/` (`server.ASSETS`), and every file is sent with `Cache-Control: no-cache` and an ETag that includes the version, so a browser never runs an older release's scripts against a newer page (#119). A reference to `/static/...` in `index.html` is rewritten to that path when the page is served. Restart for Python changes.
 
 ## Adding things
 
