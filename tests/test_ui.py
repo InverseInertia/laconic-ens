@@ -701,22 +701,24 @@ def test_export_menu_stays_in_the_window_when_the_toolbar_wraps(page):
 
 
 def test_spellcheck_follows_the_caret_onto_comments_and_headings(page):
-    spell = lambda: page.evaluate("document.querySelector('#src').spellcheck")
+    # spellcheck is set on keyup and on selectionchange, so wait for it to settle.
+    def spell(want):
+        page.wait_for_function(f"document.querySelector('#src').spellcheck === {str(want).lower()}")
     reset(page, "## Beam\n# a coment\nx = 3")
     page.keyboard.type(" ")
-    assert spell() is False                      # the caret is on a calculation
+    spell(False)                    # the caret is on a calculation
     page.keyboard.press("ArrowUp")
-    assert spell() is True                       # a comment
+    spell(True)                     # a comment
     page.keyboard.press("Control+Home")
-    assert spell() is True                       # a heading
+    spell(True)                     # a heading
     page.keyboard.press("Control+End")
     page.keyboard.press("Home")
     page.keyboard.type("# ")
-    assert spell() is True                       # the calculation became a comment
+    spell(True)                     # the calculation became a comment
     page.keyboard.press("Backspace")
     page.keyboard.press("Backspace")
-    assert spell() is False                      # and back again
+    spell(False)                    # and back again
     select(page, 0, 12)
-    assert spell() is True                       # a selection over the heading and the comment
+    spell(True)                     # a selection over the heading and the comment
     select(page, 0, len("## Beam\n# a coment\nx"))
-    assert spell() is False                      # one that reaches the calculation
+    spell(False)                    # one that reaches the calculation
