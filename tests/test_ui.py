@@ -587,3 +587,18 @@ def test_export_menu_downloads_latex_and_markdown(page):
     page.click("#exportBtn")
     page.click("#out")
     assert page.is_hidden("#exportList")
+
+
+def test_export_menu_stays_in_the_window_when_the_toolbar_wraps(page):
+    """#103: a wrapped toolbar can put Export at the start of a row, and the list, hanging from
+    the button's right edge, ran off the left of the window."""
+    page.click("#exportBtn")
+    assert page.evaluate("document.querySelector('#exportList').getBoundingClientRect().right"
+                         " === document.querySelector('#exportBtn').getBoundingClientRect().right")  # unchanged at a normal width
+    inside = ("(() => { const r = document.querySelector('#exportList').getBoundingClientRect();"
+              " return r.left >= 0 && r.right <= document.documentElement.clientWidth; })()")
+    for w in range(200, 1000, 10):
+        page.set_viewport_size({"width": w, "height": 700})
+        if page.is_hidden("#exportList"):
+            page.click("#exportBtn")
+        page.wait_for_function(inside, timeout=2000)   # the toolbar rewraps a frame or two after the resize
