@@ -221,9 +221,11 @@ eq(sim('  ylabel: a|', '.'), '  ylabel: a.|', 'period is literal in an axis labe
 eq(sim('  label 2: a|', '^'), '  label 2: a^|', 'caret is literal in a series label');
 eq(sim('  note: "a|"', '/'), '  note: "a/|"', 'slash is literal in a note');
 eq(sim('  xlim: a|', '/'), '  xlim: a / (|)', 'math keys still work in a limit');
-eq(E.isTextLine('  title: x', 0), true, 'title line is text');
-eq(E.isTextLine('title = 3', 0), false, 'an unindented line is not an option');
-eq(E.isTextLine('  xlim: 1 .. 2', 0), false, 'a limit is math');
+eq(E.isTextAt('title = 3', 2), false, 'an unindented line is not an option');
+eq(sim('  note: "a" at (L|, 2)', '/'), '  note: "a" at (L / (|), 2)', 'a note\'s position is math');
+eq(sim('!minimize d\n  method: L|', '-'), '!minimize d\n  method: L-|', 'a solver method is text');
+eq(sim('!minimize d\n  objective: d|', '/'), '!minimize d\n  objective: d / (|)', 'a solver objective is math');
+// Where the text is prose is checked against the server's expression spans in test_sheettext.js.
 
 // --- comments and the off switch ------------------------------------------------
 eq(sim('# see a|', '/'), '# see a/|', 'slash is literal in comments');

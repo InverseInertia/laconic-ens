@@ -32,6 +32,8 @@ for (const { text, line, block } of V.solver_blocks) {
   eq(A.solverBlock(text, ls), block, `${text} @${line}`);
 }
 
+for (const { text, caret, prose } of V.text_at) eq(E.isTextAt(text, caret), prose, `${text} @${caret}`);
+
 for (const { text, caret, name } of V.names_at) eq(E.nameAt(text, caret, caret), name, `${text} @${caret}`);
 
 console.log(`sheettext: ${n} checks passed`);

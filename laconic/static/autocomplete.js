@@ -104,7 +104,8 @@
     const force = !!(opts && opts.force);
     const ls = lineStartOf(t, pos), le = lineEndOf(t, pos);
     const line = t.slice(ls, le);
-    if (line.trimStart().startsWith('#') || /^\s+(title|xlabel|ylabel|label|note)(\s+\d+)?\s*:/.test(line)) return null;
+    // Nothing in prose, except a solver's method, which has its choices.
+    if (Editing.isTextAt(t, pos) && !/^[ \t]+method[ \t]*:/.test(line)) return null;
     // Inside quotes: only props() has anything to offer (its keys and the fluid).
     const quotes = (line.slice(0, pos - ls).match(/"/g) || []).length;
     if (quotes % 2) {

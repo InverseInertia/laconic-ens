@@ -478,7 +478,7 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
     </ul>
 
     <h3>Editor shortcuts <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Editor-Shortcuts" target="_blank" rel="noopener">Editor Shortcuts</a></h3>
-    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines and on the text lines under a plot.</p>
+    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines and on the text under a plot or solver: titles, labels, a note's text, the method.</p>
     <ul>
       <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot. With text highlighted, they apply to the whole terms it touches.</li>
       <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
@@ -1112,10 +1112,7 @@ function shrinkSelection() {
   src.setSelectionRange(t[0], t[1]);
   markActive();
 }
-const onCommentLine = () => {
-  const ls = src.value.lastIndexOf("\n", src.selectionStart - 1) + 1;
-  return Editing.isTextLine(src.value, ls);
-};
+const onCommentLine = () => Editing.isTextAt(src.value, src.selectionStart);
 src.addEventListener("dblclick", () => {
   if (!mathKeys.checked || onCommentLine()) return;
   const n = Editing.snap(src.value, src.selectionStart, src.selectionEnd);

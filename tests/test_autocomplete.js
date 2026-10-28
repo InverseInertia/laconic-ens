@@ -38,6 +38,7 @@ const below = (n, typed) => '\n'.repeat(n - 1) + typed;
 
 // --- no popup inside the text of a plot option -------------------------------------
 eq(at('!plot f(x), x = 0 .. 1\n  title: Mom|').ctx, null, 'no suggestions in a plot title');
+eq(at('!plot f(x), x = 0 .. 1\n  note: "Mom" at (Lm|, 2)').ctx.query, 'Lm', 'but a note\'s position is an expression');
 eq(at('  ylabel: Mom|').ctx, null, 'no suggestions in an axis label');
 eq(at('  label 2: Mom|').ctx, null, 'no suggestions in a series label');
 eq(at('  xlim: 0 .. mo|').ctx !== null, true, 'suggestions still work in a limit');

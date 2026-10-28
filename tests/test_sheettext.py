@@ -133,3 +133,13 @@ def test_the_name_at_a_caret_is_one_this_lexer_finds(case):
     found = [] if line.kind in ("comment", "heading", "meta") else \
         [t.text for t in tokenize(line.text) if t.kind in ("name", "unit") and t.start <= col <= t.end]
     assert (found[0] if found else "") == case["name"]
+
+
+@pytest.mark.parametrize("case", VECTORS["text_at"], ids=lambda c: f"{c['text']}@{c['caret']}")
+def test_prose_is_outside_every_expression_span(case):
+    """Where the editor turns math keys off (Editing.isTextAt) is outside every expression span,
+    and where it keeps them on is inside one."""
+    text, caret = case["text"], case["caret"]
+    line = scan(text).line(text.count("\n", 0, caret) + 1)
+    col = caret - (text.rfind("\n", 0, caret) + 1)
+    assert (not any(a <= col <= b for a, b in line.spans)) == case["prose"]

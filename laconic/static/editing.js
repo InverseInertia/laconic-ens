@@ -51,12 +51,20 @@
 
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
-  // Lines that hold text and not math: comments, and the title, label and note text under a plot.
-  const TEXT_OPTION = /^\s+(title|xlabel|ylabel|label|note)(\s+\d+)?\s*:/;
-  const isComment = (t, ls) => {
-    const line = t.slice(ls, lineEndOf(t, ls));
-    return line.trimStart().startsWith('#') || TEXT_OPTION.test(line);
-  };
+  // Where the text is prose, not math: outside laconic/sheettext.py's expression spans, as
+  // tests/sheettext_vectors.json holds them together. Comment lines; under a plot, a title or label
+  // and a note's text (its `at (x, y)` is math); under a solver, the method.
+  const TEXT_OPTION = /^[ \t]+(title|xlabel|ylabel|label|note|method)(?:[ \t]+[^\s:]+)?[ \t]*:/;
+  function isTextAt(t, p) {
+    const ls = lineStartOf(t, p), line = t.slice(ls, lineEndOf(t, p));
+    if (line.trimStart().startsWith('#')) return true;
+    const m = TEXT_OPTION.exec(line);
+    if (!m) return false;
+    if (m[1] !== 'note') return true;
+    const at = /"\s+at\s*\(/.exec(line), close = line.lastIndexOf(')');
+    const from = at ? at.index + at[0].length : -1;
+    return !(at && close > from && p - ls >= from && p - ls <= close);
+  }
   const edit = (from, to, insert, caret) => ({ from, to, insert, caret });
 
   // Two edits, `b` made on the text `a` left, as one edit on `t`, with b's caret.
@@ -617,7 +625,7 @@
   function charAction(ch, t, s, e, ctx) {
     if (ctx && ctx.enabled === false) return null;
     const ls = lineStartOf(t, s), le = lineEndOf(t, e);
-    if (isComment(t, ls)) return null;
+    if (isTextAt(t, s)) return null;
     // Inside quotes (a props() key or fluid such as "1-Butene") the text is not math.
     if (((t.slice(ls, s).match(/"/g) || []).length % 2) === 1) return null;
     const g = e === s && !isTok(ch) && !MARKS.includes(ch) ? globalStart(t, s, ctx) : -1;
@@ -694,7 +702,7 @@
   function keyAction(key, mods, t, s, e, ctx) {
     if (ctx && ctx.enabled === false) return null;
     const ls = lineStartOf(t, s), le = lineEndOf(t, e);
-    const comment = isComment(t, ls);
+    const comment = isTextAt(t, s);
     const k = key.length === 1 ? key.toLowerCase() : key;
     const plain = !mods.ctrl && !mods.alt && !mods.shift && !mods.meta;
 
@@ -748,7 +756,7 @@
     DEFAULT_GREEK, charAction, keyAction, indentLines, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
-    isTextLine: isComment,
+    isTextAt,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Editing = api;
