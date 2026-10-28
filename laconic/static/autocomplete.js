@@ -29,8 +29,8 @@
   const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
   const Editing = typeof module !== 'undefined' && module.exports ? require('./editing.js') : root.Editing;
 
-  const WORD = /[\p{L}\p{N}_°∞]/u;
-  const NAME_START = '[\\p{L}_](?:_∞|[\\p{L}\\p{N}_])*';
+  const WORD = /[\p{L}\p{N}_°∞∀]/u;
+  const NAME_START = '[\\p{L}_∀](?:_∞|[\\p{L}\\p{N}_∀])*';
   const FUNC_RE = new RegExp('^(~?' + NAME_START + ')\\s*\\(([^)]*)\\)\\s*=(?!=)', 'u');
   const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@&]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
