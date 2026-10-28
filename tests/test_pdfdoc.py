@@ -124,7 +124,7 @@ def test_no_browser(monkeypatch, tmp_path):
     monkeypatch.setattr(pdfdoc, "find_chromium", lambda: None)
     with pytest.raises(pdfdoc.NoBrowser):
         pdfdoc.pdf("<p>x")
-    # The page falls back to the browser's print dialog on a 501.
+    # /api/export/pdf answers 501; the printable document the page prints needs no browser on the server.
     monkeypatch.setenv("LENS_CONFIG_DIR", str(tmp_path))
     with pytest.raises(server.HTTPException) as e:
         server.export_pdf(Sheet(text="x = 1"))
@@ -145,7 +145,7 @@ def test_cli_without_a_browser(monkeypatch, tmp_path):
 
 def test_layout_in_chromium(tmp_path):
     """The real layout: every formula fits the printed column, whatever the window's width (the
-    fallback prints from a full-size tab), a very wide one is wrapped, and the document prints
+    document may be opened in a tab of any size), a very wide one is wrapped, and the document prints
     to several pages."""
     playwright = pytest.importorskip("playwright.sync_api")
     wide = "w = " + " + ".join(f"a * b / c * {i}" for i in range(1, 16))

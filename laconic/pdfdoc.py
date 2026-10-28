@@ -4,7 +4,8 @@ The document is one column of blocks, one block per export element (exports.py):
 calculations (KaTeX, one row per stage aligned at the equals signs), plots (inline SVG) and
 errors. Laconic does no typesetting of its own: each block is marked as a unit that may not be
 split, headings stay with what follows them, and a calculation wider than the page is shrunk or
-wrapped to fit. A Chromium-family browser lays out the pages and prints them (`--print-to-pdf`).
+wrapped to fit. A Chromium-family browser lays out the pages and prints them: the app's own,
+from a hidden frame with its print dialog, or for the CLI a headless one (`--print-to-pdf`).
 
 The math is the live view's flavour, as in the Markdown export; run the sheet without siunitx."""
 import html
@@ -141,7 +142,7 @@ FLAGS = ("--headless", "--disable-gpu", "--no-first-run", "--no-default-browser-
          "--virtual-time-budget=1000", "--allow-file-access-from-files")
 
 # A healthy print takes about a second; this is only the most a stalled browser may cost before
-# the page falls back to its own print dialog.
+# `--pdf` (or /api/export/pdf) gives up.
 TIMEOUT = 20
 
 

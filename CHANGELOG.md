@@ -18,6 +18,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Polynomial regression**: a `!regression a, b, c` block with `data: D` fits y = a + b·x + c·x² by least squares to points given as a matrix with an x row and a y row (one column per point), or as two vectors, `data: t, s`. Each coefficient gets the units of y / xᵏ, the names hold the fit for the lines below, `r2: R2` names R², and one name with `degree: 3` holds every coefficient as a vector. The fit is worked out as you type, with no Run button, and the row shows the fitted polynomial. (#113)
 - **Large matrices are shown collapsed**: a matrix with more than 8 rows or columns shows its first and last few with ⋯ and ⋮ between, and a **Show all** button under it shows it whole. The LaTeX, Markdown and PDF exports print it collapsed too; a line's LaTeX snippet keeps it whole. (#113)
 
+### Changes
+- **Export → PDF is quicker**: it now opens the print dialog straight away, where **Save as PDF** saves the same pages as before, instead of starting a hidden copy of Chrome or Edge for every export, which took up to ten seconds. `lens FILE --pdf` still writes the PDF directly. (#118)
+
 ### Fixes
 - **The reduced Planck constant `'hbar`** (or `'ħ`) typesets as ħ (`\hbar`) on the page and in the LaTeX export, where it used to show as a text glyph that KaTeX warned about and pdflatex could not print. (#111)
 - A long equation shrunk to fit the results pane no longer keeps a scroll bar under it at some pane widths, so the bar no longer comes and goes while you resize the window or the split. Math now leaves a little room at the right of the pane, so a pane narrowed during a resize does not show a scroll bar before the equation is shrunk to the new width. (#104)
