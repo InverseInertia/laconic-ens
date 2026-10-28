@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.4.4](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.4) (2026-10-28)
+
 ### New
 - **Hz or rad/s**: `!freq hz` or `!freq rad` says what a sheet's frequencies are. Below either, Hz is cycles per second, so `50'Hz -> 'rad/'s` is `314.2 rad/s`, `3000'rpm -> 'Hz` is `50 Hz` and `314.2'rad/'s -> 'Hz` is `50 Hz`, and a result in 1/s such as `sqrt(k/m)` is shown in Hz or in rad/s as you chose. Without it, Hz and rad/s stay the same unit as in SI (1 Hz = 1 rad/s), and a conversion between them shows a note saying so. (#115)
 - **Codec** theme preset: mint text on near-black paper, with amber globals. Pick it in Settings → Theme. (#112)
