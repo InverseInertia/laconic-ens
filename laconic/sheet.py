@@ -220,7 +220,7 @@ def _run_plot(i, raw, block, ev, fmt, used):
         owned[n] = LineResult(n, src[n], "error", error=msg)
     text = spec["title"] or "plot " + ", ".join(s["label"] for s in spec["series"])
     return LineResult(i, raw, "plot", text=text, block=block, payload=PlotPayload(spec, render_svg(spec, uid=i)),
-                      stale=solver.tainted(ev, nodes)), owned
+                      stale=ev.symbols.tainted(nodes)), owned
 
 
 def _run_solver(i, raw, handle, ev, fmt, used):
@@ -235,7 +235,7 @@ def _run_solver(i, raw, handle, ev, fmt, used):
         owned[l.n] = LineResult(l.n, l.text, "error" if msg else "solveropt", error=msg or "")
 
     def fail(msg):
-        ev.stale |= {ev.vkey(n) for n in block.unknowns}   # what reads them below is not trustworthy either
+        ev.symbols.mark_stale(ev.vkey(n) for n in block.unknowns)   # what reads them below is not trustworthy either
         return LineResult(i, raw, "error", error=msg, block=handle), owned
 
     if block.problem:
@@ -254,17 +254,10 @@ def _run_solver(i, raw, handle, ev, fmt, used):
         prob.probe()   # also when the stored result is current: the line's notes come from this run
     except Exception as e:
         return fail(describe(e))
-    taint = solver.tainted(ev, block.nodes()) or any(u.key in ev.stale for u in prob.unknowns)
-    keys = {u.key for u in prob.unknowns}
-    if status != "valid" or taint:
-        ev.stale |= keys
-    else:
-        ev.stale -= keys
-    if qs is not None:
-        for u, q in zip(prob.unknowns, qs):
-            ev.vars[u.key] = q
-    for u in prob.unknowns:     # below the block, an unknown holds what the block says
-        ev.symbols.bind(u.key, value=fmt.plain(ev.vars[u.key]))
+    taint = ev.symbols.tainted(block.nodes()) or any(ev.symbols.is_stale(u.key) for u in prob.unknowns)
+    held = qs if qs is not None else [ev.vars[u.key] for u in prob.unknowns]
+    for u, q in zip(prob.unknowns, held):     # below the block, an unknown holds what the block says
+        ev.symbols.define(u.key, q, text=fmt.plain(q), stale=status != "valid" or taint)
     values = [_value(u.name, fmt.var(u.key), fmt.quantity(ev.vars[u.key])) for u in prob.unknowns]
     plain = [f"{u.key} = {fmt.plain(ev.vars[u.key])}" for u in prob.unknowns]
     obj = prob.stored_objective(stored) if qs is not None else None
@@ -310,9 +303,8 @@ def _run_line(i, raw, s, ev, fmt, used):
         if isinstance(stmt, FuncDef):
             printer = Printer(ev, fmt, local=stmt.params)
             sym = printer.tex(stmt.body)
-            name = ev.symbols.bind(stmt.name, FUNCTION, params=stmt.params)
+            name = ev.symbols.define_function(stmt.name, stmt.params, stmt.body)
             key = name.key
-            ev.funcs[key] = (stmt.params, stmt.body)
             head = f"{fmt.var(key)}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
             return LineResult(i, raw, "funcdef", lhs=head, stages=[sym], text=s,
                               warning=_global_note(stmt.name, name, ev.symbols))
@@ -329,7 +321,7 @@ def _run_line(i, raw, s, ev, fmt, used):
             value = reduce_si(value, ev.ureg)
             if ev.mode.angle == "degree" and dict(value.unit_items()) == {"radian": 1}:
                 value = value.to("degree")
-        stale = solver.tainted(ev, [expr])
+        stale = ev.symbols.tainted([expr])
         sym = Printer(ev, fmt).tex(expr)
         sub = Printer(ev, fmt, subst=True).tex(expr)
         sig = 12 if typed else None
@@ -337,10 +329,8 @@ def _run_line(i, raw, s, ev, fmt, used):
         plain = fmt.plain(value, sig)
         stages = [res] if typed or ev.mode.short else _dedupe([sym, sub, res])
         if isinstance(stmt, Assign):
-            name = ev.symbols.bind(stmt.name, value=plain)
+            name = ev.symbols.define(stmt.name, value, text=plain, stale=stale)
             key = name.key
-            ev.vars[key] = value
-            (ev.stale.add if stale else ev.stale.discard)(key)
             return LineResult(i, raw, "assign", lhs=fmt.var(key), stages=stages,
                               text=f"{key} = {plain}", stale=stale,
                               warning=". ".join(filter(None, [_global_note(stmt.name, name, ev.symbols),

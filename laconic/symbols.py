@@ -11,13 +11,26 @@ records each definition that succeeds), and is the one place the scope rules liv
 - a solver block defines its unknowns again on its header line, with the stored answer;
 - a line that fails defines nothing.
 
+It also holds what each key is bound to as the sheet runs: a variable's value, a function's
+parameters and body, and whether a value comes from an out-of-date solver result (is stale).
+A definition, a clear and a solver unknown's binding are one call each, so these never drift
+apart from the scope rules:
+
+    table.define("x", q, text="2 m", stale=False)    a variable defined on the current line
+    table.define_function("f", ("x",), body)          a function
+    table.clear(VARIABLE)                             !clear; !clearf with FUNCTION
     table.key("g")           "~g" once g is global: the key its value is stored under
+    table.values, table.functions                     key -> value, key -> (params, body), read only
+    table.tainted(nodes)     True if evaluating `nodes` reads a stale value
     table.visible(5)         the Symbols line 5 can read
     table.uses(line)         [column, length, symbol id] of each name on a sheettext Line
 
 The page gets the table through the eval response (each row carries the symbols its line
 defines and the uses on it); static/symbols.js reads it there."""
 from dataclasses import dataclass
+from types import MappingProxyType
+
+from .nodes import refs
 
 VARIABLE, FUNCTION = "variable", "function"
 
@@ -59,6 +72,11 @@ class SymbolTable:
         self._live = {}            # (kind, name) -> the Symbol the current line sees
         self._first = {}           # (kind, name) -> the Symbol that made the name global
         self._by_name = {}         # name -> its Symbols
+        self._values = {}          # variable key -> its value (a Quantity)
+        self._bodies = {}          # function key -> (params, body)
+        self._stale = set()        # variable keys whose value comes from an out-of-date solver result
+        self.values = MappingProxyType(self._values)       # the evaluator's scope
+        self.functions = MappingProxyType(self._bodies)
 
     # ---- resolving ----------------------------------------------------------------
     def key(self, name, kind=VARIABLE):
@@ -107,8 +125,58 @@ class SymbolTable:
     def defined_on(self, n):
         return [s for s in self.symbols if s.line == n]
 
+    # ---- what a key holds -----------------------------------------------------------
+    def reach(self, nodes, local=()):
+        """Walk `nodes` and the bodies of the user functions they call. Yields (kind, key, extra):
+        ("var", key, None), ("unit", name, None) and ("func", key, (params, body))."""
+        seen, todo = set(), [(n, frozenset(local)) for n in nodes]
+        while todo:
+            node, loc = todo.pop()
+            names, calls, units = refs(node)
+            for u in units:
+                yield "unit", u, None
+            for nm in names:
+                if nm not in loc:
+                    yield "var", self.key(nm), None
+            for fn in calls:
+                fk = self.key(fn, FUNCTION)
+                if fk in self._bodies and fk not in seen:
+                    seen.add(fk)
+                    params, body = self._bodies[fk]
+                    yield "func", fk, (params, body)
+                    todo.append((body, frozenset(params)))
+
+    def tainted(self, nodes, local=()):
+        """True if evaluating `nodes` reads a value that came from an out-of-date solver."""
+        return bool(self._stale) and any(k == "var" and key in self._stale for k, key, _ in self.reach(nodes, local))
+
+    def is_stale(self, key):
+        return key in self._stale
+
     # ---- defining -----------------------------------------------------------------
-    def bind(self, name, kind=VARIABLE, value="", params=()):
+    def define(self, name, value, text="", stale=False):
+        """Define the variable `name` on the current line as `value` (shown as `text`); `stale`
+        when the value comes from an out-of-date solver result. Returns its Symbol."""
+        sym = self._bind(name, VARIABLE, text)
+        self._values[sym.key] = value
+        (self._stale.add if stale else self._stale.discard)(sym.key)
+        return sym
+
+    def define_function(self, name, params, body):
+        sym = self._bind(name, FUNCTION, params=params)
+        self._bodies[sym.key] = (tuple(params), body)
+        return sym
+
+    def mark_stale(self, keys):
+        """Mark values as not trustworthy without defining them again (a solver block that failed)."""
+        self._stale |= set(keys)
+
+    def trial(self, key, value):
+        """Hold `value` under the variable `key` for a moment, with no new definition: a solver's
+        trial values, put back to the starting value when it is done."""
+        self._values[key] = value
+
+    def _bind(self, name, kind=VARIABLE, value="", params=()):
         """Record a definition of `name` on the current line and return its Symbol. A `~`
         makes the name global; a name already in use without one cannot become global."""
         bare = name.lstrip("~")
@@ -129,7 +197,8 @@ class SymbolTable:
 
     def clear(self, kind):
         """`!clear` (variables) or `!clearf` (functions) on the current line: every name of
-        `kind` that is not global stops being visible. Returns (removed keys, kept keys)."""
+        `kind` that is not global stops being visible, and what it held is dropped. Returns
+        (removed keys, kept keys)."""
         gone, kept = [], []
         for (k, bare), s in list(self._live.items()):
             if k != kind:
@@ -140,4 +209,8 @@ class SymbolTable:
                 s.until = self.line
                 del self._live[(k, bare)]
                 gone.append(s.key)
+        held = self._values if kind == VARIABLE else self._bodies
+        for key in gone:
+            held.pop(key, None)
+        self._stale -= set(gone)
         return gone, kept

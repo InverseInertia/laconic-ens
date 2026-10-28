@@ -23,12 +23,12 @@ import json
 import math
 import time
 import warnings
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from .blockedit import BlockEditor
-from .nodes import BinOp, Call, Name, UnitLit
+from .nodes import BinOp
 from .parser import ParseError, parse_expr
 from .sheettext import is_name
 
@@ -294,51 +294,6 @@ def _split_top(s):
 
 
 # ---- what a block reads: dependencies, the hash, out-of-date tracking ------------------------
-def refs(node):
-    """(variable names, called function names, unit names) used anywhere under `node`."""
-    names, calls, units = set(), set(), set()
-    todo = [node]
-    while todo:
-        n = todo.pop()
-        if isinstance(n, Name):
-            names.add(n.name)
-        elif isinstance(n, UnitLit):
-            units.add(n.unit)
-        elif isinstance(n, Call):
-            calls.add(n.func)
-            todo.extend(n.args)
-        elif is_dataclass(n) and not isinstance(n, type):
-            todo.extend(getattr(n, f.name) for f in fields(n))
-        elif isinstance(n, (tuple, list)):
-            todo.extend(n)
-    return names, calls, units
-
-
-def _reach(ev, nodes, local=()):
-    """Walk `nodes` and the bodies of the user functions they call. Yields (kind, key, extra)."""
-    seen, todo = set(), [(n, frozenset(local)) for n in nodes]
-    while todo:
-        node, loc = todo.pop()
-        names, calls, units = refs(node)
-        for u in units:
-            yield "unit", u, None
-        for nm in names:
-            if nm not in loc:
-                yield "var", ev.vkey(nm), None
-        for fn in calls:
-            fk = ev.fkey(fn)
-            if fk in ev.funcs and fk not in seen:
-                seen.add(fk)
-                params, body = ev.funcs[fk]
-                yield "func", fk, (params, body)
-                todo.append((body, frozenset(params)))
-
-
-def tainted(ev, nodes, local=()):
-    """True if evaluating `nodes` reads a value that came from an out-of-date solver."""
-    return bool(ev.stale) and any(k == "var" and key in ev.stale for k, key, _ in _reach(ev, nodes, local))
-
-
 def _qdigest(q):
     """A quantity as hashable text. Values are cut to 12 significant digits, so a last-bit
     difference in a library (another machine, another BLAS) does not make a result look stale.
@@ -359,7 +314,7 @@ def digest(block, ev, unknowns):
     exactly when its hash equals this."""
     own = {u.key for u in unknowns}
     deps, funcs, units = {}, {}, {}
-    for kind, key, extra in _reach(ev, block.nodes()):
+    for kind, key, extra in ev.symbols.reach(block.nodes()):
         if kind == "var" and key in ev.vars and key not in own:
             deps[key] = _qdigest(ev.vars[key])
         elif kind == "func":
@@ -514,7 +469,7 @@ class Problem:
     def set_x(self, x):
         for u in self.unknowns:
             seg = np.asarray(x[u.off:u.off + u.size], dtype=float)
-            self.ev.vars[u.key] = self.ev.Q(float(seg[0]) if u.shape == () else seg.reshape(u.shape), u.units)
+            self.ev.symbols.trial(u.key, self.ev.Q(float(seg[0]) if u.shape == () else seg.reshape(u.shape), u.units))
 
     def where(self, x):
         parts = []

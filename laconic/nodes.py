@@ -1,5 +1,5 @@
 """AST node types. One tree feeds both the evaluator and the LaTeX printer."""
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from typing import Any
 
 
@@ -118,3 +118,23 @@ def is_literal(n):
             return has_implicit(n.operand)
         return isinstance(n, BinOp) and (has_implicit(n.left) or has_implicit(n.right))
     return count(n) == 1 and has_implicit(n)
+
+
+def refs(node):
+    """(variable names, called function names, unit names) used anywhere under `node`."""
+    names, calls, units = set(), set(), set()
+    todo = [node]
+    while todo:
+        n = todo.pop()
+        if isinstance(n, Name):
+            names.add(n.name)
+        elif isinstance(n, UnitLit):
+            units.add(n.unit)
+        elif isinstance(n, Call):
+            calls.add(n.func)
+            todo.extend(n.args)
+        elif is_dataclass(n) and not isinstance(n, type):
+            todo.extend(getattr(n, f.name) for f in fields(n))
+        elif isinstance(n, (tuple, list)):
+            todo.extend(n)
+    return names, calls, units

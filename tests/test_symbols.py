@@ -4,7 +4,9 @@ import pytest
 from laconic import solver
 from laconic.blockedit import apply
 from laconic import solvesession
+from laconic.nodes import BinOp, Call, Name, Num
 from laconic.sheet import evaluate
+from laconic.symbols import FUNCTION, VARIABLE, SymbolTable
 
 
 def visible(text, n):
@@ -88,3 +90,35 @@ def test_a_function_name_means_the_function():
     ws = evaluate("f = 2\nf(x) = x\ny = f(f)")
     by_id = {s.id: s for s in ws.symbols.symbols}
     assert [by_id[u[2]].kind for u in ws.results[2].symbols["uses"]] == ["variable", "function", "variable"]
+
+
+# ---- what each key holds -----------------------------------------------------------------------------
+def test_a_definition_holds_its_value_and_a_clear_drops_it():
+    t = SymbolTable()
+    t.line = 1
+    t.define("a", 1, stale=True)
+    t.define("~g", 2)
+    t.define_function("f", ("x",), BinOp("+", Name("x"), Name("a")))
+    assert dict(t.values) == {"a": 1, "~g": 2} and t.functions["f"][0] == ("x",)
+    assert t.tainted([Call("f", (Num(1),))])            # through the function's body
+    assert not t.tainted([Name("g")]) and not t.tainted([Name("a")], local=("a",))
+    t.line = 2
+    assert t.clear(VARIABLE) == (["a"], ["~g"])
+    assert dict(t.values) == {"~g": 2} and not t.is_stale("a")
+    t.line = 3
+    t.clear(FUNCTION)
+    assert dict(t.functions) == {}
+
+
+def test_defining_a_name_again_sets_whether_it_is_stale():
+    t = SymbolTable()
+    t.define("x", 1, stale=True)
+    t.mark_stale(["y"])
+    assert t.is_stale("x") and t.is_stale("y")
+    t.define("x", 2)
+    assert not t.is_stale("x") and t.values["x"] == 2
+
+
+def test_values_are_written_only_through_the_table():
+    with pytest.raises(TypeError):
+        SymbolTable().values["x"] = 1

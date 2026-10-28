@@ -155,14 +155,21 @@ class Evaluator:
         self.globals = {n: d for n, d in units if n in ok}   # instance-wide units
         self.custom = dict(self.globals)                     # globals plus this sheet's, name -> definition
         self.Q = self.ureg.Quantity
-        self.vars = {}
-        self.funcs = {}
-        self.symbols = SymbolTable()  # which names each line sees; filled in by sheet.py
-        self.stale = set()     # variable keys whose value comes from a solver result that is out of date
+        self.symbols = SymbolTable()  # which names each line sees, and what each holds; filled in by sheet.py
         self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
         self.notes = []        # warnings for the line being run; sheet.py clears them per line and shows them
         self._calls = []       # the user functions being evaluated, innermost last, to name in a note
         self.nan_hint = None   # why the value being computed may be NaN; read by check_finite
+
+    @property
+    def vars(self):
+        """Variable key -> value, read only: definitions go through the symbol table."""
+        return self.symbols.values
+
+    @property
+    def funcs(self):
+        """Function key -> (params, body), read only."""
+        return self.symbols.functions
 
     # ---- name classification (shared with the LaTeX printer) -------------
     def is_var(self, name, local=()):
