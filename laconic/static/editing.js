@@ -65,6 +65,16 @@
     const from = at ? at.index + at[0].length : -1;
     return !(at && close > from && p - ls >= from && p - ls <= close);
   }
+  // The browser may spellcheck the selection's lines when every one is prose: a comment or heading
+  // (not a `#@` line LENS writes), or a plot's title, label or note. A solver's `method:` is a
+  // name, not prose. The editor is one textarea, so its spellcheck follows the caret's lines.
+  function isProse(t, s, e) {
+    for (let ls = lineStartOf(t, s); ; ls = lineEndOf(t, ls) + 1) {
+      const line = t.slice(ls, lineEndOf(t, ls)), m = TEXT_OPTION.exec(line), head = line.trimStart();
+      if (!(head.startsWith('#') ? !head.startsWith('#@') : m && m[1] !== 'method')) return false;
+      if (lineEndOf(t, ls) >= (e === undefined ? s : e)) return true;
+    }
+  }
   const edit = (from, to, insert, caret) => ({ from, to, insert, caret });
 
   // Two edits, `b` made on the text `a` left, as one edit on `t`, with b's caret.
@@ -756,7 +766,7 @@
     DEFAULT_GREEK, charAction, keyAction, indentLines, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
-    isTextAt,
+    isTextAt, isProse,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Editing = api;

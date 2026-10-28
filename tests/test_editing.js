@@ -227,6 +227,18 @@ eq(sim('!minimize d\n  method: L|', '-'), '!minimize d\n  method: L-|', 'a solve
 eq(sim('!minimize d\n  objective: d|', '/'), '!minimize d\n  objective: d / (|)', 'a solver objective is math');
 // Where the text is prose is checked against the server's expression spans in test_sheettext.js.
 
+// --- which lines the browser may spellcheck -------------------------------------
+const sheet = '## Beam\n# a coment\nx = 3\n#@ units\n!plot x, x = 0 .. 1\n  title: Deflection';
+const at = (s) => sheet.indexOf(s);
+eq(E.isProse(sheet, at('Beam')), true, 'a heading is spellchecked');
+eq(E.isProse(sheet, at('coment')), true, 'a comment is spellchecked');
+eq(E.isProse(sheet, at('x = 3') + 2), false, 'a calculation is not');
+eq(E.isProse(sheet, at('units')), false, 'nor a #@ line LENS writes');
+eq(E.isProse(sheet, at('Deflection')), true, 'a plot title is text');
+eq(E.isProse('!root x\n  method: brentq', 12), false, "a solver's method is a name, not prose");
+eq(E.isProse(sheet, 0, at('coment')), true, 'a selection over prose lines only');
+eq(E.isProse(sheet, 0, at('x = 3') + 1), false, 'a selection that reaches a calculation');
+
 // --- comments and the off switch ------------------------------------------------
 eq(sim('# see a|', '/'), '# see a/|', 'slash is literal in comments');
 eq(sim('# a|', '.'), '# a.|', 'period is literal in comments');

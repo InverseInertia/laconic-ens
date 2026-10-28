@@ -683,3 +683,25 @@ def test_export_menu_stays_in_the_window_when_the_toolbar_wraps(page):
         if page.is_hidden("#exportList"):
             page.click("#exportBtn")
         page.wait_for_function(inside, timeout=2000)   # the toolbar rewraps a frame or two after the resize
+
+
+def test_spellcheck_follows_the_caret_onto_comments_and_headings(page):
+    spell = lambda: page.evaluate("document.querySelector('#src').spellcheck")
+    reset(page, "## Beam\n# a coment\nx = 3")
+    page.keyboard.type(" ")
+    assert spell() is False                      # the caret is on a calculation
+    page.keyboard.press("ArrowUp")
+    assert spell() is True                       # a comment
+    page.keyboard.press("Control+Home")
+    assert spell() is True                       # a heading
+    page.keyboard.press("Control+End")
+    page.keyboard.press("Home")
+    page.keyboard.type("# ")
+    assert spell() is True                       # the calculation became a comment
+    page.keyboard.press("Backspace")
+    page.keyboard.press("Backspace")
+    assert spell() is False                      # and back again
+    select(page, 0, 12)
+    assert spell() is True                       # a selection over the heading and the comment
+    select(page, 0, len("## Beam\n# a coment\nx"))
+    assert spell() is False                      # one that reaches the calculation

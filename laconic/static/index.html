@@ -791,6 +791,10 @@ src.addEventListener("input", () => {
   if (!applying) acUpdate();
 });
 for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
+// Spellcheck comment and heading lines only: the textarea is one element, so it follows the caret.
+const spellByLine = () => { src.spellcheck = Editing.isProse(src.value, src.selectionStart, src.selectionEnd); };
+for (const ev of ["input", "keyup", "click", "focus", "select"]) src.addEventListener(ev, spellByLine);
+document.addEventListener("selectionchange", () => { if (document.activeElement === src) spellByLine(); });
 
 function downloadBlob(name, blob) {
   const a = document.createElement("a");
