@@ -229,9 +229,10 @@ def render_svg(spec, uid=0, standalone=False):
                 dots.append(f'<rect x="{px - 2.4:.2f}" y="{py - 2.4:.2f}" width="4.8" height="4.8"/>')
         dash = _DASH[s["dash"]]
         cap = "round" if s["dash"] == "dotted" else "butt"
-        out.append(f'<path d="{"".join(d)}" fill="none" stroke="{s["color"]}" stroke-width="{s["width"]:g}" '
-                   f'stroke-linejoin="round" stroke-linecap="{cap}" {fixed}'
-                   + (f' stroke-dasharray="{dash}"' if dash else "") + "/>")
+        if s.get("line", True):   # points have markers only
+            out.append(f'<path d="{"".join(d)}" fill="none" stroke="{s["color"]}" stroke-width="{s["width"]:g}" '
+                       f'stroke-linejoin="round" stroke-linecap="{cap}" {fixed}'
+                       + (f' stroke-dasharray="{dash}"' if dash else "") + "/>")
         if dots:
             out.append(f'<g fill="{s["color"]}">{"".join(dots)}</g>')
     out.append("</g></g>")
@@ -280,9 +281,15 @@ def render_svg(spec, uid=0, standalone=False):
         for k, s in enumerate(spec["series"]):
             cy = ly + 8 + 18 * k + 9
             dash = _DASH[s["dash"]]
-            out.append(f'<line x1="{lx + 8:.1f}" y1="{cy:.1f}" x2="{lx + 30:.1f}" y2="{cy:.1f}" stroke="{s["color"]}" '
-                       f'stroke-width="{s["width"]:g}"' + (f' stroke-dasharray="{dash}"' if dash else "") + "/>"
-                       f'<text x="{lx + 36:.1f}" y="{cy:.1f}" dy="0.35em">{markup(s["label"], FS)}</text>')
+            if not s.get("line", True):
+                mx = lx + 19
+                out.append(f'<rect x="{mx - 2.4:.1f}" y="{cy - 2.4:.1f}" width="4.8" height="4.8" fill="{s["color"]}"/>'
+                           if s["marker"] == "square" else
+                           f'<circle cx="{mx:.1f}" cy="{cy:.1f}" r="2.6" fill="{s["color"]}"/>')
+            else:
+                out.append(f'<line x1="{lx + 8:.1f}" y1="{cy:.1f}" x2="{lx + 30:.1f}" y2="{cy:.1f}" stroke="{s["color"]}" '
+                           f'stroke-width="{s["width"]:g}"' + (f' stroke-dasharray="{dash}"' if dash else "") + "/>")
+            out.append(f'<text x="{lx + 36:.1f}" y="{cy:.1f}" dy="0.35em">{markup(s["label"], FS)}</text>')
         out.append("</g>")
     out.append("</svg>")
     return "".join(out) + ("\n" if standalone else "")

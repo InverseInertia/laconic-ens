@@ -221,10 +221,16 @@ def _multiplicative(q):
 
 
 def _points(b, ev, names=("x", "y")):
-    """The data as one flat vector of quantities per name (the variables, then y), all the same
-    length, and whether the points are laid out in a row (a matrix's rows, or a row vector of the
-    first variable) rather than a column."""
-    vals, n = [ev.eval(node) for node in b.data], len(names)
+    cols, row = columns(ev, [ev.eval(node) for node in b.data], names)
+    return [_multiplicative(c) for c in cols], row
+
+
+def columns(ev, vals, names=("x", "y"), key="data"):
+    """Points given as `data:` gives them (a plot's `points:` too): `vals` is one matrix with a row
+    per name (the variables, then y) and a column per point, or one vector per name. Returns one
+    flat vector of quantities per name, all the same length, and whether the points are laid out in
+    a row (a matrix's rows, or a row vector of the first variable) rather than a column."""
+    n = len(names)
     if len(vals) == 1:
         d = vals[0]
         mag = np.asarray(d.magnitude)
@@ -234,20 +240,21 @@ def _points(b, ev, names=("x", "y")):
                     if mag.ndim == 2 and mag.shape[1] == n else "")
             rows = ("the x values then the y values" if list(names) == ["x", "y"]
                     else "a row for " + ", ".join(names[:-1]) + f", then the {names[-1]} row")
-            raise RegressionError(f"data is a matrix with {n} rows, {rows}, one column per point; this is "
-                                  f"{shape}{hint}. Or give {n} vectors, `data: {', '.join(names)}`")
+            raise RegressionError(f"{key} is a matrix with {n} rows, {rows}, one column per point; this is "
+                                  f"{shape}{hint}. Or give {n} vectors, `{key}: {', '.join(names)}`")
         cols, row = [ev.Q(mag[k], d.units) for k in range(n)], True
     else:
         for q, what in zip(vals, names):
             m = np.asarray(q.magnitude)
             if m.ndim == 2 and 1 not in m.shape or m.ndim > 2:
-                raise RegressionError(f"The {what} data is a matrix; give a row or column vector")
+                raise RegressionError(f"The {what} {'data' if key == 'data' else 'values'} are a matrix; "
+                                      f"give a row or column vector")
         row = np.ndim(vals[0].magnitude) == 2 and np.shape(vals[0].magnitude)[0] == 1
         cols = [ev.Q(np.ravel(q.magnitude), q.units) for q in vals]
         sizes = [c.magnitude.size for c in cols]
         if len(set(sizes)) > 1:
             raise RegressionError("There are " + " and ".join(f"{k} {w} values" for k, w in zip(sizes, names)))
-    return [_multiplicative(c) for c in cols], row
+    return cols, row
 
 
 def fit(b, ev):

@@ -73,6 +73,8 @@
     {"text": "!minimize d\n  objective: d^2\n  method: SLSQP", "caret": 26, "prose": false},
     {"text": "!minimize d\n  objective: d^2\n  method: SLSQP", "caret": 42, "prose": true},
     {"text": "!minimize d\n  bounds d: 0 .. 1", "caret": 26, "prose": false},
-    {"text": "!root x\n  equation: x^2 = 2", "caret": 24, "prose": false}
+    {"text": "!root x\n  equation: x^2 = 2", "caret": 24, "prose": false},
+    {"text": "!plot f(x), x = 0 .. 1\n  points: t, s", "caret": 35, "prose": false},
+    {"text": "!regression a\n  model: f(x) = a*x", "caret": 30, "prose": false}
   ]
 }

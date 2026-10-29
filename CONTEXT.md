@@ -57,6 +57,9 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Regression block**
 : `!regression a, b, c` with a `data:` line: a least-squares polynomial through points, the columns of a 2-row matrix (x row, y row) or two vectors. The header names the coefficients, lowest power first, or one name holds them all as a vector (with `degree:`). A `model:` line (`f(x, z) = a + b*x*z`) fits that function instead: its parameters are the data's variables (a vector or matrix row each, then y), the header names its coefficients, and their units are worked out from it. It is fitted every time the sheet runs, so it has no stored result and no Run; it defines its names (and the `r2:` name, and a model's function) like an assignment.
 
+**Points**
+: Data drawn as markers on a plot, given as a **regression block**'s data is (`regression.columns`): a 2-row matrix or two vectors. A `points:` line adds a set after the plot's functions; a `!plot` header with no range (`!plot t, s`) plots points alone, its x range fitted to them.
+
 **Collapsed matrix**
 : A matrix with more than 8 rows or columns, shown by its first 3 and last 2 rows and columns with ⋮, ⋯ and ⋱ between: in the results pane until the row's button shows it whole (`static/matrixview.js`), and always in a document (`exports.collapse_matrices`). A line's LaTeX snippet keeps it whole.
 

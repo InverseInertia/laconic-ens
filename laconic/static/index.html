@@ -468,7 +468,10 @@ Tc   = props("Tcrit", "Water")       <i>fixed properties need no state</i></pre>
     <pre>!plot M(x), V(x), x = 0'm .. L
   title: Bending moment
   ylabel: M (kN&middot;m)
-  color 2: red</pre>
+  color 2: red
+  points: D               <i>measured points over the curves: an x row and a y row, or x, y</i>
+
+!plot t, s                <i>points alone: two vectors, or a matrix D</i></pre>
     <p>Indented <code>key: value</code> lines set the details; <code>!plotspec key: value</code> sets a default for every plot below it. Drag the plot to pan, <kbd>Ctrl</kbd> + wheel to zoom, double-click to reset. The new view is written back into the sheet as <code>xview:</code> and <code>yview:</code> lines, so <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes it. Each plot saves as SVG or PNG, and the LaTeX export draws it with <code>pgfplots</code>.</p>
 
     <h3>Solving and optimizing <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Solving-and-Optimizing" target="_blank" rel="noopener">Solving and Optimizing</a></h3>

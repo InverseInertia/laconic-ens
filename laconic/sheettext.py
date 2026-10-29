@@ -234,7 +234,7 @@ def _header_spans(text):
 
 
 def _plot_spans(text, o):
-    if o.key in PLOT_LIMIT_KEYS:
+    if o.key in PLOT_LIMIT_KEYS or o.key == "points":
         return (o.value_span,)
     if o.key == "note":
         at, close = re.search(r'"\s+at\s*\(', text), text.rfind(")")

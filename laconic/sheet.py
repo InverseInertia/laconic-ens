@@ -199,9 +199,9 @@ def _run_plot(i, raw, block, ev, fmt, used):
         nodes.append(node)
         return node
     try:
-        series, var, lo, hi = parse_plot(block.args)
+        series, var, lo, hi, points = parse_plot(block.args)
         b = Builder(ev, fmt, parse)
-        spec = b.build(i, series, var, lo, hi, opts)
+        spec = b.build(i, series, var, lo, hi, opts, points)
     except Exception as e:
         return LineResult(i, raw, "error", error=describe(e), block=block), owned
     for n, msg in b.errors:

@@ -1,6 +1,6 @@
 # Plots
 
-A `!plot` line draws one or more functions of one variable over a range. It is a command, so `plot` stays available as an ordinary name. Indented `key: value` lines under it set the details.
+A `!plot` line draws one or more functions of one variable over a range, and [points](#points) such as measurements. It is a command, so `plot` stays available as an ordinary name. Indented `key: value` lines under it set the details.
 
 ```
 !plot M(x), V(x), x = 0'm .. L
@@ -32,8 +32,26 @@ Where an expression is undefined (`1/x` at 0, `sqrt` of a negative) the line bre
 | `gaps` | `break` or `error` (`break`) |
 | `color`, `width`, `dash`, `marker`, `label` | per series. `color 2: red` is series 2; with no number it applies to every series. Colors are `#rrggbb`, `#rgb` or a name (`red`, `blue`, `green`, `orange`, `purple`, `sky`, `gray`, `black`, `navy`). `dash`: `solid`, `dashed`, `dotted`. `marker`: `none`, `circle`, `square` |
 | `note` | `"text" at (x, y)`: a dot and a label at a point in data coordinates. Repeat the line for more |
+| `points` | `D` or `x, y`: a set of points drawn as markers, read as `!regression` reads its `data:`. Repeat the line for more; see [Points](#points) |
 
 Options are checked as they are read. A bad one is reported on its own line and the plot is drawn without it (a bad `xview` falls back to `xlim`, then to automatic). A plot is limited to 100,000 points (series times samples) because it is redrawn on every edit.
+
+## Points
+
+Points are given as `!regression` takes its data: a matrix with an x row and a y row, one column per point, or two vectors of the same length (row or column), which may have units of their own.
+
+```
+t = [0, 1, 2, 3, 4, 5] * 's
+v = [10, 6.07, 3.68, 2.23, 1.35, 0.82] * 'm/'s
+!plot f(x), x = 0's .. 5's           a curve, with the measurements over it
+  points: t, v
+  label 2: measured
+
+!plot t, v                           points alone: no range, the axes fit the points
+!plot D                              or a matrix with an x row and a y row
+```
+
+Each `points:` line is a series after the functions, numbered in order, so `color 2:`, `marker 2:` and `label 2:` style it. Points are drawn as markers with no line between them: a circle unless `marker: square`. Their values are converted to the axes' units, and a set whose units do not fit an axis is reported on its line. The label is the y vector's name, or the matrix's. A plot of points alone takes its axis names from the two vectors (`t [s]`, `v [m/s]`) and its x range from the points, with 5% to spare.
 
 ## Defaults come in three layers
 
