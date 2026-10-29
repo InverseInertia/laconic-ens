@@ -56,6 +56,7 @@
     comment: text,
     meta: text,
     command: (r) => ({ type: 'text', text: r.source.trim() + '  →  ' + r.text }),
+    symdef: text,
     error: (r) => ({ type: 'error', source: r.source.trim(), message: r.error }),
     plot: () => ({ type: 'plot' }),
     solver: () => ({ type: 'solver' }),

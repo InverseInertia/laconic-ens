@@ -35,15 +35,16 @@
   const IDENT_RE = /[\p{L}\p{N}_°∞∀]/u;   // ∞ for subscripts such as v_∞, ∀ for volume
   const SIMPLE_RE = /^-?[\p{L}\p{N}_.'°][\p{L}\p{N}_.'°%^]*$/u;
   const isIdent = (c) => c !== undefined && IDENT_RE.test(c);
-  // % appears only in the unit '%, so it belongs to the term like a unit's letters.
-  const isTok = (c) => isIdent(c) || c === '.' || c === "'" || c === '~' || c === '%';
+  // % appears only in the unit '%, so it belongs to the term like a unit's letters; $ only in front
+  // of a symbol being declared ($x), so it belongs to that name like a global's ~.
+  const isTok = (c) => isIdent(c) || c === '.' || c === "'" || c === '~' || c === '$' || c === '%';
 
   // The worksheet lexer, the same as laconic/sheettext.py (tests/sheettext_vectors.json holds
   // them together): quoted text, units, numbers and names. Python's \w is Unicode, so the
   // classes are spelled out here.
   const W = '[\\p{L}\\p{N}_∀]', W0 = '[\\p{L}\\p{Nl}\\p{No}_∀]';
   const TOKEN_RE = new RegExp('("[^"\\n]*")' + `|('(?:(?:${W0}|°)(?:${W}|°)*|%))`
-    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?${W0}(?:_∞|${W})*[\`!@&]*)`, 'gu');
+    + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?\\$?${W0}(?:_∞|${W})*[\`!@&]*)`, 'gu');
   const KINDS = ['text', 'unit', 'num', 'name'];
   // The tokens of one line: [{kind, start, text}], left to right.
   function tokens(line) {
@@ -65,6 +66,16 @@
     const at = /"\s+at\s*\(/.exec(line), close = line.lastIndexOf(')');
     const from = at ? at.index + at[0].length : -1;
     return !(at && close > from && p - ls >= from && p - ls <= close);
+  }
+  // The browser may spellcheck the selection's lines when every one is prose: a comment or heading
+  // (not a `#@` line LENS writes), or a plot's title, label or note. A solver's `method:` is a
+  // name, not prose. The editor is one textarea, so its spellcheck follows the caret's lines.
+  function isProse(t, s, e) {
+    for (let ls = lineStartOf(t, s); ; ls = lineEndOf(t, ls) + 1) {
+      const line = t.slice(ls, lineEndOf(t, ls)), m = TEXT_OPTION.exec(line), head = line.trimStart();
+      if (!(head.startsWith('#') ? !head.startsWith('#@') : m && m[1] !== 'method')) return false;
+      if (lineEndOf(t, ls) >= (e === undefined ? s : e)) return true;
+    }
   }
   const edit = (from, to, insert, caret) => ({ from, to, insert, caret });
 
@@ -603,7 +614,7 @@
     const end = a;
     while (a > ls && isIdent(t[a - 1])) a--;
     if (a === end || !/[\p{L}_∀]/u.test(t[a])) return -1;               // no name, or a number such as 1e5
-    if (a > ls && "~'.!".includes(t[a - 1])) return -1;                // has its ~, a unit, after a point, a command
+    if (a > ls && "~'.!$".includes(t[a - 1])) return -1;               // has its ~, a unit, after a point, a command, a symbol's $
     if (FUNC_HEAD.test(t.slice(ls, a))) return -1;                      // a function's own parameters
     const name = t.slice(a, s), line = t.slice(0, s).split('\n').length;
     return Symbols.visible(symbols, line).some((g) => g.global && g.name === name) ? a : -1;
@@ -757,7 +768,7 @@
     DEFAULT_GREEK, charAction, keyAction, indentLines, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
-    isTextAt,
+    isTextAt, isProse,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Editing = api;

@@ -668,3 +668,32 @@ def test_serve_socket_listens_before_the_server_starts():
             cli._listen(port)
     finally:
         sock.close()
+
+
+def test_app_window_profile_has_spellcheck_on(monkeypatch, tmp_path):
+    """#121 spellchecks comments and headings, but the app window's profile on Linux is LENS's
+    own, with none of the user's settings: LENS turns spellcheck on in it, with a dictionary for
+    the user's language, and leaves a profile where it was already set alone."""
+    import json
+    from laconic import browser
+    for var in ("LC_ALL", "LC_MESSAGES"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("LANG", "en_GB.UTF-8")
+    prefs = tmp_path / "Default" / "Preferences"
+    browser.spellcheck_on(tmp_path)
+    assert json.loads(prefs.read_text()) == {"browser": {"enable_spellchecking": True},
+                                             "spellcheck": {"dictionaries": ["en-GB"]}}
+    prefs.write_text(json.dumps({"browser": {"enable_spellchecking": False}, "x": 1}))
+    browser.spellcheck_on(tmp_path)   # turned off from the window's menu: stays off
+    assert json.loads(prefs.read_text())["browser"]["enable_spellchecking"] is False
+    prefs.write_text(json.dumps({"spellcheck": {"dictionaries": ["de-DE"]}, "x": 1}))
+    browser.spellcheck_on(tmp_path)   # the browser's other settings and dictionaries are kept
+    assert json.loads(prefs.read_text()) == {"browser": {"enable_spellchecking": True}, "x": 1,
+                                             "spellcheck": {"dictionaries": ["de-DE"]}}
+    prefs.write_text("{not json")
+    browser.spellcheck_on(tmp_path)   # a profile it cannot read is not touched
+    assert prefs.read_text() == "{not json"
+    monkeypatch.setenv("LANG", "C.UTF-8")
+    assert browser._dictionary() == "en-US"
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    assert browser._dictionary() == "de-DE"

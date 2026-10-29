@@ -4,6 +4,7 @@ Any browser built on Chromium will do (Chrome, Chromium, Edge, Brave, Vivaldi, O
 rest all take `--app`, `--class`, `--user-data-dir` and `--print-to-pdf`). The user's default
 browser comes first when it is one of them, so a Brave user gets Brave rather than a Chrome that
 happens to be installed too (#72). LENS_CHROMIUM names one by hand and beats both."""
+import json
 import os
 import re
 import shutil
@@ -192,3 +193,36 @@ def profile_dir(exe):
     name = re.sub(r"[^A-Za-z0-9._-]", "_", Path(os.path.realpath(exe)).name) or "browser"
     cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
     return cache / "laconic-lens" / f"browser-{name}"
+
+
+def spellcheck_on(profile):
+    """Turn the browser's spellchecker on in the app window's own profile, with a dictionary for
+    the user's language, so comments and headings are spellchecked (#121) in a profile that has
+    none of the user's own settings. A profile where spellcheck was already set is left as it is,
+    so turning it off from the window's menu sticks."""
+    prefs = Path(profile) / "Default" / "Preferences"
+    try:
+        data = json.loads(prefs.read_text(encoding="utf-8")) if prefs.exists() else {}
+    except (OSError, ValueError):
+        return
+    if not isinstance(data, dict) or "enable_spellchecking" in (data.get("browser") or {}):
+        return
+    data.setdefault("browser", {})["enable_spellchecking"] = True
+    spell = data.setdefault("spellcheck", {})
+    if not spell.get("dictionaries"):
+        spell["dictionaries"] = [_dictionary()]
+    try:
+        prefs.parent.mkdir(parents=True, exist_ok=True)
+        prefs.write_text(json.dumps(data), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _dictionary():
+    """The spellcheck dictionary for the user's locale, as Chromium names them ("en-GB"), else en-US."""
+    for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
+        m = re.match(r"([a-z]{2,3})(?:_([A-Z]{2}))?", os.environ.get(var, ""))
+        if m:
+            return m.group(1) + (f"-{m.group(2)}" if m.group(2) else "")
+    return "en-US"
+

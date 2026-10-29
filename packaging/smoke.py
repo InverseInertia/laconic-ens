@@ -22,6 +22,9 @@ try:
     else:
         sys.exit("server did not start")
     assert "{{version}}" not in page, "version marker left in the page"
+    # Help ends with the changelog, which the build copies into the program (laconic/changelog.py).
+    assert "<h4>" in page.split('id="changelog"')[1] and "not included in this copy" not in page, \
+        "Help has no changelog"
     if len(sys.argv) > 2:
         assert f'id="version">{sys.argv[2]}<' in page, f"page does not show version {sys.argv[2]}"
     for path in ("/static/vendor/katex/katex.min.js", "/static/vendor/d3/d3.min.js", "/static/plotview.js",
@@ -31,6 +34,11 @@ try:
                                  headers={"Content-Type": "application/json"})
     out = urllib.request.urlopen(req, timeout=10).read().decode()
     assert "6" in out, out
+    # Symbolic math: sympy is imported only once a sheet declares a symbol, so freezing must keep it.
+    req = urllib.request.Request(base + "/api/eval", data=json.dumps({"text": "$x\n!symsolve x\n  equation: 2*x = 1"}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    rows = json.loads(urllib.request.urlopen(req, timeout=20).read())
+    assert rows[1]["text"] == "x = 1/2", rows[1]
     # A plot draws, and its standalone SVG finds the font file it embeds.
     body = {"text": "!plot sin(x), x = 0 .. 6", "line": 1}
     req = urllib.request.Request(base + "/api/plotimage", data=json.dumps(body).encode(),

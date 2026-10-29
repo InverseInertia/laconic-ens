@@ -57,7 +57,9 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `solver.py` | `!root` / `!minimize` / `!maximize`: block parsing, the input hash, the scipy calls, the stored `#@ result` line (written through the block editor) |
 | `solvesession.py` | The solve session: which blocks need solving, running one behind a runner seam (in-process `solve`, or the worker's `Jobs.run`), run or verify, and storing a result in every block whose inputs hash the same. The server, the worker and `lens --solve` call it |
 | `solverjobs.py` | The worker process that runs a solve, so it can be interrupted; `Jobs.run` is its runner for the solve session |
-| `regression.py` | `!regression`: block parsing and the least-squares polynomial fit, with each coefficient's units. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
+| `symbolic.py` | Symbolic math through sympy (imported only when a sheet declares a symbol): the sympy expression built from the AST, numbers with units held as stand-ins so Pint does their arithmetic, late binding of symbols to the values where they are used, the sympy-to-Pint walk for an expression whose symbols all have values, the sympy LaTeX and plain printers with the sheet's names and numbers, and the `!symsolve` solve |
+| `symsolve.py` | `!symsolve`: block parsing only (no sympy), so the editor's vocabulary can list its options. Run by `sheet.py` every time the sheet runs; the block is read by `sheettext` as a solver block |
+| `regression.py` | `!regression`: block parsing and the least-squares fit of a polynomial or a `model:` of any form in one or more variables, with each coefficient's units (a model's worked out from its dimensions); `columns` reads points, which a plot's `points:` shares. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
@@ -85,7 +87,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `api.js` | The page's one client of the server: JSON and text requests, keepalive saves and beacons. An `{ok: false, error}` answer is the caller's to read; an HTTP error throws its `detail` |
 | `prefs.js` | Where each setting is kept: the display preferences (the keys the server writes into the page) on the server, the rest in browser storage, with older builds' prefixes read once. The page passes a storage adapter |
 | `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table. Also the open list: when it opens, what each key does, Ctrl+Space wrapping |
-| `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line. An adapter of `symbols.py`; it applies no scope rule of its own |
+| `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line (globals, and symbols declared with `$`). An adapter of `symbols.py`; it applies no scope rule of its own |
 | `paste.js` | Table paste to matrix, pure functions |
 | `unitbrowser.js` | The units dialog: which units a search and a tag list, and adding and removing the user's tags, as pure functions |
 | `savefile.js` | Save file policy: reuse the open file or ask, the file name, the download fallback. The page passes an adapter over the File System Access API |
@@ -103,7 +105,7 @@ The example worksheets live in `laconic/examples/` and are served by `/api/examp
 
 The pure-function JS files also load under Node, which is how they are tested without a browser.
 
-The editor never works out scope itself. Autocomplete, the `~` that Math keys add to a global and the global marks all read the symbol table of the last evaluation (`symbols.js`); between a keystroke and the next response they use the last table.
+The editor never works out scope itself. Autocomplete, the `~` that Math keys add to a global and the global and symbol marks all read the symbol table of the last evaluation (`symbols.js`); between a keystroke and the next response they use the last table.
 
 The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and solver-block readers (`Autocomplete.definition`, `solverBlock`), its prose rule (`Editing.isTextAt`) and the name F2 fills in (`Editing.nameAt`), since it reads text as it is typed. They are adapters of `sheettext.py` across the HTTP seam: `tests/sheettext_vectors.json` is run by both `test_sheettext.py` and `test_sheettext.js`, so a change to one side that the other lacks fails a test.
 

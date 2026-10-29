@@ -5,12 +5,15 @@ import subprocess
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
+# laconic.symbolic imports sympy only when a sheet declares a symbol; collecting laconic's
+# submodules lets PyInstaller follow it there (smoke.py checks a symbolic solve in the build).
 hidden = (collect_submodules("laconic") + collect_submodules("uvicorn") + ["CoolProp.CoolProp"]
           + collect_submodules("scipy.optimize"))
 ROOT = os.path.dirname(SPECPATH)  # SPECPATH is the directory holding this file
 ICON = os.path.join(SPECPATH, "icon.png")  # rendered from laconic/static/logo.svg; PyInstaller converts it (needs Pillow)
 datas = [(os.path.join(ROOT, "laconic", "static"), "laconic/static"),
          (os.path.join(ROOT, "laconic", "examples"), "laconic/examples"),
+         (os.path.join(ROOT, "CHANGELOG.md"), "laconic"),  # shown in Help (laconic/changelog.py)
          (os.path.join(SPECPATH, "file-icon.ico"), ".")] + collect_data_files("pint")  # see laconic/fileassoc.py
 
 a = Analysis(

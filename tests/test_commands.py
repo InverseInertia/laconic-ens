@@ -17,6 +17,8 @@ CASES = {
               and rs[7].text == "Nothing to clear. Kept globals ~g, ~h"),
     "clearf": ("f(x) = x^2\n~g(x) = 2*x\n!clearf\ng(3)\nf(2)", 3, "Cleared f. Kept global ~g",
                lambda rs: rs[3].text == "6" and "removed by !clearf" in rs[4].error),
+    "clearsym": ("$x, ~$g, $m\nm = 2\na = 4\n!clearsym\nb = a + m\nx\ng + 1", 4, "Cleared x. Kept global ~g",
+                 lambda rs: rs[4].text == "b = 6" and "removed by !clearsym" in rs[5].error and not rs[6].error),
     "noassume": ("F = 10'kN\n!noassume\nM = F*2'm\nN = M -> 'N*'m", 2, "Units are kept as typed unless converted with ->",
                  lambda rs: rs[2].text.startswith("M = 20 kN") and rs[3].text.startswith("N = 20000 ")),
     "assume": ("!noassume\n!assume\nM = 10'kN*2'm", 2, "Units are reduced to SI again",
@@ -53,6 +55,7 @@ CASES = {
     "maximize": ("x = 1\n!maximize x\n  objective: -(x - 2)^2", 2, None, lambda rs: rs[1].kind == "solver"),
     "regression": ("D = [0, 1, 2; 1, 3, 5]\n!regression a, b\n  data: D", 2, None,
                    lambda rs: rs[1].kind == "regression"),
+    "symsolve": ("$x\n!symsolve x\n  equation: 2*x = 1", 2, None, lambda rs: rs[1].kind == "symsolve"),
 }
 
 # A bad line for each argument rule, and what its error says.
@@ -77,8 +80,8 @@ def test_command(command):
     if text is not None:
         assert (rs[n - 1].kind, rs[n - 1].text) == ("command", text)
     assert after(rs)
-    if command.name in ("root", "minimize", "maximize", "regression"):
-        return                      # a bare `!root` is still a block, reported by solver.py or regression.py
+    if command.name in ("root", "minimize", "maximize", "regression", "symsolve"):
+        return                      # a bare `!root` is still a block, reported by solver.py, regression.py or symsolve.py
     line, error = (f(command) for f in BAD[type(command.args)])
     r = run(line)[0]
     assert r.kind == "error" and error in r.error

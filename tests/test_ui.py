@@ -327,6 +327,21 @@ def test_pasted_table_becomes_matrix(page):
     assert value(page) == "# note "
 
 
+def test_help_ends_with_the_changelog_and_the_link_scrolls_to_it(page):
+    page.click("#helpBtn")
+    page.wait_for_selector("#helpDlg[open]")
+    url = page.url
+    assert page.locator("#changelog h4").count() > 0
+    assert page.evaluate("document.querySelector('#helpDlg .dlg-body').lastElementChild.id") == "changelog"
+    page.click("#changelogLink")
+    page.wait_for_function("""() => { const b = document.querySelector('#helpDlg .dlg-body').getBoundingClientRect(),
+        t = document.querySelector('#changelog').getBoundingClientRect(); return Math.abs(t.top - b.top) < 40; }""")
+    assert page.url == url   # the address is left alone
+    page.click("#changelogTop")
+    page.wait_for_function("document.querySelector('#helpDlg .dlg-body').scrollTop == 0")
+    page.click("#helpDlg .close")
+
+
 def test_help_dialog_opens_and_links_to_keys(page):
     page.click("#helpBtn")
     page.wait_for_selector("#helpDlg[open]")
@@ -442,6 +457,22 @@ def test_globals_are_marked_and_get_their_tilde(page):
     assert page.evaluate("getComputedStyle(document.querySelector('#out [data-global]')).borderBottomStyle") == "none"
     page.click("#globalsChip")
     assert page.is_checked("#markGlobals") and page.is_hidden("#globalsChip")
+
+
+def test_symbols_are_marked_and_their_results_typeset(page):
+    reset(page, "$a, ~$g\ny = a*g\n!symsolve a\n  equation: y = 2\nz = a")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector("#out .row[data-line='3'] [data-global='g']")   # the evaluation is on screen
+    assert "symbols a, ~g" in page.inner_text("#out .row[data-line='1']")
+    # the solve's row typesets a = 2/g, with g tagged as the global it is
+    assert page.locator("#out .row[data-line='3'] .katex .mfrac").count() == 1
+    assert page.locator("#out .row[data-line='3'] [data-global='g']").count() == 1
+    page.wait_for_selector("#srcMarks mark.sym")
+    marks = page.evaluate("[...document.querySelectorAll('#srcMarks mark.sym')].map(m => [m.textContent, m.dataset.global || ''])")
+    assert marks[:4] == [["$a", ""], ["~$g", "g"], ["a", ""], ["g", "g"]]
+    page.keyboard.type("\n$g")            # the editor never puts a ~ inside a declaration
+    page.keyboard.press("Enter")
+    assert value(page).endswith("\n$g\n")
 
 
 def test_each_kind_of_line_shows_its_row(page):
@@ -636,16 +667,17 @@ def test_pdf_export_shows_progress_and_prints_from_a_hidden_frame(page):
       window.__api = [];
       const f = window.fetch;
       window.fetch = (u, o) => { window.__api.push(String(u)); return f(u, o); };
-      // The page calls print() once the frame's fonts are in, a promise after its load event,
-      // so a stub put in on load is always in place by then.
-      new MutationObserver(() => {
-        for (const fr of document.querySelectorAll('iframe.printFrame'))
-          if (!fr.__hooked) { fr.__hooked = true; fr.addEventListener('load', () => {
-            fr.contentWindow.print = () => window.__prints.push({
-              katex: fr.contentDocument.querySelectorAll('.math .katex').length,
-              fonts: fr.contentDocument.fonts.status,
-              busy: document.querySelector('#exportBtn').getAttribute('aria-busy')}); }); }
-      }).observe(document.body, {childList: true});
+      // The page calls print() from the frame's onload once its fonts are in. When they already
+      // are, that runs as a microtask straight after onload, before any later load listener on
+      // the frame, so the stub goes in from a capture listener, which runs ahead of onload.
+      document.addEventListener('load', e => {
+        const fr = e.target;
+        if (!(fr instanceof HTMLIFrameElement) || !fr.classList.contains('printFrame')) return;
+        fr.contentWindow.print = () => window.__prints.push({
+          katex: fr.contentDocument.querySelectorAll('.math .katex').length,
+          fonts: fr.contentDocument.fonts.status,
+          busy: document.querySelector('#exportBtn').getAttribute('aria-busy')});
+      }, true);
     }""")
     held = []
     page.route("**/api/export/print", lambda route: held.append(route))
@@ -683,3 +715,27 @@ def test_export_menu_stays_in_the_window_when_the_toolbar_wraps(page):
         if page.is_hidden("#exportList"):
             page.click("#exportBtn")
         page.wait_for_function(inside, timeout=2000)   # the toolbar rewraps a frame or two after the resize
+
+
+def test_spellcheck_follows_the_caret_onto_comments_and_headings(page):
+    # spellcheck is set on keyup and on selectionchange, so wait for it to settle.
+    def spell(want):
+        page.wait_for_function(f"document.querySelector('#src').spellcheck === {str(want).lower()}")
+    reset(page, "## Beam\n# a coment\nx = 3")
+    page.keyboard.type(" ")
+    spell(False)                    # the caret is on a calculation
+    page.keyboard.press("ArrowUp")
+    spell(True)                     # a comment
+    page.keyboard.press("Control+Home")
+    spell(True)                     # a heading
+    page.keyboard.press("Control+End")
+    page.keyboard.press("Home")
+    page.keyboard.type("# ")
+    spell(True)                     # the calculation became a comment
+    page.keyboard.press("Backspace")
+    page.keyboard.press("Backspace")
+    spell(False)                    # and back again
+    select(page, 0, 12)
+    spell(True)                     # a selection over the heading and the comment
+    select(page, 0, len("## Beam\n# a coment\nx"))
+    spell(False)                    # one that reaches the calculation
