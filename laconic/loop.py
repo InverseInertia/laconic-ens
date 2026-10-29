@@ -24,7 +24,7 @@ from .nodes import Call, Name
 from .parser import ParseError, parse_expr
 from .sheettext import IDENT, NAME
 
-MAX_LINES = 10_000      # lines run in one block, all passes together: the sheet runs on every keystroke
+MAX_LINES = 10_000      # lines and passes run in one block, all together: the sheet runs on every keystroke
 _HEAD_RE = re.compile(rf"^({IDENT})\s*=\s*(.+?)\s*\.\.\s*(.+)$")
 _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 _ENTRY_RE = re.compile(r"^(idx|elem)\s*\((.*)\)\s*=(?!=)\s*(.+)$")
@@ -209,6 +209,15 @@ def run(block, ev, describe=str):
     scope, values, copied, here = dict(ev.vars), {}, set(), []
     count = [0]
 
+    def tick(n):
+        """Count a line or a pass (a pass of a loop whose lines are all loops that run no times costs
+        time too) and stop the block past MAX_LINES."""
+        count[0] += 1
+        if count[0] > MAX_LINES:
+            raise StepError(n, f"The loop ran more than {MAX_LINES:,} lines, so it was stopped, since "
+                               "the sheet runs on every keystroke. For a whole vector or matrix at "
+                               "once, use its operators (v .* v, sum(v))", where())
+
     def bounds(loop):
         ends = []
         for x in (loop.lo, loop.hi):
@@ -274,15 +283,13 @@ def run(block, ev, describe=str):
             scope[loop.index] = ev.Q(float(k))
             here.append(f"{loop.index} = {k}")
             passes += 1
+            if not any(not isinstance(s, Loop) for s in loop.steps):
+                tick(loop.n)
             for s in loop.steps:
                 if isinstance(s, Loop):
                     steps(s)
                     continue
-                count[0] += 1
-                if count[0] > MAX_LINES:
-                    raise StepError(s.n, f"The loop ran more than {MAX_LINES:,} lines, so it was stopped, since "
-                                         "the sheet runs on every keystroke. For a whole vector or matrix at "
-                                         "once, use its operators (v .* v, sum(v))", where())
+                tick(s.n)
                 try:
                     if isinstance(s, Entry):
                         key = entry(s)

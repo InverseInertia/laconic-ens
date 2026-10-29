@@ -96,6 +96,9 @@ def test_an_error_inside_names_every_index():
 def test_a_long_loop_is_stopped():
     rs = run("!loop i = 1 .. 200\n  !loop j = 1 .. 200\n    x = j")
     assert rs[2].error.startswith(f"The loop ran more than {MAX_LINES:,} lines")
+    # a pass whose inner loop runs no times still counts, so a huge range cannot hang the sheet
+    rs = run("!loop i = 1 .. 10^9\n  !loop j = 1 .. 0\n    x = j")
+    assert rs[0].error.startswith("The loop ran more than") and rs[0].error.endswith("(at i = 10001)")
 
 
 def test_lines_that_do_not_read():
