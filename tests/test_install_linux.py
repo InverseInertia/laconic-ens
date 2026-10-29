@@ -141,6 +141,27 @@ def test_installs_the_latest_release_and_updates_to_a_newer_one(tmp_path, github
     assert [p.name for p in (home / ".local/share/laconic-lens/_internal").iterdir()] == ["lib-0.4.0.so"]
 
 
+def test_keeps_a_copy_of_itself_in_the_install_folder(tmp_path, downloads):
+    """LENS's Update button runs that copy (laconic/updates.py)."""
+    _, home = run(tmp_path)
+    kept = home / ".local/share/laconic-lens/install-linux.sh"
+    assert kept.read_text() == (ROOT / "packaging" / "install-linux.sh").read_text()
+    assert os.access(kept, os.X_OK)
+
+
+def test_the_kept_copy_updates_lens_even_run_from_the_folder_it_replaces(tmp_path, github):
+    release(github, "0.3.5")
+    latest(github, "0.3.5")
+    _, home = run(tmp_path)
+    release(github, "0.4.0")
+    kept = home / ".local/share/laconic-lens/install-linux.sh"
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "HOME": str(home), "FAKE_GITHUB": str(github)}
+    r = subprocess.run(["sh", str(kept), "--release", "0.4.0"], env=env, capture_output=True, text=True, check=True)
+    assert "Updating LENS 0.3.5 -> 0.4.0" in r.stdout
+    assert installed(home) == (program("0.4.0"), "0.4.0")
+    assert kept.read_text() == (ROOT / "packaging" / "install-linux.sh").read_text()
+
+
 def test_a_download_that_is_not_a_program_archive_changes_nothing(tmp_path, github):
     release(github, "0.3.5")
     latest(github, "0.3.5")

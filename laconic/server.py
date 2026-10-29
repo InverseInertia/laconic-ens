@@ -19,7 +19,7 @@ from . import changelog, evaluate as evaluate_sheet, snippet
 from .exports import export as export_sheet
 from .sheet import block_at
 from .sheettext import scan
-from . import settings, unittags
+from . import settings, unittags, updates
 from .blockedit import to_json
 from ._version import label as version_label
 from .commands import help_rows
@@ -105,6 +105,10 @@ class PrefsBody(BaseModel):
     prefs: dict[str, Any]   # key -> new value; None removes it
 
 
+class UpdateBody(BaseModel):
+    version: str   # the release the page offered, so Update installs only what the user saw
+
+
 class UnitRow(BaseModel):
     name: str
     definition: str
@@ -150,7 +154,10 @@ def index():
     page = (STATIC / "index.html").read_text(encoding="utf-8").replace("/static/", ASSETS + "/")
     # In the page, not fetched, so the theme and the rest are there before the page first draws.
     # "<" escaped, so no value can close the script element it sits in.
-    prefs = json.dumps(settings.load()["prefs"]).replace("<", "\\u003c")
+    stored = settings.load()["prefs"]
+    prefs = json.dumps(stored).replace("<", "\\u003c")
+    if stored.get("checkUpdates") is not False:
+        updates.updater.check()   # in the background; the page asks for the answer later
     return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
                         .replace(CHANGELOG_MARKER, changelog.html())
                         .replace(PREFS_MARKER, prefs).replace(PREF_KEYS_MARKER, json.dumps(list(settings.PREFS))),
@@ -316,6 +323,24 @@ def get_settings():
 def put_prefs(body: PrefsBody):
     settings.save_prefs(body.prefs)
     return {"ok": True}
+
+
+@app.get("/api/update")
+def get_update(wait: float = 0):
+    """A newer release, if there is one: {"checking", "update"} (updates.py). `wait` is how long
+    to wait for the lookup, at most 10 s. Nothing is looked up when the user turned it off."""
+    if settings.load()["prefs"].get("checkUpdates") is False:
+        return {"checking": False, "update": None, "off": True}
+    return updates.updater.result(min(max(wait, 0.0), 10.0))
+
+
+@app.post("/api/update")
+def post_update(body: UpdateBody):
+    """Install the newer release: start its installer, after which this LENS exits."""
+    found = updates.updater.result()["update"]
+    if found is None or found["version"] != body.version:
+        return {"ok": False, "error": "That release is not the one on offer."}
+    return updates.updater.update()
 
 
 @app.put("/api/welcomed")
