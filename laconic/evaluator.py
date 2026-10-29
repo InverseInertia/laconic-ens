@@ -742,6 +742,11 @@ class Evaluator:
         """Material and fluid properties from CoolProp: props("D", "T", 300'K, "P", 1'atm, "Water")."""
         return _props.props(self.ureg, out, *args)
 
+    @builtin('haprops("W", "T", T, "P", p, "R", rh)')
+    def fn_haprops(self, out, *args):
+        """Humid air properties from CoolProp: haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)."""
+        return _props.haprops(self.ureg, out, *args)
+
     # ---- checks -----------------------------------------------------------
     def check_finite(self, q, expr=None):
         """NaN is always an error. Infinity is too, unless `expr` reaches a typed-in ∞

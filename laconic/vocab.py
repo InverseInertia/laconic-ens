@@ -107,11 +107,14 @@ COMMON_FLUIDS = ("Water", "Air", "Nitrogen", "Oxygen", "CarbonDioxide", "Ammonia
 def props_vocabulary():
     """Keys and fluids for the strings inside props(...). Separate from vocabulary() because importing
     CoolProp takes a few seconds; the page asks for this only once a props string is being typed.
-    keys: [key, description, SI unit, usable as a state input, fixed for a fluid (needs no state)]"""
+    keys: [key, description, SI unit, usable as a state input, fixed for a fluid (needs no state)];
+    humid: the same for haprops(...), whose keys are fixed for none."""
+    from .props import HA_KEYS
+    humid = [[k, desc, unit, inp, False] for k, (unit, desc, inp) in HA_KEYS.items()]
     try:
         import CoolProp.CoolProp as cp
     except ImportError:
-        return {"keys": [], "fluids": []}
+        return {"keys": [], "fluids": [], "humid": humid}
     keys = []
     for k in PROPS_KEYS:
         try:
@@ -141,4 +144,4 @@ def props_vocabulary():
     for name in cp.get_global_param_string("incompressible_list_solution").split(","):
         if name:
             fluids.append([f"INCOMP::{name}[0.3]", "incompressible solution; [0.3] is the fraction, edit it"])
-    return {"keys": keys, "fluids": fluids}
+    return {"keys": keys, "fluids": fluids, "humid": humid}

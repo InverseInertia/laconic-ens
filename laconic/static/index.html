@@ -495,8 +495,9 @@ M = zeros(3, 3)
     <h3>Material properties <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Material-Properties" target="_blank" rel="noopener">Material Properties</a></h3>
     <pre>rho  = props("D", "T", 20'degC, "P", 1'atm, "Water")
 Tsat = props("T", "P", 5'bar, "Q", 0, "Water") -> 'degC
-Tc   = props("Tcrit", "Water")       <i>fixed properties need no state</i></pre>
-    <p><code>props</code> looks up about 130 fluids, mixtures, humid air and brines from CoolProp, the way CoolProp's <code>PropsSI</code> does: the output key, up to two state inputs, then the fluid. Inputs take any compatible unit; the result is in SI, so convert it with <code>-&gt;</code>. Type <code>"</code> inside <code>props(</code> for the keys and fluids.</p>
+Tc   = props("Tcrit", "Water")       <i>fixed properties need no state</i>
+w    = haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)   <i>humid air</i></pre>
+    <p><code>props</code> looks up about 130 fluids, mixtures and brines from CoolProp, the way CoolProp's <code>PropsSI</code> does: the output key, up to two state inputs, then the fluid. Inputs take any compatible unit; the result is in SI, so convert it with <code>-&gt;</code>. Type <code>"</code> inside <code>props(</code> for the keys and fluids. <code>haprops</code> gives humid air the way <code>HAPropsSI</code> does: the output key and three state inputs, one of them the pressure (<code>R</code> relative humidity, <code>W</code> humidity ratio, <code>B</code> wet bulb, <code>D</code> dew point).</p>
 
     <h3>Plots <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Plots" target="_blank" rel="noopener">Plots</a></h3>
     <pre>!plot M(x), V(x), x = 0'm .. L
