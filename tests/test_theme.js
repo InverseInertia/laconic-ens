@@ -102,6 +102,14 @@ ok(Object.values(T.PRESETS).every((p) => T.contrast(p.ink, T.onInk(p)) >= T.MIN_
 eq(T.onInk({ paper: '#777777', text: '#808080', ink: '#7a7a7a' }), '#000000', 'neither readable: black or white');
 eq(T.cssVars({ ...T.defaults(), colors: T.PRESETS.Codec })['--on-ink'], T.PRESETS.Codec.text, 'as a CSS variable');
 
+// The chosen suggestion's fill stands out from the paper, and its text from the fill.
+eq(Object.fromEntries(Object.entries(T.PRESETS).map(([n, p]) => [n, T.highlight(p).fill === p.ink ? 'ink' : T.highlight(p).fill === p.rule ? 'rule' : 'text'])),
+  { ...Object.fromEntries(Object.keys(T.PRESETS).map((n) => [n, 'ink'])), Codec: 'rule' }, 'ink, but the rule color on Codec');
+ok(Object.values(T.PRESETS).every((p) => { const h = T.highlight(p); return T.contrast(h.fill, p.paper) >= T.MIN_CONTRAST && T.contrast(h.fill, h.text) >= T.MIN_CONTRAST; }),
+  'fill and text readable on every preset');
+eq(T.highlight(T.PRESETS.Codec).text, T.PRESETS.Codec.paper, 'dark text on Codec\'s mint fill');
+eq(T.cssVars({ ...T.defaults(), colors: T.PRESETS.Codec })['--hl'], T.PRESETS.Codec.rule, 'as a CSS variable');
+
 // Symbols are bright cyan on every preset.
 eq(Object.values(T.PRESETS).map((p) => p.symbol), Object.values(T.PRESETS).map(() => '#00e5ff'), 'cyan symbols everywhere');
 

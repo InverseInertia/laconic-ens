@@ -14,6 +14,7 @@
  *   presetOf(colors)         the preset with exactly these colors, or "custom"
  *   warning(colors)          the warning shown while text and paper are too close, or ""
  *   onInk(colors)            the color for text on an ink background
+ *   highlight(colors)        {fill, text}: the chosen suggestion's fill, which must stand out from the paper, and its text
  *   cssVars(theme)           {"--name": value} for the document root (--fs is the text size as a scale)
  *   toYaml(theme)            the theme as a YAML snippet, to copy and share
  *   fromYaml(text, current)  {theme, error}: a pasted YAML snippet over the current theme
@@ -110,6 +111,16 @@
     return contrast(colors.ink, '#000000') >= contrast(colors.ink, '#ffffff') ? '#000000' : '#ffffff';
   }
 
+  // The chosen suggestion is filled with ink where ink stands out from the paper; where it does not
+  // (Codec), with the rule or text color, whichever is first to; else whichever of them stands out most.
+  // Its text is then the paper or text color that reads better on that fill, as on ink.
+  function highlight(colors) {
+    const options = [colors.ink, colors.rule, colors.text];
+    const fill = options.find((c) => contrast(c, colors.paper) >= MIN_CONTRAST)
+      ?? [...options].sort((a, b) => contrast(b, colors.paper) - contrast(a, colors.paper))[0];
+    return { fill, text: onInk({ ...colors, ink: fill }) };
+  }
+
   function cssVars(theme) {
     const c = theme.colors;
     const vars = { '--sans': FONTS_SANS[theme.sans][1], '--mono': FONTS_MONO[theme.mono][1], '--fs': String((theme.size ?? 100) / 100) };
@@ -117,6 +128,9 @@
     vars['--paper-deep'] = `color-mix(in srgb, ${c.paper} 94%, ${c.text})`;
     vars['--text-soft'] = `color-mix(in srgb, ${c.text} 75%, ${c.paper})`;
     vars['--on-ink'] = onInk(c);
+    const hl = highlight(c);
+    vars['--hl'] = hl.fill;
+    vars['--on-hl'] = hl.text;
     vars['--hit'] = `color-mix(in srgb, ${c.text} 8%, transparent)`;
     // The logo is recolored from the theme: its blues are ink, text and rule, its accent is the error color.
     for (const [k, v] of Object.entries({
@@ -204,7 +218,7 @@
     return { theme, error: '' };
   }
 
-  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, SIZES, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, onInk, cssVars, toYaml, fromYaml };
+  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, SIZES, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, onInk, highlight, cssVars, toYaml, fromYaml };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Theme = api;
 })(typeof window !== 'undefined' ? window : globalThis);

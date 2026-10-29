@@ -321,6 +321,9 @@ def test_a_pressed_button_stays_readable_on_codec(page):
     page.wait_for_selector("#settingsDlg[open]")
     page.select_option("#preset", "Codec")
     assert page.evaluate(pressed) == "rgb(143, 227, 200)"        # Codec: its text color on ink
+    # the chosen suggestion is filled with Codec's rule color, which stands out from its paper, in dark text
+    hl = "getComputedStyle(document.documentElement).getPropertyValue(%r).trim()"
+    assert [page.evaluate(hl % "--hl"), page.evaluate(hl % "--on-hl")] == ["#4fd1b5", "#050d0d"]
     page.click("#themeReset")
 
 
