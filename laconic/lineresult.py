@@ -8,6 +8,7 @@ Every result answers one small interface, whatever its kind:
     r.text, r.latex, r.error,        its display parts, each empty when the line has none
     r.warning, r.stale
     r.latex_rows                     `latex` broken one stage per row, for a narrow layout
+    r.hidden                         below `!hide`: the line ran, but no row or export shows it
     r.block                          its block handle: the sheettext Block a header starts, else None
     r.symbols                        its part of the symbol table (see symbols.py)
 
@@ -114,6 +115,7 @@ class LineResult:
     error: str = ""
     warning: str = ""       # shown under the result: the line works but may not do what was meant
     stale: bool = False     # reads a value from a solver whose result is out of date
+    hidden: bool = False    # below !hide: it ran, but the results pane and the exports leave it out
     block: object = None    # a block header: the sheettext Block it starts, drawn or failed
     payload: object = None  # PlotPayload, SolverPayload, RegressionPayload or LoopPayload
     symbols: dict = None    # this line's part of the symbol table
@@ -163,7 +165,7 @@ class LineResult:
     def to_json(self):
         row = {"n": self.n, "end": self.end, "kind": self.kind, "source": self.source,
                "text": self.text, "latex": self.latex, "latex_rows": self.latex_rows, "error": self.error, "warning": self.warning,
-               "stale": self.stale, "symbols": self.symbols}
+               "stale": self.stale, "hidden": self.hidden, "symbols": self.symbols}
         if self.plot:
             row["plot"] = self.plot.to_json()
         if self.solver:

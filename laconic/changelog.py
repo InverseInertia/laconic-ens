@@ -128,6 +128,11 @@ def _body(lines):
     return "".join(out)
 
 
+def markdown(text):
+    """A block of changelog-style Markdown as HTML, such as a release's notes (updates.py)."""
+    return _body(re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines())
+
+
 def to_html(text, version=__version__):
     """The changelog's sections as HTML, newest first. An empty Unreleased section is left out.
     A release build (version stamped from its tag) is made before the release job gives the tag

@@ -40,9 +40,38 @@ NUMBERS = {"samples": (int, 10, 5000), "width": (float, 0.5, 12.0),
            "xstep": (float, 0.0, None), "ystep": (float, 0.0, None)}
 SERIES_KEYS = ("color", "width", "dash", "marker", "label")
 SHEET_KEYS = ("grid", "xscale", "yscale", "legend", "gaps", "size", "samples", "width", "dash", "marker")
-KEYS = (set(CHOICES) | set(TEXT) | set(NUMBERS) | set(SERIES_KEYS)
-        | {"size", "color", "xunit", "yunit", "xlim", "ylim", "xview", "yview", "note", "points"})
+# Every option a plot takes, in the order the editor offers them, with what it is for.
+KEY_NOTES = {
+    "title": "the plot's title",
+    "xlabel": "the x axis label; empty removes it",
+    "ylabel": "the y axis label; empty removes it",
+    "xlim": "low .. high, the x range shown; either end may be auto",
+    "ylim": "low .. high, the y range shown; either end may be auto",
+    "points": "a matrix with an x row and a y row, or two vectors: x, y",
+    "color": "a series' color: #rrggbb or a name; `color 2:` for series 2",
+    "label": "a series' name in the legend; `label 2:` for series 2",
+    "dash": "a series' line: solid, dashed or dotted",
+    "marker": "a series' marker: none, circle or square",
+    "width": "a series' line width",
+    "legend": "where the legend goes, or off",
+    "grid": "on or off",
+    "xunit": "the unit the x axis is shown in, e.g. 'mm",
+    "yunit": "the unit the y axis is shown in, e.g. 'kN * 'm",
+    "xscale": "lin or log",
+    "yscale": "lin or log",
+    "xstep": "x tick spacing, in the axis's unit",
+    "ystep": "y tick spacing, in the axis's unit",
+    "note": '"text" at (x, y): a labelled dot',
+    "size": "width x height in pixels",
+    "samples": "points per function (default 400)",
+    "gaps": "break or error where a function is undefined",
+    "xview": "the x range the mouse set (over xlim)",
+    "yview": "the y range the mouse set (over ylim)",
+}
+KEYS = tuple(KEY_NOTES)
 LIMIT_KEYS = PLOT_LIMIT_KEYS   # `lim` is the view the author chose, `view` what the mouse set over it
+# Option values the editor completes with names and units (the rest are text, numbers or CHOICES).
+MATH_KEYS = LIMIT_KEYS + ("points", "note", "xunit", "yunit")
 
 COLORS = {"black": "#000000", "gray": "#7f7f7f", "grey": "#7f7f7f", "red": "#d55e00", "blue": "#0072b2",
           "green": "#009e73", "orange": "#e69f00", "purple": "#cc79a7", "sky": "#56b4e9",

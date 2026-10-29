@@ -72,7 +72,10 @@ def aligned(lhs, stages):
 
 def element(r, commands=False):
     """The element one line result yields, or None for a line no export shows. A command is
-    kept as a `Source` only with `commands`."""
+    kept as a `Source` only with `commands`. A line hidden by `!hide` is left out, as the
+    results pane leaves it out (errors and out-of-date solver blocks are never hidden)."""
+    if r.hidden:
+        return None
     if r.kind == "heading":
         return Heading(r.text)
     if r.kind == "comment":

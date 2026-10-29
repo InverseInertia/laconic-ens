@@ -1,4 +1,4 @@
-/* The page theme: fonts, colors and editor paper, as data and pure functions.
+/* The page theme: fonts, text size, colors and editor paper, as data and pure functions.
  * The page owns the form and applies what these return; the server keeps the theme with the
  * other display preferences (laconic/settings.py).
  * Runs under Node for tests.
@@ -7,12 +7,15 @@
  *   COLOR_FIELDS             [key, label] for each theme color
  *   PRESETS                  named color sets
  *   BACKGROUNDS              editor paper styles
+ *   SIZES                    text size choices, in percent of the standard size
  *   defaults()               a fresh copy of the default theme
  *   contrast(a, b)           WCAG contrast ratio of two #rrggbb colors
  *   fromSaved(saved)         {theme, note}: a stored theme, validated; note says why it was reset
  *   presetOf(colors)         the preset with exactly these colors, or "custom"
  *   warning(colors)          the warning shown while text and paper are too close, or ""
- *   cssVars(theme)           {"--name": value} for the document root
+ *   onInk(colors)            the color for text on an ink background
+ *   highlight(colors)        {fill, text}: the chosen suggestion's fill, which must stand out from the paper, and its text
+ *   cssVars(theme)           {"--name": value} for the document root (--fs is the text size as a scale)
  *   toYaml(theme)            the theme as a YAML snippet, to copy and share
  *   fromYaml(text, current)  {theme, error}: a pasted YAML snippet over the current theme
  */
@@ -35,19 +38,21 @@
   ];
   const COLOR_FIELDS = [['paper', 'Paper'], ['text', 'Text'], ['ink', 'Ink'], ['grid', 'Grid lines'], ['rule', 'Rules'], ['err', 'Errors'], ['global', 'Globals'], ['symbol', 'Symbols']];
   const PRESETS = {
-    'LENS blueprint': { paper: '#00386b', text: '#c2deff', ink: '#348fff', grid: '#0a4d88', rule: '#1f6fc4', err: '#ff8f00', global: '#7ee0c3', symbol: '#f0a8ff' },
-    'Engineering paper': { paper: '#e6eedf', text: '#17253d', ink: '#17253d', grid: '#c3d2bd', rule: '#9db39a', err: '#a8231b', global: '#1d6b55', symbol: '#7a2e8c' },
-    'White paper': { paper: '#fbfbf8', text: '#1b1b1b', ink: '#1b1b1b', grid: '#dcdcd4', rule: '#b5b5aa', err: '#b3261e', global: '#0f6e6a', symbol: '#8b2fa0' },
-    'Dark': { paper: '#1e2127', text: '#d9dde3', ink: '#d9dde3', grid: '#2c313a', rule: '#444b57', err: '#ff7b72', global: '#6fd3b8', symbol: '#d7a3ff' },
-    'Canoe Dark': { paper: '#120a02', text: '#f5cca3', ink: '#ff4d00', grid: '#2e1a05', rule: '#ff4d00', err: '#ff1100', global: '#7ee0c3', symbol: '#c9a0ff' },
-    'Chalcedony Dark': { paper: '#000000', text: '#1d5ec1', ink: '#1b5cc1', grid: '#323339', rule: '#1b5cc1', err: '#e33129', global: '#361086', symbol: '#2aa889' },
-    'Codec': { paper: '#050d0d', text: '#8fe3c8', ink: '#0f2a28', grid: '#2c5a55', rule: '#4fd1b5', err: '#e8321e', global: '#ffb347', symbol: '#ff6fd8' },
+    'LENS blueprint': { paper: '#00386b', text: '#c2deff', ink: '#348fff', grid: '#0a4d88', rule: '#1f6fc4', err: '#ff8f00', global: '#7ee0c3', symbol: '#00e5ff' },
+    'Engineering paper': { paper: '#e6eedf', text: '#17253d', ink: '#17253d', grid: '#c3d2bd', rule: '#9db39a', err: '#a8231b', global: '#1d6b55', symbol: '#00e5ff' },
+    'White paper': { paper: '#fbfbf8', text: '#1b1b1b', ink: '#1b1b1b', grid: '#dcdcd4', rule: '#b5b5aa', err: '#b3261e', global: '#0f6e6a', symbol: '#00e5ff' },
+    'Dark': { paper: '#1e2127', text: '#d9dde3', ink: '#d9dde3', grid: '#2c313a', rule: '#444b57', err: '#ff7b72', global: '#6fd3b8', symbol: '#00e5ff' },
+    'Canoe Dark': { paper: '#120a02', text: '#f5cca3', ink: '#ff4d00', grid: '#2e1a05', rule: '#ff4d00', err: '#ff1100', global: '#7ee0c3', symbol: '#00e5ff' },
+    'Chalcedony Dark': { paper: '#000000', text: '#1d5ec1', ink: '#1b5cc1', grid: '#323339', rule: '#1b5cc1', err: '#e33129', global: '#361086', symbol: '#00e5ff' },
+    'Codec': { paper: '#050d0d', text: '#8fe3c8', ink: '#0f2a28', grid: '#2c5a55', rule: '#4fd1b5', err: '#e8321e', global: '#ffb347', symbol: '#00e5ff' },
   };
   const BACKGROUNDS = ['grid', 'lines', 'dots', 'plain'];
+  // The editor's and the results' text, and the rows they line up on, scale together.
+  const SIZES = [80, 90, 100, 110, 125, 150, 175, 200];
   // Below this ratio text is hard to read on its paper.
   const MIN_CONTRAST = 3;
 
-  const defaults = () => ({ sans: 0, mono: 4, bg: 'grid', colors: { ...PRESETS['LENS blueprint'] } });
+  const defaults = () => ({ sans: 0, mono: 4, bg: 'grid', size: 100, colors: { ...PRESETS['LENS blueprint'] } });
 
   function contrast(a, b) {
     const lum = (h) => {
@@ -68,6 +73,7 @@
     if (Number.isInteger(saved.sans) && FONTS_SANS[saved.sans]) theme.sans = saved.sans;
     if (Number.isInteger(saved.mono) && FONTS_MONO[saved.mono]) theme.mono = saved.mono;
     if (BACKGROUNDS.includes(saved.bg)) theme.bg = saved.bg;
+    if (SIZES.includes(saved.size)) theme.size = saved.size;
     const colors = saved.colors && typeof saved.colors === 'object' ? { ...saved.colors } : {};
     // Themes saved before text and ink were separate colors only have an ink, which was both.
     if (typeof colors.text !== 'string') colors.text = colors.ink;
@@ -96,12 +102,35 @@
       : '';
   }
 
+  // Pressed and hovered buttons are filled with ink. Their text is the paper color, or the theme's
+  // text color where that reads better (Codec's ink is nearly its paper); if neither can be read,
+  // black or white.
+  function onInk(colors) {
+    const best = [colors.paper, colors.text].sort((a, b) => contrast(colors.ink, b) - contrast(colors.ink, a))[0];
+    if (contrast(colors.ink, best) >= MIN_CONTRAST) return best;
+    return contrast(colors.ink, '#000000') >= contrast(colors.ink, '#ffffff') ? '#000000' : '#ffffff';
+  }
+
+  // The chosen suggestion is filled with ink where ink stands out from the paper; where it does not
+  // (Codec), with the rule or text color, whichever is first to; else whichever of them stands out most.
+  // Its text is then the paper or text color that reads better on that fill, as on ink.
+  function highlight(colors) {
+    const options = [colors.ink, colors.rule, colors.text];
+    const fill = options.find((c) => contrast(c, colors.paper) >= MIN_CONTRAST)
+      ?? [...options].sort((a, b) => contrast(b, colors.paper) - contrast(a, colors.paper))[0];
+    return { fill, text: onInk({ ...colors, ink: fill }) };
+  }
+
   function cssVars(theme) {
     const c = theme.colors;
-    const vars = { '--sans': FONTS_SANS[theme.sans][1], '--mono': FONTS_MONO[theme.mono][1] };
+    const vars = { '--sans': FONTS_SANS[theme.sans][1], '--mono': FONTS_MONO[theme.mono][1], '--fs': String((theme.size ?? 100) / 100) };
     for (const [k] of COLOR_FIELDS) vars['--' + k] = c[k];
     vars['--paper-deep'] = `color-mix(in srgb, ${c.paper} 94%, ${c.text})`;
     vars['--text-soft'] = `color-mix(in srgb, ${c.text} 75%, ${c.paper})`;
+    vars['--on-ink'] = onInk(c);
+    const hl = highlight(c);
+    vars['--hl'] = hl.fill;
+    vars['--on-hl'] = hl.text;
     vars['--hit'] = `color-mix(in srgb, ${c.text} 8%, transparent)`;
     // The logo is recolored from the theme: its blues are ink, text and rule, its accent is the error color.
     for (const [k, v] of Object.entries({
@@ -121,6 +150,7 @@
       `  sans: ${FONTS_SANS[theme.sans][0]}`,
       `  mono: ${FONTS_MONO[theme.mono][0]}`,
       `background: ${theme.bg}`,
+      `text-size: ${theme.size ?? 100}%`,
       'colors:',
       ...COLOR_FIELDS.map(([k]) => `  ${k}: '${theme.colors[k]}'`),
       '',
@@ -169,13 +199,18 @@
       if (BACKGROUNDS.includes(y.background)) theme.bg = y.background;
       else bad.push(`unknown background "${y.background}" (one of ${BACKGROUNDS.join(', ')})`);
     }
+    if (y['text-size'] !== undefined) {
+      const size = Number(String(y['text-size']).replace(/\s*%$/, ''));
+      if (SIZES.includes(size)) theme.size = size;
+      else bad.push(`unknown text size "${y['text-size']}" (one of ${SIZES.map((n) => n + '%').join(', ')})`);
+    }
     const colors = y.colors && typeof y.colors === 'object' ? y.colors : {};
     for (const [k, v] of Object.entries(colors)) {
       if (!COLOR_FIELDS.some(([f]) => f === k)) bad.push(`unknown color "${k}"`);
       else if (!isColor(v)) bad.push(`${k} is not a #rrggbb color: ${v}`);
       else theme.colors[k] = v.toLowerCase();
     }
-    if (!y.fonts && y.background === undefined && !y.colors) return { theme: null, error: 'Not a theme snippet: it has no fonts, background or colors.' };
+    if (!y.fonts && y.background === undefined && y['text-size'] === undefined && !y.colors) return { theme: null, error: 'Not a theme snippet: it has no fonts, background, text size or colors.' };
     if (bad.length) return { theme: null, error: `Theme not imported: ${bad.join('; ')}.` };
     if (contrast(theme.colors.paper, theme.colors.text) < MIN_CONTRAST) {
       return { theme: null, error: `Theme not imported: ${warning(theme.colors).replace(/^Warning: /, '').replace(/ On reload.*$/, '')}` };
@@ -183,7 +218,7 @@
     return { theme, error: '' };
   }
 
-  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, cssVars, toYaml, fromYaml };
+  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, SIZES, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, onInk, highlight, cssVars, toYaml, fromYaml };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Theme = api;
 })(typeof window !== 'undefined' ? window : globalThis);

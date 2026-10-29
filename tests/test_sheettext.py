@@ -22,11 +22,11 @@ def test_definitions(case):
     assert (d and [d.kind, d.name, list(d.params)]) == case["def"]
 
 
-@pytest.mark.parametrize("case", VECTORS["solver_blocks"], ids=lambda c: f"{c['text']}@{c['line']}")
-def test_solver_block_of_a_line(case):
+@pytest.mark.parametrize("case", VECTORS["blocks"], ids=lambda c: f"{c['text']}@{c['line']}")
+def test_block_of_a_line(case):
     b = scan(case["text"]).owner(case["line"])
-    got = {"kind": b.command, "unknowns": [u.strip() for u in b.args.split(",")]} \
-        if b and b.kind == "solver" else None
+    got = b and {"kind": b.command,
+                 "unknowns": [u.strip() for u in b.args.split(",") if u.strip()] if b.kind == "solver" else []}
     assert got == case["block"]
 
 

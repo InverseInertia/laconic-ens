@@ -116,11 +116,11 @@ const Solvers = (() => {
     return box;
   }
 
-  /* The body of a solver row: header, the values, the control strip. */
+  /* The body of a solver row: the values and the control strip. The `!root ...` line over them is
+     the page's command indicator, as on every block's row. */
   function build(r, {values = true} = {}) {
     const s = r.solver;
     const box = el("div", "solver-box" + (Rows.stale(r) ? " is-stale" : ""));
-    box.append(el("div", "s-head", Rows.head(r)));
     if (values) {
       const vals = el("div", "s-values");
       for (const v of s.values) {

@@ -25,14 +25,14 @@
       { keys: ['.'], text: 'Subscript after a name. <code>M.max</code> gives <code>M_max</code>. After a number it stays a decimal point' },
       { keys: ['^'], text: 'Exponent slot. <code>x^(&nbsp;)</code>' },
       { keys: ['→', ')'], or: true, text: 'Leave a slot. If it holds one simple term the parentheses go away: <code>x^(2)</code> becomes <code>x^2</code>' },
-      { keys: ['Enter'], text: 'With only closing brackets left on the line, finishes the line instead of splitting it' },
+      { keys: ['Enter'], text: 'With only closing brackets left on the line, finishes the line instead of splitting it. After a block header (<code>!plot</code>, <code>!root</code>, <code>!regression</code>, ...) or one of its indented lines, the new line is indented to match; on a line that is only that indent, Enter removes it and leaves the block. Works with Math keys off' },
       { keys: ['Backspace'], text: 'In an empty slot, removes the slot and its <code>^</code>, <code>/</code> or <code>sqrt</code>. After <code>, </code> or <code>; </code>, removes the separator and its space together' },
       { keys: ['Ctrl+M'], text: 'Array. <code>[&nbsp;]</code>, or wraps the selection' },
       { keys: [',', ';'], inline: true, text: 'A space is added after them automatically. In an array, <code>,</code> separates columns and <code>;</code> separates rows' },
       { keys: ['Ctrl+T', 'Alt+T'], text: 'Transpose the term on the left or the selection. Press again to undo. Browsers reserve Ctrl+T for a new tab, so use Alt+T in a normal tab' },
       { keys: ['Ctrl+[', 'Ctrl+Shift+['], text: 'Index the term on the left or the selection. Ctrl+[ gives <code>idx(A, i)</code>, typeset <code>A<sub>i</sub></code>: one element of a vector, or one row of a matrix. Ctrl+Shift+[ gives <code>elem(A, i, j)</code>, typeset <code>A<sub>i,j</sub></code>: row and column. The caret lands in the index slot. Counting starts at 1. Indexes can be indexed too: <code>idx(elem(A, 1, 2), 3)</code>' },
       { keys: ['Ctrl+<'], text: 'Polar angle sign <code>∠</code> for complex numbers: <code>5\'V∠30\'deg</code>. On a US keyboard that is Ctrl+Shift+,' },
-      { keys: ['Ctrl+G'], text: 'Greek letter for the character before the caret. Press again to go back. Edit the mapping under Greek' },
+      { keys: ['Ctrl+G'], text: 'Extended character for the one before the caret: Greek letters (<code>s</code> to <code>σ</code>), <code>8</code> to <code>∞</code>, <code>V</code> to <code>∀</code>. Press again to go back. Edit the mapping under Extended characters' },
       { keys: ['Ctrl+/', 'Ctrl+\\'], text: 'Type a literal <code>/</code> or <code>\\</code> with no fraction or radical slot' },
       { keys: ['=', '+', '-', '*'], inline: true, text: 'Spaces are added around them (and around <code>-&gt;</code>, <code>.*</code>, <code>./</code> and fractions), and a second space is ignored. A sign (<code>-3</code>, <code>x^-1</code>) and <code>1e-3</code> stay tight. Backspace removes a spaced operator in one press' },
       { keys: ['`', '!', '@', '&'], inline: true, text: 'After a variable name: <code>x`</code> puts a dot over it (<code>x``</code> two dots), <code>F!</code> an arrow, <code>a@</code> a hat, <code>u&amp;</code> a bar. <code>F_x!</code> marks the F and keeps the subscript. Each marked name is a separate variable' },
@@ -53,7 +53,7 @@
       { keys: ['Alt+Up', 'Alt+Down'], text: 'Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back' },
     ] },
     { id: 'suggestions', title: 'Suggestions', rows: [
-      { keys: ['Tab'], text: "Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name" },
+      { keys: ['Tab'], text: "Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), after two letters of a name, and on the indented lines of a block: its options, and the choices of an option such as <code>grid:</code> or <code>method:</code>" },
     ] },
   ];
 

@@ -10,8 +10,27 @@ const vocab = {
   globalUnits: [['smoot', "1.7018'm"]],
   functions: [['sin', 'sin(angle)'], ['sqrt', 'sqrt(x)'], ['solve', 'solve(A, b)']],
   constants: ['e', 'pi'],
+  blocks: {},   // the block table, set below
   commands: [['clear', 'remove all non-global variables'], ['assume', 'back to SI'], ['noassume', 'keep typed units'], ['trigdeg', 'trig in degrees'], ['trigrad', 'trig in radians']],
 };
+// The table laconic/vocab.py blocks() sends (test_server.py checks its shape).
+const SOLVER_MATH = ['equation', 'objective', 'constraint', 'bounds', 'data', 'model', 'r2'];
+const optimize = {
+  keys: [['objective', 'f'], ['constraint', 'c'], ['bounds', 'low .. high'], ['method', 'which solver']],
+  choices: { method: [['BFGS', 'default'], ['Nelder-Mead', 'simplex'], ['L-BFGS-B', 'bounds'], ['SLSQP', 'constraints']] },
+  math: ['objective', 'constraint', 'bounds'], args: { bounds: 'unknown' },
+};
+Object.assign(vocab.blocks, {
+  root: { keys: [['equation', 'lhs = rhs'], ['bounds', 'low .. high'], ['method', 'which solver'], ['tol', 'tolerance'], ['autorun', 'on/off']],
+          choices: { method: [['hybr', 'default'], ['lm', 'least squares'], ['brentq', 'bracketed']], autorun: [['on', 'auto'], ['off', 'manual']] },
+          math: ['equation', 'bounds'], args: { bounds: 'unknown' } },
+  minimize: optimize, maximize: optimize,
+  regression: { keys: [['data', 'points'], ['degree', 'n'], ['model', 'f'], ['r2', 'R²']], choices: {}, math: ['data', 'model', 'r2'], args: {} },
+  symsolve: { keys: [['equation', 'lhs = rhs'], ['pick', 'n']], choices: {}, math: ['equation'], args: {} },
+  plot: { keys: [['title', 'title'], ['xlim', 'x range'], ['points', 'points'], ['color', 'a color'], ['grid', 'on or off'], ['xunit', 'x unit'], ['note', 'a dot'], ['samples', 'n']],
+          choices: { grid: [['on', ''], ['off', '']], color: [['red', '#d55e00'], ['blue', '#0072b2']], legend: [['auto', ''], ['top right', '']] },
+          math: ['xlim', 'points', 'note', 'xunit'], args: { color: 'series' } },
+});
 // A symbol table as the server sends it (laconic/symbols.py); which names a line sees is tested there.
 const sym = (id, name, line, more) => ({ id, name, kind: 'variable', line, until: null, global: false, value: '', params: [], ...more });
 const TABLE = [
@@ -27,7 +46,7 @@ const TABLE = [
 // "text|" with the caret marked
 function at(src, opts) {
   const pos = src.indexOf('|'), text = src.replace('|', '');
-  return { text, pos, ctx: A.context(text, pos, opts) };
+  return { text, pos, ctx: A.context(text, pos, { vocab, ...opts }) };
 }
 function pick(src, opts, extras) {
   const { text, ctx } = at(src, opts);
@@ -41,7 +60,7 @@ eq(at('$ab|').ctx, null, 'a symbol being declared is a new name: nothing to offe
 eq(at('$ab, ~$cd|').ctx, null, 'nor for a global one');
 eq(A.definition('$a, ~$b'), { kind: 'symdef', name: '$a', params: [], names: ['$a', '~$b'] }, 'a declaration defines every name on it');
 eq(at('!symsolve Lm|').ctx.only, ['variable'], 'a symbolic solve names its unknowns: variables (symbols) above');
-eq(A.solverBlock('!symsolve x\n  equation: x = 1', 12), { kind: 'symsolve', unknowns: ['x'] }, 'and is a block');
+eq(A.blockAt('!symsolve x\n  equation: x = 1', 12), { kind: 'symsolve', unknowns: ['x'] }, 'and is a block');
 eq(at('!symsolve x\n  equation: L|', { force: true }).ctx.kind, 'name', 'its equations are math');
 
 // --- no popup inside the text of a plot option -------------------------------------
@@ -56,6 +75,8 @@ eq(at("!plot M(x), x = 0 .. 2'|").ctx.kind, 'unit', 'units are suggested in the 
 eq(at('!loop i = 1 .. len|').ctx.kind, 'name', 'names are suggested in a loop statement');
 eq(at('!loop i = 1 .. 3\n  !loop j = 1 .. len|').ctx.kind, 'name', 'and in a loop inside a loop');
 eq(at('!loop i = 1 .. 3\n  S = S + idx|').ctx.kind, 'name', 'a loop\'s lines are expressions');
+eq(at('!loop i = 1 .. 3\n  ti|').ctx.kind, 'name', 'a loop line offers names, not option keys');
+eq(at('!loop i = 1 .. 3\n  S| = S + i').ctx, null, 'nothing for the name a loop line assigns');
 eq(at('!cl|').ctx.kind, 'command', 'other commands still complete as commands');
 eq(at('!plotspec gr|').ctx, null, 'no suggestions in a !plotspec option');
 
@@ -136,16 +157,9 @@ eq(accepting('!cl|'), '!clear|', 'a command');
 eq(A.unitDefs("# c\n'zap = 3'm\nx = 1\n  'a_b = 1/12").map((u) => u.name), ['zap', 'a_b'], 'unit definitions');
 
 // --- solver blocks -------------------------------------------------------------------------
-vocab.solver = {
-  keys: { root: [['equation', 'lhs = rhs'], ['bounds', 'low .. high'], ['method', 'which solver'], ['autorun', 'on/off']],
-          minimize: [['objective', 'f'], ['constraint', 'c'], ['bounds', 'low .. high'], ['method', 'which solver']] },
-  methods: { root: [['hybr', 'default'], ['lm', 'least squares'], ['brentq', 'bracketed']],
-             optimize: [['BFGS', 'default'], ['Nelder-Mead', 'simplex'], ['L-BFGS-B', 'bounds'], ['SLSQP', 'constraints']] },
-  choices: { autorun: [['on', 'auto'], ['off', 'manual']] },
-};
 const ROOT = 'x1 = 1\nx2 = 2\n!root x1, x2\n';
 eq(pick(ROOT + '  m|'), ['method'], 'option keys under a block');
-eq(pick('x = 1\n!root x\n  equation: x = 1\n  |', { force: true }), ['equation', 'bounds', 'method', 'autorun'], 'all keys by hand, in the block\'s order');
+eq(pick('x = 1\n!root x\n  equation: x = 1\n  |', { force: true }), ['equation', 'bounds', 'method', 'tol', 'autorun'], 'all keys by hand, in the block\'s order');
 eq(at(ROOT + '  |').ctx, null, 'no popup on a bare indent');
 eq(pick(ROOT + '  bo|'), ['bounds x1', 'bounds x2'], 'several unknowns: one bounds line per unknown');
 eq(pick('d = 1\n!minimize d\n  bo|'), ['bounds'], 'one unknown: plain bounds');
@@ -171,6 +185,35 @@ eq(at('!ro|').ctx.kind, 'command', 'the command word is still a command');
 eq(at('x = 1\n!root x\n  equation: x = 1\n  #@ result {"a|').ctx, null, 'nothing in the stored result');
 eq(at('x = 1\n!root x\n  equation: x = 1\ny = x|x', { force: true }).ctx.kind, 'name', 'after the block, back to normal lines');
 eq(at('x = 1\n!root x\n  equation: x = 1\nzz|w = 3').ctx, null, '... where the left of = is a definition again');
+
+// --- every block works the same way, from the one table (#137) ---------------------------------
+const PLOT = '!plot f(x), x = 0 .. 1\n';
+eq(pick(PLOT + '  g|'), ['grid'], 'a plot offers its option keys');
+eq(pick(PLOT + '  |', { force: true }), ['title', 'xlim', 'points', 'color', 'grid', 'xunit', 'note', 'samples'], 'all of them by hand, in the table\'s order');
+eq(pick(PLOT + '  title: T\n  co|'), ['color'], 'below other option lines too');
+eq(pick('!plot t, s\n  ti|'), ['title'], 'and under a plot of points alone');
+eq(at(PLOT + '  |').ctx, null, 'no popup on a bare indent');
+eq(accepting(PLOT + '  gr|'), PLOT + '  grid: |', 'a plot key is inserted with its colon');
+eq(pick(PLOT + '  grid: |'), ['on', 'off'], 'a plot option\'s choices');
+eq(accepting(PLOT + '  grid: o|ff'), PLOT + '  grid: on|', 'the whole value is replaced');
+eq(pick(PLOT + '  color 2: |'), ['red', 'blue'], 'colors, after a series number');
+eq(pick(PLOT + '  legend: top|'), ['top right'], 'a choice with a space');
+eq(at(PLOT + '  color |').ctx, null, 'nothing for the series number');
+eq(at(PLOT + '  samples: 4|', { force: true }).ctx, null, 'nothing for a number option');
+eq(at(PLOT + '  title: Lm|', { force: true }).ctx, null, 'nor in its text');
+eq(at(PLOT + '  xlim: 0 .. Lm|').ctx.kind, 'name', 'names in a limit');
+eq(at(PLOT + "  xunit: 'k|").ctx.kind, 'unit', 'units in an axis unit');
+eq(at(PLOT + '  points: t|s', { force: true }).ctx.kind, 'name', 'names in points');
+eq(at(PLOT + '  y = 2\n  g|').ctx, null, 'a line that is not an option ends the plot');
+eq(at('!plot f(x), x = 0 .. 1\n\n  g|').ctx, null, 'as a blank line does');
+eq(pick('!regression a, b\n  da|'), ['data'], 'a regression offers its keys');
+eq(pick('!regression a, b\n  data: D\n  |', { force: true }), ['data', 'degree', 'model', 'r2'], 'all of them');
+eq(at('!regression a, b\n  data: Lm|').ctx.kind, 'name', 'its data is an expression');
+eq(at('!regression a\n  degree: 2|', { force: true }).ctx, null, 'its degree is a number');
+eq(pick('!symsolve x\n  eq|'), ['equation'], 'a symbolic solve offers its keys');
+eq(at('!symsolve x\n  pick: 1|', { force: true }).ctx, null, 'its pick is a number');
+eq(A.candidates(at(PLOT + '  g|').ctx, { ...vocab, blocks: undefined }, PLOT + '  g'), [], 'nothing before the table has arrived');
+eq(at(PLOT + '  xlim: 0 .. Lm|', { vocab: { ...vocab, blocks: undefined } }).ctx, null, 'not even names in a value');
 
 // --- props() strings ---------------------------------------------------------------------------------
 vocab.props = {

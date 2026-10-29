@@ -13,7 +13,9 @@
  *   editor.elsewhere()              the user is typing in another field (a dialog, the name box)
  *   editor.place(r)                 make edit r without taking the focus or joining the undo stack
  *   editor.apply(r)                 make edit r in the editor's undo stack
- * `nameAt` is the name or unit the rename dialog starts with (F2).
+ * `nameAt` is the name or unit the rename dialog starts with (F2). `headerOf` and `blockAt` read
+ * the blocks (`!plot`, `!root`, ...) as laconic/sheettext.py does, and `newline` is what Enter does
+ * in one: the new line keeps the block's indent, with or without Math keys.
  *
  * The page applies edits; the same functions run under Node for tests.
  */
@@ -21,7 +23,7 @@
   'use strict';
   const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
 
-  // Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
+  // The extended characters behind Ctrl+G: a Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
   // 8 -> ∞ and V -> ∀ ride along: the free-stream subscript, and the struck-through V some fluid
   // mechanics texts use for volume.
   const DEFAULT_GREEK = {
@@ -78,6 +80,58 @@
     }
   }
   const edit = (from, to, insert, caret) => ({ from, to, insert, caret });
+
+  // ---- blocks --------------------------------------------------------------
+  // A block header (laconic/sheettext.py): `!plot ...` or a solver's `!root x, y` (also `!minimize`,
+  // `!maximize`, `!regression`, `!symsolve`), or `!loop i = 1 .. n`, at any indent since loops nest.
+  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, and a plot or a loop
+  // names no unknowns.
+  const PLOT_HEAD = /^[ \t]*!plot[ \t]+\S/;
+  const SOLVER_HEAD = /^[ \t]*!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*?))?[ \t]*$/;
+  const LOOP_HEAD = /^[ \t]*!loop(?:[ \t].*)?$/;
+  const PLOT_OPT = /^[ \t]+[A-Za-z]\w*(?:[ \t]+\d+)?[ \t]*:/;
+  function headerOf(line) {
+    if (PLOT_HEAD.test(line)) return { kind: 'plot', unknowns: [] };
+    if (LOOP_HEAD.test(line)) return { kind: 'loop', unknowns: [] };
+    const m = SOLVER_HEAD.exec(line);
+    return m ? { kind: m[1], unknowns: (m[2] || '').split(',').map((x) => x.trim()).filter(Boolean) } : null;
+  }
+  // The block that the line starting at `ls` belongs to, as headerOf gives it, or null. A plot owns
+  // the `key: value` lines indented under it; a solver block or a loop every indented, non-blank line
+  // (a loop inside a loop counts as its outer loop's). The line
+  // being typed counts while it could still become one: only its indent, or the start of a key.
+  function blockAt(t, ls) {
+    const line = t.slice(ls, lineEndOf(t, ls));
+    if (!/^[ \t]/.test(line)) return null;
+    let plotty = PLOT_OPT.test(line) || /^[ \t]+(?:[A-Za-z]\w*(?:[ \t]+\d*)?)?$/.test(line);
+    for (let p = ls; p > 0;) {
+      const ps = lineStartOf(t, p - 1), l = t.slice(ps, p - 1);
+      const h = headerOf(l);
+      if (h && !(h.kind === 'loop' && /^[ \t]/.test(l))) return h.kind === 'plot' && !plotty ? null : h;
+      if (!/^[ \t]+\S/.test(l)) return null;
+      plotty = plotty && PLOT_OPT.test(l);
+      p = ps;
+    }
+    return null;
+  }
+
+  // Enter keeps a block going: after a block header, the new line takes the block's indent (that of
+  // the line under the header, or two spaces more than the header's); on an owned line, that line's indent. On a line that
+  // is only its indent, Enter takes the indent away instead, leaving the block. Null elsewhere.
+  function newline(t, s, e) {
+    const ls = lineStartOf(t, s), le = lineEndOf(t, e), line = t.slice(ls, lineEndOf(t, s));
+    const nl = (indent) => edit(s, e, '\n' + indent, s + 1 + indent.length);
+    if (headerOf(line)) {
+      if (t.slice(e, le).trim() !== '') return null;      // splitting a header: an ordinary new line
+      const own = /^[ \t]*/.exec(line)[0];
+      const next = /^[ \t]+(?=\S)/.exec(le < t.length ? t.slice(le + 1, lineEndOf(t, le + 1)) : '');
+      return nl(next && next[0].length > own.length ? next[0] : own + '  ');
+    }
+    const indent = /^[ \t]*/.exec(line)[0];
+    if (!indent || s - ls < indent.length || !blockAt(t, ls)) return null;
+    if (line.trim() === '' && s === e && s === le) return edit(ls, le, '', ls);
+    return nl(indent);
+  }
 
   // Two edits, `b` made on the text `a` left, as one edit on `t`, with b's caret.
   function chain(t, a, b) {
@@ -569,7 +623,7 @@
     if (table[ch]) return edit(e - 1, e, table[ch], e - 1 + table[ch].length);
     const back = Object.keys(table).find((k) => table[k] === ch);
     if (back) return edit(e - 1, e, back, e);
-    return { message: `No Greek mapping for "${ch}"` };
+    return { message: `No extended character for "${ch}"` };
   }
 
   function backspace(t, s, e, ls, le) {
@@ -712,11 +766,12 @@
 
   // Control and navigation keys (call from `keydown`). `mods` = {ctrl, alt, shift, meta}.
   function keyAction(key, mods, t, s, e, ctx) {
-    if (ctx && ctx.enabled === false) return null;
+    const plain = !mods.ctrl && !mods.alt && !mods.shift && !mods.meta;
+    // Enter in a block keeps its indent, with Math keys on or off, on prose lines too.
+    if (ctx && ctx.enabled === false) return plain && key === 'Enter' ? newline(t, s, e) : null;
     const ls = lineStartOf(t, s), le = lineEndOf(t, e);
     const comment = isTextAt(t, s);
     const k = key.length === 1 ? key.toLowerCase() : key;
-    const plain = !mods.ctrl && !mods.alt && !mods.shift && !mods.meta;
 
     // Ctrl+[ takes the term as an array and opens one index: idx(A, i), shown A_i.
     // Ctrl+Shift+[ opens row and column: elem(A, i, j), shown A_i,j.
@@ -755,8 +810,9 @@
     const g = plain && !comment && key === 'Enter' && e === s ? globalStart(t, s, ctx) : -1;
     if (g >= 0) return withTilde(t, s, g, '\n', (t2, s2) => keyAction(key, mods, t2, s2, s2, plainCtx(ctx)));
     if (plain && !comment && key === 'Enter' && e === s && /^[)\]]+$/.test(t.slice(s, le))) {
-      return edit(le, le, '\n', le + 1);
+      return newline(t, le, le) || edit(le, le, '\n', le + 1);
     }
+    if (plain && key === 'Enter') return newline(t, s, e);
     if (plain && !comment) {
       if (key === 'ArrowRight' && e === s) return exitSlot(t, s, ls);
       if (key === 'Backspace') return backspace(t, s, e, ls, le);
@@ -765,7 +821,7 @@
   }
 
   const api = {
-    DEFAULT_GREEK, charAction, keyAction, indentLines, merge, applyEdits, nameAt,
+    DEFAULT_GREEK, charAction, keyAction, indentLines, newline, headerOf, blockAt, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
     isTextAt, isProse,

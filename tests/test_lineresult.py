@@ -17,7 +17,7 @@ PLOT = "a = 2\n!plot a*x, x = 0 .. 1\n  title: T\n  grid: off\nb = 3\n"
 ROOT = "x = 1\n!root x\n  equation: x^2 = 2\nz = x + 1\n"
 
 COMMON = {"n": int, "end": int, "kind": str, "source": str, "text": str, "latex": str, "latex_rows": list,
-          "error": str, "warning": str, "stale": bool, "symbols": dict}
+          "error": str, "warning": str, "stale": bool, "hidden": bool, "symbols": dict}
 PLOT_KEYS = {"svg", "spec", "moved"}
 SOLVER_KEYS = {"kind", "unknowns", "hash", "status", "tainted", "autorun", "method", "timeout",
                "values", "summary", "note", "record"}
@@ -125,6 +125,11 @@ def test_the_display_parts_of_a_row():
     assert "'delta_degC" in three[-1]
 
 
+def test_a_row_under_hide_is_hidden_unless_it_failed():
+    out = rows("!hide\nx = 1\nnope +\n!show\ny = 2")
+    assert [r["hidden"] for r in out] == [False, True, False, False, False]
+
+
 def test_a_plot_row_carries_its_picture_and_spec():
     p = rows(PLOT)[1]["plot"]
     assert set(p) == PLOT_KEYS and p["svg"].startswith("<svg") and p["moved"] is False
@@ -162,7 +167,7 @@ def test_the_page_reads_every_row_the_server_sends():
               "console.log(JSON.stringify(rows.map((r) => { const m = R.model(r, {view: 'latex'});"
               " return m && [m.line, m.end, m.body.type]; })))")
     rows_js = Path(__file__).parents[1] / "laconic" / "static" / "rows.js"
-    for view, kinds in (("typeset", ["text", "text", "text", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
+    for view, kinds in (("typeset", ["text", "text", "none", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
                         ("latex", ["snippet", "text", "snippet", "snippet", "error", "snippet", "snippet", "snippet",
                                    "snippet", "snippet", "snippet"])):
         r = subprocess.run(["node", "-e", script, str(rows_js)], input=json.dumps(rows(text, view=view)),

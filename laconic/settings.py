@@ -1,7 +1,7 @@
 """Per-user settings kept on the machine running the server, so they follow the
 user across browsers and are shared with the command line: the Greek table
 behind Ctrl+G, the global unit definitions, the tags the user gave units in the units dialog, whether the welcome dialog has been shown and the
-page's display preferences (PREFS). Kept here rather than in the browser, whose storage belongs
+page's preferences (PREFS, which include whether to look for a new release). Kept here rather than in the browser, whose storage belongs
 to one origin and so to one port, so the page looks the same whatever port LENS runs on.
 
 The file is JSON, written atomically. `LENS_CONFIG_DIR` overrides where it lives."""
@@ -16,7 +16,8 @@ _lock = threading.Lock()
 
 # The page's display preferences: what each holds is the page's business (theme.js checks a theme).
 # The server writes this list into the page (prefs.js reads it), so it is kept only here.
-PREFS = ("theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest", "layout", "autoLayout", "layoutAsk")
+PREFS = ("theme", "view", "wrap", "wrapText", "markGlobals", "mathkeys", "suggest", "layout", "autoLayout", "layoutAsk",
+         "checkUpdates")
 
 
 def config_dir():

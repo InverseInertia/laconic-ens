@@ -23,10 +23,14 @@
     --rule: #1f6fc4;
     --err: #ff8f00;
     --global: #7ee0c3;
-    --symbol: #f0a8ff;
+    --symbol: #00e5ff;
     --hit: rgba(194, 222, 255, .08);
+    --on-ink: #00386b;   /* text on an ink background (a pressed or hovered button): see Theme.onInk */
+    --hl: #348fff;       /* the chosen suggestion's fill and the list's border, and its text: Theme.highlight */
+    --on-hl: #00386b;
     --hdr: 50px;
-    --row: 28px;
+    --fs: 1;    /* the theme's text size, as a scale on the editor's and results' type */
+    --row: calc(28px * var(--fs));
     --mono: "OCR-A", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
@@ -71,6 +75,13 @@
   header button.sq { width: 28px; height: 28px; padding: 0; }
   header button.help { font-weight: 600; }
   header button.wide { width: auto; padding: 3px 10px; }
+  /* Shown only when a newer release is out (#134): small, beside the version it would replace. */
+  header button.update { width: auto; padding: 1px 8px; font-size: 12px; color: var(--on-ink); background: var(--ink); border-color: var(--ink); }
+  header button.update[hidden] { display: none; }
+  #updateNotes { border-left: 2px solid var(--rule); padding-left: 10px; font: 400 13px/1.45 var(--sans); }
+  #updateNotes h5 { margin: 8px 0 2px; font: 600 13px var(--sans); }
+  #updateNotes ul { margin: 0 0 6px; padding-left: 18px; }
+  #updateDlg a { color: var(--text); }
   .exportMenu { position: relative; }
   /* Right-aligned under its button; placeExports() slides it back inside the window when the toolbar wraps and leaves the button near the left edge. */
   #exportList { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column;
@@ -88,7 +99,7 @@
     background: transparent; border: 1px solid var(--ink);
     padding: 5px 12px; cursor: pointer;
   }
-  button:hover { background: var(--ink); color: var(--paper); }
+  button:hover { background: var(--ink); color: var(--on-ink); }
   :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
   main { --split: 41.667%; display: grid; grid-template-columns: minmax(200px, var(--split)) 8px minmax(200px, 1fr); min-height: 0; }
@@ -112,7 +123,7 @@
   }
   html[data-bg="plain"] .grid-paper { background-image: none; }
   #src {
-    font: 400 14px/var(--row) var(--mono);
+    font: 400 calc(14px * var(--fs))/var(--row) var(--mono);
     color: var(--text);
     background-color: transparent;
     border: 0; resize: none; margin: 0;
@@ -128,7 +139,7 @@
   #srcBox > #src { grid-area: 1 / 1; position: relative; min-width: 0; min-height: 0; }
   #srcMarks {
     grid-area: 1 / 1; overflow: hidden; color: transparent; user-select: none;
-    font: 400 14px/var(--row) var(--mono); padding: 12px 16px var(--overscroll, 12px); white-space: pre; tab-size: 2;
+    font: 400 calc(14px * var(--fs))/var(--row) var(--mono); padding: 12px 16px var(--overscroll, 12px); white-space: pre; tab-size: 2;
   }
   #srcMarks.wrapped { white-space: pre-wrap; overflow-wrap: break-word; }
   #srcMarks mark { color: transparent; background: color-mix(in srgb, var(--global) 20%, transparent); border-bottom: 1.5px dotted var(--global); }
@@ -140,21 +151,21 @@
   #out [data-symbol] { color: var(--symbol); cursor: help; }
   body.globals-off #out [data-global] { color: inherit; border-bottom: 0; cursor: inherit; }
   body.globals-off #out [data-global][data-symbol] { color: var(--symbol); cursor: help; }
-  .row .g-warn { font: 400 12.5px/1.35 var(--sans); color: var(--err); padding: 0 0 3px; }
+  .row .g-warn { font: 400 calc(12.5px * var(--fs))/1.35 var(--sans); color: var(--err); padding: 0 0 3px; }
   /* Kept at the top of the results while scrolling; render() puts it back after replacing the rows. */
-  #out > #globalsChip { position: sticky; top: 0; z-index: 2; display: block; margin: 0 0 4px auto; padding: 1px 8px; font: 400 12px var(--sans); color: var(--text-soft); background: var(--paper); border: 1px dashed var(--rule); }
+  #out > #globalsChip { position: sticky; top: 0; z-index: 2; display: block; margin: 0 0 4px auto; padding: 1px 8px; font: 400 calc(12px * var(--fs)) var(--sans); color: var(--text-soft); background: var(--paper); border: 1px dashed var(--rule); }
   #out > #globalsChip[hidden] { display: none; }
-  #out > #globalsChip:hover { color: var(--paper); background: var(--ink); border-style: solid; }
-  #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; }
+  #out > #globalsChip:hover { color: var(--on-ink); background: var(--ink); border-style: solid; }
+  #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; font-size: calc(15px * var(--fs)); }
   .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; min-height: var(--row); cursor: text; }
-  .row .no { font: 400 12px/var(--row) var(--mono); color: var(--text-soft); text-align: right; padding-right: 12px; user-select: none; }
+  .row .no { font: 400 calc(12px * var(--fs))/var(--row) var(--mono); color: var(--text-soft); text-align: right; padding-right: 12px; user-select: none; }
   .row.active { background: var(--hit); }
   .row .body { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
   .row.blank { min-height: 14px; }
   .row.blank .no { line-height: 14px; }
-  .row.heading .body { font: 600 17px/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
-  .row.comment .body { font: 400 14px/var(--row) var(--sans); color: var(--text-soft); }
-  .row.error .body { font: 400 13px/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
+  .row.heading .body { font: 600 calc(17px * var(--fs))/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
+  .row.comment .body { font: 400 calc(14px * var(--fs))/var(--row) var(--sans); color: var(--text-soft); }
+  .row.error .body { font: 400 calc(13px * var(--fs))/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
   .row.error .src { color: var(--text-soft); display: block; }
   /* Math is fitted to this box (mathfit.js); the margin is room to spare, so a pane narrowed a little
      more before the next fit does not push a shrunk formula past its row and show a scroll bar (#104). */
@@ -162,8 +173,8 @@
   .row .katex-display { margin: 0; text-align: left; }
   .row .katex-display > .katex { text-align: left; }
   .row .katex { font-size: 1.12em; }
-  .row .mx-toggle { display: block; margin: 0 0 3px; padding: 0 7px; font-size: 12px; border-color: var(--rule); color: var(--text-soft); }
-  .row .mx-toggle:hover { color: var(--paper); border-color: var(--ink); }
+  .row .mx-toggle { display: block; margin: 0 0 3px; padding: 0 7px; font-size: calc(12px * var(--fs)); border-color: var(--rule); color: var(--text-soft); }
+  .row .mx-toggle:hover { color: var(--on-ink); border-color: var(--ink); }
   /* A formula too wide for the pane, one stage per row (mathfit.js); a row KaTeX breaks again goes on indented. */
   .row .math.wrapped .wrow { margin: 1px 0 1px 1.5em; text-indent: -1.5em; }
   .row .math.wrapped .wrow .base { margin: .3em 0; }   /* room between wrapped lines of fractions */
@@ -173,16 +184,18 @@
     border: 1px solid var(--ink); padding: 5px 8px; cursor: pointer;
   }
   select[hidden] { display: none; }
-  .row.command .body { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
+  /* The command indicator: the `!` line as typed, on every row a command or block makes (rows.js `head`). */
+  .row .cmd { font: 400 calc(13px * var(--fs))/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .row .cmd .cmd-name { color: var(--text); }
   .seg { display: flex; border: 1px solid var(--ink); }
   .seg button { border: 0; border-right: 1px solid var(--ink); }
   .seg button:last-child { border-right: 0; }
-  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
   .row.snip { grid-template-columns: 44px 1fr auto; }
   .row.snip .body { padding: 3px 0; }
-  .row.snip pre { margin: 0; font: 400 12.5px/1.5 var(--mono); white-space: pre; color: var(--text); }
-  .row.snip .copy { align-self: start; margin: 3px 8px 0 12px; padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
-  .row.snip .copy:hover { color: var(--paper); border-color: var(--ink); }
+  .row.snip pre { margin: 0; font: 400 calc(12.5px * var(--fs))/1.5 var(--mono); white-space: pre; color: var(--text); }
+  .row.snip .copy { align-self: start; margin: 3px 8px 0 12px; padding: 1px 8px; font-size: calc(12.5px * var(--fs)); border-color: var(--rule); color: var(--text-soft); }
+  .row.snip .copy:hover { color: var(--on-ink); border-color: var(--ink); }
   header label { display: flex; align-items: center; gap: 4px; font: 400 13px/1.15 var(--sans); cursor: pointer; }
   header input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
   /* The status takes only space left over on its row, so a message never moves the buttons. */
@@ -213,45 +226,44 @@
   .row.plot .body { padding: 6px 0 4px; }
   .plot-wrap svg { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); background: #fff; user-select: none; }
   .plot-tools { display: flex; gap: 6px; margin-top: 5px; }
-  .plot-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
-  .plot-tools button:hover { color: var(--paper); border-color: var(--ink); }
-  .plot-tools .hint { font: 400 12px var(--sans); color: var(--text-soft); align-self: center; margin-left: 6px; }
+  .plot-tools button { padding: 1px 8px; font-size: calc(12.5px * var(--fs)); border-color: var(--rule); color: var(--text-soft); }
+  .plot-tools button:hover { color: var(--on-ink); border-color: var(--ink); }
+  .plot-tools .hint { font: 400 calc(12px * var(--fs)) var(--sans); color: var(--text-soft); align-self: center; margin-left: 6px; }
   .row { position: relative; }
-  .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 13px/1 var(--sans); color: var(--text-soft); cursor: help; }
+  .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 calc(13px * var(--fs))/1 var(--sans); color: var(--text-soft); cursor: help; }
   .row.stale:not(.solver) .body { opacity: .72; }
   .row.solver .body { padding: 6px 0 4px; }
-  .solver-box .s-head { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
   .solver-box .s-values { margin: 2px 0 4px; }
   .solver-box.is-stale .s-values { opacity: .6; }
   .solver-box .s-val .katex-display { margin: 0; }
   .solver-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
-  .solver-tools button { padding: 1px 8px; font-size: 12.5px; border-color: var(--rule); color: var(--text-soft); }
-  .solver-tools button:hover:not(:disabled) { color: var(--paper); border-color: var(--ink); }
+  .solver-tools button { padding: 1px 8px; font-size: calc(12.5px * var(--fs)); border-color: var(--rule); color: var(--text-soft); }
+  .solver-tools button:hover:not(:disabled) { color: var(--on-ink); border-color: var(--ink); }
   .solver-tools button:disabled { opacity: .45; cursor: default; }
   .solver-tools button:disabled:hover { background: transparent; color: var(--text-soft); }
-  .solver-tools .s-autolbl { display: flex; align-items: center; gap: 4px; font: 400 12.5px var(--sans); color: var(--text-soft); cursor: pointer; }
+  .solver-tools .s-autolbl { display: flex; align-items: center; gap: 4px; font: 400 calc(12.5px * var(--fs)) var(--sans); color: var(--text-soft); cursor: pointer; }
   .solver-tools .s-autolbl input { accent-color: var(--ink); margin: 0; }
-  .solver-tools .s-status { display: flex; align-items: baseline; gap: 6px; flex: 1 1 100%; font: 500 13px/1.35 var(--sans); }
+  .solver-tools .s-status { display: flex; align-items: baseline; gap: 6px; flex: 1 1 100%; font: 500 calc(13px * var(--fs))/1.35 var(--sans); }
   .solver-tools .s-sym { flex: none; width: 1.2em; text-align: center; }
   .solver-tools[data-state="run"] .s-sym { display: inline-block; animation: spin 1.1s linear infinite; }
   .solver-tools[data-state="fail"] .s-status { color: var(--err); }
   .solver-tools[data-state="none"] .s-status, .solver-tools[data-state="warn"] .s-status { color: var(--text); }
-  .solver-box .s-sub { font: 400 12px var(--sans); color: var(--text-soft); margin-top: 3px; min-height: 1em; }
+  .solver-box .s-sub { font: 400 calc(12px * var(--fs)) var(--sans); color: var(--text-soft); margin-top: 3px; min-height: 1em; }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .solver-tools[data-state="run"] .s-sym { animation: none; } }
   #solverLogDlg { width: min(900px, 96vw); }
   #solverLogDlg .dlg-body { max-height: 70vh; padding: 0; }
   #solverLogText { margin: 0; padding: 10px 16px; font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 68vh; overflow: auto; }
-  .row.meta .body { font: 400 12px/1.4 var(--sans); color: var(--text-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
+  .row.meta .body { font: 400 calc(12px * var(--fs))/1.4 var(--sans); color: var(--text-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
 
-  #ac { position: fixed; z-index: 30; max-height: 60vh; overflow-y: auto; min-width: 230px; max-width: min(460px, 92vw); background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 rgba(23, 37, 61, .25); font: 400 13px/1.3 var(--mono); }
+  #ac { position: fixed; z-index: 30; max-height: 60vh; overflow-y: auto; min-width: 230px; max-width: min(460px, 92vw); background: var(--paper); border: 1.5px solid var(--hl); box-shadow: 3px 3px 0 rgba(23, 37, 61, .25); font: 400 13px/1.3 var(--mono); }
   #ac[hidden] { display: none; }
   .ac-item { display: flex; align-items: baseline; gap: 10px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
-  .ac-item[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+  .ac-item[aria-selected="true"] { background: var(--hl); color: var(--on-hl); }
   .ac-item .kind { flex: none; min-width: 3.6em; font: 500 10.5px var(--sans); letter-spacing: .05em; text-transform: uppercase; color: var(--text-soft); }
   .ac-item .lbl { font-weight: 500; }
   .ac-item .det { margin-left: auto; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--sans); color: var(--text-soft); }
-  .ac-item[aria-selected="true"] .kind, .ac-item[aria-selected="true"] .det { color: var(--paper); opacity: .85; }
+  .ac-item[aria-selected="true"] .kind, .ac-item[aria-selected="true"] .det { color: var(--on-hl); opacity: .85; }
   .ac-hint { padding: 3px 8px; border-top: 1px solid var(--grid); font: 400 11.5px var(--sans); color: var(--text-soft); }
 
   .u-row { display: grid; grid-template-columns: 11ch auto 1fr auto; align-items: center; gap: 4px 8px; margin-bottom: 8px; }
@@ -282,7 +294,7 @@
   #ubQuery { width: 100%; font: 400 14px var(--sans); padding: 4px 8px; color: var(--text); background: transparent; border: 1px solid var(--rule); }
   .ub-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
   .ub-tags button { padding: 1px 9px; font: 400 12.5px var(--sans); border-color: var(--rule); color: var(--text-soft); border-radius: 10px; }
-  .ub-tags button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  .ub-tags button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
   .ub-tags button.mine { border-style: dashed; }
   #ubList { padding: 4px 0; max-height: 56vh; }
   .ub-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 4px 16px; border-bottom: 1px solid var(--grid); }
@@ -353,6 +365,7 @@
 <header>
   <img class="logo" src="/static/logo.svg" alt="">
   <span class="brand" title="Laconic Engineering Notebook System">LENS <span class="version" id="version">{{version}}</span></span>
+  <button id="updateBtn" class="update" hidden title="A new release of LENS is out: click to update"><span aria-hidden="true">&#x21E7;</span> <span id="updateLabel">Update</span></button>
   <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
   <span class="spacer"></span>
   <span id="status" role="status"></span>
@@ -450,7 +463,7 @@ v` = 2                    <i>a mark after a name is an accent: ` dot, ! arrow, @
       <li>Operators: <code>+ - * / ^</code>, elementwise <code>.* ./</code>, and <code>-&gt;</code> to convert units. Only a number followed by units may skip the <code>*</code>: write <code>3*x</code>, not <code>3 x</code>.</li>
       <li>Constants are <code>pi</code>, <code>e</code> and <code>&infin;</code> (<kbd>Ctrl</kbd>+<kbd>G</kbd> after an <code>8</code>). Physical constants are units: <code>'R</code>, <code>'k_B</code>, <code>'h_P</code>, <code>'N_A</code>. Functions include <code>sqrt abs sin cos tan exp ln log10</code> and <code>heaviside</code>.</li>
       <li>Every later use of a global is written <code>~g</code>; with Math keys on, the editor adds the <code>~</code> once you finish typing the name. Globals are colored and underlined in the results unless <strong>Mark globals</strong> is off.</li>
-      <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!clearf</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more. Settings &rarr; Reference lists them all.</li>
+      <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!clearf</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!hide</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more. Settings &rarr; Reference lists them all.</li>
       <li><strong>Units</strong> lists every unit: search by name or description, filter by a tag such as <em>constants</em> or <em>thermodynamics</em>, and click one to insert it. <strong>+ tag</strong> adds a tag of your own.</li>
       <li>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>. Comments and plot titles are left alone.</li>
     </ul>
@@ -542,14 +555,14 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
     <ul>
       <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot. With text highlighted, they apply to the whole terms it touches.</li>
       <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
-      <li><kbd>Ctrl</kbd>+<kbd>G</kbd> turns the letter before the caret into Greek (<code>s</code> to <code>&sigma;</code>). Press it again to undo. <kbd>Ctrl</kbd>+<kbd>M</kbd> makes an array and <kbd>Alt</kbd>+<kbd>T</kbd> transposes.</li>
+      <li><kbd>Ctrl</kbd>+<kbd>G</kbd> turns the character before the caret into an extended character: a Greek letter (<code>s</code> to <code>&sigma;</code>), <code>8</code> to <code>&infin;</code> or <code>V</code> to <code>&forall;</code>. Press it again to undo. <kbd>Ctrl</kbd>+<kbd>M</kbd> makes an array and <kbd>Alt</kbd>+<kbd>T</kbd> transposes.</li>
       <li>Double-click selects a whole term, and <kbd>Alt</kbd>+<kbd>&uarr;</kbd> widens the selection step by step.</li>
       <li>Suggestions pop up after <code>'</code> (units), <code>!</code> (commands) and two letters of a name, or by hand with <kbd>Ctrl</kbd>+<kbd>Space</kbd>. <kbd>Tab</kbd> accepts.</li>
     </ul>
     <p><button id="helpKeys">All keyboard shortcuts</button></p>
 
     <h3>Settings <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Settings" target="_blank" rel="noopener">Settings</a></h3>
-    <p>Settings has five parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). Settings are stored on this machine, so every browser shows the same ones, and the command line uses the same global units. Press <kbd>F1</kbd> any time to bring this window back.</p>
+    <p>Settings has six parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Updates</strong> (whether LENS checks for a new release), <strong>Extended characters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts, text size and paper style). Settings are stored on this machine, so every browser shows the same ones, and the command line uses the same global units. Press <kbd>F1</kbd> any time to bring this window back.</p>
 
     <section id="changelog" aria-labelledby="changelogTitle">
       <h3 id="changelogTitle">Changelog <a class="wiki" href="#helpTitle" id="changelogTop">Back to top</a></h3>
@@ -598,6 +611,18 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
 </dialog>
 <datalist id="ubTagNames"></datalist>
 
+<dialog id="updateDlg" aria-labelledby="updateTitle">
+  <div class="dlg-head"><h2 id="updateTitle">Update available</h2><button class="close">Not now</button></div>
+  <div class="dlg-body">
+    <p id="updateMsg"></p>
+    <div id="updateNotes"></div>
+    <p class="note"><a id="updateLink" href="#" target="_blank" rel="noopener">Release page and downloads</a></p>
+    <p class="note" id="updateHow"></p>
+    <p class="note theme-msg" id="updateErr" role="alert" hidden></p>
+  </div>
+  <div class="dlg-foot"><span class="note" style="margin:0">Settings &rarr; Updates turns this check off.</span><span class="spacer"></span><button id="updateGo">Update</button></div>
+</dialog>
+
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
   <div class="dlg-body">
@@ -614,8 +639,13 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
       </select></label>
       <label class="set-check"><input type="checkbox" id="layoutAuto" checked> Switch automatically when the window is narrow</label>
     </section>
+    <section class="set-sec" id="updateSec">
+      <h3>Updates</h3>
+      <p class="note">When LENS starts, it asks GitHub whether a newer release is out, and if there is one shows a small button beside the version that updates LENS. Kept on this machine.</p>
+      <label class="set-check"><input type="checkbox" id="checkUpdates" checked> Check for a new release when LENS starts</label>
+    </section>
     <section class="set-sec">
-      <h3>Greek letters</h3>
+      <h3>Extended characters</h3>
       <p class="note">Ctrl+G replaces the character before the caret using this table. Changes apply immediately and are kept on this machine.</p>
       <div id="greekRows"></div>
       <div class="set-acts"><button id="greekAdd">Add row</button><span class="spacer"></span><button id="greekReset">Reset to defaults</button></div>
@@ -634,6 +664,7 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
         <legend>Fonts</legend>
         <label class="set-row"><span>Interface and output</span><select id="fontSans"></select></label>
         <label class="set-row"><span>Editor</span><select id="fontMono"></select></label>
+        <label class="set-row"><span>Text size</span><select id="textSize"></select></label>
       </fieldset>
       <fieldset class="set-grp">
         <legend>Colors</legend>
@@ -735,6 +766,7 @@ document.fonts.ready.then(() => MathFit.fitAll(out, true));
 
 // How each kind of row body is drawn; what goes in it comes from the row model (rows.js).
 const BODY = {
+  none: () => {},
   text: (el, b) => { el.textContent = b.text; },
   tex: (el, b, r) => {
     typeset(el, b.tex, b.rows);
@@ -766,6 +798,18 @@ function matrixToggle(n, m) {
   return b;
 }
 
+// The command indicator over a command's or a block's row: the `!` line as typed, and what it did.
+function commandHead(h) {
+  const d = document.createElement("div"); d.className = "cmd";
+  const name = document.createElement("span"); name.className = "cmd-name"; name.textContent = h.command;
+  d.append(name);
+  if (h.effect) {
+    const e = document.createElement("span"); e.className = "cmd-effect"; e.textContent = "  \u2192  " + h.effect;
+    d.append(e);
+  }
+  return d;
+}
+
 let shown = [];   // the row models on screen
 function render(rows) {
   last = rows;
@@ -779,6 +823,7 @@ function render(rows) {
     const no = document.createElement("div"); no.className = "no"; no.textContent = m.line;
     const body = document.createElement("div"); body.className = "body";
     BODY[m.body.type](body, m.body, r);
+    if (m.head) body.prepend(commandHead(m.head));
     if (m.warning) {
       const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + m.warning;
       body.append(w);
@@ -1513,7 +1558,7 @@ function applyTheme() {
 }
 const saveTheme = () => store.set("theme", theme);
 function syncThemeForm() {
-  $("#fontSans").value = theme.sans; $("#fontMono").value = theme.mono; $("#bgStyle").value = theme.bg;
+  $("#fontSans").value = theme.sans; $("#fontMono").value = theme.mono; $("#bgStyle").value = theme.bg; $("#textSize").value = theme.size;
   $("#preset").value = Theme.presetOf(theme.colors);
   for (const [k] of Theme.COLOR_FIELDS) $("#c-" + k).value = theme.colors[k];
   const el = $("#themeMsg");
@@ -1524,6 +1569,7 @@ function buildThemeForm() {
   const options = (list) => list.map(([name], i) => Object.assign(document.createElement("option"), {value: i, textContent: name}));
   $("#fontSans").replaceChildren(...options(Theme.FONTS_SANS));
   $("#fontMono").replaceChildren(...options(Theme.FONTS_MONO));
+  $("#textSize").replaceChildren(...Theme.SIZES.map((n) => Object.assign(document.createElement("option"), {value: n, textContent: n + "%"})));
   $("#preset").replaceChildren(...Object.keys(Theme.PRESETS).map((n) => Object.assign(document.createElement("option"), {value: n, textContent: n})),
     Object.assign(document.createElement("option"), {value: "custom", textContent: "Custom", disabled: true}));
   $("#swatches").replaceChildren(...Theme.COLOR_FIELDS.map(([k, label]) => {
@@ -1536,6 +1582,7 @@ function buildThemeForm() {
   $("#fontSans").onchange = (ev) => { theme.sans = +ev.target.value; applyTheme(); saveTheme(); };
   $("#fontMono").onchange = (ev) => { theme.mono = +ev.target.value; applyTheme(); saveTheme(); };
   $("#bgStyle").onchange = (ev) => { theme.bg = ev.target.value; applyTheme(); saveTheme(); };
+  $("#textSize").onchange = (ev) => { theme.size = +ev.target.value; applyTheme(); saveTheme(); MathFit.fitAll(out, true); };
   $("#preset").onchange = (ev) => { const p = Theme.PRESETS[ev.target.value]; if (p) { theme.colors = {...p}; applyTheme(); saveTheme(); syncThemeForm(); } };
   $("#themeReset").onclick = () => { theme = Theme.defaults(); applyTheme(); saveTheme(); syncThemeForm(); };
   $("#themeExport").onclick = () => { const y = Theme.toYaml(theme); $("#themeYaml").value = y; copyText(y, "Theme copied as YAML"); };
@@ -1628,12 +1675,12 @@ let greekTimer = 0;
 function saveGreek(value) {
   clearTimeout(greekTimer);
   greekTimer = setTimeout(() => Api.send("/api/greek", {greek: value})
-    .catch(() => say("Could not save the Greek table to the server")), 300);
+    .catch(() => say("Could not save the extended characters to the server")), 300);
 }
 function greekRow(k = "", v = "") {
   const row = document.createElement("div"); row.className = "g-row";
   const key = Object.assign(document.createElement("input"), {value: k, maxLength: 1, ariaLabel: "Key"});
-  const val = Object.assign(document.createElement("input"), {value: v, maxLength: 4, ariaLabel: "Greek letter"});
+  const val = Object.assign(document.createElement("input"), {value: v, maxLength: 4, ariaLabel: "Extended character"});
   val.className = "val";
   const arrow = Object.assign(document.createElement("span"), {className: "arrow", textContent: "→"});
   const del = Object.assign(document.createElement("button"), {textContent: "×", title: "Remove", ariaLabel: "Remove mapping"});
@@ -1834,7 +1881,7 @@ window.addEventListener("load", () => {
   if (last.length) render(last);
 });
 
-// Greek table and global units live on the server. A table saved in this browser by an
+// The extended characters (stored as `greek`) and global units live on the server. A table saved in this browser by an
 // older build is sent up once and then forgotten, so nothing is lost and a reset stays reset.
 // Resolves to the settings, or null.
 async function loadSettings() {
@@ -1881,6 +1928,60 @@ async function openStartFile() {
   return true;
 }
 
+// ---- updates (#134) ---------------------------------------------------------
+// The server looks for a newer release in the background (updates.py); the page asks for the
+// answer once it has loaded, and shows the Update button only when there is one.
+let update = null;
+async function checkUpdate() {
+  for (let i = 0; i < 3 && store.get("checkUpdates", true) !== false; i++) {
+    let r;
+    try { r = await Api.json("/api/update?wait=8"); } catch { return; }
+    if (!r.checking) { showUpdate(r.update); return; }
+  }
+}
+function showUpdate(u) {
+  update = u;
+  $("#updateBtn").hidden = !u;
+  if (!u) return;
+  $("#updateLabel").textContent = u.label;
+  $("#updateBtn").setAttribute("aria-label", `Update to LENS ${u.label}`);
+}
+$("#updateBtn").onclick = () => {
+  const u = update;
+  $("#updateMsg").textContent = `LENS ${u.label} is out; this is ${u.current}.`;
+  $("#updateNotes").innerHTML = u.notes;   // the release's notes, rendered and escaped by the server (changelog.markdown)
+  $("#updateNotes").hidden = !u.notes;
+  $("#updateLink").href = u.url;
+  $("#updateHow").textContent = u.how;
+  $("#updateGo").hidden = u.action === "manual";
+  $("#updateGo").disabled = false;
+  $("#updateErr").hidden = true;
+  $("#updateDlg").showModal();
+};
+$("#updateGo").onclick = async () => {
+  $("#updateGo").disabled = true;
+  $("#updateErr").hidden = true;
+  say(update.action === "wizard" ? "Downloading the setup wizard…" : "Starting the update…");
+  let r;
+  try { r = await Api.json("/api/update", {version: update.version}); } catch (e) { r = {ok: false, error: e.message}; }
+  if (!r.ok) {
+    $("#updateErr").textContent = r.error; $("#updateErr").hidden = false; $("#updateGo").disabled = false;
+    return;
+  }
+  store.flush();
+  $("#updateMsg").textContent = r.action === "wizard"
+    ? "The setup wizard is starting, and LENS is closing so the wizard can replace it."
+    : "The installer is running. LENS is closing, and opens again when the update is done.";
+  $("#updateGo").hidden = true;
+  setTimeout(() => window.close(), 3000);   // the server has gone by then; an app window can close itself
+};
+$("#checkUpdates").checked = store.get("checkUpdates", true) !== false;
+$("#checkUpdates").onchange = (ev) => {
+  store.set("checkUpdates", ev.target.checked);
+  if (ev.target.checked) setTimeout(checkUpdate, 500);   // once the setting has reached the server
+  else showUpdate(null);
+};
+
 (async () => {
   const [cfg] = await Promise.all([loadSettings(), loadVocab()]);
   if (!(await openStartFile())) {
@@ -1892,6 +1993,7 @@ async function openStartFile() {
   setView(store.get("view", "typeset"), false);
   // The first time LENS opens on this machine, show the welcome and help window.
   if (cfg && !cfg.welcomed) { $("#helpDlg").showModal(); Api.send("/api/welcomed").catch(() => {}); }
+  checkUpdate();
 })();
 </script>
 </body>
