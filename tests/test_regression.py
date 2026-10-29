@@ -102,6 +102,77 @@ def test_the_fit_follows_its_data_and_is_out_of_date_with_it():
     assert r[4].kind == "regression" and r[4].stale and r[6].stale
 
 
+# ---- a model -------------------------------------------------------------------------------------
+DECAY = """t = [0, 1, 2, 3, 4, 5] * 's
+v = [10, 6.07, 3.68, 2.23, 1.35, 0.82] * 'm/'s
+!regression A, k
+  model: f(t) = A*exp(-k*t)
+  data: t, v
+  r2: R2
+f(2's)
+"""
+
+
+def test_a_model_is_fitted_with_units_worked_out_and_defines_its_function():
+    r = rows(DECAY)
+    assert r[2].kind == "regression", r[2].error
+    assert r[2].text.startswith("A = 10 m/s; k = 0.5") and "(model, 6 points)" in r[2].text
+    assert r[2].regression.degree is None and r[2].regression.r2 > 0.9999
+    assert r[2].regression.model == r"f\left(t\right) = A \cdot e^{-k \cdot t}"
+    assert r[6].text == "3.679 m/s"
+
+
+def test_a_model_of_several_variables_reads_a_vector_or_a_matrix_row_for_each():
+    vectors = ("x = [0, 1, 2, 3, 0, 1, 2, 3] * 'm\nz = [0, 0, 0, 0, 1, 1, 1, 1] * 's\n"
+               "w = [1, 3, 5, 7, 4, 6, 8, 10] * 'N\n!regression a, b, c\n  model: w(x, z) = a + b*x + c*z\n"
+               "  data: x, z, w\nb\nc\n")
+    r = rows(vectors)
+    assert r[3].kind == "regression", r[3].error
+    assert (r[6].text, r[7].text) == ("2 N/m", "3 kg⋅m/s³")   # N/s, as the sheet shows it
+    matrix = ("!regression a, b, c\n  model: w(x, z) = a + b*x + c*z\n"
+              "  data: [0, 1, 2, 3, 0, 1, 2, 3; 0, 0, 0, 0, 1, 1, 1, 1; 1, 3, 5, 7, 4, 6, 8, 10]\nw(10, 10)\n")
+    assert rows(matrix)[3].text == "51"
+
+
+def test_a_value_above_the_block_is_where_the_fit_starts_and_keeps_its_units():
+    text = ("x = [0, 1, 2, 3, 4, 5, 6] * 's\ny = [0, 0.84, 0.91, 0.14, -0.76, -0.96, -0.28] * 'm\n"
+            "w = 0.9'rad/'s\n!regression A, w\n  model: f(t) = A*sin(w*t)\n  data: x, y\nw\n")
+    r = rows(text)
+    assert r[3].kind == "regression", r[3].error
+    assert r[6].text == "1 rad/s"
+
+
+def test_a_model_may_call_the_sheets_functions_and_use_its_names():
+    text = ("g(u) = u^2\nh = 2'm\nx = [1, 2, 3, 4] * 'm\ny = [3, 6, 11, 18] * 'm\n"
+            "!regression a, c\n  model: f(x) = a*g(x)/h + c\n  data: x, y\na\nc\n")
+    r = rows(text)
+    assert r[4].kind == "regression", r[4].error
+    assert (r[7].text, r[8].text) == ("2", "2 m")
+
+
+def test_a_model_the_units_walk_cannot_read_is_fitted_point_by_point():
+    text = "!regression a, c\n  model: f(x) = a*idx([1, 2], 2)*x + c\n  data: [1, 2, 3; 3, 5, 7]\na\n"
+    assert rows(text)[3].text == "1"
+
+
+def test_a_large_model_fit_is_quick_enough_to_run_on_every_edit():
+    import time
+    xs = [k / 10 for k in range(300)]
+    ys = [3 * 2.718281828 ** (-0.3 * x) + 0.5 for x in xs]
+    text = (f"x = [{', '.join(map(str, xs))}]\ny = [{', '.join(f'{v:.6f}' for v in ys)}]\n"
+            "!regression A, k, c\n  model: f(x) = A*exp(-k*x) + c\n  data: x, y\n")
+    rows(text)
+    t0 = time.perf_counter()
+    r = rows(text)
+    assert r[2].text.startswith("A = 3; k = 0.3; c = 0.5"), r[2].text
+    assert time.perf_counter() - t0 < 0.5
+
+
+def test_rename_reaches_the_model_line():
+    edits, _ = rename(DECAY, "k", "λ")
+    assert "  model: f(t) = A*exp(-λ*t)" in apply(DECAY, edits).split("\n")
+
+
 # ---- errors --------------------------------------------------------------------------------------
 @pytest.mark.parametrize("text, message", [
     ("!regression\n  data: [1, 2; 3, 4]", "!regression reads"),
@@ -116,6 +187,16 @@ def test_the_fit_follows_its_data_and_is_out_of_date_with_it():
     ("!regression p\n  data: [1, 2, 3] * 's, [1, 2, 3]\n  degree: 1", "Name each one: `!regression p0, p1`"),
     ("!regression a, b\n  data: [1, 2; 3, 4i]", "complex"),
     ("!regression a, b\n  data: [1, 2; 3, 4]\n  r2: a", "already a coefficient"),
+    ("!regression a, b\n  data: [1, 2], [1, 2], [1, 2]", "For more variables, give a `model:`"),
+    ("!regression a, c\n  model: f(x) = a*x\n  data: [1, 2; 2, 4]", "c does not appear in the model"),
+    ("!regression a\n  model: f(x) = a*x\n  data: [1, 2; 2, 4]\n  degree: 1", "degree: is for a polynomial"),
+    ("!regression a, x\n  model: f(x) = a*x\n  data: [1, 2; 2, 4]", "'x' is a coefficient and one of"),
+    ("!regression a\n  model: f(x, z) = a*x*z\n  data: [1, 2; 2, 4], [1, 2]", "2 variables, so data is a matrix with 3"),
+    ("!regression a\n  model: f(x, z) = a*x*z\n  data: [1, 2; 2, 4]", "a row for x, z, then the f row"),
+    ("!regression a, b\n  model: f(x) = a + b*x\n  data: [1; 2]", "2 coefficients need at least 2 points"),
+    ("!regression a, b\n  model: f(x) = a*x^b\n  data: [1, 2, 3] * 'm, [1, 2, 3]", "divide the base by its unit"),
+    ("!regression a\n  model: f(x) = a + x\n  data: [1, 2, 3] * 'm, [1, 2, 3] * 's", "units do not work out"),
+    ("!regression a\n  model: f(x) = 1/(a - x)\n  data: [1, 2; 2, 4]", "cannot be worked out at every point"),
 ])
 def test_what_is_wrong_is_said_on_the_header(text, message):
     r = rows(text)[0]
@@ -123,10 +204,11 @@ def test_what_is_wrong_is_said_on_the_header(text, message):
 
 
 @pytest.mark.parametrize("line, message", [
-    ("  method: hybr", "Unknown option 'method'. Under !regression: data, degree, r2"),
+    ("  method: hybr", "Unknown option 'method'. Under !regression: data, degree, model, r2"),
     ("  degree: 1.5", "degree is a whole number"),
     ("  r2: 2x", "r2 names the variable"),
     ("  data: [1, 2; 3, 4]", "data is given twice"),
+    ("  model: a + b*x", "model reads `y(x) = a + b*exp(k*x)`"),
     ('  #@ result {"hash": "x"}', "stores no result"),
 ])
 def test_a_bad_option_line_is_reported_on_that_line(line, message):

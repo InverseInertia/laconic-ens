@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Regression with any model, in one or more variables**: a `model:` line under `!regression` fits that function instead of a polynomial, such as `model: f(t) = A*exp(-k*t)` with `!regression A, k`, or `model: w(x, z) = a + b*x + c*z` with `data: x, z, w` (one vector per variable, then y, or a matrix with a row for each). Each coefficient gets the units that make the model come out in y's units; the fit starts from a coefficient's value above the block, when it has one, and below the block the model is a function you can call or plot, `f(2's)`. (#128)
+
 ### Changes
 - **∀ for volume is now typed as the ∀ character**: press Ctrl+G after a `V` (again to go back), and the worksheet keeps the ∀ itself, as in `∀_cv = 0.2'm^3`. A name spelled `forall` is an ordinary name again; replace it with ∀ to keep the symbol. A Greek table you edited earlier needs a `V`→`∀` row, or Reset to defaults. (#125)
 

@@ -149,7 +149,7 @@
         while (ve > vs && /[ \t]/.test(t[ve - 1])) ve--;
         return { kind: 'choice', start: vs, end: Math.max(ve, pos), query: t.slice(vs, pos), key, block };
       }
-      if (!['equation', 'objective', 'constraint', 'bounds', 'data', 'r2'].includes(key)) return null;
+      if (!['equation', 'objective', 'constraint', 'bounds', 'data', 'model', 'r2'].includes(key)) return null;
     }
     if (line.trimStart().startsWith('!') && !isPlot) {
       if (!/^\s*!$/.test(before)) return null;
