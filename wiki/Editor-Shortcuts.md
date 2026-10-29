@@ -30,7 +30,7 @@ These are off on comment lines, on the text lines under a plot (title, labels, a
 | `Tab`, `Shift+Tab` | Indent or unindent the line, or every highlighted line, by two spaces. Works with Math keys off. Press `Esc` first to move the focus out of the editor with `Tab` |
 | `Alt+Z` | Turn text wrapping in the editor on or off |
 | `Alt+L` | Switch between side-by-side and stacked views. See [Settings](Settings) |
-| `F2` | Rename the name at the caret everywhere |
+| `F2` | Rename the name at the caret everywhere. In the dialog a name is typed as in the editor: `.` after a name types the subscript `_`, and `Ctrl+G` the extended character |
 | `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+O` | Save, Save As, Open |
 
 The editor scrolls half a page past the last line, as most code editors do, so the line you are typing at the end of a long sheet can sit in the middle of the screen rather than at its bottom edge.

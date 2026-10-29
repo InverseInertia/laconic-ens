@@ -1704,6 +1704,21 @@ function openRename() {
   ($("#renameOld").value ? $("#renameNew") : $("#renameOld")).focus();
 }
 $("#renameBtn").onclick = openRename;
+// A name is typed in them as in the editor: a period for a subscript, Ctrl+G for an extended character.
+for (const id of ["#renameOld", "#renameNew"]) $(id).addEventListener("keydown", (ev) => {
+  const f = ev.target, mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
+  if (ev.isComposing) return;
+  const r = Editing.nameKeyAction(ev.key, mods, f.value, f.selectionStart, f.selectionEnd, ctx());
+  if (!r) return;
+  ev.preventDefault();
+  if (r.message) say(r.message);
+  if (r.insert === undefined) return;
+  f.setSelectionRange(r.from, r.to);
+  if (!document.execCommand("insertText", false, r.insert)) {
+    f.setRangeText(r.insert, r.from, r.to, "end"); f.dispatchEvent(new Event("input", {bubbles: true}));
+  }
+  f.setSelectionRange(r.caret, r.caret);
+});
 for (const id of ["#renameOld", "#renameNew"]) $(id).addEventListener("input", () => {
   $("#renameConfirm").value = ""; $("#renameGo").textContent = "Rename"; $("#renameErr").hidden = true;
 });

@@ -738,6 +738,20 @@
     }
   }
 
+  // A one-line field that holds a name, such as Rename's: the math keys a name is typed with. A
+  // period after a name types its subscript underscore (`M.max` gives `M_max`) and Ctrl+G its
+  // extended character (`a` gives α), as in the editor; nothing else is a math key there.
+  // `key` and `mods` are a keydown's; null when the key types as usual.
+  function nameKeyAction(key, mods, t, s, e, ctx) {
+    if (ctx && ctx.enabled === false) return null;
+    const plain = !mods.ctrl && !mods.alt && !mods.meta;
+    if (plain && key === '.') return subscript(t, s, e, 0);
+    if (mods.ctrl && !mods.alt && !mods.shift && !mods.meta && key.toLowerCase() === 'g') {
+      return greek(t, s, e, (ctx && ctx.greek) || DEFAULT_GREEK);
+    }
+    return null;
+  }
+
   // Tab and Shift+Tab: indent or unindent every line the caret or selection touches by one block
   // indent (two spaces). A selection ending at the start of a line leaves that line alone, and
   // blank lines in a multi-line selection are not indented. Unindenting takes up to two leading
@@ -821,7 +835,7 @@
   }
 
   const api = {
-    DEFAULT_GREEK, charAction, keyAction, indentLines, newline, headerOf, blockAt, merge, applyEdits, nameAt,
+    DEFAULT_GREEK, charAction, keyAction, nameKeyAction, indentLines, newline, headerOf, blockAt, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
     isTextAt, isProse,

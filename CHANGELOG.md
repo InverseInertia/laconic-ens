@@ -15,6 +15,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### Changes
 - **Blank lines no longer show in the results**: the empty lines you leave in the sheet to keep it readable are left out of the results pane, as the exports already left them out. (#143)
 
+### Fixes
+- **The Rename dialog takes extended characters and subscripts**: in F2's name fields, Ctrl+G now turns the letter before the caret into its extended character (`s` into σ) and a period after a name types the subscript underscore (`σ.max` gives `σ_max`), as in the editor, so a name can be renamed to one with Greek letters. (#139)
+
 ## [v0.5.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.0) (2026-10-29)
 
 ### New

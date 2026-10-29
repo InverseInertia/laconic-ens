@@ -217,6 +217,26 @@ assert.ok(E.keyAction('g', { ctrl: true }, 'x = 5', 5, 5, {}).message.includes('
 eq(sim('x = a|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = ȧ|', 'custom table is used');
 eq(sim('x = b|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'x = b|', 'custom table replaces the default');
 
+// --- a name field (the Rename dialog, #139) ---------------------------------------
+function field(src, keys, ctx) {
+  let t = src.replace('|', ''), c = src.indexOf('|');
+  for (const k of keys) {
+    const key = typeof k === 'string' ? k : k.key, mods = { ctrl: false, alt: false, shift: false, meta: false, ...(typeof k === 'string' ? {} : k) };
+    const r = E.nameKeyAction(key, mods, t, c, c, ctx);
+    if (r && r.insert !== undefined) { t = t.slice(0, r.from) + r.insert + t.slice(r.to); c = r.caret; }
+    else if (!r && key.length === 1 && !mods.ctrl) { t = t.slice(0, c) + key + t.slice(c); c++; }
+  }
+  return t.slice(0, c) + '|' + t.slice(c);
+}
+eq(field('s|', [ctrl('g')]), 'σ|', 'Ctrl+G in a name field');
+eq(field('s|', [ctrl('g'), ctrl('g')]), 's|', 'and back');
+eq(field('M|', ['.', 'm', 'a', 'x']), 'M_max|', 'a period types the subscript');
+eq(field('T|', ['.', '8', ctrl('g')]), 'T_∞|', 'the free-stream subscript');
+eq(field("'k|", ['.']), "'k.|", 'not after a unit');
+eq(field('x|', ['/', '^']), 'x/^|', 'no other math key in a name');
+eq(field('a|', [ctrl('g')], { enabled: false }), 'a|', 'none with Math keys off');
+eq(field('a|', [ctrl('g')], { greek: { a: 'ȧ' } }), 'ȧ|', 'the extended characters table is used');
+
 // --- text lines under a plot ----------------------------------------------------
 eq(sim('!plot f(x), x = 0 .. 1\n  title: M|', '/'), '!plot f(x), x = 0 .. 1\n  title: M/|', 'slash is literal in a plot title');
 eq(sim('  ylabel: a|', '.'), '  ylabel: a.|', 'period is literal in an axis label');
