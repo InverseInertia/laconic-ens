@@ -85,8 +85,11 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Row**
 : A line result as `/api/eval` sends it (`to_json()`): the common fields, plus `plot` or `solver` for those kinds and `snippet` in the LaTeX view. `tests/test_lineresult.py` pins its shape.
 
+**Command indicator**
+: The `!` line as typed, shown in the same way over every row a command or a block makes (`!sigfigs 3  →  Results show ...`, `!plot ...`, `!root ...`), so the commands can be seen while scrolling. It is the row model's `head`; exports leave it out.
+
 **Row model**
-: What the results pane shows for one row: its lines, class names, a typed body (text, math, error, plot, solver or snippet; math with a **collapsed matrix** carries the toggle that shows it whole), the warning, the stale mark and the Copy text. `static/rows.js` builds it from a row with one table from line kind to body; option lines map to no row of their own.
+: What the results pane shows for one row: its lines, class names, its **command indicator**, a typed body (text, math, error, plot, solver or snippet; math with a **collapsed matrix** carries the toggle that shows it whole), the warning, the stale mark and the Copy text. `static/rows.js` builds it from a row with one table from line kind to body; option lines map to no row of their own.
 
 ## Name scope (`symbols.py`)
 

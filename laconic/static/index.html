@@ -173,7 +173,9 @@
     border: 1px solid var(--ink); padding: 5px 8px; cursor: pointer;
   }
   select[hidden] { display: none; }
-  .row.command .body { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
+  /* The command indicator: the `!` line as typed, on every row a command or block makes (rows.js `head`). */
+  .row .cmd { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .row .cmd .cmd-name { color: var(--text); }
   .seg { display: flex; border: 1px solid var(--ink); }
   .seg button { border: 0; border-right: 1px solid var(--ink); }
   .seg button:last-child { border-right: 0; }
@@ -220,7 +222,6 @@
   .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 13px/1 var(--sans); color: var(--text-soft); cursor: help; }
   .row.stale:not(.solver) .body { opacity: .72; }
   .row.solver .body { padding: 6px 0 4px; }
-  .solver-box .s-head { font: 400 13px/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
   .solver-box .s-values { margin: 2px 0 4px; }
   .solver-box.is-stale .s-values { opacity: .6; }
   .solver-box .s-val .katex-display { margin: 0; }
@@ -728,6 +729,7 @@ document.fonts.ready.then(() => MathFit.fitAll(out, true));
 
 // How each kind of row body is drawn; what goes in it comes from the row model (rows.js).
 const BODY = {
+  none: () => {},
   text: (el, b) => { el.textContent = b.text; },
   tex: (el, b, r) => {
     typeset(el, b.tex, b.rows);
@@ -759,6 +761,18 @@ function matrixToggle(n, m) {
   return b;
 }
 
+// The command indicator over a command's or a block's row: the `!` line as typed, and what it did.
+function commandHead(h) {
+  const d = document.createElement("div"); d.className = "cmd";
+  const name = document.createElement("span"); name.className = "cmd-name"; name.textContent = h.command;
+  d.append(name);
+  if (h.effect) {
+    const e = document.createElement("span"); e.className = "cmd-effect"; e.textContent = "  \u2192  " + h.effect;
+    d.append(e);
+  }
+  return d;
+}
+
 let shown = [];   // the row models on screen
 function render(rows) {
   last = rows;
@@ -772,6 +786,7 @@ function render(rows) {
     const no = document.createElement("div"); no.className = "no"; no.textContent = m.line;
     const body = document.createElement("div"); body.className = "body";
     BODY[m.body.type](body, m.body, r);
+    if (m.head) body.prepend(commandHead(m.head));
     if (m.warning) {
       const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + m.warning;
       body.append(w);

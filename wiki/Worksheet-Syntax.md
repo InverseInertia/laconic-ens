@@ -82,6 +82,8 @@ A `~` on a definition makes the name global: `~g = 9.81'm / 's^2`. Every later u
 
 A line starting with `!` is a command. It affects every line below it.
 
+In the results, every `!` line is marked the same way, so you can see what was called as you scroll: the line as typed, in the code font under a dashed rule. A one-line command adds what it did (`!sigfigs 3  →  Results show 3 significant figures`); a plot, solver, regression or symbolic solve shows its `!plot ...`, `!root ...` line over its picture or values. The exports leave the marks out (the LaTeX document keeps one-line commands as `%` comments).
+
 | Command | Effect |
 |---|---|
 | `!clear` | remove all non-global variables (functions are kept) |

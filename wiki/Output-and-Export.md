@@ -15,6 +15,8 @@ The last of `!sigfigs`, `!sigfigsbig` and `!decplace` wins. Plain notation is us
 
 Each calculation line shows up to three stages: the symbolic form, the form with values substituted, and the result.
 
+Every command and every plot, solver, regression or symbolic solve block is headed in the results by the `!` line it was called with, the same way for every kind, with what a one-line command did after an arrow. These marks are for reading the page; the exports leave them out.
+
 ## Typeset and LaTeX views
 
 The **Typeset / LaTeX** switch in the header chooses how results are shown. Typeset renders the math, with global variables colored and underlined unless **Mark globals** is off (see [Worksheet Syntax](Worksheet-Syntax#global-variables)). A calculation too wide for the results pane is fitted to it as in the PDF export: a little too wide is shrunk, much too wide is wrapped one stage per row (and after `+` and `=` within a stage), and it is fitted again when the pane is resized. LaTeX shows the source for each line in the export flavor (siunitx units), with a Copy button per line.
