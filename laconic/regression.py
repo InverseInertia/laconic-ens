@@ -176,7 +176,8 @@ def _multiplicative(q):
 
 
 def _points(b, ev):
-    """The x and y quantities, as flat vectors of the same length."""
+    """The x and y quantities, as flat vectors of the same length, and whether the points are laid
+    out in a row (a matrix's x row, or a row vector of x values) rather than a column."""
     vals = [ev.eval(n) for n in b.data]
     if len(vals) == 1:
         d = vals[0]
@@ -187,21 +188,23 @@ def _points(b, ev):
             raise RegressionError(f"data is a matrix with 2 rows, the x values then the y values, one column per "
                                   f"point; this is {shape}{hint}. Or give two vectors, `data: x, y`")
         x, y = ev.Q(mag[0], d.units), ev.Q(mag[1], d.units)
+        row = True
     else:
         x, y = vals
         for q, what in ((x, "x"), (y, "y")):
             m = np.asarray(q.magnitude)
             if m.ndim == 2 and 1 not in m.shape or m.ndim > 2:
                 raise RegressionError(f"The {what} data is a matrix; give a row or column vector")
+        row = np.ndim(x.magnitude) == 2 and np.shape(x.magnitude)[0] == 1
         x, y = ev.Q(np.ravel(x.magnitude), x.units), ev.Q(np.ravel(y.magnitude), y.units)
         if x.magnitude.size != y.magnitude.size:
             raise RegressionError(f"There are {x.magnitude.size} x values and {y.magnitude.size} y values")
-    return _multiplicative(x), _multiplicative(y)
+    return _multiplicative(x), _multiplicative(y), row
 
 
 def fit(b, ev):
     """Fit the block's polynomial to its data. Returns a Fit; raises RegressionError."""
-    x, y = _points(b, ev)
+    x, y, row = _points(b, ev)
     xm, ym = _real(x, "x"), _real(y, "y")
     deg, npts = b.degree, xm.size
     if np.unique(xm).size <= deg:
@@ -228,7 +231,9 @@ def fit(b, ev):
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else (1.0 if ss_res == 0 else 0.0)
     coeffs = [ev.Q(float(c[k]), y.units / x.units ** k) for k in range(deg + 1)]
     if single:
-        coeffs = [ev.Q(np.array([q.to(y.units).magnitude for q in coeffs]), y.units)]
+        # The vector lies as the data does: a row for a matrix's x row or a row of x values.
+        v = np.array([q.to(y.units).magnitude for q in coeffs])
+        coeffs = [ev.Q(v[None, :] if row else v[:, None], y.units)]
     names = [getattr(n, "name", "") for n in b.data] if len(b.data) == 2 else ["", ""]
     return Fit(coeffs, r2, npts, deg, *names)
 

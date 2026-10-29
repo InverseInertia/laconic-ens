@@ -12,6 +12,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### Changes
 - **∀ for volume is now typed as the ∀ character**: press Ctrl+G after a `V` (again to go back), and the worksheet keeps the ∀ itself, as in `∀_cv = 0.2'm^3`. A name spelled `forall` is an ordinary name again; replace it with ∀ to keep the symbol. A Greek table you edited earlier needs a `V`→`∀` row, or Reset to defaults. (#125)
 
+### Fixes
+- **A vector of regression coefficients keeps its orientation**: with one name and `degree:`, `!regression p` gave a vector that was shown as a column in the results and as a row in its plain text, whatever the data. It now lies as the data does: a row for a matrix's x row or a row vector of x values, a column for a column vector, everywhere it is shown and when used below. (#126)
+
 ## [v0.4.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.5) (2026-10-28)
 
 ### Fixes

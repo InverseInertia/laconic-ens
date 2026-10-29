@@ -70,6 +70,18 @@ def test_one_name_holds_every_coefficient_as_a_vector_when_x_has_no_units():
     assert r"{p}_{1} + {p}_{2}" in r[2].regression.model
 
 
+@pytest.mark.parametrize("x, shape", [("[0, 1, 2, 3]", "row"), ("[0; 1; 2; 3]", "column")])
+def test_the_vector_of_coefficients_lies_as_the_x_values_do(x, shape):
+    text = f"x = {x}\ny = [1, 3, 9, 19]\n!regression p\n  data: x, y\n  degree: 2\np\n"
+    r = rows(text)
+    row = r"\begin{bmatrix} 1 & 0 & 2 \end{bmatrix}"
+    column = r"\begin{bmatrix} 1 \\ 0 \\ 2 \end{bmatrix}"
+    assert (row if shape == "row" else column) in r[2].latex and r[5].latex.endswith(row if shape == "row" else column)
+    assert r[5].text == ("[[1 0 2]]" if shape == "row" else "[[1]\n [0]\n [2]]")
+    points = rows("D = [0, 1, 2, 3; 1, 3, 9, 19]\n!regression p\n  data: D\n  degree: 2\np\n")
+    assert points[4].latex.endswith(row)
+
+
 def test_a_column_or_row_vector_and_offset_temperatures_work():
     text = "t = [0; 60; 120] * 's\nT = [20'degC, 30'degC, 40'degC]\n!regression T0, k\n  data: t, T\nk\n"
     r = rows(text)

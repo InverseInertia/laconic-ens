@@ -88,7 +88,7 @@ y = [2.1, 3.9, 6.2, 7.8, 10.1] * 'N
 | `degree:` | the polynomial's degree, 0 to 20. With several names the degree is one less than their number, and `degree:` may be left out; with one name it is needed |
 | `r2:` | a name for R² (1 − residual sum of squares / total sum of squares) |
 
-The coefficient of xᵏ has the units of y / xᵏ, so the fit is the same whatever units the data is typed in. A single name holds every coefficient as one vector only when x has no units, since otherwise each coefficient has units of its own. Offset temperatures (°C, °F) are fitted in kelvin. A term whose part of y is rounding error (the zero coefficient of an exact fit) is shown as 0.
+The coefficient of xᵏ has the units of y / xᵏ, so the fit is the same whatever units the data is typed in. A single name holds every coefficient as one vector only when x has no units, since otherwise each coefficient has units of its own. That vector lies as the x values do: a row for a matrix's x row or a row vector, a column for a column vector. Offset temperatures (°C, °F) are fitted in kelvin. A term whose part of y is rounding error (the zero coefficient of an exact fit) is shown as 0.
 
 The row shows the fitted polynomial in the names the data came from (`s = s0 + v0 t + g2 t²`), then each coefficient and R². A fit needs at least degree + 1 different x values; real, finite numbers only. Data that reads an out-of-date solver result makes the fit, and everything computed from it, out of date as well (⚠). The exports print the polynomial and one row per value. Rename (F2) reaches the names in the header, `data:` and `r2:`.
 
