@@ -74,7 +74,7 @@ A `~` on a definition makes the name global: `~g = 9.81'm / 's^2`. Every later u
 
 - A global and an ordinary variable can never share a name. Plain `g` after `~g` still means the global, so assigning `g = 12` changes it. That line gets a warning, since a missing `~` there is usually a slip. Defining `~g` for a name already used without `~` is an error.
 - Globals are tinted in the editor and colored and underlined in the results. Hover one, in either place, to see the line that made it global. **Mark globals** in the header switches the marks in the results off; a note at the top of the results then says how many globals are unmarked. Warnings still show, and the LaTeX view and export are always plain.
-- `!clear` and `!clearf` name the globals they kept: `Cleared a, b. Kept global ~g`.
+- `!clear`, `!clearf` and `!clearsym` name the globals they kept: `Cleared a, b. Kept global ~g`.
 - Evaluation is top to bottom, so a global is only available below its definition (units are the exception, see [Units](Units)).
 - Functions work the same way: `~f(x) = x^2`, used as `f(2)`.
 
@@ -86,6 +86,7 @@ A line starting with `!` is a command. It affects every line below it.
 |---|---|
 | `!clear` | remove all non-global variables (functions are kept) |
 | `!clearf` | remove all non-global functions |
+| `!clearsym` | remove all non-global symbols (declared with `$`), keeping other variables |
 | `!noassume` / `!assume` | keep results in the units the arithmetic produced / back to simplest SI |
 | `!trigdeg` / `!trigrad` | bare numbers in trig functions are degrees / radians (default) |
 | `!short` / `!long` | show only each line's final result / full steps again |

@@ -90,6 +90,7 @@ def _run(text, siunitx=False, global_units=None, until=None):
     has_defs = any(l.kind == "unitdef" for l in sheet.lines)
     ev = Evaluator(global_units or (), fork=has_defs)
     fmt = Fmt(ev.ureg, siunitx=siunitx, custom=ev.custom, mode=ev.mode)
+    fmt.table = ev.symbols
     defs, here, used = {}, {}, set()
     for l in sheet.lines:
         if l.kind == "unitdef":
@@ -349,7 +350,7 @@ def _run_line(i, raw, s, ev, fmt, used):
             sym = printer.tex(stmt.body)
             name = ev.symbols.define_function(stmt.name, stmt.params, stmt.body)
             key = name.key
-            head = f"{fmt.var(key)}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
+            head = f"{fmt.var(key, function=True)}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
             return LineResult(i, raw, "funcdef", lhs=head, stages=[sym], text=s,
                               warning=_global_note(stmt.name, name, ev.symbols))
 

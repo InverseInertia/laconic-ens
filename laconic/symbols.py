@@ -4,7 +4,7 @@ It is built once, while the sheet runs top to bottom (`sheet.evaluate` moves `li
 records each definition that succeeds), and is the one place the scope rules live:
 
 - a definition makes a name visible on the lines below it, until the name is defined
-  again or `!clear` / `!clearf` removes it;
+  again or `!clear` / `!clearf` removes it (`!clearsym` removes only symbols);
 - a `~` on a definition makes the name global: from then on it is stored as `~name`,
   every use of the name means the global, and `!clear` / `!clearf` keep it;
 - a `$` declares a symbol (`$x`, `~$g` for a global one): a variable whose value is a sympy
@@ -20,7 +20,7 @@ apart from the scope rules:
 
     table.define("x", q, text="2 m", stale=False)    a variable defined on the current line
     table.define_function("f", ("x",), body)          a function
-    table.clear(VARIABLE)                             !clear; !clearf with FUNCTION
+    table.clear(VARIABLE)                             !clear; !clearf with FUNCTION; !clearsym with symbols_only
     table.key("g")           "~g" once g is global: the key its value is stored under
     table.values, table.functions                     key -> value, key -> (params, body), read only
     table.tainted(nodes)     True if evaluating `nodes` reads a stale value
@@ -158,6 +158,11 @@ class SymbolTable:
     def is_stale(self, key):
         return key in self._stale
 
+    def is_symbol(self, key):
+        """True if the variable `key` the current line sees is a symbol declared with `$`."""
+        s = self._live.get((VARIABLE, key.lstrip("~")))
+        return s is not None and s.symbol
+
     # ---- defining -----------------------------------------------------------------
     def define(self, name, value, text="", stale=False, symbol=False):
         """Define the variable `name` on the current line as `value` (shown as `text`); `stale`
@@ -202,13 +207,14 @@ class SymbolTable:
         self._by_name.setdefault(bare, []).append(sym)
         return sym
 
-    def clear(self, kind):
+    def clear(self, kind, symbols_only=False):
         """`!clear` (variables) or `!clearf` (functions) on the current line: every name of
-        `kind` that is not global stops being visible, and what it held is dropped. Returns
-        (removed keys, kept keys)."""
+        `kind` that is not global stops being visible, and what it held is dropped. With
+        `symbols_only` (`!clearsym`), only symbols declared with `$` go, and only global ones
+        are named as kept. Returns (removed keys, kept keys)."""
         gone, kept = [], []
         for (k, bare), s in list(self._live.items()):
-            if k != kind:
+            if k != kind or (symbols_only and not s.symbol):
                 continue
             if s.is_global:
                 kept.append(s.key)

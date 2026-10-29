@@ -31,7 +31,7 @@ class SheetMode:
     complex: str = "rect"      # !complex: show complex results as 3 + 4i ("rect") or 5∠53.13° ("polar"),
                                # or allow only real results ("real")
     plotdefs: dict = field(default_factory=dict)   # !plotspec key: value, for the plots below
-    cleared: set = field(default_factory=set)        # variables removed by !clear, for a clearer error
+    cleared: dict = field(default_factory=dict)      # variable -> the !clear or !clearsym that removed it, for a clearer error
     cleared_funcs: set = field(default_factory=set)  # functions removed by !clearf
 
 
@@ -104,7 +104,7 @@ class Statement:
 # effect(mode, ev, value) -> the text the command line shows
 
 def _cleared(gone, kept):
-    """`!clear` and `!clearf` name what they kept as well, since a global surviving one is easy to miss."""
+    """`!clear`, `!clearf` and `!clearsym` name what they kept as well, since a global surviving one is easy to miss."""
     text = f"Cleared {', '.join(gone)}" if gone else "Nothing to clear"
     if kept:
         text += f". Kept global{'s' * (len(kept) > 1)} {', '.join(kept)}"
@@ -113,7 +113,13 @@ def _cleared(gone, kept):
 
 def _clear(mode, ev, _):
     gone, kept = ev.symbols.clear(VARIABLE)
-    mode.cleared.update(gone)
+    mode.cleared.update(dict.fromkeys(gone, "!clear"))
+    return _cleared(gone, kept)
+
+
+def _clearsym(mode, ev, _):
+    gone, kept = ev.symbols.clear(VARIABLE, symbols_only=True)
+    mode.cleared.update(dict.fromkeys(gone, "!clearsym"))
     return _cleared(gone, kept)
 
 
@@ -191,6 +197,8 @@ class Command:
 
 _CLEAR_HELP = "On its own line, removes every non-global variable above it"
 _CLEARF_HELP = "On its own line, removes every non-global function above it"
+_CLEARSYM_HELP = ("On its own line, removes every non-global symbol (declared with <code>$</code>) above it, "
+                  "and keeps the other variables")
 _ASSUME_HELP = ("Below <code>!noassume</code>, results keep the units that come out of the arithmetic "
                 "(<code>kN*m</code>, not <code>J</code>) unless you convert with <code>-&gt;</code>. "
                 "<code>!assume</code> returns to SI")
@@ -215,6 +223,7 @@ _FREQ_HELP = ("What frequencies are. Below <code>!freq hz</code> or <code>!freq 
 COMMANDS = (
     Command("clear", NoArgs(), "remove all non-global variables", _clear, _CLEAR_HELP),
     Command("clearf", NoArgs(), "remove all non-global functions", _clearf, _CLEARF_HELP),
+    Command("clearsym", NoArgs(), "remove all non-global symbols", _clearsym, _CLEARSYM_HELP),
     Command("noassume", NoArgs(), "keep typed units in results",
             _setter("assume", False, "Units are kept as typed unless converted with ->"), _ASSUME_HELP),
     Command("assume", NoArgs(), "reduce results to SI again",
@@ -255,7 +264,7 @@ BY_NAME = {c.name: c for c in COMMANDS}
 
 
 def run(line, mode, ev):
-    """Run one `!name args` line against `mode` (and, for !clear and !clearf, the
+    """Run one `!name args` line against `mode` (and, for !clear, !clearf and !clearsym, the
     evaluator's names). Returns the text the line shows; raises CommandError."""
     words = line.strip()[1:].split(None, 1)
     name = words[0] if words else ""

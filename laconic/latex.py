@@ -122,17 +122,22 @@ class Fmt:
         self.ureg, self.siunitx = ureg, siunitx
         self.mode = mode or SheetMode()
         self.custom = custom
+        self.table = None     # the sheet's SymbolTable, for tagging symbols in the live view
         self._macros = {}     # units this document declares: name -> macro
         self._builtin = {}    # the Pint units among them: name -> how they print
         self._dimless = ureg.Unit("dimensionless")
 
-    def var(self, key):
-        """A variable or function by its stored key. In the live view a global (`~g`) is
-        tagged so the page can color and underline it; LaTeX snippets and the export stay plain."""
+    def var(self, key, function=False):
+        """A variable or function by its stored key. In the live view a global (`~g`) and a
+        symbol declared with `$` (as `table` has it at the current line) are tagged so the page
+        can color them and underline the global; LaTeX snippets and the export stay plain."""
         tex = name_latex(key)
-        if self.siunitx or not key.startswith("~"):
+        if self.siunitx:
             return tex
-        return f"\\htmlData{{global={key[1:]}}}{{{tex}}}"
+        tags = [f"global={key[1:]}"] if key.startswith("~") else []
+        if not function and self.table is not None and self.table.is_symbol(key):
+            tags.append(f"symbol={key.lstrip('~')}")
+        return f"\\htmlData{{{','.join(tags)}}}{{{tex}}}" if tags else tex
 
     def _macro(self, name, spelling=None):
         if name not in self._macros:
@@ -480,7 +485,7 @@ class Printer:
     def call(self, n):
         f, a = n.func, [self.tex(x) for x in n.args]
         if self.ev.fkey(f) in self.ev.funcs:
-            return f"{self.fmt.var(self.ev.fkey(f))}\\left({', '.join(a)}\\right)", ATOM
+            return f"{self.fmt.var(self.ev.fkey(f), function=True)}\\left({', '.join(a)}\\right)", ATOM
         b = FUNCTIONS.get(f)
         if b and b.tex and b.args in (None, len(a)):
             return b.tex.format(*(_Arg(self, x, t) for x, t in zip(n.args, a))), _BINDS[b.binds]

@@ -249,7 +249,7 @@ class Evaluator:
         if n.name in CONSTANTS:
             return self.Q(CONSTANTS[n.name])
         if n.name in self.mode.cleared:
-            raise EvalError(f"'{n.name}' was removed by !clear")
+            raise EvalError(f"'{n.name}' was removed by {self.mode.cleared[n.name]}")
         hint = f". Units need an apostrophe: '{n.name}" if self.is_unit(n.name) else ""
         raise EvalError(f"'{n.name}' is not defined{hint}")
 

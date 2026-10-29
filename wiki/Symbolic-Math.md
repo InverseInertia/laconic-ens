@@ -20,14 +20,14 @@ a_1 = acc                      every symbol has a value now: 5 m/s²
 
 ## Declaring symbols
 
-A line made of `$` names declares them: `$x`, or several at once, `$a, $b, $c`, each with its own `$`. A declared name is a variable whose value is the symbol itself; it is visible below its line, `!clear` removes it, and Rename (F2) renames it, like any other variable.
+A line made of `$` names declares them: `$x`, or several at once, `$a, $b, $c`, each with its own `$`. A declared name is a variable whose value is the symbol itself; it is visible below its line, `!clear` removes it, and Rename (F2) renames it, like any other variable. `!clearsym` removes only the symbols, and keeps global symbols and every other variable: a symbol that has been given a value is an ordinary variable by then, so it is kept too.
 
 - **Global symbols.** `~$g` declares a global symbol, the `~` first: `!clear` keeps it and every later use means it, as for [global variables](Worksheet-Syntax#global-variables).
 - **Uses are plain names.** The `$` is written only on the declaration. Everywhere else write `x` (or `~g`); `$x` inside an expression is an error that says so.
 - **A symbol has no value.** `$x = 2` is an error. To give a symbol a value, assign it on a later line, `x = 2`; below that line `x` is the number.
 - Names work as everywhere else: `$σ_max` is σ<sub>max</sub>, `$v!` is a vector v, `$T_inf` is T<sub>∞</sub>.
 
-In the editor a symbol is underlined with a dashed line (a global symbol is tinted as well), and hovering it names the line that declared it. Suggestions list your symbols with *symbol* beside them.
+Symbols are shown in their own color, the theme's **Symbols** color (Settings → Theme): tinted in the editor and colored in the results. Only globals are underlined, so a global symbol is in the symbol color and underlined. Hovering a symbol names the line that declared it. Suggestions list your symbols with *symbol* beside them.
 
 ## Expressions over symbols
 

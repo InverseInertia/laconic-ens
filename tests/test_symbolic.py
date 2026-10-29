@@ -5,17 +5,24 @@ import sys
 import pytest
 
 from laconic.latex import document
+from laconic.markdown import plain_math
 from laconic.rename import rename
 from laconic.sheet import evaluate, run
 from laconic.vocab import vocabulary
 
 
-def rows(src):
-    return run(src)
+def rows(src, tags=False):
+    """The sheet's rows, with the page's \\htmlData tags (globals, symbols) taken out of their
+    math unless `tags`, so the math reads as it prints; test_symbols_are_tagged checks the tags."""
+    out = run(src)
+    if not tags:
+        for r in out:
+            r.lhs, r.stages = plain_math(r.lhs), [plain_math(t) for t in r.stages]
+    return out
 
 
 def last(src):
-    return run(src)[-1]
+    return rows(src)[-1]
 
 
 # ---- declaring symbols -------------------------------------------------------------------------
@@ -48,7 +55,7 @@ def test_declaration_errors(src, msg):
 def test_a_global_symbol_is_global_and_kept_by_clear():
     r = rows("~$g\n$x\nh = g*x\n!clear\nk = g + 1\nx")
     assert r[0].text == "symbol ~g" and r[0].symbols["defines"][0]["global"]
-    assert r[2].latex == r"h = \htmlData{global=g}{g} \cdot x"
+    assert r[2].latex == r"h = g \cdot x"
     assert r[3].text == "Cleared x, h. Kept global ~g"
     assert r[4].text == "k = g + 1"
     assert r[5].kind == "error" and "removed by !clear" in r[5].error
@@ -198,6 +205,16 @@ def test_a_solution_without_symbols_is_a_number():
     assert r[4].symbols["defines"][0]["symbol"] is False
 
 
+def test_symbols_are_tagged():
+    """The page colors symbols and globals from these tags: a symbol, a global symbol as both,
+    a global as global only, and a symbol given a value is a plain variable from then on."""
+    r = rows("~$g, $x\n~h = 2\ny = g*x*h\nx = 3\nz = x + 1", tags=True)
+    assert r[2].lhs == "y" and r[2].stages[0] == (r"\htmlData{global=g,symbol=g}{g} \cdot \htmlData{symbol=x}{x} "
+                                                  r"\cdot \htmlData{global=h}{h}")
+    assert r[4].stages[0] == "x + 1"
+    assert "htmlData" not in evaluate("$x\ny = 2*x", siunitx=True).results[1].latex
+
+
 def test_a_system_of_equations():
     r = rows("$x, $y, $a\n!symsolve x, y\n  equation: x + y = a\n  equation: x - y = 1\nz = x*y")
     assert r[1].text == "x = a/2 + 1/2, y = a/2 - 1/2"
@@ -207,7 +224,7 @@ def test_a_system_of_equations():
 
 def test_a_global_unknown():
     r = rows("~$g, $h\n!symsolve g\n  equation: g*h = 2\ny = g")
-    assert r[1].latex == r"\htmlData{global=g}{g} = \frac{2}{h}"
+    assert r[1].latex == r"g = \frac{2}{h}"
     assert r[3].text == "y = 2/h"
 
 

@@ -33,15 +33,15 @@
     ['Courier', '"Courier New", Courier, monospace'],
     ['OCR-A', '"OCR-A", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace'],
   ];
-  const COLOR_FIELDS = [['paper', 'Paper'], ['text', 'Text'], ['ink', 'Ink'], ['grid', 'Grid lines'], ['rule', 'Rules'], ['err', 'Errors'], ['global', 'Globals']];
+  const COLOR_FIELDS = [['paper', 'Paper'], ['text', 'Text'], ['ink', 'Ink'], ['grid', 'Grid lines'], ['rule', 'Rules'], ['err', 'Errors'], ['global', 'Globals'], ['symbol', 'Symbols']];
   const PRESETS = {
-    'LENS blueprint': { paper: '#00386b', text: '#c2deff', ink: '#348fff', grid: '#0a4d88', rule: '#1f6fc4', err: '#ff8f00', global: '#7ee0c3' },
-    'Engineering paper': { paper: '#e6eedf', text: '#17253d', ink: '#17253d', grid: '#c3d2bd', rule: '#9db39a', err: '#a8231b', global: '#1d6b55' },
-    'White paper': { paper: '#fbfbf8', text: '#1b1b1b', ink: '#1b1b1b', grid: '#dcdcd4', rule: '#b5b5aa', err: '#b3261e', global: '#0f6e6a' },
-    'Dark': { paper: '#1e2127', text: '#d9dde3', ink: '#d9dde3', grid: '#2c313a', rule: '#444b57', err: '#ff7b72', global: '#6fd3b8' },
-    'Canoe Dark': { paper: '#120a02', text: '#f5cca3', ink: '#ff4d00', grid: '#2e1a05', rule: '#ff4d00', err: '#ff1100', global: '#7ee0c3' },
-    'Chalcedony Dark': { paper: '#000000', text: '#1d5ec1', ink: '#1b5cc1', grid: '#323339', rule: '#1b5cc1', err: '#e33129', global: '#361086' },
-    'Codec': { paper: '#050d0d', text: '#8fe3c8', ink: '#0f2a28', grid: '#2c5a55', rule: '#4fd1b5', err: '#e8321e', global: '#ffb347' },
+    'LENS blueprint': { paper: '#00386b', text: '#c2deff', ink: '#348fff', grid: '#0a4d88', rule: '#1f6fc4', err: '#ff8f00', global: '#7ee0c3', symbol: '#f0a8ff' },
+    'Engineering paper': { paper: '#e6eedf', text: '#17253d', ink: '#17253d', grid: '#c3d2bd', rule: '#9db39a', err: '#a8231b', global: '#1d6b55', symbol: '#7a2e8c' },
+    'White paper': { paper: '#fbfbf8', text: '#1b1b1b', ink: '#1b1b1b', grid: '#dcdcd4', rule: '#b5b5aa', err: '#b3261e', global: '#0f6e6a', symbol: '#8b2fa0' },
+    'Dark': { paper: '#1e2127', text: '#d9dde3', ink: '#d9dde3', grid: '#2c313a', rule: '#444b57', err: '#ff7b72', global: '#6fd3b8', symbol: '#d7a3ff' },
+    'Canoe Dark': { paper: '#120a02', text: '#f5cca3', ink: '#ff4d00', grid: '#2e1a05', rule: '#ff4d00', err: '#ff1100', global: '#7ee0c3', symbol: '#c9a0ff' },
+    'Chalcedony Dark': { paper: '#000000', text: '#1d5ec1', ink: '#1b5cc1', grid: '#323339', rule: '#1b5cc1', err: '#e33129', global: '#361086', symbol: '#2aa889' },
+    'Codec': { paper: '#050d0d', text: '#8fe3c8', ink: '#0f2a28', grid: '#2c5a55', rule: '#4fd1b5', err: '#e8321e', global: '#ffb347', symbol: '#ff6fd8' },
   };
   const BACKGROUNDS = ['grid', 'lines', 'dots', 'plain'];
   // Below this ratio text is hard to read on its paper.
@@ -72,6 +72,11 @@
     // Themes saved before text and ink were separate colors only have an ink, which was both.
     if (typeof colors.text !== 'string') colors.text = colors.ink;
     for (const [k] of COLOR_FIELDS) if (isColor(colors[k])) theme.colors[k] = colors[k];
+    // Themes saved before symbols had a color get their preset's, else the default's.
+    if (!isColor(colors.symbol)) {
+      const like = Object.values(PRESETS).find((p) => COLOR_FIELDS.every(([k]) => k === 'symbol' || p[k].toLowerCase() === theme.colors[k].toLowerCase()));
+      if (like) theme.colors.symbol = like.symbol;
+    }
     // A saved palette whose text can't be read on its paper (all black, say) would leave the page
     // unusable and the Settings dialog unreachable by eye, so it falls back to the default colors.
     if (contrast(theme.colors.paper, theme.colors.text) < MIN_CONTRAST) {

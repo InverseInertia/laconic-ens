@@ -17,6 +17,8 @@ CASES = {
               and rs[7].text == "Nothing to clear. Kept globals ~g, ~h"),
     "clearf": ("f(x) = x^2\n~g(x) = 2*x\n!clearf\ng(3)\nf(2)", 3, "Cleared f. Kept global ~g",
                lambda rs: rs[3].text == "6" and "removed by !clearf" in rs[4].error),
+    "clearsym": ("$x, ~$g, $m\nm = 2\na = 4\n!clearsym\nb = a + m\nx\ng + 1", 4, "Cleared x. Kept global ~g",
+                 lambda rs: rs[4].text == "b = 6" and "removed by !clearsym" in rs[5].error and not rs[6].error),
     "noassume": ("F = 10'kN\n!noassume\nM = F*2'm\nN = M -> 'N*'m", 2, "Units are kept as typed unless converted with ->",
                  lambda rs: rs[2].text.startswith("M = 20 kN") and rs[3].text.startswith("N = 20000 ")),
     "assume": ("!noassume\n!assume\nM = 10'kN*2'm", 2, "Units are reduced to SI again",
