@@ -15,6 +15,8 @@ The last of `!sigfigs`, `!sigfigsbig` and `!decplace` wins. Plain notation is us
 
 Each calculation line shows up to three stages: the symbolic form, the form with values substituted, and the result.
 
+Blank lines are for keeping the sheet text readable, so the results pane and the exports leave them out: the results are laid out to be read already.
+
 Every command and every plot, solver, regression or symbolic solve block is headed in the results by the `!` line it was called with, the same way for every kind, with what a one-line command did after an arrow. These marks are for reading the page; the exports leave them out.
 
 ## Hiding lines

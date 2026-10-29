@@ -20,7 +20,6 @@ eq(body(row('heading', { text: 'Loads' })), { type: 'text', text: 'Loads' }, 'a 
 eq(body(row('symdef', { text: 'symbols a, b' })), { type: 'text', text: 'symbols a, b' }, 'a symbol declaration names its symbols');
 eq(body(row('symsolve', { latex: 'x = 1' })).type, 'tex', 'a symbolic solve is typeset');
 eq(body(row('comment', { text: 'n' })), { type: 'text', text: 'n' }, 'so does a comment');
-eq(body(row('blank')), { type: 'text', text: '' }, 'a blank line shows nothing');
 eq(body(row('command', { source: '!sigfigs 3  ', text: 'sigfigs 3' })), { type: 'none' },
   'a command is all head: it shows itself and what it did');
 eq(body(row('error', { source: '  x = +', error: 'Bad' })), { type: 'error', source: 'x = +', message: 'Bad' },
@@ -30,6 +29,8 @@ eq(body(row('solver', { solver: {} })), { type: 'solver' }, 'so does a solver bl
 eq(R.model(row('plotopt'), {}), null, 'a plot option line has no row of its own');
 eq(R.model(row('solveropt'), {}), null, 'nor has a solver option line');
 eq(R.model(row('loopline'), {}), null, 'nor has a line a loop runs');
+eq(R.model(row('blank'), {}), null, 'nor has a blank line: the results pane leaves out the sheet\'s spacing (#143)');
+eq(R.model(row('blank', { snippet: null }), { view: 'latex' }), null, 'in either view');
 
 eq(R.model(row('assign', { latex: 'x = 2', hidden: true }), {}), null, 'a line under !hide has no row (#135)');
 eq(R.model(row('plot', { plot: {}, hidden: true, snippet: 'S' }), { view: 'latex' }), null, 'in either view');
@@ -46,7 +47,7 @@ for (const kind of ['plot', 'solver', 'regression', 'symsolve', 'loop']) {
 }
 eq(head(row('command', { source: '!clear', text: 'Cleared', snippet: '% !clear' }), 'latex').command, '!clear',
   'a command keeps its indicator over its snippet');
-for (const kind of ['assign', 'expr', 'heading', 'comment', 'error', 'blank', 'symdef'])
+for (const kind of ['assign', 'expr', 'heading', 'comment', 'error', 'symdef'])
   eq(head(row(kind, { source: '!plot nope' })), null, `no indicator on a ${kind} line`);
 
 // --- the common parts -------------------------------------------------------------------------
@@ -61,7 +62,7 @@ eq([snip.cls, snip.body, snip.copy], ['row snip', { type: 'snippet', text: 'x = 
   'a snippet, with Copy');
 eq(body(row('solver', { snippet: 'S', solver: {} }), 'latex').solver, true, 'a solver snippet keeps its controls');
 eq(body(row('error', { snippet: '% bad', error: 'Bad' }), 'latex').type, 'error', 'an error is shown, not its snippet');
-eq(body(row('blank', { snippet: null }), 'latex').type, 'text', 'a line without a snippet shows as usual');
+eq(body(row('comment', { text: 'n', snippet: null }), 'latex').type, 'text', 'a line without a snippet shows as usual');
 eq(body(row('assign', { latex: 'x = 2', snippet: 'x = 2' }), 'typeset').type, 'tex', 'only in the LaTeX view');
 
 // --- large matrices --------------------------------------------------------------------------

@@ -57,7 +57,7 @@
 
   // line kind -> its body, or null when the line has no row of its own. Other kinds are calculations.
   const BODY = {
-    blank: () => ({ type: 'text', text: '' }),
+    blank: null,   // blank lines keep the sheet text readable; the results are readable already (#143)
     heading: text,
     comment: text,
     meta: text,

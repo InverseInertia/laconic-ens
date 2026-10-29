@@ -161,8 +161,6 @@
   .row .no { font: 400 calc(12px * var(--fs))/var(--row) var(--mono); color: var(--text-soft); text-align: right; padding-right: 12px; user-select: none; }
   .row.active { background: var(--hit); }
   .row .body { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
-  .row.blank { min-height: 14px; }
-  .row.blank .no { line-height: 14px; }
   .row.heading .body { font: 600 calc(17px * var(--fs))/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
   .row.comment .body { font: 400 calc(14px * var(--fs))/var(--row) var(--sans); color: var(--text-soft); }
   .row.error .body { font: 400 calc(13px * var(--fs))/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
@@ -814,7 +812,8 @@ function commandHead(h) {
 let shown = [];   // the row models on screen
 function render(rows) {
   last = rows;
-  // A block's option lines are part of its row, so they get no row of their own (unless one is wrong).
+  // A block's option lines are part of its row, so they get no row of their own (unless one is wrong),
+  // and blank lines get none at all.
   const items = rows.map((r) => [r, Rows.model(r, {view, expanded})]).filter(([, m]) => m);
   shown = items.map(([, m]) => m);
   out.replaceChildren(...items.map(([r, m]) => {

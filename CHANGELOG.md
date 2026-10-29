@@ -12,6 +12,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### New
 - **Humid air properties**: `haprops` gives the properties of moist air from CoolProp's `HAPropsSI`, such as the humidity ratio `w = haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)`, the wet bulb (`"B"`), dew point (`"D"`), enthalpy and volume per kg of dry air. It takes the output key and three state inputs, one of them the pressure, converts their units as `props` does, and typing `"` inside it suggests the keys. See the wiki's Material Properties page. (#142)
 
+### Changes
+- **Blank lines no longer show in the results**: the empty lines you leave in the sheet to keep it readable are left out of the results pane, as the exports already left them out. (#143)
+
 ## [v0.5.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.0) (2026-10-29)
 
 ### New
