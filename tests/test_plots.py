@@ -686,3 +686,18 @@ def test_rename_reaches_a_points_line():
     text = MEASURED + "!plot t, s\n!plot x, x = 0 .. 1\n  points: t, s\n"
     out, _ = renamed(text, "t", "time")
     assert "!plot time, s" in out and "  points: time, s" in out
+
+
+def test_points_without_units_are_read_in_the_units_the_plot_gives(  # #141
+):
+    text = ("D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]\ng(t) = 1'm + 2'm/'s*t\n"
+            "!plot g(t), t = 0's .. 3's\n  points: D\n")
+    (bad,) = [r for r in run(text) if r.kind == "error"]
+    assert bad.n == 4 and "x values have no units, and the x axis is in s: give `xunit: 's`" in bad.error
+    sp = plot(text + "  xunit: 's\n  yunit: 'cm\n")
+    assert sp["y"]["unit"] == "cm" and sp["series"][1]["x"] == [0, 1, 2, 3] and sp["series"][1]["y"] == [1.1, 2.9, 5.2, 7.1]
+    assert sp["series"][0]["y"][0] == pytest.approx(100)          # the curve in the unit given
+    sp = plot("D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]\n!plot D\n  xunit: 's\n  yunit: 'm\n")
+    assert sp["x"]["unit"] == "s" and sp["y"]["unit"] == "m" and sp["series"][0]["y"] == [1.1, 2.9, 5.2, 7.1]
+    with_units = run(MEASURED + "!plot t, s\n  xunit: 'm\n")
+    assert [r.kind for r in with_units][-1] == "error"           # points with units still convert

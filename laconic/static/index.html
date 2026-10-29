@@ -504,7 +504,9 @@ w    = haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)   <i>humid air</i></pre>
   color 2: red
   points: D               <i>measured points over the curves: an x row and a y row, or x, y</i>
 
-!plot t, s                <i>points alone: two vectors, or a matrix D</i></pre>
+!plot t, s                <i>points alone: two vectors, or a matrix D</i>
+  xunit: 's                <i>points without units are read in the units the plot gives</i>
+  yunit: 'm</pre>
     <p>Indented <code>key: value</code> lines set the details; <code>!plotspec key: value</code> sets a default for every plot below it. Drag the plot to pan, <kbd>Ctrl</kbd> + wheel to zoom, double-click to reset. The new view is written back into the sheet as <code>xview:</code> and <code>yview:</code> lines, so <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes it. Each plot saves as SVG or PNG, and the LaTeX export draws it with <code>pgfplots</code>.</p>
 
     <h3>Solving and optimizing <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Solving-and-Optimizing" target="_blank" rel="noopener">Solving and Optimizing</a></h3>
@@ -525,7 +527,10 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 !regression a, b, c       <i>y = a + b x + c x&sup2;, lowest power first</i>
   data: D                 <i>or two vectors: data: t, s</i>
   model: y(x) = a + b*exp(c*x)  <i>optional: any function instead; y(x, z) takes data: x, z, y</i>
-  r2: R2                  <i>optional: a name for R&sup2;</i></pre>
+  r2: R2                  <i>optional: a name for R&sup2;</i>
+  xunit: 's                <i>optional: the units of data that has none, such as a pasted matrix</i>
+  yunit: 'm
+  function: f(t)          <i>optional: the fitted polynomial as a function below the block</i></pre>
     <p><code>!regression</code> fits a polynomial by least squares as the sheet runs, with no Run button. Each coefficient gets the units of y / x<sup>k</sup>, and the names it defines hold the fit below the block.</p>
 
     <h3>Symbolic math <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Symbolic-Math" target="_blank" rel="noopener">Symbolic Math</a></h3>

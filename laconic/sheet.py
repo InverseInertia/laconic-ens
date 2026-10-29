@@ -300,6 +300,9 @@ def _run_regression(i, raw, handle, ev, fmt, used):
         if block.model:
             m = block.model
             fkey = ev.symbols.define_function(m.name, m.params, m.body).key
+        elif block.function:
+            fname, param, body = regression.function_source(block, f)
+            fkey = ev.symbols.define_function(fname, [param], parse_expr(body)).key
     except Exception as e:
         return fail(describe(e))
     values = [_value(key, fmt.var(key), fmt.quantity(q)) for key, q in defined]
@@ -310,7 +313,7 @@ def _run_regression(i, raw, handle, ev, fmt, used):
         head = f"{fmt.var(fkey)}\\left({', '.join(name_latex(p) for p in m.params)}\\right)"
         model = f"{head} = {Printer(ev, fmt, local=m.params).tex(m.body)}"
     else:
-        model = _polynomial(f, defined, ev, fmt)
+        model = _polynomial(f, defined, ev, fmt, (fkey, param) if block.function else None)
     tex = r"\begin{gathered} " + model + r" \\ " + r",\quad ".join(v["latex"] for v in values) + r" \end{gathered}"
     info = RegressionPayload(block.names, f.degree, f.points, f.r2, model, values)
     return LineResult(i, raw, "regression", stages=[tex], block=handle, payload=info, stale=stale,
@@ -376,10 +379,15 @@ def _loop_code(top, printer, depth):
     return rows
 
 
-def _polynomial(f, defined, ev, fmt):
-    """The fitted polynomial in the names it defined: `y = a + b x + c x^2`."""
-    x = fmt.var(ev.vkey(f.x_name)) if f.x_name else "x"
-    y = fmt.var(ev.vkey(f.y_name)) if f.y_name else "y"
+def _polynomial(f, defined, ev, fmt, function=None):
+    """The fitted polynomial in the names it defined: `y = a + b x + c x^2`, or `f(x) = ...` with
+    `function`, (its key, its variable)."""
+    if function:
+        x = name_latex(function[1])
+        y = rf"{fmt.var(function[0], function=True)}\left({x}\right)"
+    else:
+        x = fmt.var(ev.vkey(f.x_name)) if f.x_name else "x"
+        y = fmt.var(ev.vkey(f.y_name)) if f.y_name else "y"
     if len(defined) == 1 and f.degree > 0:
         base = fmt.var(defined[0][0])
         coeffs = [f"{{{base}}}_{{{k + 1}}}" for k in range(f.degree + 1)]

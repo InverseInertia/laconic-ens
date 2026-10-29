@@ -260,3 +260,55 @@ def test_a_document_collapses_a_large_matrix_but_a_snippet_keeps_it_whole():
         out = export(text, fmt)
         assert "\\cdots" in out and out.count(" & ") < 20, fmt
     assert snippet(rows(text)[0]).count(" & ") == 2 * 39
+
+
+# ---- units for data without them, and the polynomial as a function (#141) ---------------------------
+PASTED = "M = [0, 1, 2, 3; 0.1, 4.8, 19.7, 44.0]\n"
+
+
+def test_xunit_and_yunit_give_data_without_units_its_units():
+    r = by_line(PASTED + "!regression a, b, g\n  data: M\n  xunit: 's\n  yunit: 'm\n", 2)
+    assert r.kind == "regression" and "g = 4.9 m/s²" in r.text and "b = -0.04 m/s" in r.text
+    r = by_line(PASTED + "!regression c\n  data: M\n  degree: 2\n  yunit: 'm\n", 2)
+    assert r.text.startswith("c = [[0.06 -0.04 4.9]] m")        # a vector of coefficients takes y's unit
+    r = by_line(FALL + "  xunit: 'ms\n", 3)
+    assert r.kind == "regression" and "r = 4.9 m/s²" in r.text      # data with units is converted: the same fit
+
+
+@pytest.mark.parametrize("opts, message", [
+    ("  xunit: 's\n  degree: 2\n", "cannot share one vector"),
+    ("  xunit: 's\n  degree: 2\n  yunit: 2'm\n", "yunit is a unit such as 'm"),
+    ("  degree: 1\n  yunit: 'm\n  xunit: 's\n  function: c\n", "'c' is already a name this block defines"),
+])
+def test_bad_units_and_functions(opts, message):
+    r = by_line(PASTED + "!regression c\n  data: M\n" + opts, 2)
+    assert r.kind == "error" and message in r.error, r.error
+
+
+def test_a_bad_function_line_is_its_own_error():
+    r = by_line(PASTED + "!regression c\n  data: M\n  degree: 1\n  function: 2f\n", 5)
+    assert r.kind == "error" and "function names the fitted polynomial" in r.error
+
+
+def test_yunit_must_fit_data_with_units():
+    r = by_line(FALL + "  yunit: 's\n", 3)
+    assert r.kind == "error" and "y values are in m, which do not convert to s (yunit)" in r.error
+
+
+def test_function_defines_the_fitted_polynomial_below_the_block():
+    text = PASTED + "!regression a, b, g\n  data: M\n  xunit: 's\n  yunit: 'm\n  function: s(t)\nh = s(2's)\n"
+    r = by_line(text, 2)
+    assert r"\left(t\right) = a + b\,t + g\,{t}^{2}" in r.latex
+    assert by_line(text, 7).text.startswith("h = 19.58")
+    vec = PASTED + "!regression p\n  data: M\n  degree: 2\n  function: f\ny = f(2)\n"
+    assert by_line(vec, 6).text.startswith("y = 19.58")
+    named = FALL + "  function: pos\npos(2's)\n"                  # its variable is the x data's name
+    assert r"\left(t\right)" in by_line(named, 3).latex and by_line(named, 6).text.startswith("19.6")
+    model = DECAY.replace("  r2: R2\n", "  r2: R2\n  function: g\n")
+    assert "defines its function already" in by_line(model, 3).error
+
+
+def test_rename_reaches_the_function_and_unit_lines():
+    text = PASTED + "!regression a, b\n  data: M\n  xunit: 's\n  function: f(t)\nf(1's)\n"
+    out = apply(text, rename(text, "f", "fit")[0])
+    assert "  function: fit(t)" in out and out.endswith("fit(1's)\n")

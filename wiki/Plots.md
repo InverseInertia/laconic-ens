@@ -22,7 +22,7 @@ Where an expression is undefined (`1/x` at 0, `sqrt` of a negative) the line bre
 | `title`, `xlabel`, `ylabel` | text. Axis labels are `name [unit]` unless set. `x_max` or `x_{max}` is a subscript. An empty value removes the label |
 | `xlim`, `ylim` | the view you choose: `low .. high`, with units or plain numbers in the axis's display unit. Either end can be `auto` (automatic, 5% headroom) |
 | `xview`, `yview` | same form, but written by the mouse. It sits over `xlim`/`ylim`; removing it goes back to them |
-| `xunit`, `yunit` | the unit the axis is shown in, e.g. `'kN * 'm` (default: the typed range's unit for x, the simplest SI unit for y) |
+| `xunit`, `yunit` | the unit the axis is shown in, e.g. `'kN * 'm` (default: the typed range's unit for x, the simplest SI unit for y). [Points](#points) without units are read in it |
 | `xscale`, `yscale` | `lin` or `log` (`lin`) |
 | `xstep`, `ystep` | tick spacing in the display unit (automatic) |
 | `grid` | `on` or `off` (`on`) |
@@ -50,6 +50,18 @@ v = [10, 6.07, 3.68, 2.23, 1.35, 0.82] * 'm/'s
 !plot t, v                           points alone: no range, the axes fit the points
 !plot D                              or a matrix with an x row and a y row
 ```
+
+Points without units, such as a matrix pasted from a spreadsheet, are read in the units the plot gives its axes, so plotting them over a curve with units needs `xunit:` and `yunit:` (or the one for the axis that has units):
+
+```
+D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]        pasted, no units
+!plot g(t), t = 0's .. 3's
+  points: D
+  xunit: 's                                  D's x row is in seconds
+  yunit: 'm                                  and its y row in metres
+```
+
+Without them, a points line on an axis with units says which line to add. Points that have units are converted to the axes' units as usual.
 
 Each `points:` line is a series after the functions, numbered in order, so `color 2:`, `marker 2:` and `label 2:` style it. Points are drawn as markers with no line between them: a circle unless `marker: square`. Their values are converted to the axes' units, and a set whose units do not fit an axis is reported on its line. The label is the y vector's name, or the matrix's. A plot of points alone takes its axis names from the two vectors (`t [s]`, `v [m/s]`) and its x range from the points, with 5% to spare.
 

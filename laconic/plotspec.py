@@ -83,12 +83,15 @@ class Builder:
             self.errors.append((line, msg))
             return fallback
 
-    def unit_option(self, line, src, current):
+    def unit_option(self, line, src, current, free=False):
+        """The unit an `xunit:` or `yunit:` line gives, which `current` must convert to. With
+        `free`, an axis that so far has only points without units takes any unit."""
         def run():
             q = self.scalar(src)
             if q.magnitude != 1:
                 raise PlotError("A unit option is a unit such as 'mm, not a quantity")
-            self.ev.Q(1, current).to(q.units)
+            if not (free and self._dimless(current)):
+                self.ev.Q(1, current).to(q.units)
             return q.units
         return self.soft(line, run, None)
 
@@ -197,9 +200,9 @@ class Builder:
             xdisp = lo.units
         else:
             var, xdisp = sets[0][3][0], sets[0][1].units
-        if "xunit" in block:
-            xdisp = self.unit_option(at["xunit"], block["xunit"], xdisp) or xdisp
-        sets = self.in_axis(sets, 1, xdisp, "x")
+        xgiven = "xunit" in block and self.unit_option(at["xunit"], block["xunit"], xdisp, header_points is not None)
+        xdisp = xgiven or xdisp
+        sets = self.in_axis(sets, 1, xdisp, "x", bool(xgiven))
         if header_points is not None:
             px = np.concatenate([s[1] for s in sets])
             px = px[px > 0] if xlog else px
@@ -236,16 +239,16 @@ class Builder:
 
         # ---- the y axis ----
         first = next((q for qs in raw for q in qs if q is not None), None)
-        if first is None and sets:
+        only_points = first is None and bool(sets)
+        if only_points:
             first = sets[0][2][0]
         if first is None:
             ydisp = ev.Q(1).units
         else:
             ydisp = reduce_si(first, ev.ureg, ev.mode.freq).units if ev.mode.assume else first.units
-        if "yunit" in block and first is not None:
-            ydisp = self.unit_option(at["yunit"], block["yunit"], first.units) or ydisp
-        elif "yunit" in block:
-            ydisp = self.unit_option(at["yunit"], block["yunit"], ydisp) or ydisp
+        ygiven = "yunit" in block and self.unit_option(at["yunit"], block["yunit"],
+                                                       first.units if first is not None else ydisp, only_points)
+        ydisp = ygiven or ydisp
         ys = []
         for qs in raw:
             good = [q for q in qs if q is not None]
@@ -261,7 +264,7 @@ class Builder:
                                     "Plot them separately") from None
                 arr[[i for i, q in enumerate(qs) if q is not None]] = vals
             ys.append(arr)
-        sets = self.in_axis(sets, 2, ydisp, "y")
+        sets = self.in_axis(sets, 2, ydisp, "y", bool(ygiven))
         ys += [np.array(s[2], dtype=float) for s in sets]
         ylog = get("yscale", 0) == "log"
         if ylog:
@@ -332,16 +335,24 @@ class Builder:
             "inherited": {k: canon(k, v) for k, v in cfg.items()},
         }
 
-    def in_axis(self, sets, k, disp, axis):
-        """`sets` with part k (x or y) as plain numbers in the axis's unit. A set that does not fit
-        the axis is reported on its line and left out; the header's is the plot's error."""
+    def in_axis(self, sets, k, disp, axis, given=False):
+        """`sets` with part k (x or y) as plain numbers in the axis's unit. Values without units
+        are read in the axis's unit when the plot gives it (`xunit:`, `yunit:`), as a matrix pasted
+        without units needs. A set that does not fit the axis is reported on its line and left out;
+        the header's is the plot's error."""
         out = []
         for s in sets:
             q = s[k]
             try:
-                v = q.magnitude if self._dimless(disp) and q.dimensionless else q.to(disp).magnitude
+                if q.dimensionless and (given or self._dimless(disp)):
+                    v = q.to("dimensionless").magnitude
+                else:
+                    v = q.to(disp).magnitude
             except pint.errors.DimensionalityError:
                 msg = f"The {axis} values are in {q.units:~P}, and the {axis} axis is in {disp:~P}"
+                if q.dimensionless:
+                    msg = (f"The {axis} values have no units, and the {axis} axis is in {disp:~P}: give "
+                           f"`{axis}unit: {unit_source(self.ev, disp) or disp}` to read them in it")
                 if s[0] is None:
                     raise EvalError(msg) from None
                 self.errors.append((s[0], msg))
