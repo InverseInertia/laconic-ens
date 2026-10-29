@@ -90,7 +90,7 @@ def rename(text, old, new, confirm=False):
     raises RenameWarning unless `confirm` is set."""
     old, new = old.strip(), new.strip()
     if not old.startswith("'"):
-        old, new = old.lstrip("~"), new.lstrip("~")   # a global and its later uses are one name
+        old, new = old.lstrip("~$"), new.lstrip("~$")   # a global (or symbol) and its later uses are one name
     if old.startswith("'"):
         return _rename_unit(text, old[1:], new.removeprefix("'"), confirm)
     if not is_name(old):
@@ -103,7 +103,7 @@ def rename(text, old, new, confirm=False):
         raise RenameError(f"'{old}' is built in and cannot be renamed")
     if new in _builtins():
         raise RenameError(f"'{new}' is built in; choose another name")
-    used = {n.lstrip("~") for n in _names(text)}
+    used = {n.lstrip("~$") for n in _names(text)}
     if old not in used:
         raise RenameError(f"'{old}' does not appear in the sheet")
     if new in used:

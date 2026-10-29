@@ -1,7 +1,7 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
-from . import catalogue, regression, solver
+from . import catalogue, regression, solver, symsolve
 from .commands import COMMANDS
 from .evaluator import CONSTANTS, registry
 from .functions import FUNCTIONS
@@ -64,7 +64,8 @@ def vocabulary(global_units=()):
         "commands": [[c.name, c.summary] for c in COMMANDS],
         "solver": {
             "keys": {**{kind: [[k, solver.KEY_NOTES[k]] for k in keys] for kind, keys in solver.KEYS.items()},
-                     "regression": [[k, regression.KEY_NOTES[k]] for k in regression.KEYS]},
+                     "regression": [[k, regression.KEY_NOTES[k]] for k in regression.KEYS],
+                     "symsolve": [[k, symsolve.KEY_NOTES[k]] for k in symsolve.KEYS]},
             "methods": {"root": [[m, solver.METHOD_NOTES[m]] for m in solver.ROOT_METHODS],
                         "optimize": [[m, solver.METHOD_NOTES[m]] for m in solver.MIN_METHODS]},
             "choices": {"autorun": [["on", "solve again after the inputs change"], ["off", "only when Run is pressed"]]},

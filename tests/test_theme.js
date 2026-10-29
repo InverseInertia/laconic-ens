@@ -88,4 +88,14 @@ eq(T.warning({ paper: '#000000', text: '#111111' }),
   eq(d, T.defaults(), 'current theme not changed');
 }
 
+// A theme saved before symbols had a color gets its preset's symbol color, so it is still that preset.
+{
+  const { symbol, ...old } = T.PRESETS['Dark'];
+  const t = T.fromSaved({ colors: old }).theme;
+  eq(t.colors.symbol, symbol, 'old Dark theme gets Dark symbol color');
+  eq(T.presetOf(t.colors), 'Dark', 'and is still the Dark preset');
+  const custom = T.fromSaved({ colors: { ...old, err: '#123456' } }).theme;
+  eq(custom.colors.symbol, T.defaults().colors.symbol, 'a custom one gets the default symbol color');
+}
+
 console.log(`theme: ${n} checks passed`);

@@ -1,0 +1,37 @@
+## Symbolic math
+# A $ declares symbols: names that stand for themselves. Expressions over them are worked out
+# by sympy and shown as math. A symbolic result has no units, so numbers with units wait until
+# every symbol in an expression has a value; then it is worked out with units as usual.
+
+## A formula from an equation: the period of a pendulum
+$T, $L, ~$g
+!symsolve L
+  equation: T = 2*pi*sqrt(L/g)
+# Below the block L holds the formula. Give the symbols values and it is a length.
+~g = 9.81'm/'s^2
+T = 2's
+L_2s = L
+
+## Both roots of a quadratic
+$a, $b, $c, $x
+q = a*x^2 + b*x + c
+!symsolve x
+  equation: q = 0
+  pick: 2
+# x is the second solution below the block; with numbers for a, b and c it is a number.
+a = 1
+b = -3
+c = 2
+x_2 = x
+
+## Two equations, two unknowns
+$p, $r, $s
+!symsolve p, r
+  equation: p + r = s
+  equation: p - r = 1
+pr = p*r
+
+## A plot over a symbol draws its expression
+$t
+y = t^2 * exp(-t)
+!plot y, t = 0 .. 8

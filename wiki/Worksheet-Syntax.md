@@ -16,6 +16,7 @@ z = 3 + 4i   v = 10'V∠30'deg   complex numbers (see Complex Numbers)
 σ_max = 3   T_∞ = 300'K        Greek letters and subscripts in names
 'smoot = 1.7018'm              define a unit (see Units)
 ~g = 9.81'm / 's^2             global variable (see below)
+$a, $x   q = a*x^2            symbols, and an expression over them (see Symbolic Math)
 x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 u& = 3                         bar over a variable
 ```
@@ -63,13 +64,17 @@ A mark typed right after a name puts an accent over it in the typeset view and t
 
 Marks combine (``v`! `` is `\vec{\dot{v}}`). With a subscript the mark goes at the end and sits over the base letter: `F_x!` is `\vec{F}_{x}`. `x`, `x!`, `x@` and `x&` are four different variables.
 
+## Symbols
+
+A `$` in front of a name declares it a symbol, on a line of its own: `$x`, or `$a, $b, $c`. An expression over symbols is worked out by sympy and shown as math, and `!symsolve x` solves equations for them. Later uses are the plain name, `x`. A symbol can be global too: `~$g`, the `~` first. See [Symbolic Math](Symbolic-Math).
+
 ## Global variables
 
 A `~` on a definition makes the name global: `~g = 9.81'm / 's^2`. Every later use is the global one, written `~g`. With Math keys on, the editor adds the `~` for you: type `g` on a later line and the `~` appears as soon as the name is finished (a space, an operator, a bracket or Enter). The `~` is source-only and never typeset.
 
 - A global and an ordinary variable can never share a name. Plain `g` after `~g` still means the global, so assigning `g = 12` changes it. That line gets a warning, since a missing `~` there is usually a slip. Defining `~g` for a name already used without `~` is an error.
 - Globals are tinted in the editor and colored and underlined in the results. Hover one, in either place, to see the line that made it global. **Mark globals** in the header switches the marks in the results off; a note at the top of the results then says how many globals are unmarked. Warnings still show, and the LaTeX view and export are always plain.
-- `!clear` and `!clearf` name the globals they kept: `Cleared a, b. Kept global ~g`.
+- `!clear`, `!clearf` and `!clearsym` name the globals they kept: `Cleared a, b. Kept global ~g`.
 - Evaluation is top to bottom, so a global is only available below its definition (units are the exception, see [Units](Units)).
 - Functions work the same way: `~f(x) = x^2`, used as `f(2)`.
 
@@ -81,6 +86,7 @@ A line starting with `!` is a command. It affects every line below it.
 |---|---|
 | `!clear` | remove all non-global variables (functions are kept) |
 | `!clearf` | remove all non-global functions |
+| `!clearsym` | remove all non-global symbols (declared with `$`), keeping other variables |
 | `!noassume` / `!assume` | keep results in the units the arithmetic produced / back to simplest SI |
 | `!trigdeg` / `!trigrad` | bare numbers in trig functions are degrees / radians (default) |
 | `!short` / `!long` | show only each line's final result / full steps again |
@@ -106,3 +112,4 @@ The Rename button or F2 renames a variable, function or custom unit everywhere (
 
 - `# text` is a comment, `## text` a section heading (a `\subsection*` in the export).
 - `#@ ...` lines are written by LENS (the saved unit block) and are not displayed as comments.
+- The browser's spellchecker is on while the caret is on a comment, a heading or a plot's title, label or note, and off on calculations, so names and units are never marked. The editor is one text box, and the browser only checks words as you type them and drops every mark when spellcheck goes off: a misspelling is underlined while you write the line, and the marks go away when the caret moves to a calculation.

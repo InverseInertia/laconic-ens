@@ -23,6 +23,7 @@
     --rule: #1f6fc4;
     --err: #ff8f00;
     --global: #7ee0c3;
+    --symbol: #f0a8ff;
     --hit: rgba(194, 222, 255, .08);
     --hdr: 50px;
     --row: 28px;
@@ -130,8 +131,14 @@
   }
   #srcMarks.wrapped { white-space: pre-wrap; overflow-wrap: break-word; }
   #srcMarks mark { color: transparent; background: color-mix(in srgb, var(--global) 20%, transparent); border-bottom: 1.5px dotted var(--global); }
+  /* A symbol ($x, see symbolic.py) is tinted in the symbol color and not underlined: only globals
+     are. A global symbol takes the symbol color and the global's underline. */
+  #srcMarks mark.sym { background: color-mix(in srgb, var(--symbol) 30%, transparent); border-bottom: 0; }
+  #srcMarks mark.sym[data-global] { border-bottom: 1.5px dotted var(--global); }
   #out [data-global] { color: var(--global); border-bottom: 1.5px dotted var(--global); cursor: help; }
+  #out [data-symbol] { color: var(--symbol); cursor: help; }
   body.globals-off #out [data-global] { color: inherit; border-bottom: 0; cursor: inherit; }
+  body.globals-off #out [data-global][data-symbol] { color: var(--symbol); cursor: help; }
   .row .g-warn { font: 400 12.5px/1.35 var(--sans); color: var(--err); padding: 0 0 3px; }
   /* Kept at the top of the results while scrolling; render() puts it back after replacing the rows. */
   #out > #globalsChip { position: sticky; top: 0; z-index: 2; display: block; margin: 0 0 4px auto; padding: 1px 8px; font: 400 12px var(--sans); color: var(--text-soft); background: var(--paper); border: 1px dashed var(--rule); }
@@ -305,6 +312,12 @@
   .help a.wiki { float: right; font: 400 12px var(--sans); letter-spacing: 0; text-transform: none; }
   .help ul.examples { list-style: none; padding-left: 0; }
   .help ul.examples li { display: flex; align-items: center; gap: 10px; }
+  #changelog { margin-top: 24px; padding-top: 4px; border-top: 1px solid var(--rule); }
+  #changelog h3 { margin-top: 14px; }
+  #changelog h4 { margin: 16px 0 4px; font: 600 15px var(--sans); }
+  #changelog h4 a { text-decoration: none; }
+  #changelog h5 { margin: 8px 0 4px; font: 600 12px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); }
+  #changelog ul ul { margin: 4px 0 0; }
   @media (max-width: 560px) { .help .welcome { flex-direction: column; text-align: center; } }
   .u-empty { color: var(--text-soft); font-size: 13.5px; }
 
@@ -406,7 +419,7 @@
       <div id="helpLogo"><img src="/static/logo.svg" alt=""></div>
       <div>
         <h1 id="helpTitle">Welcome to LENS</h1>
-        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a></p>
+        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a> &middot; <a href="#changelog" id="changelogLink">Changelog</a></p>
         <p>The Laconic Engineering Notebook System: a units-aware worksheet. Type one expression per line on the left and the typeset result appears on the right as you type. Copy LaTeX line by line, or export a whole document.</p>
         <p>Worksheets are plain-text <code>.lens</code> files, so they diff and merge in git. Units are marked with an apostrophe (<code>'kN</code>), so a bare name is always a variable.</p>
         <p><a href="https://github.com/inverseinertia/laconic-ens/wiki" target="_blank" rel="noopener">Read the full documentation on the wiki &rarr;</a></p>
@@ -491,6 +504,17 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
   r2: R2                  <i>optional: a name for R&sup2;</i></pre>
     <p><code>!regression</code> fits a polynomial by least squares as the sheet runs, with no Run button. Each coefficient gets the units of y / x<sup>k</sup>, and the names it defines hold the fit below the block.</p>
 
+    <h3>Symbolic math <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Symbolic-Math" target="_blank" rel="noopener">Symbolic Math</a></h3>
+    <pre>$m, $a, $F                <i>$ declares symbols; ~$g a global one</i>
+p = m*a                   <i>a symbolic result, shown as math</i>
+!symsolve a               <i>solve for symbols with sympy, as you type</i>
+  equation: F = m*a       <i>below the block, a = F/m</i>
+m = 2'kg
+F = 10'N
+acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
+    <p>A symbolic result has no units: numbers without units go into it, and a number with units is an error until every symbol in the expression has a value, when it is worked out with units as usual. With several solutions, <code>pick: 2</code> chooses the one the unknowns hold below the block.</p>
+    <p>Symbols are shown in the theme's Symbols color; only globals are underlined, so a global symbol is in the symbol color and underlined. Hover one to see where it was declared. <code>!clearsym</code> removes the non-global symbols and keeps every other variable.</p>
+
     <h3>Output and export <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Output-and-Export" target="_blank" rel="noopener">Output and Export</a></h3>
     <ul>
       <li><strong>Typeset / LaTeX</strong> switches the right-hand side between rendered math and LaTeX source, with a Copy button per line. The menu beside it chooses how each snippet is wrapped: inline, <code>\[ \]</code> or <code>align*</code>.</li>
@@ -514,6 +538,11 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 
     <h3>Settings <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Settings" target="_blank" rel="noopener">Settings</a></h3>
     <p>Settings has five parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Greek letters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts and paper style). Settings are stored on this machine, so every browser shows the same ones, and the command line uses the same global units. Press <kbd>F1</kbd> any time to bring this window back.</p>
+
+    <section id="changelog" aria-labelledby="changelogTitle">
+      <h3 id="changelogTitle">Changelog <a class="wiki" href="#helpTitle" id="changelogTop">Back to top</a></h3>
+      <!-- changelog: rendered from CHANGELOG.md by server.py -->
+    </section>
   </div>
 </dialog>
 
@@ -663,14 +692,17 @@ let acWaiting = false;  // or {force}: suggestions were made from an older table
 const sheetBody = (extra = {}) => ({text: src.value, title: nameEl.value, view, wrap, ...extra});
 const post = (path, extra) => Api.request(path, sheetBody(extra));
 
-// The server tags global names with \htmlData{global=name}; that is the only HTML command it emits.
+// The server tags global names and symbols with \htmlData{global=name,symbol=name}; that is the only HTML command it emits.
 const KATEX_OPTS = {displayMode: true, throwOnError: false,
   trust: (c) => c.command === "\\htmlData", strict: (code) => (code === "htmlExtension" ? "ignore" : "warn")};
 // Math is drawn into a .math box that render() fits to the pane's width (mathfit.js, the rule the
 // PDF export uses): too wide, it is shrunk, or wrapped as `rows` (one stage per row) and shrunk.
 // KaTeX not loaded yet: the box shows the source, and render() runs again on load.
 function titleGlobals(el) {
-  if (markGlobals.checked) for (const g of el.querySelectorAll("[data-global]")) g.title = globalTitle(g.dataset.global);
+  for (const g of el.querySelectorAll("[data-global], [data-symbol]")) {
+    const t = markTitle(g.dataset);
+    if (t) g.title = t; else g.removeAttribute("title");
+  }
 }
 function typeset(el, tex, rows) {
   const m = document.createElement("div"); m.className = "math";
@@ -791,6 +823,14 @@ src.addEventListener("input", () => {
   if (!applying) acUpdate();
 });
 for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
+// Spellcheck comment and heading lines only: the textarea is one element, so it follows the caret.
+// Set only when it changes: Chromium drops the spelling marks each time it is set, even to the same value.
+const spellByLine = () => {
+  const on = Editing.isProse(src.value, src.selectionStart, src.selectionEnd);
+  if (src.spellcheck !== on) src.spellcheck = on;
+};
+for (const ev of ["input", "keyup", "click", "focus", "select"]) src.addEventListener(ev, spellByLine);
+document.addEventListener("selectionchange", () => { if (document.activeElement === src) spellByLine(); });
 
 function downloadBlob(name, blob) {
   const a = document.createElement("a");
@@ -1024,7 +1064,8 @@ function plotBody(r) {
 
 // ---- global variables ----------------------------------------------------
 // Globals are colored and underlined in the results (Mark globals turns that off, and a chip
-// then says how many are hidden) and always tinted in the editor. Hovering one names it.
+// then says how many are hidden) and always tinted in the editor. Symbols ($x) are colored in
+// their own color and not underlined, whatever Mark globals says. Hovering one names it.
 const markGlobals = $("#markGlobals"), srcMarks = $("#srcMarks"), chip = $("#globalsChip");
 markGlobals.checked = store.get("markGlobals", true);
 markGlobals.onchange = () => { store.set("markGlobals", markGlobals.checked); render(last); };
@@ -1037,26 +1078,45 @@ function globalTitle(name) {
   const d = globalDefs().get(name);
   return d ? `Global ${d.kind} ~${name}, defined on line ${d.line}` : `Global ~${name}`;
 }
+// The hover text of a marked name, from its data-global and data-symbol; "" for a global while
+// Mark globals is off. A global symbol says both.
+function markTitle({global, symbol}) {
+  if (symbol) {
+    const d = symbols().find((s) => s.symbol && s.name === symbol);
+    const what = global ? `Global symbol ~${symbol}` : `Symbol ${symbol}`;
+    return d ? `${what}, declared on line ${d.line}` : what;
+  }
+  return global && markGlobals.checked ? globalTitle(global) : "";
+}
 function paintGlobals() {
   const n = globalDefs().size, off = !markGlobals.checked;
   document.body.classList.toggle("globals-off", off);
   out.prepend(chip);
   chip.hidden = !(off && n);
   chip.textContent = `~ ${n} global${n === 1 ? "" : "s"} not marked`;
-  if (off) for (const g of out.querySelectorAll("[data-global]")) g.removeAttribute("title");
+  titleGlobals(out);
   paintSrcMarks();
 }
 // The marks come from the last evaluation, so a line edited since then is left unmarked until the next one.
+// Globals are tinted and underlined; symbols ($x) are tinted in their own color; a global symbol is that and underlined.
+function srcMarksOf(r, table) {
+  const at = new Map();
+  for (const [c, len, name] of Symbols.marks(r, table)) at.set(c, {c, len, global: name, symbol: null});
+  for (const [c, len, name] of Symbols.symbolMarks(r, table)) at.set(c, {...(at.get(c) || {c, len, global: null}), symbol: name});
+  return [...at.values()].sort((a, b) => a.c - b.c);
+}
 function paintSrcMarks() {
   const text = src.value.split("\n"), rows = Rows.current(last, text), table = symbols();
   const lines = text.map((line, i) => {
-    const r = rows[i], marks = r ? Symbols.marks(r, table) : [];
+    const r = rows[i], marks = r ? srcMarksOf(r, table) : [];
     if (!marks.length) return document.createTextNode(line + "\n");
     const f = document.createDocumentFragment();
     let pos = 0;
-    for (const [c, len, name] of marks) {
+    for (const {c, len, global, symbol} of marks) {
       f.append(line.slice(pos, c));
-      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len); m.dataset.global = name;
+      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len);
+      if (global) m.dataset.global = global;
+      if (symbol) { m.classList.add("sym"); m.dataset.symbol = symbol; }
       f.append(m); pos = c + len;
     }
     f.append(line.slice(pos) + "\n");
@@ -1075,7 +1135,7 @@ new ResizeObserver(syncSrcMarks).observe(src);
 // The marks sit under the textarea, so the pointer never reaches them; look underneath it instead.
 src.addEventListener("mousemove", (ev) => {
   const m = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.parentElement === srcMarks && el.tagName === "MARK");
-  const title = m ? globalTitle(m.dataset.global) : "";
+  const title = !m ? "" : m.dataset.symbol ? markTitle(m.dataset) : globalTitle(m.dataset.global);
   if (src.title !== title) src.title = title;
 });
 
@@ -1516,6 +1576,9 @@ addEventListener("pagehide", () => {
   if (a) Api.beacon(`/api/solve/${a.job}/interrupt`, {});
 });
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
+// The changelog links scroll Help, without touching the address.
+$("#changelogLink").onclick = (ev) => { ev.preventDefault(); $("#changelog").scrollIntoView({block: "start", behavior: "smooth"}); };
+$("#changelogTop").onclick = (ev) => { ev.preventDefault(); $("#helpDlg .dlg-body").scrollTo({top: 0, behavior: "smooth"}); };
 // Worked examples come from the program itself, so they are there however it was installed.
 Api.json("/api/examples").then((list) => {
   for (const ex of list) {

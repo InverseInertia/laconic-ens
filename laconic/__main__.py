@@ -73,6 +73,8 @@ def _launch(url, app):
     gives the page more of the keyboard (Ctrl+T is a new tab in a normal tab)."""
     if app:
         for exe in browser.app_candidates():   # the next one when a browser will not start
+            if sys.platform.startswith("linux"):
+                browser.spellcheck_on(browser.profile_dir(exe))
             if _spawn([exe] + _app_args(url, exe)):
                 return
         print("No Chromium-based browser found, opening the default browser instead")
@@ -209,7 +211,7 @@ def main():
     for r in results:
         if r.kind == "error":
             print(f"{r.n:>3}  ERROR  {r.error}", file=sys.stderr)
-        elif r.text and r.kind in ("assign", "expr", "regression"):
+        elif r.text and r.kind in ("assign", "expr", "regression", "symsolve"):
             print(f"{r.n:>3}  {r.text}" + ("   (out of date)" if r.stale else ""))
         elif r.solver:
             print(f"{r.n:>3}  {r.text}   ({_STATUS[r.solver.status]})")

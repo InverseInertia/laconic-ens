@@ -66,7 +66,7 @@ def test_rows_carry_their_part_of_the_table():
     assert [d["name"] for d in rows[0].symbols["defines"]] == ["g"]
     assert rows[0].symbols["defines"][0]["global"] is True
     assert rows[1].symbols["defines"][0] | {"id": 0} == {"id": 0, "name": "y", "kind": "variable", "line": 2,
-                                                         "until": None, "global": False, "value": "5", "params": []}
+                                                         "until": None, "global": False, "value": "5", "params": [], "symbol": False}
     assert rows[2].symbols["defines"][0]["params"] == ["g"]
 
 

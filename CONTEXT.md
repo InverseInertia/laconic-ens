@@ -11,10 +11,10 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : One line of sheet text, numbered from 1 as the editor numbers it. It carries its **kind**, its **owner**, its **expression spans** and its line ending (`eol`) separately from its text.
 
 **Line kind**
-: What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `unitdef`, `funcdef`, `assign`, `expr`, a block header (`plot`, `solver`) or a line a block owns (`plotopt`, `solveropt`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
+: What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `unitdef`, `funcdef`, `assign`, `symdef` (`$a, $b`), `expr`, a block header (`plot`, `solver`) or a line a block owns (`plotopt`, `solveropt`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
 
 **Block**
-: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py`.
+: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` or `!symsolve` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py` or `symbolic.py`.
 
 **Owner**
 : The block a line belongs to (a header owns itself), or none.
@@ -29,13 +29,29 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : The part of a line that holds an expression. A plot's limits and note positions are expressions; its title is text. Rename and global marking only look inside spans.
 
 **Token**
-: A name, unit, number or quoted text found by the worksheet lexer. A **name** may carry a `~` (global) in front and `` ` ``, `!`, `@` after, and `∞` as a whole subscript (`v_∞`); a **unit** is a quote and a unit name, or `'%`. The lexer patterns are also the grammar's terminals, and the editor's JS lexers are held to them by `tests/sheettext_vectors.json`.
+: A name, unit, number or quoted text found by the worksheet lexer. A **name** may carry a `~` (global) and then a `$` (a symbolic variable being declared) in front and `` ` ``, `!`, `@` after, and `∞` as a whole subscript (`v_∞`); a **unit** is a quote and a unit name, or `'%`. The lexer patterns are also the grammar's terminals, and the editor's JS lexers are held to them by `tests/sheettext_vectors.json`.
 
 **Definition**
-: What a code line defines: a variable (`x = ...`), a function (`f(x) = ...`, whose **parameters** are local to the line) or a unit (`'u = ...`).
+: What a code line defines: a variable (`x = ...`), a function (`f(x) = ...`, whose **parameters** are local to the line), a unit (`'u = ...`) or symbolic variables (`$a, $b`).
 
 **Global**
 : A name defined with a leading `~`. It survives `!clear`, and the editor marks each use of it.
+
+## Symbolic math (`symbolic.py`)
+
+**Symbolic variable** (a *symbol* on the page)
+: A name declared with a `$` on a line of its own (`$x`; `~$g` for a global one). It is a variable whose value is a sympy Symbol of its name, so the symbol table defines, clears and globalizes it like any other; the `$` is written only on the declaration. Not to be confused with a symbol table **Symbol**, which is one definition of any name (`Symbol.symbol` is true for a symbolic variable's).
+
+**Symbolic value**
+: A variable's value that is a sympy expression rather than a Quantity: a symbolic variable, or an expression over them (`q = a*x^2`). A line whose expression reaches one is built as a sympy expression from the AST; it is symbolic when symbols are left in it, and has no units.
+
+**Stand-in** (`Value`)
+: A number from the sheet inside a sympy expression, held as a sympy symbol that carries its Quantity, so Pint and not sympy does its unit arithmetic. A dimensionless one goes into a symbolic result as a number; one with units, or a matrix, cannot.
+
+**Late binding**
+: When a symbolic value is used, each symbol in it takes the value of the variable of its name where it is used (a later `x = 2`, a plot over x, a parameter x). With every symbol bound, the expression is a number, worked out with Pint, units and all.
+
+**Symbolic solve**: a `!symsolve x, y` block with `equation:` lines, solved by sympy each run (nothing stored). With one solution, or the one `pick: n` names, the unknowns hold it below the block.
 
 ## Line results (`lineresult.py`)
 

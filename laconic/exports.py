@@ -79,7 +79,7 @@ def element(r, commands=False):
         return Paragraph([r.text])
     if r.kind == "error":
         return Error(r.n, r.error)
-    if r.kind == "command":
+    if r.kind in ("command", "symdef"):   # a symbol declaration is kept as typed, like a command
         return Source(r.n, r.source.strip()) if commands else None
     if r.plot:
         return Figure(r.n, r.plot)
@@ -93,7 +93,7 @@ def element(r, commands=False):
         rows = [aligned(y, [poly])[0]] + [aligned(v["lhs"], [v["rhs"]])[0] for v in fit.values]
         return Math(r.n, rows, fit.model + r",\quad " + r",\; ".join(v["latex"] for v in fit.values),
                     note=r.warning or (STALE if r.stale else ""))
-    if r.kind in ("assign", "expr", "funcdef", "unitdef"):
+    if r.kind in ("assign", "expr", "funcdef", "unitdef", "symsolve"):
         return Math(r.n, aligned(r.lhs, r.stages), r.latex, flat=r.latex_rows,
                     note=r.warning or (STALE if r.stale else ""))
     return None

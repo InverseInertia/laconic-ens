@@ -12,7 +12,7 @@ M_max = w * L^2 / 8 -> 'kN * 'm      # 30.38 kN·m
 
 Units carry an apostrophe (`'kN`), so a bare name is always a variable. The same engine drives the web
 page, the LaTeX export and the command line. It also does matrices, fluid properties (CoolProp),
-plots, and equation solving and optimization (scipy).
+plots, equation solving and optimization (scipy), and symbolic math (sympy).
 
 ## Download and install
 

@@ -43,6 +43,8 @@ LINES = [
     ("!root x\n  equation: x = 1\n  # aside\n  y = 2\n  #@ result {}\n\n  z = 1",
      [("solver", 1), ("solveropt", 1), ("solveropt", 1), ("solveropt", 1), ("solveropt", 1),
       ("blank", None), ("assign", None)]),                # a solver owns every indented line until a blank
+    ("$a, ~$g\ny = a*g\n$x = 1\n!symsolve a\n  equation: a = 2",
+     [("symdef", None), ("assign", None), ("symdef", None), ("solver", 4), ("solveropt", 4)]),
     ("!root x\n  !root y\n  'u = 2'm",                     # owned lines are never headers; a unit definition stays one
      [("solver", 1), ("solveropt", 1), ("unitdef", 1)]),
     ("!plot x, x = 0 .. 1\n!minimize d\n  objective: d",

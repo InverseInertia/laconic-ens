@@ -7,6 +7,8 @@
     {"line": "r = 3'% * x", "tokens": [["name", 0, "r"], ["num", 4, "3"], ["unit", 5, "'%"], ["name", 10, "x"]]},
     {"line": "T = 20'°C", "tokens": [["name", 0, "T"], ["num", 4, "20"], ["unit", 6, "'°C"]]},
     {"line": "~g = 9.81'm/'s^2", "tokens": [["name", 0, "~g"], ["num", 5, "9.81"], ["unit", 9, "'m"], ["unit", 12, "'s"], ["num", 15, "2"]]},
+    {"line": "$a, $b, ~$g", "tokens": [["name", 0, "$a"], ["name", 4, "$b"], ["name", 8, "~$g"]]},
+    {"line": "y = a$b", "tokens": [["name", 0, "y"], ["name", 4, "a"], ["name", 5, "$b"]]},
     {"line": "σ_max = 2*τ", "tokens": [["name", 0, "σ_max"], ["num", 8, "2"], ["name", 10, "τ"]]},
     {"line": "v_∞ = 2*T_inf + v_∞_0!", "tokens": [["name", 0, "v_∞"], ["num", 6, "2"], ["name", 8, "T_inf"], ["name", 16, "v_∞_0!"]]},
     {"line": "x = ∞ + x∞", "tokens": [["name", 0, "x"], ["name", 8, "x"]]},
@@ -23,6 +25,9 @@
   "definitions": [
     {"line": "x = 1", "def": ["assign", "x", []]},
     {"line": "~g = 9.81'm/'s^2", "def": ["assign", "~g", []]},
+    {"line": "$a, $b", "def": ["symdef", "$a", []]},
+    {"line": "~$g", "def": ["symdef", "~$g", []]},
+    {"line": "$x = 2", "def": ["symdef", "$x", []]},
     {"line": "x` = 2", "def": ["assign", "x`", []]},
     {"line": "u& = 2", "def": ["assign", "u&", []]},
     {"line": "σ_max = 3", "def": ["assign", "σ_max", []]},
@@ -39,12 +44,14 @@
     {"text": "x = 1\n!root x, y\n  equation: x = y\n  equation: x + y = 2", "line": 3, "block": {"kind": "root", "unknowns": ["x", "y"]}},
     {"text": "!minimize d\n  objective: d^2\n  # a note\n  bounds d: 0 .. 1", "line": 4, "block": {"kind": "minimize", "unknowns": ["d"]}},
     {"text": "!maximize q\n  objective: q\n\n  equation: q", "line": 4, "block": null},
+    {"text": "$a, $x\n!symsolve x\n  equation: a*x = 1\n  pick: 1", "line": 4, "block": {"kind": "symsolve", "unknowns": ["x"]}},
     {"text": "!root x\n  equation: x = 1\ny = 2", "line": 3, "block": null},
     {"text": "D = [0, 1; 1, 3]\n!regression a, b\n  data: D\n  r2: R2", "line": 4, "block": {"kind": "regression", "unknowns": ["a", "b"]}},
     {"text": "!plot f(x), x = 0 .. 1\n  xlim: 0 .. 1", "line": 2, "block": null}
   ],
   "names_at": [
     {"text": "σ_max = 3", "caret": 2, "name": "σ_max"},
+    {"text": "$ab, $c", "caret": 2, "name": "$ab"},
     {"text": "p = 5'%", "caret": 7, "name": "'%"},
     {"text": "F = 12'kN", "caret": 6, "name": "'kN"},
     {"text": "F = 12'kN", "caret": 5, "name": ""},
