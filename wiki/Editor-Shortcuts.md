@@ -20,7 +20,7 @@ These are off on comment lines, on the text lines under a plot (title, labels, a
 | `Ctrl+M` | Array `[]`, or wraps the selection |
 | `Ctrl+T` or `Alt+T` | Transpose the term on the left or the selection. Press again to undo |
 | `Ctrl+<` | The polar angle sign `∠`, for complex numbers: `5'V∠30'deg`. On a US keyboard press Ctrl+Shift+, |
-| `Ctrl+G` | Greek letter for the character before the caret. Press again to revert |
+| `Ctrl+G` | Extended character (Greek letters, ∞, ∀) for the character before the caret. Press again to revert |
 | `Ctrl+[` , `Ctrl+Shift+[` | Wrap in `idx( , )` / `elem( , , )` |
 | `Ctrl+/`, `Ctrl+\` | A literal `/` (spaced) or `\`, with no fraction or radical slot |
 | `Enter` | With only closing brackets left on the line, finishes the line |
@@ -73,6 +73,6 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 
 `Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions.
 
-## Greek table
+## Extended characters
 
-Ctrl+G uses a Mathcad-style table, editable under Settings → Greek: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν, x→ξ, o→ο, p→π, r→ρ, s→σ, t→τ, u→υ, f→φ, c→χ, y→ψ, w→ω, and `G D Q L X P S F Y W` for Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω. It also maps 8→∞ and V→∀ (the struck-through V for volume). A table you edited before these were added does not have their rows: add them, or press Reset to defaults.
+Ctrl+G uses a table of extended characters, editable under Settings → Extended characters. The Greek letters follow Mathcad: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν, x→ξ, o→ο, p→π, r→ρ, s→σ, t→τ, u→υ, f→φ, c→χ, y→ψ, w→ω, and `G D Q L X P S F Y W` for Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω. It also maps 8→∞ and V→∀ (the struck-through V for volume). A table you edited before these were added does not have their rows: add them, or press Reset to defaults.

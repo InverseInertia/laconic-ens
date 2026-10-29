@@ -19,10 +19,12 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### Changes
 - **The editor scrolls past the last line**: as in most code editors, you can scroll half a page beyond the end of the sheet, so the line you are typing at the bottom of a long sheet can sit in the middle of the screen. (#129)
-- **∀ for volume is now typed as the ∀ character**: press Ctrl+G after a `V` (again to go back), and the worksheet keeps the ∀ itself, as in `∀_cv = 0.2'm^3`. A name spelled `forall` is an ordinary name again; replace it with ∀ to keep the symbol. A Greek table you edited earlier needs a `V`→`∀` row, or Reset to defaults. (#125)
+- **∀ for volume is now typed as the ∀ character**: press Ctrl+G after a `V` (again to go back), and the worksheet keeps the ∀ itself, as in `∀_cv = 0.2'm^3`. A name spelled `forall` is an ordinary name again; replace it with ∀ to keep the symbol. A table you edited earlier (Settings → Extended characters) needs a `V`→`∀` row, or Reset to defaults. (#125)
+- **Greek letters is now Extended characters**: the Ctrl+G table in Settings is called Extended characters, since it holds ∞ and ∀ as well as Greek letters. The table itself is unchanged.
 
 ### Fixes
 - **A vector of regression coefficients keeps its orientation**: with one name and `degree:`, `!regression p` gave a vector that was shown as a column in the results and as a row in its plain text, whatever the data. It now lies as the data does: a row for a matrix's x row or a row vector of x values, a column for a column vector, everywhere it is shown and when used below. (#126)
+- **Pressed buttons are readable on every theme**: on Codec, the pressed Typeset or LaTeX button, a hovered button and the chosen suggestion had dark text on a dark fill. Their text now takes the theme's paper or text color, whichever stands out more from the ink.
 
 ## [v0.4.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.5) (2026-10-28)
 

@@ -95,6 +95,13 @@ eq(T.warning({ paper: '#000000', text: '#111111' }),
   eq(d, T.defaults(), 'current theme not changed');
 }
 
+// Text on ink (a pressed or hovered button) takes whichever of paper and text reads better.
+eq(Object.fromEntries(Object.entries(T.PRESETS).map(([n, p]) => [n, T.onInk(p) === p.paper ? 'paper' : 'text'])),
+  { ...Object.fromEntries(Object.keys(T.PRESETS).map((n) => [n, 'paper'])), Codec: 'text' }, 'paper on ink, but text on Codec');
+ok(Object.values(T.PRESETS).every((p) => T.contrast(p.ink, T.onInk(p)) >= T.MIN_CONTRAST), 'readable on every preset');
+eq(T.onInk({ paper: '#777777', text: '#808080', ink: '#7a7a7a' }), '#000000', 'neither readable: black or white');
+eq(T.cssVars({ ...T.defaults(), colors: T.PRESETS.Codec })['--on-ink'], T.PRESETS.Codec.text, 'as a CSS variable');
+
 // Symbols are bright cyan on every preset.
 eq(Object.values(T.PRESETS).map((p) => p.symbol), Object.values(T.PRESETS).map(() => '#00e5ff'), 'cyan symbols everywhere');
 

@@ -13,6 +13,7 @@
  *   fromSaved(saved)         {theme, note}: a stored theme, validated; note says why it was reset
  *   presetOf(colors)         the preset with exactly these colors, or "custom"
  *   warning(colors)          the warning shown while text and paper are too close, or ""
+ *   onInk(colors)            the color for text on an ink background
  *   cssVars(theme)           {"--name": value} for the document root (--fs is the text size as a scale)
  *   toYaml(theme)            the theme as a YAML snippet, to copy and share
  *   fromYaml(text, current)  {theme, error}: a pasted YAML snippet over the current theme
@@ -100,12 +101,22 @@
       : '';
   }
 
+  // Pressed and hovered buttons are filled with ink. Their text is the paper color, or the theme's
+  // text color where that reads better (Codec's ink is nearly its paper); if neither can be read,
+  // black or white.
+  function onInk(colors) {
+    const best = [colors.paper, colors.text].sort((a, b) => contrast(colors.ink, b) - contrast(colors.ink, a))[0];
+    if (contrast(colors.ink, best) >= MIN_CONTRAST) return best;
+    return contrast(colors.ink, '#000000') >= contrast(colors.ink, '#ffffff') ? '#000000' : '#ffffff';
+  }
+
   function cssVars(theme) {
     const c = theme.colors;
     const vars = { '--sans': FONTS_SANS[theme.sans][1], '--mono': FONTS_MONO[theme.mono][1], '--fs': String((theme.size ?? 100) / 100) };
     for (const [k] of COLOR_FIELDS) vars['--' + k] = c[k];
     vars['--paper-deep'] = `color-mix(in srgb, ${c.paper} 94%, ${c.text})`;
     vars['--text-soft'] = `color-mix(in srgb, ${c.text} 75%, ${c.paper})`;
+    vars['--on-ink'] = onInk(c);
     vars['--hit'] = `color-mix(in srgb, ${c.text} 8%, transparent)`;
     // The logo is recolored from the theme: its blues are ink, text and rule, its accent is the error color.
     for (const [k, v] of Object.entries({
@@ -193,7 +204,7 @@
     return { theme, error: '' };
   }
 
-  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, SIZES, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, cssVars, toYaml, fromYaml };
+  const api = { FONTS_SANS, FONTS_MONO, COLOR_FIELDS, PRESETS, BACKGROUNDS, SIZES, MIN_CONTRAST, defaults, contrast, fromSaved, presetOf, warning, onInk, cssVars, toYaml, fromYaml };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Theme = api;
 })(typeof window !== 'undefined' ? window : globalThis);

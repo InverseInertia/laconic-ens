@@ -21,7 +21,7 @@
   'use strict';
   const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
 
-  // Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
+  // The extended characters behind Ctrl+G: a Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
   // 8 -> ∞ and V -> ∀ ride along: the free-stream subscript, and the struck-through V some fluid
   // mechanics texts use for volume.
   const DEFAULT_GREEK = {
@@ -569,7 +569,7 @@
     if (table[ch]) return edit(e - 1, e, table[ch], e - 1 + table[ch].length);
     const back = Object.keys(table).find((k) => table[k] === ch);
     if (back) return edit(e - 1, e, back, e);
-    return { message: `No Greek mapping for "${ch}"` };
+    return { message: `No extended character for "${ch}"` };
   }
 
   function backspace(t, s, e, ls, le) {

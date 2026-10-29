@@ -285,6 +285,17 @@ def test_text_size_scales_the_editor_and_results_together(page):
     assert page.evaluate(style, "#src") == [14, 28]
 
 
+def test_a_pressed_button_stays_readable_on_codec(page):
+    """Codec's ink is nearly its paper, so a pressed button's label takes the theme's text color."""
+    pressed = "getComputedStyle(document.querySelector('.seg button[aria-pressed=true]')).color"
+    assert page.evaluate(pressed) == "rgb(0, 56, 107)"           # LENS blueprint: paper on ink
+    page.click("#settingsBtn")
+    page.wait_for_selector("#settingsDlg[open]")
+    page.select_option("#preset", "Codec")
+    assert page.evaluate(pressed) == "rgb(143, 227, 200)"        # Codec: its text color on ink
+    page.click("#themeReset")
+
+
 def test_theme_yaml_export_and_import(page):
     page.click("#settingsBtn")
     page.wait_for_selector("#settingsDlg[open]")
