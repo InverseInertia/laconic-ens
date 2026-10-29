@@ -51,6 +51,8 @@ Trig functions read a bare number as radians unless `!trigdeg` is active; `asin`
 
 User functions are defined as `f(x, y) = expression`. They see every variable defined above them. A parameter is written as any variable is, with its marks (`` f(V`) = ρ*V` ``) or as ∀.
 
+For a sum over an index, or a vector or matrix built entry by entry, use a `!loop` block; see [Matrices](Matrices#loops).
+
 ## Accents over variables
 
 A mark typed right after a name puts an accent over it in the typeset view and the export.

@@ -4,7 +4,7 @@
  * turns a model into DOM. Runs under Node for tests.
  *
  *   model(row, {view, expanded})  null for a line shown inside its block's row (a plot's or
- *                       solver's option lines), else {line, end, cls, body, warning, stale, copy}.
+ *                       solver's option lines, a loop's lines), else {line, end, cls, body, warning, stale, copy}.
  *                       `expanded`: a Set of the lines whose large matrices are shown whole:
  *     line, end    the lines the row owns (a block header owns its block)
  *     cls          the row's class names
@@ -62,6 +62,7 @@
     solver: () => ({ type: 'solver' }),
     plotopt: null,
     solveropt: null,
+    loopline: null,
   };
 
   function model(r, opts) {

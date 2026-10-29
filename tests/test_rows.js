@@ -29,6 +29,7 @@ eq(body(row('plot', { plot: {} })), { type: 'plot' }, 'a plot draws from its pay
 eq(body(row('solver', { solver: {} })), { type: 'solver' }, 'so does a solver block');
 eq(R.model(row('plotopt'), {}), null, 'a plot option line has no row of its own');
 eq(R.model(row('solveropt'), {}), null, 'nor has a solver option line');
+eq(R.model(row('loopline'), {}), null, 'nor has a line a loop runs');
 
 // --- the common parts -------------------------------------------------------------------------
 const plot = R.model(row('plot', { n: 4, end: 6, stale: true, warning: 'w', plot: {} }), {});

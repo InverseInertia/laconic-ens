@@ -12,8 +12,8 @@ Every result answers one small interface, whatever its kind:
     r.symbols                        its part of the symbol table (see symbols.py)
 
 What only one kind has is its payload, behind `r.plot` (PlotPayload), `r.solver`
-(SolverPayload) or `r.regression` (RegressionPayload); each is None on every other line, a block
-header that failed included.
+(SolverPayload), `r.regression` (RegressionPayload) or `r.loop` (LoopPayload); each is None on
+every other line, a block header that failed included.
 
 `r.to_json()` is the row `/api/eval` sends. Its shape is pinned by tests/test_lineresult.py,
 so a change to it is a deliberate one; static/rows.js is the page's reader of it."""
@@ -94,6 +94,16 @@ class RegressionPayload:
 
 
 @dataclass
+class LoopPayload:
+    """A `!loop` block that ran (see sheet._run_loop): the block typeset as steps, one per row, and
+    what each name it assigned holds after the last pass. The page shows it as the row's math, so
+    nothing of it goes into the row JSON."""
+    code: list              # `&\textbf{for}\ i = 1, \ldots, 3`, then each step indented under its loop
+    values: list            # {name, lhs, rhs, latex} for each name the block assigned
+    passes: int             # of the top loop
+
+
+@dataclass
 class LineResult:
     n: int
     source: str
@@ -105,7 +115,7 @@ class LineResult:
     warning: str = ""       # shown under the result: the line works but may not do what was meant
     stale: bool = False     # reads a value from a solver whose result is out of date
     block: object = None    # a block header: the sheettext Block it starts, drawn or failed
-    payload: object = None  # PlotPayload, SolverPayload or RegressionPayload
+    payload: object = None  # PlotPayload, SolverPayload, RegressionPayload or LoopPayload
     symbols: dict = None    # this line's part of the symbol table
 
     @property
@@ -131,6 +141,10 @@ class LineResult:
     @property
     def regression(self):
         return self.payload if isinstance(self.payload, RegressionPayload) else None
+
+    @property
+    def loop(self):
+        return self.payload if isinstance(self.payload, LoopPayload) else None
 
     @property
     def latex(self):

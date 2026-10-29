@@ -11,8 +11,8 @@ from . import catalogue
 from .blockedit import newline
 from .evaluator import EvalError, Evaluator, is_symbolic
 from .latex import Fmt, Printer, name_latex
-from .lineresult import LineResult, PlotPayload, RegressionPayload, SolverPayload
-from .nodes import Assign, Convert, FuncDef, Neg, Num, UnitDef, is_literal, refs
+from .lineresult import LineResult, LoopPayload, PlotPayload, RegressionPayload, SolverPayload
+from .nodes import Assign, Call, Convert, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
@@ -20,7 +20,7 @@ from .plotspec import Builder
 from .sheettext import scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import commands, regression, solver, symsolve
+from . import commands, loop, regression, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -112,6 +112,9 @@ def _run(text, siunitx=False, global_units=None, until=None):
             results.append(r)
         elif l.kind == "plot":
             r, owned = _run_plot(i, raw, sheet.block(i), ev, fmt, used)
+            results.append(r)
+        elif l.kind == "loop":
+            r, owned = _run_loop(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "blank":
             results.append(LineResult(i, raw, "blank"))
@@ -309,6 +312,65 @@ def _run_regression(i, raw, handle, ev, fmt, used):
     info = RegressionPayload(block.names, f.degree, f.points, f.r2, model, values)
     return LineResult(i, raw, "regression", stages=[tex], block=handle, payload=info, stale=stale,
                       text="; ".join(plain) + f"  ({regression.describe(f)})"), owned
+
+
+def _run_loop(i, raw, handle, ev, fmt, used):
+    """A `!loop` line and the lines it runs. Worked out here, every run, like a regression: the
+    names its lines assign hold, below the block, what they held after the last pass. A line that
+    fails is reported on that line, and the names the block assigns are then out of date below."""
+    block = loop.parse_block(handle)
+    owned = {l.n: LineResult(l.n, l.text, "loopline") for l in handle.members}
+    for n, msg in block.errors.items():
+        owned[n] = LineResult(n, (owned[n].source if n in owned else raw), "error", error=msg)
+
+    def fail(msg):
+        ev.symbols.mark_stale(ev.vkey(n) for n in block.names())
+        return LineResult(i, raw, "error", error=msg, block=handle), owned
+
+    if block.problem:
+        return fail(block.problem)
+    nodes = block.nodes()
+    for node in nodes:
+        used |= refs(node).units
+    try:
+        done = loop.run(block, ev, describe)
+    except loop.StepError as e:
+        if e.n != i:
+            owned[e.n] = LineResult(e.n, owned[e.n].source, "error", error=str(e))
+            return fail(f"Line {e.n} failed{e.where}")
+        return fail(str(e))
+    stale = ev.symbols.tainted(nodes, local=block.indexes())
+    values, plain = [], []
+    for name in block.names():
+        if name not in done.values:
+            continue
+        q = catalogue.settle_ratio(done.values[name])
+        if ev.mode.assume:
+            q = reduce_si(q, ev.ureg, ev.mode.freq)
+        key = ev.symbols.define(name, q, text=fmt.plain(q), stale=stale).key
+        values.append(_value(key, fmt.var(key), fmt.quantity(q)))
+        plain.append(f"{key} = {fmt.plain(q)}")
+    code = _loop_code(block.top, Printer(ev, fmt, local=block.indexes()), 0)
+    rows = code + [f"{v['lhs']} &= {v['rhs']}" for v in values]
+    tex = r"\begin{aligned} " + r" \\ ".join(rows) + r" \end{aligned}"
+    times = "time" if done.passes == 1 else "times"
+    text = "; ".join(plain) + f"  (ran {done.passes} {times})" if plain else f"ran {done.passes} {times}"
+    return LineResult(i, raw, "loop", stages=[tex], text=text, block=handle, stale=stale,
+                      payload=LoopPayload(code, values, done.passes)), owned
+
+
+def _loop_code(top, printer, depth):
+    """The block as steps, one row each, starting with `&` for an aligned environment: each loop
+    as `for i = 1, ..., n`, each step under it indented, an assignment as `S <- S + i^2`."""
+    pad = r"\quad " * depth
+    rows = [rf"&{pad}\textbf{{for}}\ {name_latex(top.index)} = {printer.tex(top.lo)}, \ldots, {printer.tex(top.hi)}"]
+    for s in top.steps:
+        if isinstance(s, loop.Loop):
+            rows += _loop_code(s, printer, depth + 1)
+            continue
+        target = Call(s.func, (Name(s.name), *s.at)) if isinstance(s, loop.Entry) else Name(s.name)
+        rows.append(rf"&{pad}\quad {printer.tex(target)} \leftarrow {printer.tex(s.expr)}")
+    return rows
 
 
 def _polynomial(f, defined, ev, fmt):
