@@ -816,7 +816,11 @@ src.addEventListener("input", () => {
 });
 for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
 // Spellcheck comment and heading lines only: the textarea is one element, so it follows the caret.
-const spellByLine = () => { src.spellcheck = Editing.isProse(src.value, src.selectionStart, src.selectionEnd); };
+// Set only when it changes: Chromium drops the spelling marks each time it is set, even to the same value.
+const spellByLine = () => {
+  const on = Editing.isProse(src.value, src.selectionStart, src.selectionEnd);
+  if (src.spellcheck !== on) src.spellcheck = on;
+};
 for (const ev of ["input", "keyup", "click", "focus", "select"]) src.addEventListener(ev, spellByLine);
 document.addEventListener("selectionchange", () => { if (document.activeElement === src) spellByLine(); });
 
