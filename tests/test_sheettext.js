@@ -26,10 +26,10 @@ for (const { line, def } of V.definitions) {
   eq(d && [d.kind, d.name, d.params], def, line);
 }
 
-for (const { text, line, block } of V.solver_blocks) {
+for (const { text, line, block } of V.blocks) {
   let ls = 0;
   for (let i = 1; i < line; i++) ls = text.indexOf('\n', ls) + 1;
-  eq(A.solverBlock(text, ls), block, `${text} @${line}`);
+  eq(E.blockAt(text, ls), block, `${text} @${line}`);
 }
 
 for (const { text, caret, prose } of V.text_at) eq(E.isTextAt(text, caret), prose, `${text} @${caret}`);

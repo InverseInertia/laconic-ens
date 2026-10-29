@@ -25,7 +25,7 @@
       { keys: ['.'], text: 'Subscript after a name. <code>M.max</code> gives <code>M_max</code>. After a number it stays a decimal point' },
       { keys: ['^'], text: 'Exponent slot. <code>x^(&nbsp;)</code>' },
       { keys: ['→', ')'], or: true, text: 'Leave a slot. If it holds one simple term the parentheses go away: <code>x^(2)</code> becomes <code>x^2</code>' },
-      { keys: ['Enter'], text: 'With only closing brackets left on the line, finishes the line instead of splitting it' },
+      { keys: ['Enter'], text: 'With only closing brackets left on the line, finishes the line instead of splitting it. After a block header (<code>!plot</code>, <code>!root</code>, <code>!regression</code>, ...) or one of its indented lines, the new line is indented to match; on a line that is only that indent, Enter removes it and leaves the block. Works with Math keys off' },
       { keys: ['Backspace'], text: 'In an empty slot, removes the slot and its <code>^</code>, <code>/</code> or <code>sqrt</code>. After <code>, </code> or <code>; </code>, removes the separator and its space together' },
       { keys: ['Ctrl+M'], text: 'Array. <code>[&nbsp;]</code>, or wraps the selection' },
       { keys: [',', ';'], inline: true, text: 'A space is added after them automatically. In an array, <code>,</code> separates columns and <code>;</code> separates rows' },
@@ -53,7 +53,7 @@
       { keys: ['Alt+Up', 'Alt+Down'], text: 'Grow the selection one step at a time: term, product, sum, brackets, outwards to the whole line. Alt+&darr; steps back' },
     ] },
     { id: 'suggestions', title: 'Suggestions', rows: [
-      { keys: ['Tab'], text: "Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), and after two letters of a name" },
+      { keys: ['Tab'], text: "Accepts the highlighted suggestion. <kbd>&uarr;</kbd> <kbd>&darr;</kbd> choose, <kbd>Esc</kbd> closes. <kbd>Enter</kbd> accepts only after you have chosen with the arrows, otherwise it ends the line as usual. Suggestions appear after <code>'</code> (units), after <code>!</code> (commands), after two letters of a name, and on the indented lines of a block: its options, and the choices of an option such as <code>grid:</code> or <code>method:</code>" },
     ] },
   ];
 

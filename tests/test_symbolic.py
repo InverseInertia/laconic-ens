@@ -309,7 +309,7 @@ def test_rename_keeps_the_dollar_and_the_tilde():
 def test_the_editor_is_offered_symsolve_and_its_options():
     v = vocabulary()
     assert "symsolve" in [c for c, _ in v["commands"]]
-    assert [k for k, _ in v["solver"]["keys"]["symsolve"]] == ["equation", "pick"]
+    assert [k for k, _ in v["blocks"]["symsolve"]["keys"]] == ["equation", "pick"]
 
 
 def test_the_eval_endpoint_sends_symbolic_rows(tmp_path, monkeypatch):

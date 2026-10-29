@@ -62,7 +62,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `regression.py` | `!regression`: block parsing and the least-squares fit of a polynomial or a `model:` of any form in one or more variables, with each coefficient's units (a model's worked out from its dimensions); `columns` reads points, which a plot's `points:` shares. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
-| `vocab.py` | What the editor suggests: units, functions, constants, commands |
+| `vocab.py` | What the editor suggests: units, functions, constants, commands, and `blocks()`, one table of every block's option keys, choices and expression-valued keys, built from the lists `plotopts`, `solver`, `regression` and `symsolve` parse the blocks with |
 | `unittags.py` | The units dialog's tags: the standard tag list (units and Pint dimensions) and the cleaning of the user's tags before they are stored |
 | `settings.py` | The per-user settings file (the Ctrl+G extended characters, stored as `greek`, global units, the user's unit tags, the page's display preferences including the theme and whether to check for updates, and whether the welcome was shown) |
 | `server.py` | FastAPI app. It writes the preference keys (`settings.PREFS`) into the page |
@@ -84,10 +84,10 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `index.html` | The page: layout, styles, dialogs, and the glue script that wires the modules below to the DOM and browser APIs; it holds no logic of its own that a module could. `render()` draws each row model's body through a small table of body types |
 | `rows.js` | The row model: what the results pane shows for each eval row, from one table of line kind to body, and which row shows a given line. The page's one reader of the rows' common fields (`line`, `head`, `stale`, `current` for other modules) |
 | `mathfit.js` | Fitting typeset math to its width: leave it, shrink it, or wrap it one stage per row (`latex_rows`). The results pane and the PDF export (`pdfdoc.py`) both use it |
-| `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits); `merge` turns the server's edits into one such edit, and `applyEdits` makes them through the page's editor adapter; `nameAt` is the name F2 fills in; `isTextAt` says where the text is prose (outside `sheettext`'s expression spans) |
+| `editing.js` | Math keys and term-aware selection, as pure functions (`{from, to, insert, caret}` edits); `merge` turns the server's edits into one such edit, and `applyEdits` makes them through the page's editor adapter; `nameAt` is the name F2 fills in; `isTextAt` says where the text is prose (outside `sheettext`'s expression spans); `headerOf` and `blockAt` read the blocks, and `newline` keeps a block's indent on Enter |
 | `api.js` | The page's one client of the server: JSON and text requests, keepalive saves and beacons. An `{ok: false, error}` answer is the caller's to read; an HTTP error throws its `detail` |
 | `prefs.js` | Where each setting is kept: the display preferences (the keys the server writes into the page) on the server, the rest in browser storage, with older builds' prefixes read once. The page passes a storage adapter |
-| `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table. Also the open list: when it opens, what each key does, Ctrl+Space wrapping |
+| `autocomplete.js` | What to suggest, as pure functions. Your variables and functions come from the last symbol table; a block's options and their values from the vocabulary's `blocks` table, the same rule for every block. Also the open list: when it opens, what each key does, Ctrl+Space wrapping |
 | `symbols.js` | Reads the symbol table out of the eval rows: what a line sees, the globals, the marks on a line (globals, and symbols declared with `$`). An adapter of `symbols.py`; it applies no scope rule of its own |
 | `paste.js` | Table paste to matrix, pure functions |
 | `unitbrowser.js` | The units dialog: which units a search and a tag list, and adding and removing the user's tags, as pure functions |
@@ -108,7 +108,7 @@ The pure-function JS files also load under Node, which is how they are tested wi
 
 The editor never works out scope itself. Autocomplete, the `~` that Math keys add to a global and the global and symbol marks all read the symbol table of the last evaluation (`symbols.js`); between a keystroke and the next response they use the last table.
 
-The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and solver-block readers (`Autocomplete.definition`, `solverBlock`), its prose rule (`Editing.isTextAt`) and the name F2 fills in (`Editing.nameAt`), since it reads text as it is typed. They are adapters of `sheettext.py` across the HTTP seam: `tests/sheettext_vectors.json` is run by both `test_sheettext.py` and `test_sheettext.js`, so a change to one side that the other lacks fails a test.
+The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and block readers (`Autocomplete.definition`, `Editing.headerOf` and `blockAt`), its prose rule (`Editing.isTextAt`) and the name F2 fills in (`Editing.nameAt`), since it reads text as it is typed. They are adapters of `sheettext.py` across the HTTP seam: `tests/sheettext_vectors.json` is run by both `test_sheettext.py` and `test_sheettext.js`, so a change to one side that the other lacks fails a test.
 
 ## HTTP API
 

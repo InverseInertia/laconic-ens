@@ -295,3 +295,34 @@ def test_tick_labels_stay_inside_the_picture_at_scientific_scales(page):
         return b.left >= s.left - 0.5 && b.right <= s.right + 0.5;
     })""")
     assert inside and width > 0
+
+
+def labels(page):
+    page.wait_for_selector("#ac:not([hidden])")
+    return page.eval_on_selector_all("#ac .ac-item .lbl", "els => els.map(e => e.textContent)")
+
+
+def test_typing_plot_options_indents_and_suggests_keys_and_values(page):
+    """#137: a plot's option lines are typed as a solver's are, with its own keys and values."""
+    reset(page, "!plot sin(x), x = 1 .. 10")
+    page.keyboard.press("Enter")
+    page.keyboard.type("co")
+    assert labels(page) == ["color"]
+    page.keyboard.press("Tab")
+    page.keyboard.type("re")
+    assert labels(page) == ["red"]
+    page.keyboard.press("Tab")
+    page.keyboard.press("Enter")
+    page.keyboard.press("Control+Space")                  # every key, in the table's order
+    assert labels(page)[:3] == ["title", "xlabel", "ylabel"]
+    page.keyboard.type("xs")
+    assert labels(page) == ["xscale", "xstep"]
+    page.keyboard.press("Tab")
+    page.keyboard.press("Control+Space")
+    assert labels(page) == ["lin", "log"]
+    page.keyboard.type("lo")
+    page.keyboard.press("Tab")
+    assert value(page) == "!plot sin(x), x = 1 .. 10\n  color: red\n  xscale: log"
+    page.wait_for_selector(".pl-area")
+    page.wait_for_timeout(250)
+    assert not page.query_selector(".row.error") and "#d55e00" in page.inner_html(".plot-wrap")   # drawn in red

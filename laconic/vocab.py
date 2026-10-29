@@ -1,10 +1,11 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
-from . import catalogue, regression, solver, symsolve
+from . import catalogue, plotopts, regression, solver, symsolve
 from .commands import COMMANDS
 from .evaluator import CONSTANTS, registry
 from .functions import FUNCTIONS
+from .sheettext import SOLVER_EXPR_KEYS
 from .si import reduce_si
 
 # Offered first, and the ones that get SI prefixes spelled out (kN, mm, GPa).
@@ -54,6 +55,32 @@ def _units():
     return out
 
 
+def _block(notes, choices=None, math=(), args=None):
+    return {"keys": [[k, n] for k, n in notes.items()], "choices": choices or {},
+            "math": [k for k in notes if k in math], "args": args or {}}
+
+
+def blocks():
+    """What the editor offers on the indented lines of each block, by its command: the option keys
+    in order with what each is for, the values of a key that takes one of a few (`choices`), the
+    keys whose value is an expression (`math`: names and units are offered there), and the keys
+    that name something before the colon (`args`: `unknown` for `bounds x:`, `series` for
+    `color 2:`). Built from the tables the blocks are parsed with, so the two cannot differ."""
+    autorun = [["on", "solve again after the inputs change"], ["off", "only when Run is pressed"]]
+    colors = [[name, hex_] for name, hex_ in plotopts.COLORS.items() if name != "grey"]
+    out = {"plot": _block(plotopts.KEY_NOTES,
+                          {**{k: [[v, ""] for v in vs] for k, vs in plotopts.CHOICES.items()}, "color": colors},
+                          plotopts.MATH_KEYS, dict.fromkeys(plotopts.SERIES_KEYS, "series"))}
+    for kind, keys in solver.KEYS.items():
+        methods = solver.ROOT_METHODS if kind == "root" else solver.MIN_METHODS
+        out[kind] = _block({k: solver.KEY_NOTES[k] for k in keys},
+                           {"method": [[m, solver.METHOD_NOTES[m]] for m in methods], "autorun": autorun},
+                           SOLVER_EXPR_KEYS, {"bounds": "unknown"})
+    out["regression"] = _block({k: regression.KEY_NOTES[k] for k in regression.KEYS}, math=SOLVER_EXPR_KEYS)
+    out["symsolve"] = _block({k: symsolve.KEY_NOTES[k] for k in symsolve.KEYS}, math=SOLVER_EXPR_KEYS)
+    return out
+
+
 def vocabulary(global_units=()):
     """Everything the editor completes from, for this instance."""
     return {
@@ -62,14 +89,7 @@ def vocabulary(global_units=()):
         "functions": [[f, FUNCTIONS[f].signature] for f in sorted(FUNCTIONS)],
         "constants": sorted(CONSTANTS),
         "commands": [[c.name, c.summary] for c in COMMANDS],
-        "solver": {
-            "keys": {**{kind: [[k, solver.KEY_NOTES[k]] for k in keys] for kind, keys in solver.KEYS.items()},
-                     "regression": [[k, regression.KEY_NOTES[k]] for k in regression.KEYS],
-                     "symsolve": [[k, symsolve.KEY_NOTES[k]] for k in symsolve.KEYS]},
-            "methods": {"root": [[m, solver.METHOD_NOTES[m]] for m in solver.ROOT_METHODS],
-                        "optimize": [[m, solver.METHOD_NOTES[m]] for m in solver.MIN_METHODS]},
-            "choices": {"autorun": [["on", "solve again after the inputs change"], ["off", "only when Run is pressed"]]},
-        },
+        "blocks": blocks(),
     }
 
 

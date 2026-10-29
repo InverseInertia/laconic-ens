@@ -1,6 +1,6 @@
 # Plots
 
-A `!plot` line draws one or more functions of one variable over a range, and [points](#points) such as measurements. It is a command, so `plot` stays available as an ordinary name. Indented `key: value` lines under it set the details.
+A `!plot` line draws one or more functions of one variable over a range, and [points](#points) such as measurements. It is a command, so `plot` stays available as an ordinary name. Indented `key: value` lines under it set the details. Press `Enter` after the `!plot` line and the next line is indented for you; type a letter or two and the editor suggests the options, and then the values of those with a few choices (`grid: on`, `color: red`).
 
 ```
 !plot M(x), V(x), x = 0'm .. L
