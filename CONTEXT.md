@@ -11,10 +11,10 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : One line of sheet text, numbered from 1 as the editor numbers it. It carries its **kind**, its **owner**, its **expression spans** and its line ending (`eol`) separately from its text.
 
 **Line kind**
-: What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `unitdef`, `funcdef`, `assign`, `symdef` (`$a, $b`), `expr`, a block header (`plot`, `solver`) or a line a block owns (`plotopt`, `solveropt`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
+: What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `unitdef`, `funcdef`, `assign`, `symdef` (`$a, $b`), `expr`, a block header (`plot`, `solver`, `loop`) or a line a block owns (`plotopt`, `solveropt`, `loopline`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
 
 **Block**
-: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` or `!symsolve` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py` or `symbolic.py`.
+: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!loop`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` or `!symsolve` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py` or `symbolic.py`. A `!loop` owns every indented, non-blank line under it, as a solver does; a `!loop` among them, with the lines indented further under it, is a loop inside it, which `loop.py` reads out of the indentation.
 
 **Owner**
 : The block a line belongs to (a header owns itself), or none.

@@ -29,6 +29,8 @@ eq(body(row('plot', { plot: {} })), { type: 'plot' }, 'a plot draws from its pay
 eq(body(row('solver', { solver: {} })), { type: 'solver' }, 'so does a solver block');
 eq(R.model(row('plotopt'), {}), null, 'a plot option line has no row of its own');
 eq(R.model(row('solveropt'), {}), null, 'nor has a solver option line');
+eq(R.model(row('loopline'), {}), null, 'nor has a line a loop runs');
+
 eq(R.model(row('assign', { latex: 'x = 2', hidden: true }), {}), null, 'a line under !hide has no row (#135)');
 eq(R.model(row('plot', { plot: {}, hidden: true, snippet: 'S' }), { view: 'latex' }), null, 'in either view');
 eq(R.model(row('command', { source: '!hide', text: 'hidden' }), {}).head.command, '!hide', '!hide itself shows as a command');
@@ -37,7 +39,7 @@ eq(R.model(row('command', { source: '!hide', text: 'hidden' }), {}).head.command
 const head = (r, view) => R.model(r, { view }).head;
 eq(head(row('command', { source: '!sigfigs 3  ', text: 'Results show 3' })), { command: '!sigfigs 3', effect: 'Results show 3' },
   'a command names itself and what it did');
-for (const kind of ['plot', 'solver', 'regression', 'symsolve']) {
+for (const kind of ['plot', 'solver', 'regression', 'symsolve', 'loop']) {
   const r = row(kind, { source: '  !' + kind + ' a, b', latex: 'a = 1', plot: {}, solver: {} });
   eq(head(r), { command: '!' + kind + ' a, b', effect: '' }, `a ${kind} block names the command it was called with`);
   eq(head({ ...r, snippet: 'S' }, 'latex'), head(r), `in the LaTeX view too (${kind})`);

@@ -101,8 +101,10 @@
     const blocks = (opts && opts.vocab && opts.vocab.blocks) || {};
     const ls = lineStartOf(t, pos), le = lineEndOf(t, pos);
     const line = t.slice(ls, le);
-    // On a line a block owns, what its table says of the option key.
-    const block = blockAt(t, ls), table = block && blocks[block.kind];
+    // On a line a block owns, what its table says of the option key. A loop's lines are
+    // calculations, not options.
+    const owner = blockAt(t, ls), block = owner && owner.kind !== 'loop' ? owner : null;
+    const table = block && blocks[block.kind];
     const colon = line.indexOf(':');
     const key = block && colon >= 0 ? line.slice(0, colon).trim().split(/\s+/)[0] : null;
     const choices = table && key && table.choices[key];
@@ -126,9 +128,10 @@
     const before = t.slice(ls, s), after = t.slice(e, le);
 
     const head = Editing.headerOf(line);
-    const isPlot = !!head && head.kind === 'plot';   // a plot statement holds expressions, unlike other commands
+    // A plot or loop statement holds expressions, unlike other commands.
+    const isMath = !!head && (head.kind === 'plot' || head.kind === 'loop');
     // A solver header names its unknowns: variables defined above.
-    if (head && !isPlot && !/^\s*!$/.test(before)) {
+    if (head && !isMath && !/^\s*!$/.test(before)) {
       // A regression's header names new variables, the coefficients it defines: nothing to offer.
       if (/^[\d.]/.test(query) || (!force && query.length < 2) || head.kind === 'regression') return null;
       return { kind: 'name', start: s, end: e, query, tilde: false, only: ['variable'] };
@@ -153,7 +156,7 @@
       // Names and units only where the value is an expression; a title, a number or a size has none.
       if (!table || !table.math.includes(key)) return null;
     }
-    if (line.trimStart().startsWith('!') && !isPlot) {
+    if (line.trimStart().startsWith('!') && !isMath) {
       if (!/^\s*!$/.test(before)) return null;
       return { kind: 'command', start: s, end: e, query, tilde: false };
     }
@@ -161,7 +164,7 @@
     if (t[s - 1] === '.' && /[\d]/.test(t[s - 2] || '')) return null;
     // The left of = is a name being defined (or a unit, or a function's parameters): nothing to complete.
     // (An equation or constraint in a solver block has = on its right too, and is an expression.)
-    if (!isPlot && !block && !before.includes('=') && after.includes('=')) return null;
+    if (!isMath && !block && !before.includes('=') && after.includes('=')) return null;
     if (t[s - 1] === "'") return { kind: 'unit', start: s, end: e, query, tilde: false };
     const tilde = t[s - 1] === '~';
     if (t[s - 1] === '$') return null;                         // a symbol being declared: a new name

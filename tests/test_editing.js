@@ -435,6 +435,11 @@ eq(sim('A = [1, 2|]', ['Enter'], { enabled: false }), 'A = [1, 2\n|]', 'which le
 eq(sim('!root x\n  equation: f(x|)', ['Enter']), '!root x\n  equation: f(x)\n  |', 'finishing a line of closing brackets keeps the indent');
 eq(sim('!plot f(x), x = 0|.. 1', ['Enter']), '!plot f(x), x = 0\n|.. 1', 'splitting a header is an ordinary Enter');
 eq(sim('!plot f(x), x = 0 .. 1\n  y = 2|', ['Enter']), '!plot f(x), x = 0 .. 1\n  y = 2\n|', 'a line a plot does not own');
+eq(sim('!loop i = 1 .. 3|', ['Enter']), '!loop i = 1 .. 3\n  |', 'after a loop header');
+eq(sim('!loop i = 1 .. 3\n  S = S + i|', ['Enter']), '!loop i = 1 .. 3\n  S = S + i\n  |', 'after a loop line');
+eq(sim('!loop i = 1 .. 3\n  !loop j = 1 .. 2|', ['Enter']), '!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    |', 'a loop inside a loop indents two more');
+eq(sim('!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    x = i*j|', ['Enter']), '!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    x = i*j\n    |', 'and its lines keep that indent');
+eq(sim('!loop i = 1 .. 3\n  !loop j = 1 .. 2|\n  S = S + i', ['Enter']), '!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    |\n  S = S + i', 'a line under at the outer indent is not the inner loop\'s');
 eq(sim('  x = 1|', ['Enter']), '  x = 1\n|', 'an indented line outside any block');
 eq(sim('!plot f(x), x = 0 .. 1\n |  title: A', ['Enter']), '!plot f(x), x = 0 .. 1\n \n|  title: A', 'a caret inside the indent');
 eq(sim('!root x\n  equation: x = 1\n  |\n  bounds x: 0 .. 1', ['Enter']), '!root x\n  equation: x = 1\n|\n  bounds x: 0 .. 1', 'a bare indent between owned lines');

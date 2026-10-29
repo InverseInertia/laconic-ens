@@ -83,18 +83,22 @@
 
   // ---- blocks --------------------------------------------------------------
   // A block header (laconic/sheettext.py): `!plot ...` or a solver's `!root x, y` (also `!minimize`,
-  // `!maximize`, `!regression`, `!symsolve`). headerOf(line) -> {kind, unknowns} or null, where
-  // kind is the command, and a plot names no unknowns.
+  // `!maximize`, `!regression`, `!symsolve`), or `!loop i = 1 .. n`, at any indent since loops nest.
+  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, and a plot or a loop
+  // names no unknowns.
   const PLOT_HEAD = /^[ \t]*!plot[ \t]+\S/;
   const SOLVER_HEAD = /^[ \t]*!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*?))?[ \t]*$/;
+  const LOOP_HEAD = /^[ \t]*!loop(?:[ \t].*)?$/;
   const PLOT_OPT = /^[ \t]+[A-Za-z]\w*(?:[ \t]+\d+)?[ \t]*:/;
   function headerOf(line) {
     if (PLOT_HEAD.test(line)) return { kind: 'plot', unknowns: [] };
+    if (LOOP_HEAD.test(line)) return { kind: 'loop', unknowns: [] };
     const m = SOLVER_HEAD.exec(line);
     return m ? { kind: m[1], unknowns: (m[2] || '').split(',').map((x) => x.trim()).filter(Boolean) } : null;
   }
   // The block that the line starting at `ls` belongs to, as headerOf gives it, or null. A plot owns
-  // the `key: value` lines indented under it; a solver block every indented, non-blank line. The line
+  // the `key: value` lines indented under it; a solver block or a loop every indented, non-blank line
+  // (a loop inside a loop counts as its outer loop's). The line
   // being typed counts while it could still become one: only its indent, or the start of a key.
   function blockAt(t, ls) {
     const line = t.slice(ls, lineEndOf(t, ls));
@@ -103,7 +107,7 @@
     for (let p = ls; p > 0;) {
       const ps = lineStartOf(t, p - 1), l = t.slice(ps, p - 1);
       const h = headerOf(l);
-      if (h) return h.kind === 'plot' && !plotty ? null : h;
+      if (h && !(h.kind === 'loop' && /^[ \t]/.test(l))) return h.kind === 'plot' && !plotty ? null : h;
       if (!/^[ \t]+\S/.test(l)) return null;
       plotty = plotty && PLOT_OPT.test(l);
       p = ps;
@@ -112,15 +116,16 @@
   }
 
   // Enter keeps a block going: after a block header, the new line takes the block's indent (that of
-  // the line under the header, or two spaces); on an owned line, that line's indent. On a line that
+  // the line under the header, or two spaces more than the header's); on an owned line, that line's indent. On a line that
   // is only its indent, Enter takes the indent away instead, leaving the block. Null elsewhere.
   function newline(t, s, e) {
     const ls = lineStartOf(t, s), le = lineEndOf(t, e), line = t.slice(ls, lineEndOf(t, s));
     const nl = (indent) => edit(s, e, '\n' + indent, s + 1 + indent.length);
     if (headerOf(line)) {
       if (t.slice(e, le).trim() !== '') return null;      // splitting a header: an ordinary new line
+      const own = /^[ \t]*/.exec(line)[0];
       const next = /^[ \t]+(?=\S)/.exec(le < t.length ? t.slice(le + 1, lineEndOf(t, le + 1)) : '');
-      return nl(next ? next[0] : '  ');
+      return nl(next && next[0].length > own.length ? next[0] : own + '  ');
     }
     const indent = /^[ \t]*/.exec(line)[0];
     if (!indent || s - ls < indent.length || !blockAt(t, ls)) return null;

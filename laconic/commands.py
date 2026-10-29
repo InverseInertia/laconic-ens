@@ -93,8 +93,8 @@ class Text:
 
 @dataclass(frozen=True)
 class Statement:
-    """A command that starts a plot or solver block. Those lines are run by plotspec.py
-    and solver.py; one that gets here is malformed, and gets `usage` as its error."""
+    """A command that starts a plot, solver or loop block. Those lines are run by plotspec.py,
+    solver.py and loop.py; one that gets here is malformed, and gets `usage` as its error."""
     usage: str
     hint = ""
 
@@ -268,6 +268,8 @@ COMMANDS = (
             "fit a polynomial or a model to points: !regression a, b, c, then indented data: lines"),
     Command("symsolve", Statement("A symbolic solve reads `!symsolve x, y`"),
             "solve equations for symbols with sympy: !symsolve x, then indented equation: lines"),
+    Command("loop", Statement("A loop reads `!loop i = 1 .. n`: the index, then the first and last values"),
+            "run the indented lines once for each i: !loop i = 1 .. n"),
 )
 BY_NAME = {c.name: c for c in COMMANDS}
 

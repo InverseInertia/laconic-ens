@@ -7,8 +7,8 @@ anything; this is the one place that reads the shape of the text.
     sheet.owner(5)               the plot or solver Block that line 5 belongs to, or None
     sheet.line(5).tokens("name") the names in its expressions, with their columns
 
-A plot owns the `key: value` lines indented under it; a solver block owns every indented,
-non-blank line under it. Lines are numbered from 1 and split on "\\n" only, so the numbers are
+A plot owns the `key: value` lines indented under it; a solver block and a `!loop` own every
+indented, non-blank line under it. Lines are numbered from 1 and split on "\\n" only, so the numbers are
 the editor's; a "\\r" before the "\\n" belongs to the line's `eol`, not its text.
 
 The lexer patterns (NAME, UNIT, NUMBER, STRING) are the grammar's terminals as well. The
@@ -32,12 +32,15 @@ _TOKEN = re.compile(rf"(?P<text>{STRING})|(?P<unit>{UNIT})|(?P<num>{NUMBER})|(?P
 _NAME_RE = re.compile(rf"~?{IDENT}[`!@&]*\Z")   # a name as used: no `$`
 _SYMDEF_RE = re.compile(r"^~?\$")
 
+# A parameter is a name as a variable's is, with its ` ! @ & marks (`f(V`) = ...`), but no ~ or $.
+_PARAM = rf"{IDENT}[`!@&]*"
 _FUNC_RE = re.compile(
-    rf"^(~?{IDENT})\s*\(\s*({IDENT}(?:\s*,\s*{IDENT})*)\s*\)\s*=(?!=)\s*(.+)$")
+    rf"^(~?{IDENT})\s*\(\s*({_PARAM}(?:\s*,\s*{_PARAM})*)\s*\)\s*=(?!=)\s*(.+)$")
 _UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 
 _PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
+_LOOP_RE = re.compile(r"^!loop(?:[ \t]+(.*\S))?[ \t]*$")
 _SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*\S))?[ \t]*$")
 _PLOT_OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \t]*(.*?)[ \t]*$")
@@ -132,7 +135,7 @@ class Line:
     n: int              # 1-based
     text: str           # without its line ending
     eol: str            # "\n", "\r\n", or "" on a last line with none
-    kind: str           # blank heading meta comment command unitdef funcdef assign symdef expr plot plotopt solver solveropt
+    kind: str           # blank heading meta comment command unitdef funcdef assign symdef expr plot plotopt solver solveropt loop loopline
     block: int = None   # header line of the plot or solver block that owns this line (the header owns itself)
     spans: tuple = ()   # (start, end) of each part that holds expressions
     option: Option = None   # under a block: the parsed option line
@@ -163,9 +166,9 @@ class Line:
 
 @dataclass
 class Block:
-    """A `!plot` or a solver header and the lines it owns."""
-    kind: str           # "plot" or "solver"
-    command: str        # "plot", "root", "minimize", "maximize", "regression" or "symsolve"
+    """A `!plot`, solver or `!loop` header and the lines it owns."""
+    kind: str           # "plot", "solver" or "loop"
+    command: str        # "plot", "root", "minimize", "maximize", "regression", "symsolve" or "loop"
     args: str           # what follows the command on the header line
     lines: list = field(default_factory=list)   # the header Line, then the owned lines
 
@@ -224,6 +227,8 @@ def _kind(s):
         return "solver"
     if _PLOT_RE.match(s):
         return "plot"
+    if _LOOP_RE.match(s):
+        return "loop"
     if s.startswith("##"):
         return "heading"
     if s.startswith("#@"):
@@ -270,21 +275,30 @@ def scan(text):
             line.spans = _solver_spans(line.option)
         elif cur and cur.kind == "plot" and (o := plot_option(t)):
             line.option, line.spans = o, _plot_spans(t, o)
+        elif cur and cur.kind == "loop" and t[:1] in (" ", "\t") and s:
+            if _LOOP_RE.match(s):
+                line.spans = _header_spans(t)
+            elif not line.comment:
+                line.spans = ((0, len(t)),)
+                d = definition(s)
+                line.definition = d if d and d.kind == "assign" else None
         else:
             cur = None
-            if line.kind in ("solver", "plot"):
-                m = (_SOLVER_RE if line.kind == "solver" else _PLOT_RE).match(s)
+            if line.kind in ("solver", "plot", "loop"):
                 if line.kind == "solver":
+                    m = _SOLVER_RE.match(s)
                     cur = Block("solver", m.group(1), m.group(2) or "")
+                elif line.kind == "loop":
+                    cur = Block("loop", "loop", _LOOP_RE.match(s).group(1) or "")
                 else:
-                    cur = Block("plot", "plot", m.group(1))
+                    cur = Block("plot", "plot", _PLOT_RE.match(s).group(1))
                 blocks[n] = cur
                 line.spans = _header_spans(t)
             elif line.kind not in ("blank", "heading", "meta", "comment", "command"):
                 line.spans = ((0, len(t)),)
         if cur:
             if cur.lines and line.kind != "unitdef":   # a unit definition is one wherever it is
-                line.kind = cur.kind + "opt"
+                line.kind = "loopline" if cur.kind == "loop" else cur.kind + "opt"
             line.block = cur.lines[0].n if cur.lines else n
             cur.lines.append(line)
         if line.kind in ("unitdef", "funcdef", "assign", "symdef", "expr"):

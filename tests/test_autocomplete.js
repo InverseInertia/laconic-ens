@@ -72,6 +72,11 @@ eq(at('  xlim: 0 .. mo|').ctx !== null, true, 'suggestions still work in a limit
 // a !plot statement holds expressions, unlike other commands
 eq(at('!plot mom|ent(x), x = 0 .. 1').ctx.kind, 'name', 'names are suggested in a plot statement, even before the =');
 eq(at("!plot M(x), x = 0 .. 2'|").ctx.kind, 'unit', 'units are suggested in the range of a plot statement');
+eq(at('!loop i = 1 .. len|').ctx.kind, 'name', 'names are suggested in a loop statement');
+eq(at('!loop i = 1 .. 3\n  !loop j = 1 .. len|').ctx.kind, 'name', 'and in a loop inside a loop');
+eq(at('!loop i = 1 .. 3\n  S = S + idx|').ctx.kind, 'name', 'a loop\'s lines are expressions');
+eq(at('!loop i = 1 .. 3\n  ti|').ctx.kind, 'name', 'a loop line offers names, not option keys');
+eq(at('!loop i = 1 .. 3\n  S| = S + i').ctx, null, 'nothing for the name a loop line assigns');
 eq(at('!cl|').ctx.kind, 'command', 'other commands still complete as commands');
 eq(at('!plotspec gr|').ctx, null, 'no suggestions in a !plotspec option');
 

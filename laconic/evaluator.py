@@ -271,9 +271,9 @@ class Evaluator:
         exp = self.eval(node.right, scope)
         return self.unit_value(node.left, scope) ** float(exp.to("dimensionless").magnitude)
 
-    def ev_Implicit(self, n, scope):
-        """`12'kN/'m`: a number followed by units. A variable after a number
-        needs an explicit `*`, so `3 x` is an error rather than a guess."""
+    def check_implicit(self, n):
+        """A variable after a number needs an explicit `*`, so `3 x` is an error rather than a
+        guess. The LaTeX printer asks too, since a function's body is typeset before it runs."""
         v = n.number.value
         num = f"{v.imag:g}i" if isinstance(v, complex) else f"{v:g}"
         for f in n.factors:
@@ -281,6 +281,10 @@ class Evaluator:
                 what = f.name if isinstance(f, Name) else "an expression"
                 raise EvalError(f"{what} cannot follow a number directly. Write {num}*{what} to multiply; "
                                 f"units need an apostrophe, e.g. {num}'{what}")
+
+    def ev_Implicit(self, n, scope):
+        """`12'kN/'m`: a number followed by units."""
+        self.check_implicit(n)
         first = self.unit_value(n.factors[0], scope)
         if isinstance(n.number.value, complex) and _offset(first, self.ureg):
             raise EvalError("A complex number cannot carry an offset unit such as 'degC")

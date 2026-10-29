@@ -481,6 +481,13 @@ F = [10; 5] * 'kN         <i>a unit on its own is 1 of that unit</i>
 u = solve(A, F)
 idx(u, 1)   elem(A, 1, 2) <i>indexes count from 1</i>
 A * B    A .* B           <i>matrix product, elementwise product</i></pre>
+    <pre>S = 0
+M = zeros(3, 3)
+!loop i = 1 .. 3          <i>the indented lines run for i = 1, 2, 3</i>
+  S = S + i^2             <i>below the block, S = 14</i>
+  !loop j = 1 .. 3        <i>a loop inside, indented under it</i>
+    elem(M, i, j) = 1/(i + j - 1)   <i>an entry; idx(v, i) = for a vector's</i></pre>
+    <p>A <code>!loop</code> runs its lines as the sheet runs. Each line assigns a name or an entry of a matrix made above, and below the block each name holds its last value.</p>
     <p>There are also <code>inv</code>, <code>det</code>, <code>transpose</code>, <code>eigvals</code>, <code>lstsq</code> and more; the suggestion list shows them all. Every entry of a matrix shares one dimension. Paste cells from Excel or a Markdown table and they become a matrix (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> pastes plain text).</p>
 
     <h3>Material properties <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Material-Properties" target="_blank" rel="noopener">Material Properties</a></h3>
