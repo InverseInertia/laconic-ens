@@ -59,7 +59,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `solverjobs.py` | The worker process that runs a solve, so it can be interrupted; `Jobs.run` is its runner for the solve session |
 | `symbolic.py` | Symbolic math through sympy (imported only when a sheet declares a symbol): the sympy expression built from the AST, numbers with units held as stand-ins so Pint does their arithmetic, late binding of symbols to the values where they are used, the sympy-to-Pint walk for an expression whose symbols all have values, the sympy LaTeX and plain printers with the sheet's names and numbers, and the `!symsolve` solve |
 | `symsolve.py` | `!symsolve`: block parsing only (no sympy), so the editor's vocabulary can list its options. Run by `sheet.py` every time the sheet runs; the block is read by `sheettext` as a solver block |
-| `regression.py` | `!regression`: block parsing and the least-squares polynomial fit, with each coefficient's units. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
+| `regression.py` | `!regression`: block parsing and the least-squares fit of a polynomial or a `model:` of any form in one or more variables, with each coefficient's units (a model's worked out from its dimensions); `columns` reads points, which a plot's `points:` shares. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |

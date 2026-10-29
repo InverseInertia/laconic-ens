@@ -43,10 +43,11 @@ def kinds(text):
 # ---- syntax -----------------------------------------------------------------------
 
 def test_plot_statement_splits_series_and_range():
-    assert parse_plot("M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L")
-    assert parse_plot("f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2")
+    assert parse_plot("M(x), V(x), x = 0'm .. L") == (["M(x)", "V(x)"], "x", "0'm", "L", None)
+    assert parse_plot("f(a, b), t = 1.5 .. 2") == (["f(a, b)"], "t", "1.5", "2", None)
+    assert parse_plot("t, s") == ((), None, None, None, ["t", "s"])     # no range: points
     with pytest.raises(PlotError):
-        parse_plot("sin(x)")
+        parse_plot("a, b, c")
 
 
 def test_split_top_ignores_commas_inside_brackets():
@@ -626,3 +627,62 @@ def test_the_same_worksheet_draws_the_same_picture_twice():
     src = BEAM + "!plot M(x), x = 0'm .. L\n  title: T\n  xlim: 1'm .. 4'm\n"
     a, b = plots(src)[0], plots(src)[0]
     assert a.plot.svg == b.plot.svg and a.plot.spec == b.plot.spec and math.isfinite(a.plot.spec["y"]["lim"][0])
+
+
+# ---- points ---------------------------------------------------------------------------------------
+MEASURED = "t = [3, 1, 2, 0] * 's\ns = [44, 4.8, 19.7, 0.1] * 'm\n"
+
+
+def test_a_header_without_a_range_plots_points_read_as_regression_data():
+    sp = plot("D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1] * 'm\n!plot D\n")
+    (s,) = sp["series"]
+    assert s["line"] is False and s["marker"] == "circle" and s["label"] == "D"
+    assert s["x"] == [0, 1, 2, 3] and s["y"] == [1.1, 2.9, 5.2, 7.1]
+    assert sp["x"]["lim"] == pytest.approx([-0.15, 3.15]) and sp["x"]["label"] == "x [m]"
+    sp = plot(MEASURED + "!plot t, s\n  marker: square\n")
+    (s,) = sp["series"]
+    assert s["x"] == [0, 1, 2, 3] and s["y"] == [0.1, 4.8, 19.7, 44]   # sorted by x
+    assert s["marker"] == "square" and sp["x"]["label"] == "t [s]" and sp["y"]["label"] == "s [m]"
+
+
+def test_points_lines_overlay_measurements_on_a_curve_in_the_axes_units():
+    text = MEASURED + "!plot 5'm/'s^2*x^2, x = 0's .. 3's\n  points: t, s\n  points: [0, 1; 1000, 2000] * 'mm\n"
+    sp = plot(text)
+    assert [s["line"] for s in sp["series"]] == [True, False]
+    assert sp["legend"] == "top right" and sp["series"][1]["label"] == "s"
+    (bad,) = [r for r in run(text) if r.kind == "error"]
+    assert bad.n == 5 and "x values are in mm, and the x axis is in s" in bad.error
+    ok = plot(MEASURED + "!plot 5'm/'s^2*x^2, x = 0's .. 3's\n  points: [0, 1] * 's, [1000, 2000] * 'mm\n")
+    assert ok["series"][1]["x"] == [0, 1] and ok["series"][1]["y"] == [1, 2]
+
+
+def test_a_points_line_keeps_its_series_number_when_another_fails():
+    text = MEASURED + "!plot x*1'm/'s, x = 0's .. 3's\n  points: nothing, s\n  points: t, s\n  color 3: red\n"
+    sp = plot(text)
+    assert sp["series"][-1]["color"] == "#d55e00"
+    assert [r.kind for r in run(text)][-3:] == ["error", "plotopt", "plotopt"]
+
+
+@pytest.mark.parametrize("text, message", [
+    ("!plot [1, 2, 3]", "points is a matrix with 2 rows"),
+    ("!plot x", "A plot reads `!plot f(x), x = low .. high`"),
+    ("!plot [1, 2], [1, 2, 3]", "There are 2 x values and 3 y values"),
+    ("!plot [-1, 0; 3, 4]\n  xscale: log", "A log x axis needs points above zero"),
+])
+def test_points_that_cannot_be_drawn_are_the_plots_error(text, message):
+    r = run(text)[0]
+    assert r.kind == "error" and message in r.error, r.error
+
+
+def test_points_are_markers_without_a_line_in_the_svg_and_pgfplots():
+    r = plots(MEASURED + "!plot t, s\n  legend: top left\n")[0]
+    svg = r.plot.svg
+    assert svg.count("<circle") == 4 + 1 and "stroke-linejoin" not in svg   # four points and the legend's
+    tex = document(evaluate(MEASURED + "!plot t, s\n", siunitx=True).results)
+    assert "only marks" in tex
+
+
+def test_rename_reaches_a_points_line():
+    text = MEASURED + "!plot t, s\n!plot x, x = 0 .. 1\n  points: t, s\n"
+    out, _ = renamed(text, "t", "time")
+    assert "!plot time, s" in out and "  points: time, s" in out

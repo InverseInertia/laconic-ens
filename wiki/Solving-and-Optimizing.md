@@ -61,7 +61,7 @@ Any line computed from an out-of-date block (and any plot) gets a ⚠ beside it,
 
 ## Regression
 
-`!regression` fits a polynomial to points by least squares. It is written like the solver blocks, but a fit is quick and exact, so it is worked out every time the sheet runs: there is no Run button and nothing is stored in the block.
+`!regression` fits a polynomial to points by least squares, or any function of one or more variables given as a [model](#fitting-a-model). It is written like the solver blocks, but a fit is quick and exact, so it is worked out every time the sheet runs: there is no Run button and nothing is stored in the block.
 
 ```
 D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1] * 'm      a matrix of points, one column each: the x row, then the y row
@@ -88,9 +88,34 @@ y = [2.1, 3.9, 6.2, 7.8, 10.1] * 'N
 | `degree:` | the polynomial's degree, 0 to 20. With several names the degree is one less than their number, and `degree:` may be left out; with one name it is needed |
 | `r2:` | a name for R² (1 − residual sum of squares / total sum of squares) |
 
-The coefficient of xᵏ has the units of y / xᵏ, so the fit is the same whatever units the data is typed in. A single name holds every coefficient as one vector only when x has no units, since otherwise each coefficient has units of its own. Offset temperatures (°C, °F) are fitted in kelvin. A term whose part of y is rounding error (the zero coefficient of an exact fit) is shown as 0.
+The coefficient of xᵏ has the units of y / xᵏ, so the fit is the same whatever units the data is typed in. A single name holds every coefficient as one vector only when x has no units, since otherwise each coefficient has units of its own. That vector lies as the x values do: a row for a matrix's x row or a row vector, a column for a column vector. Offset temperatures (°C, °F) are fitted in kelvin. A term whose part of y is rounding error (the zero coefficient of an exact fit) is shown as 0.
 
-The row shows the fitted polynomial in the names the data came from (`s = s0 + v0 t + g2 t²`), then each coefficient and R². A fit needs at least degree + 1 different x values; real, finite numbers only. Data that reads an out-of-date solver result makes the fit, and everything computed from it, out of date as well (⚠). The exports print the polynomial and one row per value. Rename (F2) reaches the names in the header, `data:` and `r2:`.
+The row shows the fitted polynomial in the names the data came from (`s = s0 + v0 t + g2 t²`), then each coefficient and R². A fit needs at least degree + 1 different x values; real, finite numbers only. Data that reads an out-of-date solver result makes the fit, and everything computed from it, out of date as well (⚠). The exports print the polynomial and one row per value. Rename (F2) reaches the names in the header, `data:`, `model:` and `r2:`.
+
+### Fitting a model
+
+A `model:` line fits any function instead of a polynomial, of one variable or several. It is written as a function definition: its parameters are the data's variables, and the header's names are the coefficients to fit, each of which must appear in it.
+
+```
+t = [0, 1, 2, 3, 4, 5] * 's
+v = [10, 6.07, 3.68, 2.23, 1.35, 0.82] * 'm/'s
+!regression A, k
+  model: f(t) = A*exp(-k*t)                    A in m/s, k in 1/s, worked out from the model
+  data: t, v
+f(2's)                                         below the block, f is a function like any other
+
+!regression a, b, c
+  model: w(x, z) = a + b*x + c*z               several variables: one vector each, then y
+  data: x, z, w                                or a matrix with an x row, a z row and a w row
+```
+
+| | |
+|---|---|
+| `data:` | one vector per variable in the model's order, then the y values (`data: x, z, w`); or a matrix with a row for each variable, then the y row, one column per point |
+| units | each coefficient gets the units that make the model come out in y's units, worked out from the model: k in `exp(-k*t)` is in 1/s, A in m/s. A coefficient the model leaves free (`a*b*x`) is a plain number. A power whose exponent is fitted needs a base without units, `a*(x/1'm)^b` |
+| start | the fit starts from each coefficient's value above the block, which keeps its units (`w = 0.9'rad/'s`), or from 1. A model that is not linear in its coefficients may need a start near the answer; the row says when the fit did not settle |
+
+The model is fitted by least squares (`scipy.optimize.least_squares`), every time the sheet runs, so it takes at most 5000 points. It can use the sheet's names and call its functions; `degree:` is for a polynomial only. The row shows the model in the coefficients' names, then each coefficient and R².
 
 ## Command line
 

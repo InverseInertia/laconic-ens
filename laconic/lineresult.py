@@ -83,10 +83,10 @@ class RegressionPayload:
     the polynomial fits. It is worked out every time the sheet runs, so it is never out of date
     by itself; the row is `stale` when its data reads an out-of-date solver result."""
     names: list             # the coefficient names, lowest power first (or one vector's name)
-    degree: int
+    degree: int             # None for a `model:`
     points: int
     r2: float
-    model: str              # the fitted polynomial, typeset: y = a + b x + ...
+    model: str              # the fitted polynomial or model, typeset: y = a + b x + ...
     values: list            # {name, lhs, rhs, latex} for each coefficient, then R²
 
     def to_json(self):

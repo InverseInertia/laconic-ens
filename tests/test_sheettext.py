@@ -82,6 +82,8 @@ SPANS = [
     ("!plot f(x), x = 0 .. L", [" f(x), x = 0 .. L"]),
     ("!plot f(x), x = 0 .. 1\n  xlim: 0 .. L", ["0 .. L"]),
     ("!plot f(x), x = 0 .. 1\n  title: L", []),
+    ("!plot f(x), x = 0 .. 1\n  points: t, s", ["t, s"]),
+    ("!regression a\n  model: f(x) = a*x", ["f(x) = a*x"]),
     ('!plot f(x), x = 0 .. 1\n  note: "peak L" at (a, b)', ["a, b"]),
     ("!root x, y", [" x, y"]),
     ("!root x\n  equation: x^2 = L", ["x^2 = L"]),

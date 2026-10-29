@@ -47,7 +47,7 @@ _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
 # is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
 # (static/editing.js isTextAt; tests/sheettext_vectors.json holds the two together).
 PLOT_LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")
-SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "r2")
+SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "model", "r2")
 
 
 @dataclass(frozen=True)
@@ -242,7 +242,7 @@ def _header_spans(text):
 
 
 def _plot_spans(text, o):
-    if o.key in PLOT_LIMIT_KEYS:
+    if o.key in PLOT_LIMIT_KEYS or o.key == "points":
         return (o.value_span,)
     if o.key == "note":
         at, close = re.search(r'"\s+at\s*\(', text), text.rfind(")")

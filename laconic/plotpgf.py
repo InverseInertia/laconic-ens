@@ -82,6 +82,8 @@ def pgfplots(spec):
     for s in spec["series"]:
         style = [f"color={_color(s['color'])}", f"line width={s['width'] * 0.75:.2f}pt", s["dash"],
                  f"mark={_MARK[s['marker']]}, mark size=1.2pt" if s["marker"] != "none" else "mark=none"]
+        if not s.get("line", True):   # points: markers only
+            style.append("only marks")
         pts = " ".join(f"({_num(a)},{'nan' if b is None else _num(b)})" for a, b in zip(s["x"], s["y"]))
         lines.append(r"\addplot[" + ", ".join(style) + "] coordinates {\n" + pts + "\n};")
         if spec["legend"]:

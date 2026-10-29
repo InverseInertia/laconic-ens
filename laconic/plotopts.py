@@ -6,6 +6,9 @@ and the worksheet alone is enough to redraw the same graph.
     !plot M(x), x = 0'm .. L
       title: Bending moment
       xlim: 0'm .. 3.2'm
+      points: D             measured points, as !regression reads them: an x row and a y row
+
+    !plot t, s              points alone: two vectors, or a matrix with an x row and a y row
 
 Nothing here evaluates anything; expression-valued options (limits, units,
 notes) stay as source text until the plot is built."""
@@ -38,7 +41,7 @@ NUMBERS = {"samples": (int, 10, 5000), "width": (float, 0.5, 12.0),
 SERIES_KEYS = ("color", "width", "dash", "marker", "label")
 SHEET_KEYS = ("grid", "xscale", "yscale", "legend", "gaps", "size", "samples", "width", "dash", "marker")
 KEYS = (set(CHOICES) | set(TEXT) | set(NUMBERS) | set(SERIES_KEYS)
-        | {"size", "color", "xunit", "yunit", "xlim", "ylim", "xview", "yview", "note"})
+        | {"size", "color", "xunit", "yunit", "xlim", "ylim", "xview", "yview", "note", "points"})
 LIMIT_KEYS = PLOT_LIMIT_KEYS   # `lim` is the view the author chose, `view` what the mouse set over it
 
 COLORS = {"black": "#000000", "gray": "#7f7f7f", "grey": "#7f7f7f", "red": "#d55e00", "blue": "#0072b2",
@@ -72,14 +75,29 @@ def split_top(s):
 
 
 def parse_plot(args):
-    """`M(x), V(x), x = 0'm .. L`, what follows `!plot`, -> (series sources, variable, low, high)."""
+    """`M(x), V(x), x = 0'm .. L`, what follows `!plot`, -> (series sources, variable, low, high,
+    points). Without a range it is points alone, `D` or `t, s` (see `parse_points`): (), None, None,
+    None and the points' sources."""
     m = _RANGE_RE.match(args)
     if not m:
-        raise PlotError("A plot reads `!plot f(x), x = low .. high`")
+        try:
+            return (), None, None, None, parse_points(args)
+        except PlotError:
+            raise PlotError("A plot reads `!plot f(x), x = low .. high`, or `!plot D` or `!plot x, y` "
+                            "for points") from None
     series = split_top(m.group(1))
     if not all(series):
         raise PlotError("A plot needs an expression before each comma")
-    return series, m.group(2), m.group(3).strip(), m.group(4).strip()
+    return series, m.group(2), m.group(3).strip(), m.group(4).strip(), None
+
+
+def parse_points(v):
+    """`D` (a matrix with an x row and a y row) or `x, y` (two vectors) -> their sources."""
+    parts = split_top(v)
+    if not 1 <= len(parts) <= 2 or not all(parts):
+        raise PlotError("points reads `points: D`, a matrix with an x row and a y row, "
+                        "or `points: x, y`, two vectors")
+    return parts
 
 
 def _number(key, v):
@@ -132,6 +150,8 @@ def parse_value(key, v):
         if not v:
             raise PlotError(f"{key} needs a unit, e.g. 'kN * 'm")
         return v
+    if key == "points":
+        return parse_points(v)
     if key == "note":
         m = _NOTE_RE.match(v)
         parts = split_top(m.group(2)) if m else []

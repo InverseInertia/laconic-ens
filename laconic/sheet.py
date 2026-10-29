@@ -202,9 +202,9 @@ def _run_plot(i, raw, block, ev, fmt, used):
         nodes.append(node)
         return node
     try:
-        series, var, lo, hi = parse_plot(block.args)
+        series, var, lo, hi, points = parse_plot(block.args)
         b = Builder(ev, fmt, parse)
-        spec = b.build(i, series, var, lo, hi, opts)
+        spec = b.build(i, series, var, lo, hi, opts, points)
     except Exception as e:
         return LineResult(i, raw, "error", error=describe(e), block=block), owned
     for n, msg in b.errors:
@@ -291,13 +291,20 @@ def _run_regression(i, raw, handle, ev, fmt, used):
         r2 = ev.Q(f.r2, "dimensionless")
         if block.r2:
             r2_key = ev.symbols.define(block.r2, r2, text=fmt.plain(r2), stale=stale).key
+        if block.model:
+            m = block.model
+            fkey = ev.symbols.define_function(m.name, m.params, m.body).key
     except Exception as e:
         return fail(describe(e))
     values = [_value(key, fmt.var(key), fmt.quantity(q)) for key, q in defined]
     values.append(_value(r2_key if block.r2 else "R²", fmt.var(r2_key) if block.r2 else "R^{2}", fmt.quantity(r2)))
     plain = [f"{key} = {fmt.plain(q)}" for key, q in defined]
     plain.append(f"{r2_key if block.r2 else 'R²'} = {fmt.plain(r2)}")
-    model = _polynomial(f, defined, ev, fmt)
+    if block.model:
+        head = f"{fmt.var(fkey)}\\left({', '.join(name_latex(p) for p in m.params)}\\right)"
+        model = f"{head} = {Printer(ev, fmt, local=m.params).tex(m.body)}"
+    else:
+        model = _polynomial(f, defined, ev, fmt)
     tex = r"\begin{gathered} " + model + r" \\ " + r",\quad ".join(v["latex"] for v in values) + r" \end{gathered}"
     info = RegressionPayload(block.names, f.degree, f.points, f.r2, model, values)
     return LineResult(i, raw, "regression", stages=[tex], block=handle, payload=info, stale=stale,

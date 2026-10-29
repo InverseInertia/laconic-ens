@@ -3,7 +3,10 @@ and returns a plain dict (the spec). The SVG renderer, the pgfplots writer and t
 browser all read that dict, so a plot looks the same wherever it is drawn.
 
 Samples are taken point by point rather than on an array: `*` between arrays is a
-matrix product in this language, so a vectorised evaluation would be wrong."""
+matrix product in this language, so a vectorised evaluation would be wrong.
+
+Points (`points:` lines, or a header with no range) are read as `!regression` reads its data, and
+drawn as markers with no line between them."""
 import math
 
 import numpy as np
@@ -13,6 +16,7 @@ from .evaluator import _TINY, EvalError
 from .latex import name_latex
 from .parser import parse_expr
 from .plotopts import BUILTIN, PALETTE, PlotError, canon
+from .regression import RegressionError, columns
 from .si import reduce_si
 
 MAX_NOTES = 50
@@ -46,6 +50,11 @@ def unit_source(ev, units):
     return ""
 
 
+def _plain(src):
+    """A source that is just a name, so it can label an axis."""
+    return bool(src) and src.replace("_", "a").isalnum()
+
+
 def unit_text(units):
     """`kN·m`, for axis labels."""
     s = f"{units:~P}"
@@ -69,7 +78,7 @@ class Builder:
         carries on without it."""
         try:
             return fn()
-        except (EvalError, PlotError, pint.errors.PintError, ValueError, ZeroDivisionError) as e:
+        except (EvalError, PlotError, RegressionError, pint.errors.PintError, ValueError, ZeroDivisionError) as e:
             msg = f"Incompatible units: {e}" if isinstance(e, pint.errors.DimensionalityError) else str(e)
             self.errors.append((line, msg))
             return fallback
@@ -104,6 +113,17 @@ class Builder:
             return tuple(out)
         return self.soft(line, run, (None, None))
 
+    def points(self, srcs):
+        """The x and y quantities of one set of points, sorted by x, and a name for each axis."""
+        x, y = columns(self.ev, [self.ev.eval(self.parse(src)) for src in srcs], key="points")[0]
+        for q, what in ((x, "x"), (y, "y")):
+            if np.iscomplexobj(q.magnitude):
+                raise PlotError(f"The {what} values are complex; plot their re(), im(), abs() or arg()")
+        order = np.argsort(np.asarray(x.magnitude, dtype=float), kind="stable")
+        names = srcs if len(srcs) == 2 and all(_plain(s) for s in srcs) else ["x", srcs[0]]
+        return self.ev.Q(np.asarray(x.magnitude, dtype=float)[order], x.units), \
+            self.ev.Q(np.asarray(y.magnitude, dtype=float)[order], y.units), names
+
     # ---- sampling ---------------------------------------------------------------
     def point(self, node, scope, gaps, var, xv):
         try:
@@ -126,16 +146,19 @@ class Builder:
                                 "Use `gaps: break` to leave a gap there") from None
             return None
 
-    def build(self, line, series_src, var, lo_src, hi_src, opts):
+    def build(self, line, series_src, var, lo_src, hi_src, opts, header_points=None):
+        """`header_points`: the sources of the points a header with no range plots (`!plot t, s`)."""
         ev = self.ev
         cfg = {**BUILTIN, **ev.mode.plotdefs}
-        block, per, notes, at, idxline = {}, {}, [], {}, {}
+        block, per, notes, at, idxline, point_opts = {}, {}, [], {}, {}, []
         for ln, key, idx, val in opts:
             at[key] = ln
             if idx is not None:
                 idxline[idx] = ln
             if key == "note":
                 notes.append((ln, val))
+            elif key == "points":
+                point_opts.append((ln, val))
             elif idx is None:
                 block[key] = val
             else:
@@ -144,23 +167,49 @@ class Builder:
         def get(key, i, default=None):
             return per.get(i + 1, {}).get(key, block.get(key, cfg.get(key, default)))
 
+        # ---- points: (line, x, y, axis names, source, series number from 0); the header's have no
+        # line. They are numbered after the functions, in order, whether or not they could be read.
+        sets = []
+        if header_points is not None:
+            try:
+                sets.append((None, *self.points(header_points), ", ".join(header_points), 0))
+            except (EvalError, RegressionError, pint.errors.PintError) as e:
+                raise EvalError(f"A plot reads `!plot f(x), x = low .. high`; read as points, `{', '.join(header_points)}` "
+                                f"fails: {e}") from None
+        for k, (ln, srcs) in enumerate(point_opts, len(series_src) + len(sets)):
+            got = self.soft(ln, lambda: self.points(srcs))
+            if got:
+                sets.append((ln, *got, ", ".join(srcs), k))
+        count = len(series_src) + (header_points is not None) + len(point_opts)
+
         # ---- the range and the x axis ----
-        lo, hi = self.scalar(lo_src), self.scalar(hi_src)
-        if lo.dimensionless and lo.magnitude == 0 and not hi.dimensionless:
-            lo = ev.Q(0, hi.units)
-        elif hi.dimensionless and hi.magnitude == 0 and not lo.dimensionless:
-            hi = ev.Q(0, lo.units)
-        try:
-            hi = hi.to(lo.units)
-        except pint.errors.DimensionalityError:
-            raise EvalError(f"The ends of the range have different units ({lo.units:~P} and {hi.units:~P})") from None
-        xdisp = lo.units
+        xlog = get("xscale", 0) == "log"
+        if header_points is None:
+            lo, hi = self.scalar(lo_src), self.scalar(hi_src)
+            if lo.dimensionless and lo.magnitude == 0 and not hi.dimensionless:
+                lo = ev.Q(0, hi.units)
+            elif hi.dimensionless and hi.magnitude == 0 and not lo.dimensionless:
+                hi = ev.Q(0, lo.units)
+            try:
+                hi = hi.to(lo.units)
+            except pint.errors.DimensionalityError:
+                raise EvalError(f"The ends of the range have different units ({lo.units:~P} and {hi.units:~P})") from None
+            xdisp = lo.units
+        else:
+            var, xdisp = sets[0][3][0], sets[0][1].units
         if "xunit" in block:
             xdisp = self.unit_option(at["xunit"], block["xunit"], xdisp) or xdisp
-        x0, x1 = float(lo.to(xdisp).magnitude), float(hi.to(xdisp).magnitude)
+        sets = self.in_axis(sets, 1, xdisp, "x")
+        if header_points is not None:
+            px = np.concatenate([s[1] for s in sets])
+            px = px[px > 0] if xlog else px
+            if xlog and px.size == 0:
+                raise EvalError("A log x axis needs points above zero")
+            x0, x1 = self.auto_y(px, xlog, 0), self.auto_y(px, xlog, 1)
+        else:
+            x0, x1 = float(lo.to(xdisp).magnitude), float(hi.to(xdisp).magnitude)
         if not (math.isfinite(x0) and math.isfinite(x1)) or x0 >= x1:
             raise EvalError("A plot range goes from low to high")
-        xlog = get("xscale", 0) == "log"
         if xlog and x0 <= 0:
             raise EvalError("A log x axis needs a range above zero")
         xlim = self.window("x", block, at, xdisp, [x0, x1], xlog)
@@ -187,6 +236,8 @@ class Builder:
 
         # ---- the y axis ----
         first = next((q for qs in raw for q in qs if q is not None), None)
+        if first is None and sets:
+            first = sets[0][2][0]
         if first is None:
             ydisp = ev.Q(1).units
         else:
@@ -210,6 +261,8 @@ class Builder:
                                     "Plot them separately") from None
                 arr[[i for i, q in enumerate(qs) if q is not None]] = vals
             ys.append(arr)
+        sets = self.in_axis(sets, 2, ydisp, "y")
+        ys += [np.array(s[2], dtype=float) for s in sets]
         ylog = get("yscale", 0) == "log"
         if ylog:
             for a in ys:
@@ -224,25 +277,35 @@ class Builder:
         # ---- labels, series, notes ----
         xu, yu = unit_text(xdisp), unit_text(ydisp)
         labels = [get("label", i, series_src[i]) for i in range(len(nodes))]
+        labels += [get("label", i, names[1]) for _, _, _, names, _, i in sets]
         xauto, yauto = "xlabel" not in block, "ylabel" not in block
         xlabel = block["xlabel"] if not xauto else (f"{var} [{xu}]" if xu else var)
         if not yauto:
             ylabel = block["ylabel"]
-        elif len(nodes) == 1:
+        elif len(labels) == 1:
             ylabel = f"{labels[0]} [{yu}]" if yu else labels[0]
         else:
             ylabel = f"[{yu}]" if yu else ""
         legend = get("legend", 0)
-        legend = ("top right" if len(nodes) > 1 else None) if legend == "auto" else (None if legend == "off" else legend)
+        legend = ("top right" if count > 1 else None) if legend == "auto" else (None if legend == "off" else legend)
         series = []
-        for i, arr in enumerate(ys):
+        for i, arr in enumerate(ys[:len(nodes)]):
             sx, sy = self.break_poles([float(v) for v in xs],
                                       [None if not math.isfinite(v) else float(v) for v in arr], ylim)
             series.append({
                 "label": labels[i], "src": series_src[i],
                 "color": get("color", i, PALETTE[i % len(PALETTE)]),
                 "width": get("width", i), "dash": get("dash", i), "marker": get("marker", i),
-                "x": sx, "y": sy,
+                "x": sx, "y": sy, "line": True,
+            })
+        for k, (_, x, _, _, src, i) in enumerate(sets):   # points: markers, one per point, never joined
+            arr, marker = ys[len(nodes) + k], get("marker", i)
+            series.append({
+                "label": labels[len(nodes) + k], "src": src,
+                "color": get("color", i, PALETTE[i % len(PALETTE)]),
+                "width": get("width", i), "dash": get("dash", i), "marker": "circle" if marker == "none" else marker,
+                "x": [float(v) for v in x], "y": [None if not math.isfinite(v) else float(v) for v in arr],
+                "line": False,
             })
         out_notes = []
         for ln, (text, xs_, ys_) in notes[:MAX_NOTES]:
@@ -250,8 +313,8 @@ class Builder:
             if pos:
                 out_notes.append({"text": text, "x": pos[0], "y": pos[1]})
         for idx in per:
-            if idx > len(nodes):
-                self.errors.append((idxline[idx], f"There is no series {idx}; this plot has {len(nodes)}"))
+            if idx > count:
+                self.errors.append((idxline[idx], f"There is no series {idx}; this plot has {count}"))
 
         def axis(name, disp, lim, scale, step_key):
             step = block.get(step_key)
@@ -268,6 +331,23 @@ class Builder:
             "series": series, "notes": out_notes,
             "inherited": {k: canon(k, v) for k, v in cfg.items()},
         }
+
+    def in_axis(self, sets, k, disp, axis):
+        """`sets` with part k (x or y) as plain numbers in the axis's unit. A set that does not fit
+        the axis is reported on its line and left out; the header's is the plot's error."""
+        out = []
+        for s in sets:
+            q = s[k]
+            try:
+                v = q.magnitude if self._dimless(disp) and q.dimensionless else q.to(disp).magnitude
+            except pint.errors.DimensionalityError:
+                msg = f"The {axis} values are in {q.units:~P}, and the {axis} axis is in {disp:~P}"
+                if s[0] is None:
+                    raise EvalError(msg) from None
+                self.errors.append((s[0], msg))
+                continue
+            out.append(s[:k] + (np.asarray(v, dtype=float),) + s[k + 1:])
+        return out
 
     def window(self, name, block, at, disp, auto, log):
         """An axis's limits in three layers: `xview` (what the mouse set) over `xlim` (what the
