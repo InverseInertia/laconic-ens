@@ -1,11 +1,29 @@
-"""Fixtures for the browser tests: a live server and a Chromium page on it (test_ui.py,
-test_plots_ui.py, test_solver_ui.py). Each skips when its dependency is not installed."""
+"""Fixtures: an offline update check for every test, and for the browser tests a live server and a
+Chromium page on it (test_ui.py, test_plots_ui.py, test_solver_ui.py). Each skips when its
+dependency is not installed."""
 import os
 import socket
 import threading
 import time
 
 import pytest
+
+
+def _offline(url, timeout):
+    raise OSError("tests do not use the network")
+
+
+@pytest.fixture(autouse=True)
+def no_update_check(monkeypatch):
+    """No test asks GitHub for releases: the update check (updates.py) is offline, and installs
+    and exits nothing. A test that wants a release replaces `updates.updater` itself."""
+    from laconic import updates
+
+    def refuse(*a, **k):
+        raise AssertionError("a test tried to start or stop a program")
+
+    monkeypatch.setattr(updates, "updater", updates.Updater(fetch=_offline, download=refuse, spawn=refuse,
+                                                            exit=refuse, where=updates.Place("manual")))
 
 
 @pytest.fixture(scope="module")

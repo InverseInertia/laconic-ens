@@ -15,12 +15,13 @@
 # installs the newest release whose files are beside it. A build of your own
 # (lens-linux-x64.tar.gz, lens-icon.png and lens-file-icon.png beside it) is installed without
 # asking GitHub. The archive holds the folder PyInstaller builds: lens/lens and lens/_internal.
+# A copy of the script is kept in the install folder, as install-linux.sh, for LENS's Update button.
 # No root needed; XDG_DATA_HOME is honoured.
 set -eu
 
 # The installer's own version, numbered apart from LENS's: bump it when this script changes
 # (see wiki/Releases-and-Packaging.md).
-INSTALLER_VERSION="2.1.0"
+INSTALLER_VERSION="2.2.0"
 REPO="inverseinertia/laconic-ens"
 LATEST_API="${LENS_RELEASE_API:-https://api.github.com/repos/$REPO/releases/latest}"
 DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -150,6 +151,9 @@ is_png() {  # a proxy or captive portal can hand back an HTML page instead of th
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
+# A copy of this script goes into the install folder, where LENS's Update runs it (laconic/updates.py).
+# Taken now: the script may be running from the folder it is about to replace.
+if [ -f "$0" ]; then cp "$0" "$STAGE/install-linux.sh"; fi
 fetch "$PREFIX-linux-x64.tar.gz" "$STAGE/lens.tar.gz"
 fetch "$PREFIX-icon.png" "$STAGE/icon.png"
 fetch "$PREFIX-file-icon.png" "$STAGE/file-icon.png"
@@ -169,6 +173,7 @@ remove_existing
 mkdir -p "$APP_DIR" "$(dirname "$ICON")" "$(dirname "$DESKTOP")" "$(dirname "$MIME_XML")" "$(dirname "$FILE_ICON")"
 cp -R "$STAGE/app/lens/." "$APP_DIR/"
 if [ -n "$BASE" ]; then echo "$RELEASE" > "$APP_DIR/version"; fi  # what the next run updates from
+if [ -f "$STAGE/install-linux.sh" ]; then install -m 755 "$STAGE/install-linux.sh" "$APP_DIR/install-linux.sh"; fi
 install -m 644 "$STAGE/icon.png" "$ICON"
 install -m 644 "$STAGE/file-icon.png" "$FILE_ICON"
 # The .lens file type. A file type's icon can only be named, so it is found through the icon theme.

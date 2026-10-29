@@ -15,6 +15,16 @@ Windows and Linux programs are on the [releases page](https://github.com/inverse
 
 Double-clicking the program opens the UI in an app window. It quits a few seconds after the window closes. On Linux the window is a Chromium app window running in a browser profile of its own, kept in `~/.cache/laconic-lens/browser-<browser>`, so the panel, dock and Alt+Tab list show it as LENS with the LENS icon rather than as another browser window; it does not share the extensions, logins or history of your everyday browser. LENS turns the browser's spellchecker on in that profile, with a dictionary for your language, so comments and headings are spellchecked; turning it off from the window's right-click menu sticks. A browser installed from your distribution's packages (or Google's, Brave's...) is used before a flatpak or snap one, even when the sandboxed one is your default browser: the desktop always shows a sandboxed browser's windows as that browser. Ubuntu installs Chromium only as a snap, so to see the LENS icon there, install Google Chrome, Brave, Vivaldi or Edge from its maker's `.deb`; LENS picks it over the snap. On Wayland the window is opened through XWayland, since that is the only way Chromium lets it carry the LENS name. With no Chromium-family browser installed, LENS opens in a tab of your default browser instead, and that tab shows as the browser. Double-clicking a `.lens` file (once set up as above) opens that sheet, and **Save** writes back to it.
 
+## Updating
+
+When a newer release is out, a small button with its version (for example **⇧ v0.5.0**) appears beside the version in the header. Click it to see what changed, then **Update**:
+
+- **Windows:** LENS downloads the release's setup wizard and starts it, then closes so the wizard can replace it. Go through the wizard as for a first install; it keeps your choices and your settings, and its last page can start the new LENS.
+- **Linux:** LENS runs the installer kept in its install folder (`~/.local/share/laconic-lens/install-linux.sh`, which the installer copies there) for that release, closes while it installs, and opens again when it has finished. The installer's output goes to `~/.cache/laconic-lens/update.log`.
+- A copy not installed by a LENS installer (one installed from source, or a program unpacked by hand) cannot update itself; the dialog links to the release instead. A source checkout says `dev` and is never offered an update.
+
+The check asks GitHub once each time LENS starts and does nothing offline. Turn it off under Settings → Updates.
+
 ## From source
 
 Needs Python 3.10 or newer. The dependencies include CoolProp, scipy and sympy.

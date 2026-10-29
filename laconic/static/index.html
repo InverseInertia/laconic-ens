@@ -71,6 +71,13 @@
   header button.sq { width: 28px; height: 28px; padding: 0; }
   header button.help { font-weight: 600; }
   header button.wide { width: auto; padding: 3px 10px; }
+  /* Shown only when a newer release is out (#134): small, beside the version it would replace. */
+  header button.update { width: auto; padding: 1px 8px; font-size: 12px; color: var(--paper); background: var(--ink); border-color: var(--ink); }
+  header button.update[hidden] { display: none; }
+  #updateNotes { border-left: 2px solid var(--rule); padding-left: 10px; font: 400 13px/1.45 var(--sans); }
+  #updateNotes h5 { margin: 8px 0 2px; font: 600 13px var(--sans); }
+  #updateNotes ul { margin: 0 0 6px; padding-left: 18px; }
+  #updateDlg a { color: var(--text); }
   .exportMenu { position: relative; }
   /* Right-aligned under its button; placeExports() slides it back inside the window when the toolbar wraps and leaves the button near the left edge. */
   #exportList { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; display: flex; flex-direction: column;
@@ -353,6 +360,7 @@
 <header>
   <img class="logo" src="/static/logo.svg" alt="">
   <span class="brand" title="Laconic Engineering Notebook System">LENS <span class="version" id="version">{{version}}</span></span>
+  <button id="updateBtn" class="update" hidden title="A new release of LENS is out: click to update"><span aria-hidden="true">&#x21E7;</span> <span id="updateLabel">Update</span></button>
   <input type="text" id="name" value="sheet" aria-label="Worksheet name" spellcheck="false">
   <span class="spacer"></span>
   <span id="status" role="status"></span>
@@ -591,6 +599,18 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
 </dialog>
 <datalist id="ubTagNames"></datalist>
 
+<dialog id="updateDlg" aria-labelledby="updateTitle">
+  <div class="dlg-head"><h2 id="updateTitle">Update available</h2><button class="close">Not now</button></div>
+  <div class="dlg-body">
+    <p id="updateMsg"></p>
+    <div id="updateNotes"></div>
+    <p class="note"><a id="updateLink" href="#" target="_blank" rel="noopener">Release page and downloads</a></p>
+    <p class="note" id="updateHow"></p>
+    <p class="note theme-msg" id="updateErr" role="alert" hidden></p>
+  </div>
+  <div class="dlg-foot"><span class="note" style="margin:0">Settings &rarr; Updates turns this check off.</span><span class="spacer"></span><button id="updateGo">Update</button></div>
+</dialog>
+
 <dialog id="settingsDlg" aria-labelledby="settingsTitle">
   <div class="dlg-head"><h2 id="settingsTitle">Settings</h2><button class="close">Done</button></div>
   <div class="dlg-body">
@@ -606,6 +626,11 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
         <option value="stacked">Stacked (results on top)</option>
       </select></label>
       <label class="set-check"><input type="checkbox" id="layoutAuto" checked> Switch automatically when the window is narrow</label>
+    </section>
+    <section class="set-sec" id="updateSec">
+      <h3>Updates</h3>
+      <p class="note">When LENS starts, it asks GitHub whether a newer release is out, and if there is one shows a small button beside the version that updates LENS. Kept on this machine.</p>
+      <label class="set-check"><input type="checkbox" id="checkUpdates" checked> Check for a new release when LENS starts</label>
     </section>
     <section class="set-sec">
       <h3>Greek letters</h3>
@@ -1874,6 +1899,60 @@ async function openStartFile() {
   return true;
 }
 
+// ---- updates (#134) ---------------------------------------------------------
+// The server looks for a newer release in the background (updates.py); the page asks for the
+// answer once it has loaded, and shows the Update button only when there is one.
+let update = null;
+async function checkUpdate() {
+  for (let i = 0; i < 3 && store.get("checkUpdates", true) !== false; i++) {
+    let r;
+    try { r = await Api.json("/api/update?wait=8"); } catch { return; }
+    if (!r.checking) { showUpdate(r.update); return; }
+  }
+}
+function showUpdate(u) {
+  update = u;
+  $("#updateBtn").hidden = !u;
+  if (!u) return;
+  $("#updateLabel").textContent = u.label;
+  $("#updateBtn").setAttribute("aria-label", `Update to LENS ${u.label}`);
+}
+$("#updateBtn").onclick = () => {
+  const u = update;
+  $("#updateMsg").textContent = `LENS ${u.label} is out; this is ${u.current}.`;
+  $("#updateNotes").innerHTML = u.notes;   // the release's notes, rendered and escaped by the server (changelog.markdown)
+  $("#updateNotes").hidden = !u.notes;
+  $("#updateLink").href = u.url;
+  $("#updateHow").textContent = u.how;
+  $("#updateGo").hidden = u.action === "manual";
+  $("#updateGo").disabled = false;
+  $("#updateErr").hidden = true;
+  $("#updateDlg").showModal();
+};
+$("#updateGo").onclick = async () => {
+  $("#updateGo").disabled = true;
+  $("#updateErr").hidden = true;
+  say(update.action === "wizard" ? "Downloading the setup wizard…" : "Starting the update…");
+  let r;
+  try { r = await Api.json("/api/update", {version: update.version}); } catch (e) { r = {ok: false, error: e.message}; }
+  if (!r.ok) {
+    $("#updateErr").textContent = r.error; $("#updateErr").hidden = false; $("#updateGo").disabled = false;
+    return;
+  }
+  store.flush();
+  $("#updateMsg").textContent = r.action === "wizard"
+    ? "The setup wizard is starting, and LENS is closing so the wizard can replace it."
+    : "The installer is running. LENS is closing, and opens again when the update is done.";
+  $("#updateGo").hidden = true;
+  setTimeout(() => window.close(), 3000);   // the server has gone by then; an app window can close itself
+};
+$("#checkUpdates").checked = store.get("checkUpdates", true) !== false;
+$("#checkUpdates").onchange = (ev) => {
+  store.set("checkUpdates", ev.target.checked);
+  if (ev.target.checked) setTimeout(checkUpdate, 500);   // once the setting has reached the server
+  else showUpdate(null);
+};
+
 (async () => {
   const [cfg] = await Promise.all([loadSettings(), loadVocab()]);
   if (!(await openStartFile())) {
@@ -1885,6 +1964,7 @@ async function openStartFile() {
   setView(store.get("view", "typeset"), false);
   // The first time LENS opens on this machine, show the welcome and help window.
   if (cfg && !cfg.welcomed) { $("#helpDlg").showModal(); Api.send("/api/welcomed").catch(() => {}); }
+  checkUpdate();
 })();
 </script>
 </body>

@@ -64,7 +64,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |
 | `vocab.py` | What the editor suggests: units, functions, constants, commands |
 | `unittags.py` | The units dialog's tags: the standard tag list (units and Pint dimensions) and the cleaning of the user's tags before they are stored |
-| `settings.py` | The per-user settings file (Greek table, global units, the user's unit tags, the page's display preferences including the theme, and whether the welcome was shown) |
+| `settings.py` | The per-user settings file (Greek table, global units, the user's unit tags, the page's display preferences including the theme and whether to check for updates, and whether the welcome was shown) |
 | `server.py` | FastAPI app. It writes the preference keys (`settings.PREFS`) into the page |
 | `opened.py` | The sheets this server's windows are opened on (the start file, and sheets another launch handed over, by token), and which may be written back (`.lens` only) |
 | `markdown.py` | Export elements to a Markdown note in Obsidian's style: `$$` math in the live preview's flavour, plots as embedded SVG |
@@ -73,6 +73,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `instance.py` | One LENS at a time on the same port: a second launch hands its window (and sheet) to the running one |
 | `fileassoc.py` | `lens --register-files` / `--unregister-files`: the `.lens` file type on Windows, under `HKEY_CURRENT_USER` |
 | `lifecycle.py` | Tracks open pages so the packaged app exits after its window closes |
+| `updates.py` | The update check and the Update button (#134): asks the GitHub releases API once per run, in the background with a short timeout, for the newest release (no drafts, prereleases or `installer-v*` tags) and compares it with `_version.py` (a `0+dev` checkout never looks); Update starts the installer for how this copy was installed: the release's Windows setup wizard, downloaded, or the copy of `install-linux.sh` in the install folder, after which LENS exits. Its network, download, process and exit calls are seams the tests replace |
 | `__main__.py` | The `lens` command line. `--serve` opens the server's socket and starts the browser before importing the server (about a second), so the browser's first request waits in the socket's queue rather than LENS waiting for anything, and builds the unit registry in the background before the page asks for a result. The package's `__init__` loads its heavy names on first use for the same reason |
 | `_version.py` | The program's version, the one place it is written; the release build stamps it from the tag |
 
@@ -129,6 +130,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and so
 | `GET /api/opened`, `POST /api/opened/save` | the worksheet the window was opened on (`lens --window FILE`), and writing it back to that file |
 | `GET /api/examples`, `GET /api/examples/{name}` | the example worksheets in `laconic/examples/` |
 | `POST /api/ping`, `POST /api/bye` | page lifecycle for the packaged app |
+| `GET /api/update?wait=`, `POST /api/update` | a newer release, if the check found one (`{checking, update}`, with its version, notes, page and what Update does here; `{off: true}` when the setting is off); start its installer, given the version the page offered, after which LENS exits |
 | `GET /api/hello`, `POST /api/window` | how another launch recognizes a running LENS and hands it the window (`instance.py`) |
 
 Endpoints that change the text return `{"ok": true, "edits": [{"from", "to", "insert"}, ...]}`: edits against the text in the request, not overlapping, with offsets in UTF-16 code units as JavaScript counts them. The page makes them only if its text is still the one it sent.
