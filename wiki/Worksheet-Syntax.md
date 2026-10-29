@@ -49,7 +49,7 @@ u& = 3                         bar over a variable
 
 Trig functions read a bare number as radians unless `!trigdeg` is active; `asin`, `acos` and `atan` return in the current angle unit.
 
-User functions are defined as `f(x, y) = expression`. They see every variable defined above them.
+User functions are defined as `f(x, y) = expression`. They see every variable defined above them. A parameter is written as any variable is, with its marks (`` f(V`) = ρ*V` ``) or as ∀.
 
 ## Accents over variables
 

@@ -32,8 +32,10 @@ _TOKEN = re.compile(rf"(?P<text>{STRING})|(?P<unit>{UNIT})|(?P<num>{NUMBER})|(?P
 _NAME_RE = re.compile(rf"~?{IDENT}[`!@&]*\Z")   # a name as used: no `$`
 _SYMDEF_RE = re.compile(r"^~?\$")
 
+# A parameter is a name as a variable's is, with its ` ! @ & marks (`f(V`) = ...`), but no ~ or $.
+_PARAM = rf"{IDENT}[`!@&]*"
 _FUNC_RE = re.compile(
-    rf"^(~?{IDENT})\s*\(\s*({IDENT}(?:\s*,\s*{IDENT})*)\s*\)\s*=(?!=)\s*(.+)$")
+    rf"^(~?{IDENT})\s*\(\s*({_PARAM}(?:\s*,\s*{_PARAM})*)\s*\)\s*=(?!=)\s*(.+)$")
 _UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 

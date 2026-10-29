@@ -61,6 +61,19 @@ def test_user_function_and_scope():
     assert "10" in r.latex
 
 
+def test_function_parameters_may_be_forall_or_carry_name_marks():
+    # #132: a parameter is spelled as a variable is, ∀ and the ` ! @ & marks included
+    rs = run("f(∀) = 2*∀\nf(3)\ng(V`, x!) = V`*x!\ng(2, 3)\nh(∀_cv) = ∀_cv\nh(4)")
+    assert not any(r.error for r in rs)
+    assert [rs[1].text, rs[3].text, rs[5].text] == ["6", "6", "4"]
+    assert rs[2].lhs == "g\\left(\\dot{V}, \\vec{x}\\right)"
+
+
+def test_a_name_after_a_number_in_a_function_body_says_how_to_multiply():
+    # it used to fail typesetting the body, before the body ever ran: 'Name' object has no attribute 'left'
+    assert "cannot follow a number directly. Write 2*∀" in run("f(∀) = 2∀")[0].error
+
+
 def test_function_may_use_a_later_variable():
     res = run("g(x) = x*k\nk = 3\ng(2)")
     assert res[0].kind == "funcdef" and "6" in res[-1].latex

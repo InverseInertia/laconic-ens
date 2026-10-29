@@ -22,6 +22,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### Fixes
 - **A vector of regression coefficients keeps its orientation**: with one name and `degree:`, `!regression p` gave a vector that was shown as a column in the results and as a row in its plain text, whatever the data. It now lies as the data does: a row for a matrix's x row or a row vector of x values, a column for a column vector, everywhere it is shown and when used below. (#126)
+- **Function parameters are spelled like any variable**: a parameter with a mark, such as `` SWEP_B26W(V`) = ... `` or `f(x!) = ...`, was a syntax error, and the function was then unknown to every line below. A parameter may now carry the `` ` ! @ & `` marks, as well as be ∀ (`f(∀) = 2*∀`). A number directly before a name in a function's body (`f(∀) = 2∀`) now says to write `2*∀`, where it showed an internal error. (#132)
 
 ## [v0.4.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.5) (2026-10-28)
 

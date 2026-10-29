@@ -444,6 +444,7 @@ class Printer:
 
     def implicit(self, n):
         # Always rendered `number, thin space, unit`. Units never become variables here.
+        self.ev.check_implicit(n)
         v = n.number.value
         if self.fmt.siunitx:
             q = self.ev.eval(n)

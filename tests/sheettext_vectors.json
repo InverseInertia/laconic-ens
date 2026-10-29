@@ -35,6 +35,7 @@
     {"line": "q_∞(h, T_s) = h*(T_s - T_∞)", "def": ["funcdef", "q_∞", ["h", "T_s"]]},
     {"line": "f(x) = x^2", "def": ["funcdef", "f", ["x"]]},
     {"line": "~h(a, b) = a*b", "def": ["funcdef", "~h", ["a", "b"]]},
+    {"line": "g(V`, ∀) = V`*∀", "def": ["funcdef", "g", ["V`", "∀"]]},
     {"line": "'smoot = 1.7018'm", "def": ["unitdef", "smoot", []]},
     {"line": "x == 1", "def": null},
     {"line": "f(2)", "def": null},
