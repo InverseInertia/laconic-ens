@@ -73,6 +73,8 @@ def _launch(url, app):
     gives the page more of the keyboard (Ctrl+T is a new tab in a normal tab)."""
     if app:
         for exe in browser.app_candidates():   # the next one when a browser will not start
+            if sys.platform.startswith("linux"):
+                browser.spellcheck_on(browser.profile_dir(exe))
             if _spawn([exe] + _app_args(url, exe)):
                 return
         print("No Chromium-based browser found, opening the default browser instead")
