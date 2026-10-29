@@ -14,6 +14,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Changelog in Help**: the bottom of the Help window lists what changed in each release, and the **Changelog** link beside the version at the top jumps to it. (#122)
 - **Symbolic math**: declare symbols with a `$` on a line of their own (`$m, $a, $F`; `~$g` for a global one), and an expression over them, such as `p = m*a`, is worked out by sympy and shown as math. A `!symsolve a` block with `equation: F = m*a` lines solves for symbols as you type, and below it `a` holds `F/m` (with several solutions, `pick: 2` chooses one). Once the symbols have values (`m = 2'kg`, `F = 10'N`), `acc = a` works out to `5 m/s²`, units and all; a number with units cannot go into a result that is still symbolic, and the line says so. Symbols are shown in their own theme color (Settings → Theme → Symbols) in the editor and the results, and hovering one names its declaration; only globals are underlined, so a global symbol is in the symbol color and underlined. `!clearsym` removes the non-global symbols and keeps other variables. The LaTeX, Markdown and PDF exports typeset the results. See the wiki's Symbolic Math page. (#123)
 
+### Changes
+- **∀ for volume is now typed as the ∀ character**: press Ctrl+G after a `V` (again to go back), and the worksheet keeps the ∀ itself, as in `∀_cv = 0.2'm^3`. A name spelled `forall` is an ordinary name again; replace it with ∀ to keep the symbol. A Greek table you edited earlier needs a `V`→`∀` row, or Reset to defaults. (#125)
+
 ## [v0.4.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.5) (2026-10-28)
 
 ### Fixes

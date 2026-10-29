@@ -17,8 +17,9 @@ import re
 from dataclasses import dataclass, field
 
 # A name may hold ∞ as a whole subscript (`v_∞`, `T_∞_0`), the free-stream mark; ∞ on its own is
-# the constant, and not a name.
-IDENT = r"[^\W\d](?:_∞|\w)*"
+# the constant, and not a name. ∀, the struck-through V some fluid mechanics texts use for volume,
+# counts as a letter (`∀_cv`).
+IDENT = r"(?:[^\W\d]|∀)(?:_∞|∀|\w)*"
 # A `$` (after the `~` of a global, if any) declares a symbol: `$x`, `~$g`. It is written only on
 # the line that declares it; every use is the plain name.
 NAME = rf"~?\$?{IDENT}[`!@&]*"

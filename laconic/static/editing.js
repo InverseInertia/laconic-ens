@@ -22,16 +22,17 @@
   const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
 
   // Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
-  // 8 -> ∞ rides along: it is the one non-Greek symbol worksheets need.
+  // 8 -> ∞ and V -> ∀ ride along: the free-stream subscript, and the struck-through V some fluid
+  // mechanics texts use for volume.
   const DEFAULT_GREEK = {
     a: 'α', b: 'β', g: 'γ', d: 'δ', e: 'ε', z: 'ζ', h: 'η', q: 'θ', i: 'ι', k: 'κ',
     l: 'λ', m: 'μ', n: 'ν', x: 'ξ', o: 'ο', p: 'π', r: 'ρ', s: 'σ', t: 'τ', u: 'υ',
     f: 'φ', c: 'χ', y: 'ψ', w: 'ω',
     G: 'Γ', D: 'Δ', Q: 'Θ', L: 'Λ', X: 'Ξ', P: 'Π', S: 'Σ', F: 'Φ', Y: 'Ψ', W: 'Ω',
-    8: '∞',
+    8: '∞', V: '∀',
   };
 
-  const IDENT_RE = /[\p{L}\p{N}_°∞]/u;   // ∞ for subscripts such as v_∞
+  const IDENT_RE = /[\p{L}\p{N}_°∞∀]/u;   // ∞ for subscripts such as v_∞, ∀ for volume
   const SIMPLE_RE = /^-?[\p{L}\p{N}_.'°][\p{L}\p{N}_.'°%^]*$/u;
   const isIdent = (c) => c !== undefined && IDENT_RE.test(c);
   // % appears only in the unit '%, so it belongs to the term like a unit's letters; $ only in front
@@ -41,7 +42,7 @@
   // The worksheet lexer, the same as laconic/sheettext.py (tests/sheettext_vectors.json holds
   // them together): quoted text, units, numbers and names. Python's \w is Unicode, so the
   // classes are spelled out here.
-  const W = '[\\p{L}\\p{N}_]', W0 = '[\\p{L}\\p{Nl}\\p{No}_]';
+  const W = '[\\p{L}\\p{N}_∀]', W0 = '[\\p{L}\\p{Nl}\\p{No}_∀]';
   const TOKEN_RE = new RegExp('("[^"\\n]*")' + `|('(?:(?:${W0}|°)(?:${W}|°)*|%))`
     + '|((?:\\p{Nd}+(?:\\.\\p{Nd}+)?|\\.\\p{Nd}+)(?:[eE][+-]?\\p{Nd}+)?' + `(?:[ij](?!${W}))?)` + `|(~?\\$?${W0}(?:_∞|${W})*[\`!@&]*)`, 'gu');
   const KINDS = ['text', 'unit', 'num', 'name'];
@@ -603,7 +604,7 @@
   // one is assigned). When a name is finished, by typing something that cannot continue it, and
   // it is a global the line can see, the ~ goes in front. ctx.symbols is the last symbol table (symbols.js).
   const MARKS = '`!@&';
-  const FUNC_HEAD = /^\s*~?[\p{L}_][\p{L}\p{N}_]*[`!@&]*\s*\([^)]*$/u;
+  const FUNC_HEAD = /^\s*~?[\p{L}_∀][\p{L}\p{N}_∀]*[`!@&]*\s*\([^)]*$/u;
   function globalStart(t, s, ctx) {
     const symbols = ctx && ctx.symbols;
     if (!symbols || !symbols.length || isIdent(t[s]) || MARKS.includes(t[s] || ' ')) return -1;
@@ -612,7 +613,7 @@
     while (a > ls && MARKS.includes(t[a - 1])) a--;
     const end = a;
     while (a > ls && isIdent(t[a - 1])) a--;
-    if (a === end || !/[\p{L}_]/u.test(t[a])) return -1;               // no name, or a number such as 1e5
+    if (a === end || !/[\p{L}_∀]/u.test(t[a])) return -1;               // no name, or a number such as 1e5
     if (a > ls && "~'.!$".includes(t[a - 1])) return -1;               // has its ~, a unit, after a point, a command, a symbol's $
     if (FUNC_HEAD.test(t.slice(ls, a))) return -1;                      // a function's own parameters
     const name = t.slice(a, s), line = t.slice(0, s).split('\n').length;

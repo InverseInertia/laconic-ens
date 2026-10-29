@@ -26,7 +26,7 @@ u& = 3                         bar over a variable
 - A **unit** is `'` followed by a Pint unit name: `'kN`, `'mm`, `'degC`, `'°C`, `'ohm`.
 - A bare name is always a variable, so `m` can be a mass while `'m` is the metre.
 - Only a number followed by units may be written without `*`. `3 x` is an error; write `3*x`.
-- Names may use Greek letters and subscripts (`σ_max`, `M_max`). A trailing digit becomes a subscript in the typeset view (`x1` is x₁). Spelled-out Greek names typeset as the letter (`sigma_max` is σ<sub>max</sub>), and `forall` is ∀, the struck-through V some fluid mechanics texts use for volume to keep V for velocity: `forall_cv = 0.2'm^3`.
+- Names may use Greek letters and subscripts (`σ_max`, `M_max`). A trailing digit becomes a subscript in the typeset view (`x1` is x₁). Spelled-out Greek names typeset as the letter (`sigma_max` is σ<sub>max</sub>), and ∀ (Ctrl+G after a `V`) is the struck-through V some fluid mechanics texts use for volume to keep V for velocity: `∀_cv = 0.2'm^3`.
 - A subscript may be infinity, as in a free-stream `T_∞` or `v_∞`: type `T.8` then Ctrl+G, or spell it `T_inf`. Both show as T<sub>∞</sub> (`T_{\infty}`), but they are two different names, as `sigma` and `σ` are. Only a whole `inf` part counts (`x_info` stays as it is), and ∞ is allowed in a name only right after `_`: `∞` on its own is still the constant.
 - A number ending in `i` or `j` is imaginary: `4i`, `2.5j`. See [Complex Numbers](Complex-Numbers).
 - Constants: `pi`, `e`, and `∞` (Ctrl+G after an `8`). A result may be infinite only when the line uses `∞`, so `1/0` is still an error; `∞ - ∞` and `0*∞` are too.

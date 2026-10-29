@@ -209,6 +209,8 @@ eq(sim('sigma = s|', [ctrl('g')]), 'sigma = σ|', 'only the preceding character'
 eq(sim('x = 5|', [ctrl('g')]), 'x = 5|', 'no mapping, no change');
 eq(sim('x = 8|', [ctrl('g')]), 'x = ∞|', '8 -> infinity');
 eq(sim('x = 8|', [ctrl('g'), ctrl('g')]), 'x = 8|', 'infinity reverts to 8');
+eq(sim('V|', [ctrl('g'), '.', 'c', 'v']), '∀_cv|', 'V -> forall, a name that takes a subscript');
+eq(sim('x = ∀|', [ctrl('g')]), 'x = V|', 'forall reverts to V');
 eq(sim('T|', ['.', '8', ctrl('g'), ' ', '=', ' ', '3']), 'T_∞ = 3|', 'free-stream subscript: T.8 Ctrl+G');
 eq(sim('v_∞|', '.0'), 'v_∞_0|', 'a name ending in ∞ takes a subscript');
 assert.ok(E.keyAction('g', { ctrl: true }, 'x = 5', 5, 5, {}).message.includes('5')); n++;

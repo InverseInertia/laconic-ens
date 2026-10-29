@@ -26,9 +26,6 @@ GREEK = {g: "\\" + g for g in (
 GREEK.update({g: "\\" + g for g in
               "Gamma Delta Theta Lambda Xi Pi Sigma Phi Psi Omega".split()})
 GREEK["varepsilon"] = "\\varepsilon"
-# Not Greek, but typed and typeset the same way: forall is the struck-through V (∀) that some
-# fluid mechanics texts use for volume, to keep V for velocity.
-GREEK["forall"] = "\\forall"
 
 
 _ACCENTS = {"!": "\\vec", "@": "\\hat", "&": "\\bar"}
@@ -78,6 +75,9 @@ _GREEK_CHARS = {
     "Π": "\\Pi", "Σ": "\\Sigma", "Φ": "\\Phi", "Ψ": "\\Psi", "Ω": "\\Omega",
     "Υ": "\\Upsilon", "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
     "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Χ": "X",
+    # Not Greek, but typed (Ctrl+G on V) and typeset the same way: ∀ is the struck-through V that
+    # some fluid mechanics texts use for volume, to keep V for velocity.
+    "∀": "\\forall",
 }
 
 
