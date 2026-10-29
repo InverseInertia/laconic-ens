@@ -173,6 +173,34 @@ def test_tab_indents_and_shift_tab_unindents(page):
     assert value(page) == "  a = 1\n  b = 2"
 
 
+@pytest.mark.parametrize("above, header, typed, key, val", [
+    ("", "!plot sin(x), x = 0 .. 10", "gr", "grid", "off"),
+    ("", "!plot t, s", "ti", "title", "Points"),
+    ("x = 1\n", "!root x", "eq", "equation", "x"),
+    ("x = 1\n", "!minimize x", "ob", "objective", "x"),
+    ("x = 1\n", "!maximize x", "ob", "objective", "x"),
+    ("D = [0, 1; 1, 3]\n", "!regression a, b", "da", "data", "D"),
+    ("$x\n", "!symsolve x", "eq", "equation", "x"),
+], ids=lambda v: v if isinstance(v, str) and v.startswith("!") else None)
+def test_every_block_indents_on_enter_and_suggests_its_options(page, above, header, typed, key, val):
+    """#137: the same typing gives the same result under every block command."""
+    reset(page, above + header)
+    page.keyboard.press("Enter")
+    assert value(page) == above + header + "\n  "
+    page.keyboard.type(typed)
+    page.wait_for_selector("#ac:not([hidden])")
+    assert page.eval_on_selector_all("#ac .ac-item .lbl", "els => els.map(e => e.textContent)")[0] == key
+    page.keyboard.press("Tab")
+    page.keyboard.type(val)
+    page.keyboard.press("Escape")
+    page.keyboard.press("Enter")
+    assert value(page) == f"{above}{header}\n  {key}: {val}\n  "
+    page.keyboard.press("Enter")                         # a bare indent: Enter leaves the block
+    assert value(page) == f"{above}{header}\n  {key}: {val}\n"
+    page.keyboard.press("Control+z")
+    assert value(page) == f"{above}{header}\n  {key}: {val}\n  "
+
+
 def test_split_can_be_dragged(page):
     box = page.locator("#split").bounding_box()
     before = page.locator("#src").bounding_box()["width"]

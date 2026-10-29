@@ -141,12 +141,34 @@ def test_saving_one_setting_keeps_the_other():
 
 
 def test_vocabulary_has_solver_options_and_methods():
-    v = server.vocab()["solver"]
-    assert [k for k, _ in v["keys"]["root"]][:2] == ["equation", "bounds"]
-    assert "objective" in [k for k, _ in v["keys"]["minimize"]]
-    assert [m for m, _ in v["methods"]["root"]] == ["hybr", "lm", "broyden1", "broyden2", "krylov", "brentq"]
-    assert "SLSQP" in [m for m, _ in v["methods"]["optimize"]] and all(d for _, d in v["methods"]["optimize"])
-    assert [c for c, _ in v["choices"]["autorun"]] == ["on", "off"]
+    v = server.vocab()["blocks"]
+    assert [k for k, _ in v["root"]["keys"]][:2] == ["equation", "bounds"]
+    assert "objective" in [k for k, _ in v["minimize"]["keys"]]
+    assert [m for m, _ in v["root"]["choices"]["method"]] == ["hybr", "lm", "broyden1", "broyden2", "krylov", "brentq"]
+    assert "SLSQP" in [m for m, _ in v["maximize"]["choices"]["method"]] and all(d for _, d in v["minimize"]["choices"]["method"])
+    assert [c for c, _ in v["root"]["choices"]["autorun"]] == ["on", "off"]
+    assert v["root"]["args"] == {"bounds": "unknown"} and "bounds" in v["root"]["math"] and "method" not in v["root"]["math"]
+
+
+def test_vocabulary_describes_every_block_from_the_tables_it_is_parsed_with():
+    """One entry per block command sheettext knows, each key with a note, as the parsers take them (#137)."""
+    from laconic import plotopts, regression, solver, symsolve
+    from laconic.sheettext import _SOLVER_RE
+    v = server.vocab()["blocks"]
+    assert set(v) == {"plot", *_SOLVER_RE.pattern.split("(")[1].split(")")[0].split("|")}
+    keys = {kind: [k for k, _ in b["keys"]] for kind, b in v.items()}
+    assert set(keys["plot"]) == set(plotopts.KEYS) and keys["regression"] == list(regression.KEYS)
+    assert keys["symsolve"] == list(symsolve.KEYS) and keys["minimize"] == list(solver.KEYS["minimize"])
+    for b in v.values():
+        assert all(note for _, note in b["keys"])
+        assert set(b["choices"]) | set(b["math"]) | set(b["args"]) <= {k for k, _ in b["keys"]}
+    plot = v["plot"]
+    assert [c for c, _ in plot["choices"]["grid"]] == ["on", "off"] and "red" in dict(plot["choices"]["color"])
+    assert {"xlim", "points", "note", "xunit"} <= set(plot["math"]) and "title" not in plot["math"]
+    assert plot["args"]["color"] == "series"
+    # every kind of plot option is listed
+    assert set(plotopts.CHOICES) | set(plotopts.TEXT) | set(plotopts.NUMBERS) | set(plotopts.SERIES_KEYS) \
+        | set(plotopts.LIMIT_KEYS) <= set(plotopts.KEYS)
 
 
 def test_props_vocabulary_lists_keys_and_fluids():

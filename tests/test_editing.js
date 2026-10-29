@@ -420,4 +420,26 @@ eq(indented('a = [1\n\nb = 2]\nc = 3', false), '  a = [1\n\n  b = 2]\nc = 3', 'e
 eq(indented('[a = 1\n]b = 2', false), '  [a = 1\n]b = 2', 'a selection ending at a line start leaves that line alone');
 eq(indented('  [a = 1\n    b = 2]', true), '[a = 1\n  b = 2]', 'Shift+Tab over several lines');
 
+// --- Enter keeps a block's indent, the same for every block (#137) --------------------------------
+for (const head of ['!plot f(x), x = 0 .. 1', '!plot t, s', '!root x, y', '!minimize d', '!maximize q', '!regression a, b', '!symsolve x']) {
+  eq(sim(head + '|', ['Enter']), head + '\n  |', `Enter after ${head} indents the new line`);
+}
+eq(sim('!plot f(x), x = 0 .. 1\n  title: A|', ['Enter']), '!plot f(x), x = 0 .. 1\n  title: A\n  |', 'after a plot option line (prose: math keys off there)');
+eq(sim('!plot f(x), x = 0 .. 1\n  xlim: 0 .. 1|', ['Enter', 'Enter']), '!plot f(x), x = 0 .. 1\n  xlim: 0 .. 1\n|', 'Enter on a bare indent leaves the block');
+eq(sim('x = 1\n!root x\n  equation: x^2 = 2|', ['Enter']), 'x = 1\n!root x\n  equation: x^2 = 2\n  |', 'after a solver option line');
+eq(sim('!root x\n  # a note|', ['Enter']), '!root x\n  # a note\n  |', 'after a comment the block owns');
+eq(sim('!regression a\n    data: D|', ['Enter']), '!regression a\n    data: D\n    |', 'the line\'s own indent');
+eq(sim('!symsolve x|\n\tequation: x = 1', ['Enter']), '!symsolve x\n\t|\n\tequation: x = 1', 'after the header, the indent of the line under it');
+eq(sim('!plot f(x), x = 0 .. 1\n  title: A|', ['Enter'], { enabled: false }), '!plot f(x), x = 0 .. 1\n  title: A\n  |', 'with Math keys off too');
+eq(sim('A = [1, 2|]', ['Enter'], { enabled: false }), 'A = [1, 2\n|]', 'which leave other lines to the browser');
+eq(sim('!root x\n  equation: f(x|)', ['Enter']), '!root x\n  equation: f(x)\n  |', 'finishing a line of closing brackets keeps the indent');
+eq(sim('!plot f(x), x = 0|.. 1', ['Enter']), '!plot f(x), x = 0\n|.. 1', 'splitting a header is an ordinary Enter');
+eq(sim('!plot f(x), x = 0 .. 1\n  y = 2|', ['Enter']), '!plot f(x), x = 0 .. 1\n  y = 2\n|', 'a line a plot does not own');
+eq(sim('  x = 1|', ['Enter']), '  x = 1\n|', 'an indented line outside any block');
+eq(sim('!plot f(x), x = 0 .. 1\n |  title: A', ['Enter']), '!plot f(x), x = 0 .. 1\n \n|  title: A', 'a caret inside the indent');
+eq(sim('!root x\n  equation: x = 1\n  |\n  bounds x: 0 .. 1', ['Enter']), '!root x\n  equation: x = 1\n|\n  bounds x: 0 .. 1', 'a bare indent between owned lines');
+eq(E.newline('x = 1', 5, 5), null, 'newline: nothing to do outside a block');
+eq(E.headerOf('!plotspec grid: off'), null, '!plotspec starts no block');
+eq(E.headerOf('!rooted'), null, 'nor a longer word');
+
 console.log(`${n} editing checks passed`);

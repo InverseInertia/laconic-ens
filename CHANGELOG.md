@@ -22,6 +22,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### Fixes
 - **A vector of regression coefficients keeps its orientation**: with one name and `degree:`, `!regression p` gave a vector that was shown as a column in the results and as a row in its plain text, whatever the data. It now lies as the data does: a row for a matrix's x row or a row vector of x values, a column for a column vector, everywhere it is shown and when used below. (#126)
+- **Typing a block works the same under every block command**: under `!plot`, the editor now suggests the plot's options as you type an indented line (`title`, `xlim`, `color`, `points`, ...), and the values of those with a few choices (`grid: on`, `xscale: log`, `color: red`), as it already did under `!root`, `!minimize`, `!maximize`, `!regression` and `!symsolve`; it no longer offers variable names in a plot's numbers and sizes. Pressing Enter after any block header, or after one of its indented lines, now indents the new line to match, and Enter on a line that is only that indent removes it to leave the block. (#137)
 
 ## [v0.4.5](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.4.5) (2026-10-28)
 

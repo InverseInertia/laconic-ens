@@ -20,9 +20,13 @@
  *       one of {list} (the list after it), {accept}, {close} or {message}
  *   pick(text, list)                 the edit for the chosen item, or null
  *
- * Besides names, units and commands it completes, from vocab.solver: the option keys, `method:`
- * and `autorun:` values and unknown names of a `!root` / `!minimize` / `!maximize` block; and,
- * from vocab.props (fetched separately, it needs CoolProp), the quoted keys and fluid of props().
+ * Besides names, units and commands it completes, on the indented lines of every block (`!plot`,
+ * `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`), from one table, vocab.blocks
+ * (laconic/vocab.py blocks(), built from the tables the server parses the blocks with): the option
+ * keys, a solver's unknown after `bounds `, the values of a key with a few choices (`method:`,
+ * `grid:`, `color:`), and names and units in the keys whose values are expressions. From
+ * vocab.props (fetched separately, it needs CoolProp), the quoted keys and fluid of props().
+ * context() needs the table, as opts.vocab, to know what a key's value is.
  */
 (function (root) {
   'use strict';
@@ -35,7 +39,6 @@
   const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@&]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
   const MAX = 8;
-  const SOLVER_HEAD = /^\s*!(root|minimize|maximize|regression|symsolve)\b(.*)$/;
   const SYMDEF_RE = /^~?\$/;
 
   // What a trimmed line defines: {kind: 'unitdef' | 'funcdef' | 'assign' | 'symdef', name, params}, or null.
@@ -68,21 +71,8 @@
     return out;
   }
 
-  // The solver block that the line starting at `ls` belongs to: {kind, unknowns}, or null.
-  // A block is its header and the indented, non-blank lines under it (the line being typed may
-  // still be only its indent).
-  function solverBlock(t, ls) {
-    if (!/^[ \t]/.test(t.slice(ls, lineEndOf(t, ls)))) return null;
-    let p = ls;
-    while (p > 0) {
-      const ps = lineStartOf(t, p - 1), l = t.slice(ps, p - 1);
-      const m = SOLVER_HEAD.exec(l);
-      if (m) return { kind: m[1], unknowns: m[2].split(',').map((x) => x.trim()).filter(Boolean) };
-      if (!/^[ \t]+\S/.test(l)) return null;
-      p = ps;
-    }
-    return null;
-  }
+  // The block the line starting at `ls` belongs to, {kind, unknowns}, or null (editing.js).
+  const blockAt = Editing.blockAt;
 
   // Inside a quoted argument of props(...) at `pos` (the line runs from `ls`, the quote opened at `q`):
   // which argument it is, and the first argument's text. Null for any other string.
@@ -108,10 +98,16 @@
   // or a name of two or more characters.
   function context(t, pos, opts) {
     const force = !!(opts && opts.force);
+    const blocks = (opts && opts.vocab && opts.vocab.blocks) || {};
     const ls = lineStartOf(t, pos), le = lineEndOf(t, pos);
     const line = t.slice(ls, le);
-    // Nothing in prose, except a solver's method, which has its choices.
-    if (Editing.isTextAt(t, pos) && !/^[ \t]+method[ \t]*:/.test(line)) return null;
+    // On a line a block owns, what its table says of the option key.
+    const block = blockAt(t, ls), table = block && blocks[block.kind];
+    const colon = line.indexOf(':');
+    const key = block && colon >= 0 ? line.slice(0, colon).trim().split(/\s+/)[0] : null;
+    const choices = table && key && table.choices[key];
+    // Nothing in prose, except a value with choices (a solver's method).
+    if (Editing.isTextAt(t, pos) && !(choices && pos - ls > colon)) return null;
     // Inside quotes: only props() has anything to offer (its keys and the fluid).
     const quotes = (line.slice(0, pos - ls).match(/"/g) || []).length;
     if (quotes % 2) {
@@ -129,33 +125,33 @@
     const query = t.slice(s, pos);
     const before = t.slice(ls, s), after = t.slice(e, le);
 
-    const isPlot = /^\s*!plot\s/.test(line);   // a plot statement holds expressions, unlike other commands
+    const head = Editing.headerOf(line);
+    const isPlot = !!head && head.kind === 'plot';   // a plot statement holds expressions, unlike other commands
     // A solver header names its unknowns: variables defined above.
-    if (SOLVER_HEAD.test(line) && !/^\s*!$/.test(before)) {
+    if (head && !isPlot && !/^\s*!$/.test(before)) {
       // A regression's header names new variables, the coefficients it defines: nothing to offer.
-      if (/^[\d.]/.test(query) || (!force && query.length < 2) || SOLVER_HEAD.exec(line)[1] === 'regression') return null;
+      if (/^[\d.]/.test(query) || (!force && query.length < 2) || head.kind === 'regression') return null;
       return { kind: 'name', start: s, end: e, query, tilde: false, only: ['variable'] };
     }
-    const block = solverBlock(t, ls);
     if (block) {
-      const colon = line.indexOf(':');
       if (colon < 0 || pos - ls <= colon) {
         // The option key, or after `bounds ` the unknown it limits.
-        if (/^[ \t]+bounds[ \t]+$/.test(before)) {
+        const arg = /^[ \t]+([A-Za-z]\w*)[ \t]+$/.exec(before);
+        if (arg && table && table.args[arg[1]] === 'unknown') {
           return { kind: 'choice', start: s, end: e, query, choices: block.unknowns.map((u) => [u, 'unknown']), suffix: ': ' };
         }
         if (!/^[ \t]+$/.test(before) || (!force && !query)) return null;
         return { kind: 'option', start: s, end: e, query, block };
       }
-      const key = line.slice(0, colon).trim().split(/\s+/)[0];
-      if (key === 'method' || key === 'autorun') {
+      if (choices) {
         let vs = ls + colon + 1;
         while (vs < pos && /[ \t]/.test(t[vs])) vs++;
         let ve = le;
         while (ve > vs && /[ \t]/.test(t[ve - 1])) ve--;
-        return { kind: 'choice', start: vs, end: Math.max(ve, pos), query: t.slice(vs, pos), key, block };
+        return { kind: 'choice', start: vs, end: Math.max(ve, pos), query: t.slice(vs, pos), key, block, choices };
       }
-      if (!['equation', 'objective', 'constraint', 'bounds', 'data', 'model', 'r2'].includes(key)) return null;
+      // Names and units only where the value is an expression; a title, a number or a size has none.
+      if (!table || !table.math.includes(key)) return null;
     }
     if (line.trimStart().startsWith('!') && !isPlot) {
       if (!/^\s*!$/.test(before)) return null;
@@ -215,19 +211,17 @@
         });
       }
     } else if (ctx.kind === 'option') {
-      const sv = vocab.solver || { keys: {} };
-      for (const [key, detail] of sv.keys[ctx.block.kind] || []) {
+      const table = (vocab.blocks || {})[ctx.block.kind] || { keys: [], args: {} };
+      for (const [key, detail] of table.keys) {
         // several unknowns: a bounds line names one, so offer one per unknown
-        if (key === 'bounds' && ctx.block.unknowns.length > 1) {
-          for (const u of ctx.block.unknowns) add({ kind: 'option', insert: `bounds ${u}`, label: `bounds ${u}`, detail, suffix: ': ' }, 0, 'bounds', detail);
+        if (table.args[key] === 'unknown' && ctx.block.unknowns.length > 1) {
+          for (const u of ctx.block.unknowns) add({ kind: 'option', insert: `${key} ${u}`, label: `${key} ${u}`, detail, suffix: ': ' }, 0, key, detail);
         } else add({ kind: 'option', insert: key, label: key, detail, suffix: ': ' }, 0, key, detail);
       }
       // keep the block's own order (equation first), not alphabetical
       found.forEach((c, i) => { c.rank = i; });
     } else if (ctx.kind === 'choice') {
-      const sv = vocab.solver || { methods: {}, choices: {} };
-      const list = ctx.choices || (ctx.key === 'method' ? sv.methods[ctx.block.kind === 'root' ? 'root' : 'optimize'] : sv.choices[ctx.key]) || [];
-      list.forEach(([name, detail], i) => add({ kind: ctx.key || 'unknown', insert: name, label: name, detail, suffix: ctx.suffix }, i, name, detail));
+      ctx.choices.forEach(([name, detail], i) => add({ kind: ctx.key || 'unknown', insert: name, label: name, detail, suffix: ctx.suffix }, i, name, detail));
     } else if (ctx.kind === 'command') {
       for (const [name, detail] of vocab.commands || []) add({ kind: 'command', insert: name, label: '!' + name, detail }, 0, name, detail);
     } else if (ctx.kind === 'unit') {
@@ -295,7 +289,7 @@
   function open(t, s, e, opts, env) {
     const force = !!opts.force;
     if ((!opts.enabled && !force) || s !== e) return null;
-    const ctx = context(t, s, { force });
+    const ctx = context(t, s, { force, vocab: env.vocab });
     if (!ctx) return null;
     if (ctx.kind === 'prop' && !env.vocab.props) return { props: true };
     const items = candidates(ctx, env.vocab, t, { symbols: env.symbols });
@@ -337,7 +331,7 @@
     return list.wrap ? Editing.wrapWithCall(t, list.wrap[0], list.wrap[1], c.insert) : accept(t, list.ctx, c);
   }
 
-  const api = { unitDefs, definition, solverBlock, context, candidates, accept, open, wrapping, key, pick };
+  const api = { unitDefs, definition, blockAt, context, candidates, accept, open, wrapping, key, pick };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Autocomplete = api;
 })(typeof window !== 'undefined' ? window : globalThis);
