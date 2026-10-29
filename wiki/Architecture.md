@@ -36,7 +36,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 
 | Module | Role |
 |---|---|
-| `sheettext.py` | The shape of the worksheet text: each line's kind, the plot or solver block that owns it, its expression spans, and the name/unit/number tokens in them. One deep module behind `scan(text)`; the sheet, rename, plot and solver modules read lines and blocks through it. Its lexer patterns are the grammar's terminals too. Terms are defined in `CONTEXT.md` |
+| `sheettext.py` | The shape of the worksheet text: each line's kind, the plot, solver or loop block that owns it, its expression spans, and the name/unit/number tokens in them. One deep module behind `scan(text)`; the sheet, rename, plot and solver modules read lines and blocks through it. Its lexer patterns are the grammar's terminals too. Terms are defined in `CONTEXT.md` |
 | `blockedit.py` | Edits to the sheet text (`Edit`, `apply`, the UTF-16 wire form) and the block editor: set, remove or replace an option line, store a result (kept last), append a block-owned line. It keeps the block's indent and the file's line endings, and returns at most one minimal edit. `plotopts` and `solver` write through it; `rename` returns its `Edit`s and the save text takes its `newline` |
 | `parser.py` | Lark LALR grammar for expressions. Assignment, function and unit definitions are split off first (`sheettext.definition`), which avoids a grammar clash between `f(x) = ...` and the call `f(x)` |
 | `nodes.py` | Frozen dataclasses for the AST, and the one walk of it (`walk`, and `refs`: the names, calls and units an expression reads) |
@@ -59,6 +59,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `solverjobs.py` | The worker process that runs a solve, so it can be interrupted; `Jobs.run` is its runner for the solve session |
 | `symbolic.py` | Symbolic math through sympy (imported only when a sheet declares a symbol): the sympy expression built from the AST, numbers with units held as stand-ins so Pint does their arithmetic, late binding of symbols to the values where they are used, the sympy-to-Pint walk for an expression whose symbols all have values, the sympy LaTeX and plain printers with the sheet's names and numbers, and the `!symsolve` solve |
 | `symsolve.py` | `!symsolve`: block parsing only (no sympy), so the editor's vocabulary can list its options. Run by `sheet.py` every time the sheet runs; the block is read by `sheettext` as a solver block |
+| `loop.py` | `!loop`: the block's steps and the loops inside it, read out of the indentation of its lines, and the run of them against the evaluator's names (it changes none of them; `sheet.py` defines what the block assigned). Run by `sheet.py` every time the sheet runs; typeset there as steps |
 | `regression.py` | `!regression`: block parsing and the least-squares fit of a polynomial or a `model:` of any form in one or more variables, with each coefficient's units (a model's worked out from its dimensions); `columns` reads points, which a plot's `points:` shares. Run by `sheet.py` every time the sheet runs (no stored result); the block is read by `sheettext` as a solver block |
 | `props.py` | CoolProp lookup, imported on first use |
 | `rename.py` | Rename of names and units, over the tokens `sheettext` finds in expression spans |

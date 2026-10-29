@@ -129,7 +129,7 @@
     const query = t.slice(s, pos);
     const before = t.slice(ls, s), after = t.slice(e, le);
 
-    const isPlot = /^\s*!plot\s/.test(line);   // a plot statement holds expressions, unlike other commands
+    const isMath = /^\s*!(plot|loop)\s/.test(line);   // a plot or loop statement holds expressions, unlike other commands
     // A solver header names its unknowns: variables defined above.
     if (SOLVER_HEAD.test(line) && !/^\s*!$/.test(before)) {
       // A regression's header names new variables, the coefficients it defines: nothing to offer.
@@ -157,7 +157,7 @@
       }
       if (!['equation', 'objective', 'constraint', 'bounds', 'data', 'model', 'r2'].includes(key)) return null;
     }
-    if (line.trimStart().startsWith('!') && !isPlot) {
+    if (line.trimStart().startsWith('!') && !isMath) {
       if (!/^\s*!$/.test(before)) return null;
       return { kind: 'command', start: s, end: e, query, tilde: false };
     }
@@ -165,7 +165,7 @@
     if (t[s - 1] === '.' && /[\d]/.test(t[s - 2] || '')) return null;
     // The left of = is a name being defined (or a unit, or a function's parameters): nothing to complete.
     // (An equation or constraint in a solver block has = on its right too, and is an expression.)
-    if (!isPlot && !block && !before.includes('=') && after.includes('=')) return null;
+    if (!isMath && !block && !before.includes('=') && after.includes('=')) return null;
     if (t[s - 1] === "'") return { kind: 'unit', start: s, end: e, query, tilde: false };
     const tilde = t[s - 1] === '~';
     if (t[s - 1] === '$') return null;                         // a symbol being declared: a new name

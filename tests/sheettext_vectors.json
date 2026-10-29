@@ -35,6 +35,7 @@
     {"line": "q_∞(h, T_s) = h*(T_s - T_∞)", "def": ["funcdef", "q_∞", ["h", "T_s"]]},
     {"line": "f(x) = x^2", "def": ["funcdef", "f", ["x"]]},
     {"line": "~h(a, b) = a*b", "def": ["funcdef", "~h", ["a", "b"]]},
+    {"line": "g(V`, ∀) = V`*∀", "def": ["funcdef", "g", ["V`", "∀"]]},
     {"line": "'smoot = 1.7018'm", "def": ["unitdef", "smoot", []]},
     {"line": "x == 1", "def": null},
     {"line": "f(2)", "def": null},
@@ -47,6 +48,7 @@
     {"text": "$a, $x\n!symsolve x\n  equation: a*x = 1\n  pick: 1", "line": 4, "block": {"kind": "symsolve", "unknowns": ["x"]}},
     {"text": "!root x\n  equation: x = 1\ny = 2", "line": 3, "block": null},
     {"text": "D = [0, 1; 1, 3]\n!regression a, b\n  data: D\n  r2: R2", "line": 4, "block": {"kind": "regression", "unknowns": ["a", "b"]}},
+    {"text": "!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    x = i*j", "line": 3, "block": null},
     {"text": "!plot f(x), x = 0 .. 1\n  xlim: 0 .. 1", "line": 2, "block": null}
   ],
   "names_at": [

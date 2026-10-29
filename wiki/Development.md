@@ -42,6 +42,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `test_editing_node.py` | runs the Node suites from pytest |
 | `test_solver.py`, `test_solverjobs.py` | solver blocks, the solve session, and the worker process with its runner |
 | `test_symbolic.py` | symbols (`$x`, `~$g`), symbolic expressions, units and late binding, `!symsolve`, and their errors, exports and rename |
+| `test_loop.py` | `!loop` blocks: what they leave below, entries, loops inside loops, errors, Rename and exports |
 | `test_regression.py`, `matrix_vectors.json` | `!regression` blocks (the fit, units, errors, exports), and large matrices collapsed in documents; the vectors are shared with `test_matrixview.js` |
 | `test_install_linux.py` | `packaging/install-linux.sh` run in a throwaway home folder with a stand-in program and a stand-in `curl` serving fake releases: the launcher it writes, what `--uninstall` removes, installing and updating to the latest release, `--release`, what it does offline or when a download fails, stopping a LENS still running from the install folder, and installer 1.0.0 updating through `packaging/v1-bridge.sh` |
 | `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py`, `test_regression_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |

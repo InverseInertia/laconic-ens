@@ -48,7 +48,7 @@ CASES = {
              and rs[3].text == "Hz and rad/s are both 1/s again, 1 Hz = 1 rad/s" and shown(rs[4]) == "50 rad/s"),
     "plotspec": ("!plotspec grid: off\n!plotspec reset", 1, "Plots below: grid off",
                  lambda rs: rs[1].text == "Plot options are back to the defaults"),
-    # Statements: their lines are run by plotspec.py and solver.py, never by the dispatcher.
+    # Statements: their lines are run by plotspec.py, solver.py and loop.py, never by the dispatcher.
     "plot": ("!plot x, x = 0 .. 1", 1, None, lambda rs: rs[0].kind == "plot"),
     "root": ("x = 1\n!root x\n  equation: x = 2", 2, None, lambda rs: rs[1].kind == "solver"),
     "minimize": ("x = 1\n!minimize x\n  objective: (x - 2)^2", 2, None, lambda rs: rs[1].kind == "solver"),
@@ -56,6 +56,7 @@ CASES = {
     "regression": ("D = [0, 1, 2; 1, 3, 5]\n!regression a, b\n  data: D", 2, None,
                    lambda rs: rs[1].kind == "regression"),
     "symsolve": ("$x\n!symsolve x\n  equation: 2*x = 1", 2, None, lambda rs: rs[1].kind == "symsolve"),
+    "loop": ("S = 0\n!loop i = 1 .. 3\n  S = S + i", 2, None, lambda rs: rs[1].kind == "loop" and rs[1].text.startswith("S = 6")),
 }
 
 # A bad line for each argument rule, and what its error says.

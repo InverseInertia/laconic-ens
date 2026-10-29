@@ -93,6 +93,9 @@ def element(r, commands=False):
         rows = [aligned(y, [poly])[0]] + [aligned(v["lhs"], [v["rhs"]])[0] for v in fit.values]
         return Math(r.n, rows, fit.model + r",\quad " + r",\; ".join(v["latex"] for v in fit.values),
                     note=r.warning or (STALE if r.stale else ""))
+    if r.loop:   # the steps, left-aligned, then what each name holds after the last pass
+        rows = r.loop.code + [aligned(v["lhs"], [v["rhs"]])[0] for v in r.loop.values]
+        return Math(r.n, rows, r.latex, note=r.warning or (STALE if r.stale else ""))
     if r.kind in ("assign", "expr", "funcdef", "unitdef", "symsolve"):
         return Math(r.n, aligned(r.lhs, r.stages), r.latex, flat=r.latex_rows,
                     note=r.warning or (STALE if r.stale else ""))
