@@ -27,7 +27,9 @@ eq([d.sans, d.mono, d.bg], [0, 4, 'grid'], 'default fonts and paper');
 eq(T.fromSaved(null), { theme: T.defaults(), note: '' }, 'nothing saved');
 eq(T.fromSaved('dark'), { theme: T.defaults(), note: '' }, 'not an object');
 eq(T.fromSaved({ sans: 2, mono: 3, bg: 'dots', colors: T.PRESETS.Dark }).theme,
-  { sans: 2, mono: 3, bg: 'dots', colors: T.PRESETS.Dark }, 'valid theme kept');
+  { sans: 2, mono: 3, bg: 'dots', size: 100, colors: T.PRESETS.Dark }, 'valid theme kept');
+eq(T.fromSaved({ size: 125 }).theme.size, 125, 'text size kept');
+eq([T.fromSaved({ size: 37 }).theme.size, T.fromSaved({ size: '125' }).theme.size], [100, 100], 'a size not offered falls back to 100%');
 {
   const t = T.fromSaved({ sans: 99, mono: 1.5, bg: 'stripes', colors: { paper: '#fff', grid: 'red', err: '#ABCDEF' } }).theme;
   eq([t.sans, t.mono, t.bg], [0, 4, 'grid'], 'bad fonts and paper fall back field by field');
@@ -67,15 +69,18 @@ eq(T.warning({ paper: '#000000', text: '#111111' }),
   eq(v['--paper'], '#1e2127', 'color variable');
   eq(v['--logo-acc'], T.PRESETS.Dark.err, 'logo accent is the error color');
   eq(v['--paper-deep'], 'color-mix(in srgb, #1e2127 94%, #d9dde3)', 'derived color');
+  eq(v['--fs'], '1', 'a theme saved before text sizes is at 100%');
+  eq(T.cssVars({ ...T.defaults(), size: 150 })['--fs'], '1.5', 'text size as a scale');
 }
 
 // YAML snippets.
 {
-  const t = { sans: 3, mono: 1, bg: 'dots', colors: { ...T.PRESETS['Chalcedony Dark'] } };
+  const t = { sans: 3, mono: 1, bg: 'dots', size: 125, colors: { ...T.PRESETS['Chalcedony Dark'] } };
   const y = T.toYaml(t);
   ok(/^name: Chalcedony Dark$/m.test(y), 'snippet names its preset');
   ok(/^  sans: Georgia \(serif\)$/m.test(y), 'fonts by label');
   ok(/^  paper: '#000000'$/m.test(y), 'colors quoted, so # is not a comment');
+  ok(/^text-size: 125%$/m.test(y), 'text size in percent');
   eq(T.fromYaml(y, T.defaults()), { theme: t, error: '' }, 'round trip');
   const d = T.defaults();
   eq(T.fromYaml('colors:\n  err: #ABCDEF  # bright\n', d).theme.colors, { ...d.colors, err: '#abcdef' }, 'unquoted hex, comments, left-out fields kept');
@@ -83,10 +88,15 @@ eq(T.warning({ paper: '#000000', text: '#111111' }),
   ok(/unknown sans font "Comic"/.test(T.fromYaml('fonts:\n  sans: Comic\n', d).error), 'bad font rejected');
   ok(/unknown color "lime"/.test(T.fromYaml('colors:\n  lime: "#00ff00"\n', d).error), 'bad color name rejected');
   ok(/hard to tell apart/.test(T.fromYaml("colors:\n  paper: '#000000'\n  text: '#111111'\n", d).error), 'unreadable rejected');
-  ok(/no fonts, background or colors/.test(T.fromYaml('name: x\n', d).error), 'empty snippet rejected');
+  eq(T.fromYaml('text-size: 90\n', d).theme.size, 90, 'text size with or without %');
+  ok(/unknown text size "95%"/.test(T.fromYaml('text-size: 95%\n', d).error), 'a size not offered rejected');
+  ok(/no fonts, background, text size or colors/.test(T.fromYaml('name: x\n', d).error), 'empty snippet rejected');
   ok(/line 1/.test(T.fromYaml('hello\n', d).error), 'garbage rejected');
   eq(d, T.defaults(), 'current theme not changed');
 }
+
+// Symbols are bright cyan on every preset.
+eq(Object.values(T.PRESETS).map((p) => p.symbol), Object.values(T.PRESETS).map(() => '#00e5ff'), 'cyan symbols everywhere');
 
 // A theme saved before symbols had a color gets its preset's symbol color, so it is still that preset.
 {

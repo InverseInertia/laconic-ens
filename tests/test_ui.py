@@ -265,6 +265,26 @@ def test_theme_settings(page):
     assert page.evaluate("getComputedStyle(document.body).backgroundColor") == "rgb(0, 56, 107)"
 
 
+def test_text_size_scales_the_editor_and_results_together(page):
+    """The theme's text size scales the editor's type, the results' type and the row both line up on."""
+    style = "s => { const c = getComputedStyle(document.querySelector(s)); return [parseFloat(c.fontSize), parseFloat(c.lineHeight)]; }"
+    assert page.evaluate(style, "#src") == [14, 28]
+    page.wait_for_selector("#out .row.comment .body")
+    comment = page.evaluate(style, "#out .row.comment .body")
+    page.click("#settingsBtn")
+    page.wait_for_selector("#settingsDlg[open]")
+    page.select_option("#textSize", "150")
+    assert page.evaluate(style, "#src") == [21, 42]
+    assert page.evaluate(style, "#out .row.comment .body") == [comment[0] * 1.5, comment[1] * 1.5]
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    assert page.evaluate(style, "#src") == [21, 42]
+    page.click("#settingsBtn")
+    assert page.input_value("#textSize") == "150"
+    page.click("#themeReset")
+    assert page.evaluate(style, "#src") == [14, 28]
+
+
 def test_theme_yaml_export_and_import(page):
     page.click("#settingsBtn")
     page.wait_for_selector("#settingsDlg[open]")
