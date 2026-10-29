@@ -17,7 +17,7 @@ PLOT = "a = 2\n!plot a*x, x = 0 .. 1\n  title: T\n  grid: off\nb = 3\n"
 ROOT = "x = 1\n!root x\n  equation: x^2 = 2\nz = x + 1\n"
 
 COMMON = {"n": int, "end": int, "kind": str, "source": str, "text": str, "latex": str, "latex_rows": list,
-          "error": str, "warning": str, "stale": bool, "symbols": dict}
+          "error": str, "warning": str, "stale": bool, "hidden": bool, "symbols": dict}
 PLOT_KEYS = {"svg", "spec", "moved"}
 SOLVER_KEYS = {"kind", "unknowns", "hash", "status", "tainted", "autorun", "method", "timeout",
                "values", "summary", "note", "record"}
@@ -123,6 +123,11 @@ def test_the_display_parts_of_a_row():
     three = rows("~i = 1\ni = 2 * 'degC")[1]["warning"].split(". ")   # global, imaginary unit, offset unit
     assert three[0].startswith("Changes the global ~i") and any(t.startswith("i reads like") for t in three)
     assert "'delta_degC" in three[-1]
+
+
+def test_a_row_under_hide_is_hidden_unless_it_failed():
+    out = rows("!hide\nx = 1\nnope +\n!show\ny = 2")
+    assert [r["hidden"] for r in out] == [False, True, False, False, False]
 
 
 def test_a_plot_row_carries_its_picture_and_spec():

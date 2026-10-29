@@ -92,6 +92,7 @@ In the results, every `!` line is marked the same way, so you can see what was c
 | `!noassume` / `!assume` | keep results in the units the arithmetic produced / back to simplest SI |
 | `!trigdeg` / `!trigrad` | bare numbers in trig functions are degrees / radians (default) |
 | `!short` / `!long` | show only each line's final result / full steps again |
+| `!hide` / `!show` | hide the results of the lines below / show them again; hidden lines still run, see [Output and Export](Output-and-Export#hiding-lines) |
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |
 | `!freq hz\|rad\|si` | Hz is cycles per second, so `->` between Hz and rad/s puts in the 2π, and 1/s results show in Hz / rad/s; `si` (default) keeps 1 Hz = 1 rad/s, see [Units](Units#frequencies-hz-and-rads) |

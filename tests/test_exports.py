@@ -21,6 +21,16 @@ def test_comment_lines_run_on_unless_something_shown_comes_between():
     assert kinds(kept) == ["Paragraph", "Source", "Paragraph", "Math", "Paragraph"] and kept[1] == Source(4, "!clear")
 
 
+def test_lines_hidden_by_hide_are_left_out_as_on_the_page():
+    text = "# a\n!hide\n# b\nx = 2\n!plot x*t, t = 0 .. 1\nnope +\n!show\ny = x + 1"
+    els = elements(evaluate(text).results)
+    assert kinds(els) == ["Paragraph", "Error", "Math"] and els[0].lines == ["a"] and els[1].n == 6
+    kept = elements(evaluate(text).results, commands=True)    # !hide and !show are commands like any other
+    assert [e.text for e in kept if isinstance(e, Source)] == ["!hide", "!show"]
+    md = export(text, "md")
+    assert md.count("$$") == 2 and "y &= x + 1" in md and "<svg" not in md and "[!error] Line 6" in md
+
+
 def test_a_calculation_is_its_stages_one_per_row():
     m = elements(evaluate("M = 2 * 3'm").results)[0]
     assert m.rows == ["M &= 2 \\cdot 3\\,\\mathrm{m}", "&= 6\\,\\mathrm{m}"]

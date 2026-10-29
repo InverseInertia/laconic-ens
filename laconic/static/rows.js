@@ -4,7 +4,7 @@
  * turns a model into DOM. Runs under Node for tests.
  *
  *   model(row, {view, expanded})  null for a line shown inside its block's row (a plot's or
- *                       solver's option lines), else {line, end, cls, head, body, warning, stale, copy}.
+ *                       solver's option lines) or hidden by `!hide` (row.hidden), else {line, end, cls, head, body, warning, stale, copy}.
  *                       `expanded`: a Set of the lines whose large matrices are shown whole:
  *     line, end    the lines the row owns (a block header owns its block)
  *     cls          the row's class names
@@ -74,7 +74,7 @@
 
   function model(r, opts) {
     const make = Object.prototype.hasOwnProperty.call(BODY, r.kind) ? BODY[r.kind] : calc;
-    if (make === null) return null;
+    if (make === null || r.hidden) return null;
     const snip = !!(opts && opts.view === 'latex' && r.snippet && r.kind !== 'error');
     return {
       line: r.n,

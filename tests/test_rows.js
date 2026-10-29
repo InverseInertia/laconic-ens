@@ -29,6 +29,9 @@ eq(body(row('plot', { plot: {} })), { type: 'plot' }, 'a plot draws from its pay
 eq(body(row('solver', { solver: {} })), { type: 'solver' }, 'so does a solver block');
 eq(R.model(row('plotopt'), {}), null, 'a plot option line has no row of its own');
 eq(R.model(row('solveropt'), {}), null, 'nor has a solver option line');
+eq(R.model(row('assign', { latex: 'x = 2', hidden: true }), {}), null, 'a line under !hide has no row (#135)');
+eq(R.model(row('plot', { plot: {}, hidden: true, snippet: 'S' }), { view: 'latex' }), null, 'in either view');
+eq(R.model(row('command', { source: '!hide', text: 'hidden' }), {}).head.command, '!hide', '!hide itself shows as a command');
 
 // --- the command indicator (#136) -------------------------------------------------------------
 const head = (r, view) => R.model(r, { view }).head;

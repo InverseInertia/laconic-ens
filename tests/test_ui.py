@@ -509,6 +509,25 @@ def test_each_kind_of_line_shows_its_row(page):
     page.click("#viewTypeset")
 
 
+def test_hide_and_show_hide_results_but_not_errors(page):
+    """Lines under !hide run but get no row until !show; errors still do (#135)."""
+    text = ("a = 2\n!hide\nb = a * 3\n!plot b*x, x = 0 .. 1\nD = [0, 1, 2; 1, 3, 5]\n!regression p, q\n  data: D\n"
+            "nope +\n!show\nc = b + q")
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    shown = "[...document.querySelectorAll('#out .row')].map((r) => +r.dataset.line).join()"
+    page.wait_for_function(f"{shown} === '1,2,8,9,10'")     # the rows of this sheet, not the one before
+    page.wait_for_selector(".row[data-line='10'] .katex")
+    heads = page.eval_on_selector_all("#out .row .cmd", "cs => cs.map((c) => c.textContent)")
+    assert heads == ["!hide  →  Results below are hidden until !show; errors still show", "!show  →  Results are shown again"]
+    assert page.inner_text(".row[data-line='8'] .body .src") == "nope +"
+    assert "8" in page.inner_text(".row[data-line='10'] .body")    # b and q were defined while hidden
+    page.click("#viewLatex")
+    page.wait_for_selector(".row.snip pre")
+    assert page.evaluate(shown) == "1,2,8,9,10"
+    page.click("#viewTypeset")
+
+
 FIT = """[...document.querySelectorAll('#out .math')].map((m) => ({
     line: +m.closest('.row').dataset.line, wrapped: m.classList.contains('wrapped'),
     zoomed: [...m.children].some((k) => k.style.zoom),

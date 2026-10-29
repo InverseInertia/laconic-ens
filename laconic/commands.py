@@ -8,7 +8,7 @@ command is one entry here and nothing else.
 
 The sheet mode (`SheetMode`) is what the commands change and the rest of a run reads:
 the evaluator reads the angle unit and the cleared names, `Fmt` reads the precision,
-`sheet.py` reads assume and short, `plotspec.py` reads the plot defaults. Nothing
+`sheet.py` reads assume, short and hidden, `plotspec.py` reads the plot defaults. Nothing
 outside this module writes it."""
 import re
 from dataclasses import dataclass, field
@@ -33,6 +33,8 @@ class SheetMode:
     plotdefs: dict = field(default_factory=dict)   # !plotspec key: value, for the plots below
     cleared: dict = field(default_factory=dict)      # variable -> the !clear or !clearsym that removed it, for a clearer error
     cleared_funcs: set = field(default_factory=set)  # functions removed by !clearf
+    hidden: bool = False       # True after !hide: lines still run, but their results are not shown
+                               # (sheet.py marks them; errors are never hidden), until !show
 
 
 class CommandError(Exception):
@@ -207,6 +209,9 @@ _TRIG_HELP = ("Set the angle unit for <code>sin</code>, <code>cos</code>, <code>
               "explicit units such as <code>30'deg</code> always work")
 _SHORT_HELP = ("Below <code>!short</code>, each line shows only its final result, with its unit but no "
                "intermediate steps. <code>!long</code> restores the full display")
+_HIDE_HELP = ("Below <code>!hide</code>, lines still run and define their names, but their results are not shown "
+              "in the results or the exports, until <code>!show</code>. Errors are still shown, and so is a solver "
+              "block that needs to be run")
 _PRECISION_HELP = ("Choose how many significant figures (4 by default; <code>!sigfigsbig</code> keeps trailing "
                    "zeros, <code>2.500</code>) or decimal places results are displayed with. The last one given "
                    "wins. Only the display is rounded; every calculation uses the full value")
@@ -236,6 +241,10 @@ COMMANDS = (
             _setter("short", True, "Showing final results only, without steps"), _SHORT_HELP),
     Command("long", NoArgs(), "show steps again",
             _setter("short", False, "Showing steps again"), _SHORT_HELP),
+    Command("hide", NoArgs(), "hide the results below, until !show (they still run)",
+            _setter("hidden", True, "Results below are hidden until !show; errors still show"), _HIDE_HELP),
+    Command("show", NoArgs(), "show results again after !hide",
+            _setter("hidden", False, "Results are shown again"), _HIDE_HELP),
     Command("sigfigs", Whole(1, 15), "display n significant figures (default 4): !sigfigs 5",
             _sigfigs(False), _PRECISION_HELP),
     Command("sigfigsbig", Whole(1, 15), "like !sigfigs, but keeps trailing zeros: 2.500",

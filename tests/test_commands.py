@@ -31,6 +31,11 @@ CASES = {
               lambda rs: len(rs[2].stages) == 1 and rs[2].text == "M = 30380 J" and len(rs[3].stages) == 1),
     "long": ("w = 12'kN/'m\n!short\n!long\nM = w*(4.5'm)^2/8", 3, "Showing steps again",
              lambda rs: len(rs[3].stages) == 3),
+    "hide": ("a = 1\n!hide\nb = a + 1\n!plot b*x, x = 0 .. 1\n!show\nc = b * 2", 2,
+             "Results below are hidden until !show; errors still show",
+             lambda rs: [r.hidden for r in rs] == [False, False, True, True, False, False] and rs[5].text == "c = 4"),
+    "show": ("!hide\nx = 1\n!show\nx", 3, "Results are shown again",
+             lambda rs: [r.hidden for r in rs] == [False, True, False, False]),
     "sigfigs": ("x = 1/3\n!sigfigs 6\nx\n!sigfigs 1\nx", 2, "Results show 6 significant figures",
                 lambda rs: shown(rs[2]) == "0.333333" and rs[3].text == "Results show 1 significant figure"),
     "sigfigsbig": ("a = 2.5\n!sigfigsbig 4\na", 2, "Results show 4 significant figures, trailing zeros kept",
@@ -102,3 +107,14 @@ def test_help_rows_group_commands_that_share_a_text():
     assert "<kbd>!noassume</kbd> <kbd>!assume</kbd>" in rows
     assert "<kbd>!sigfigs n</kbd> <kbd>!sigfigsbig n</kbd> <kbd>!decplace n</kbd>" in rows
     assert rows.count("<tr>") == len({c.help for c in COMMANDS if c.help})
+
+
+def test_hide_keeps_errors_and_solvers_that_need_running_in_sight():
+    """Under !hide every line runs and defines its names, but only !hide, !show, errors and solver
+    blocks whose result is not current are left showing."""
+    text = ("!hide\n## Working\n# a note\n\na = 2\nnope +\n!sigfigs 3\n!hide\n!plot a*x, x = 0 .. 1\n  bad: 1\n"
+            "y = 1\n!root y\n  equation: y = a\nD = [0, 1; 1, 3]\n!regression p, q\n  data: D\n!show\nb = a + p")
+    rs = run(text)
+    assert [r.n for r in rs if not r.hidden] == [1, 6, 10, 12, 17, 18]
+    assert rs[5].kind == "error" and rs[9].kind == "error" and rs[11].solver.status == "none"
+    assert rs[17].text == "b = 3"         # the hidden lines still defined a and p

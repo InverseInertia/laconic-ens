@@ -64,6 +64,9 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Display parts**
 : What a row can show, the same fields on every result and empty when the line has none: `text` (plain), `latex` (typeset; `latex_rows` is the same broken one stage per row, for a layout too narrow for it), `error`, `warning` and `stale`.
 
+**Hidden line** (`r.hidden`)
+: A line that ran under `!hide` (and before the next `!show`): it defines its names as usual, but the results pane and every export leave it out. `sheet.py` marks it, from the **sheet mode** before and after the line, so `!hide` and `!show` themselves are never hidden; nor is an error, nor a solver block whose result is not current.
+
 **Block handle**
 : On a block header's result, the sheettext **Block** it starts, whether the block drew or failed. `sheet.block_at(text, line)` finds a block by its header, and `sheet.solver_blocks(text)` finds every solver block. Both read the text to find the blocks and run the sheet only as far as they need (`evaluate(..., until=)`).
 
@@ -146,7 +149,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Statement**: a command that begins a plot or solver block (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`). It is listed in the registry for suggestions and help, but its lines are run by `plotspec.py`, `solver.py` and `regression.py`.
 
-**Sheet mode** (`SheetMode`): the state commands change as a sheet runs top to bottom: angle unit, assume (reduce to SI), short (final result only), display precision (significant figures, decimal places, trailing zeros), plot defaults, and the names removed by `!clear` / `!clearf`. Each run starts with a fresh one; only commands write it, and the evaluator, `Fmt` and the plot builder read it.
+**Sheet mode** (`SheetMode`): the state commands change as a sheet runs top to bottom: angle unit, assume (reduce to SI), short (final result only), display precision (significant figures, decimal places, trailing zeros), hidden (`!hide`), plot defaults, and the names removed by `!clear` / `!clearf`. Each run starts with a fresh one; only commands write it, and the evaluator, `Fmt` and the plot builder read it.
 
 ## Complex numbers
 

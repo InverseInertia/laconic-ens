@@ -102,6 +102,7 @@ def _run(text, siunitx=False, global_units=None, until=None):
         i, raw, s = l.n, l.text, l.text.strip()
         ev.symbols.line = i
         ev.notes.clear()
+        hiding = ev.mode.hidden
         if i in defs:
             results.append(defs[i])
         elif i in owned:
@@ -126,6 +127,8 @@ def _run(text, siunitx=False, global_units=None, until=None):
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
         _add_notes(results[-1], ev.notes)
+        # Hidden: run under !hide and still under it after (so !hide and !show themselves show).
+        results[-1].hidden = hiding and ev.mode.hidden and _hideable(results[-1])
     for r, l in zip(results, sheet.lines):
         r.symbols = _symbols(ev.symbols, l)
     ws = Worksheet(text, results, ev.symbols)
@@ -501,6 +504,13 @@ def _bare_number(expr):
     left to the usual stages, since `!complex polar` shows it differently from how it was typed."""
     n = expr.operand if isinstance(expr, Neg) else expr
     return isinstance(n, Num) and not isinstance(n.value, complex)
+
+
+def _hideable(r):
+    """Whether `!hide` may hide this result. An error never is, so a broken line is not lost, nor
+    is a solver block whose result is not current, so it can still be run (and is not exported as
+    if it were right)."""
+    return r.kind != "error" and not (r.solver and not r.solver.current)
 
 
 def _add_notes(r, notes):
