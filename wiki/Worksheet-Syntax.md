@@ -111,4 +111,4 @@ The Rename button or F2 renames a variable, function or custom unit everywhere (
 
 - `# text` is a comment, `## text` a section heading (a `\subsection*` in the export).
 - `#@ ...` lines are written by LENS (the saved unit block) and are not displayed as comments.
-- The browser's spellchecker checks the line you are on when it is a comment, a heading or a plot's title, label or note; calculations are never marked. The editor is one text box, so while the caret is on such a line the browser may underline misspelt words on other lines too, and the marks go away when the caret moves back to a calculation.
+- The browser's spellchecker is on while the caret is on a comment, a heading or a plot's title, label or note, and off on calculations, so names and units are never marked. The editor is one text box, and the browser only checks words as you type them and drops every mark when spellcheck goes off: a misspelling is underlined while you write the line, and the marks go away when the caret moves to a calculation.
