@@ -6,7 +6,6 @@ Not built yet.
 
 - Symbolic math
 - Line breaking inside a single stage of a long equation
-- Globals usable above their definition (units already are)
 - Custom units that define a new base dimension or an offset scale
 - Mouse selection snapped to terms (use double-click or `Alt+Up`)
 
