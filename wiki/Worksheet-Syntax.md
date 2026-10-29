@@ -82,6 +82,8 @@ A `~` on a definition makes the name global: `~g = 9.81'm / 's^2`. Every later u
 
 A line starting with `!` is a command. It affects every line below it.
 
+In the results, every `!` line is marked the same way, so you can see what was called as you scroll: the line as typed, in the code font under a dashed rule. A one-line command adds what it did (`!sigfigs 3  →  Results show 3 significant figures`); a plot, solver, regression or symbolic solve shows its `!plot ...`, `!root ...` line over its picture or values. The exports leave the marks out (the LaTeX document keeps one-line commands as `%` comments).
+
 | Command | Effect |
 |---|---|
 | `!clear` | remove all non-global variables (functions are kept) |
@@ -90,6 +92,7 @@ A line starting with `!` is a command. It affects every line below it.
 | `!noassume` / `!assume` | keep results in the units the arithmetic produced / back to simplest SI |
 | `!trigdeg` / `!trigrad` | bare numbers in trig functions are degrees / radians (default) |
 | `!short` / `!long` | show only each line's final result / full steps again |
+| `!hide` / `!show` | hide the results of the lines below / show them again; hidden lines still run, see [Output and Export](Output-and-Export#hiding-lines) |
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |
 | `!freq hz\|rad\|si` | Hz is cycles per second, so `->` between Hz and rad/s puts in the 2π, and 1/s results show in Hz / rad/s; `si` (default) keeps 1 Hz = 1 rad/s, see [Units](Units#frequencies-hz-and-rads) |

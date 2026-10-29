@@ -182,7 +182,9 @@
     border: 1px solid var(--ink); padding: 5px 8px; cursor: pointer;
   }
   select[hidden] { display: none; }
-  .row.command .body { font: 400 calc(13px * var(--fs))/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
+  /* The command indicator: the `!` line as typed, on every row a command or block makes (rows.js `head`). */
+  .row .cmd { font: 400 calc(13px * var(--fs))/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .row .cmd .cmd-name { color: var(--text); }
   .seg { display: flex; border: 1px solid var(--ink); }
   .seg button { border: 0; border-right: 1px solid var(--ink); }
   .seg button:last-child { border-right: 0; }
@@ -229,7 +231,6 @@
   .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 calc(13px * var(--fs))/1 var(--sans); color: var(--text-soft); cursor: help; }
   .row.stale:not(.solver) .body { opacity: .72; }
   .row.solver .body { padding: 6px 0 4px; }
-  .solver-box .s-head { font: 400 calc(13px * var(--fs))/1.4 var(--mono); color: var(--text-soft); border-top: 1px dashed var(--rule); padding: 5px 0 2px; margin-top: 6px; }
   .solver-box .s-values { margin: 2px 0 4px; }
   .solver-box.is-stale .s-values { opacity: .6; }
   .solver-box .s-val .katex-display { margin: 0; }
@@ -460,7 +461,7 @@ v` = 2                    <i>a mark after a name is an accent: ` dot, ! arrow, @
       <li>Operators: <code>+ - * / ^</code>, elementwise <code>.* ./</code>, and <code>-&gt;</code> to convert units. Only a number followed by units may skip the <code>*</code>: write <code>3*x</code>, not <code>3 x</code>.</li>
       <li>Constants are <code>pi</code>, <code>e</code> and <code>&infin;</code> (<kbd>Ctrl</kbd>+<kbd>G</kbd> after an <code>8</code>). Physical constants are units: <code>'R</code>, <code>'k_B</code>, <code>'h_P</code>, <code>'N_A</code>. Functions include <code>sqrt abs sin cos tan exp ln log10</code> and <code>heaviside</code>.</li>
       <li>Every later use of a global is written <code>~g</code>; with Math keys on, the editor adds the <code>~</code> once you finish typing the name. Globals are colored and underlined in the results unless <strong>Mark globals</strong> is off.</li>
-      <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!clearf</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more. Settings &rarr; Reference lists them all.</li>
+      <li>A line starting with <code>!</code> is a command and affects every line below it: <code>!clear</code>, <code>!clearf</code>, <code>!noassume</code>, <code>!trigdeg</code>, <code>!short</code>, <code>!hide</code>, <code>!sigfigs n</code>, <code>!plot</code>, <code>!root</code>, and more. Settings &rarr; Reference lists them all.</li>
       <li><strong>Units</strong> lists every unit: search by name or description, filter by a tag such as <em>constants</em> or <em>thermodynamics</em>, and click one to insert it. <strong>+ tag</strong> adds a tag of your own.</li>
       <li>Rename a variable, function or custom unit everywhere with <strong>Rename</strong> or <kbd>F2</kbd>. Comments and plot titles are left alone.</li>
     </ul>
@@ -756,6 +757,7 @@ document.fonts.ready.then(() => MathFit.fitAll(out, true));
 
 // How each kind of row body is drawn; what goes in it comes from the row model (rows.js).
 const BODY = {
+  none: () => {},
   text: (el, b) => { el.textContent = b.text; },
   tex: (el, b, r) => {
     typeset(el, b.tex, b.rows);
@@ -787,6 +789,18 @@ function matrixToggle(n, m) {
   return b;
 }
 
+// The command indicator over a command's or a block's row: the `!` line as typed, and what it did.
+function commandHead(h) {
+  const d = document.createElement("div"); d.className = "cmd";
+  const name = document.createElement("span"); name.className = "cmd-name"; name.textContent = h.command;
+  d.append(name);
+  if (h.effect) {
+    const e = document.createElement("span"); e.className = "cmd-effect"; e.textContent = "  \u2192  " + h.effect;
+    d.append(e);
+  }
+  return d;
+}
+
 let shown = [];   // the row models on screen
 function render(rows) {
   last = rows;
@@ -800,6 +814,7 @@ function render(rows) {
     const no = document.createElement("div"); no.className = "no"; no.textContent = m.line;
     const body = document.createElement("div"); body.className = "body";
     BODY[m.body.type](body, m.body, r);
+    if (m.head) body.prepend(commandHead(m.head));
     if (m.warning) {
       const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + m.warning;
       body.append(w);

@@ -405,3 +405,11 @@ def test_a_large_matrix_input_hashes_quickly_and_ignores_last_bit_noise():
     t0 = time.monotonic()
     solver._qdigest(big)
     assert time.monotonic() - t0 < 0.5
+
+
+def test_hide_hides_a_solver_block_only_while_its_result_is_current():
+    """A block under !hide that is out of date or never run stays in sight, so it can be run."""
+    text = "!hide\ny = 1\n!root y\n  equation: y^2 = 4\nz = y\n"
+    assert [r.hidden for r in rows(text)] == [False, True, False, True, True]
+    done = rows(solved(text))
+    assert done[2].solver.current and done[2].hidden and done[5].hidden

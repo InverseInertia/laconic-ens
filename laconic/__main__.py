@@ -209,6 +209,8 @@ def main():
                 path.write_text(r.plot.image(uid=r.n), encoding="utf-8")
                 print(f"wrote {path}")
     for r in results:
+        if r.hidden:        # below !hide, as on the page and in the exports
+            continue
         if r.kind == "error":
             print(f"{r.n:>3}  ERROR  {r.error}", file=sys.stderr)
         elif r.text and r.kind in ("assign", "expr", "regression", "symsolve"):

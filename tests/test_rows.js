@@ -21,14 +21,31 @@ eq(body(row('symdef', { text: 'symbols a, b' })), { type: 'text', text: 'symbols
 eq(body(row('symsolve', { latex: 'x = 1' })).type, 'tex', 'a symbolic solve is typeset');
 eq(body(row('comment', { text: 'n' })), { type: 'text', text: 'n' }, 'so does a comment');
 eq(body(row('blank')), { type: 'text', text: '' }, 'a blank line shows nothing');
-eq(body(row('command', { source: '!sigfigs 3  ', text: 'sigfigs 3' })),
-  { type: 'text', text: '!sigfigs 3  →  sigfigs 3' }, 'a command shows itself and what it did');
+eq(body(row('command', { source: '!sigfigs 3  ', text: 'sigfigs 3' })), { type: 'none' },
+  'a command is all head: it shows itself and what it did');
 eq(body(row('error', { source: '  x = +', error: 'Bad' })), { type: 'error', source: 'x = +', message: 'Bad' },
   'an error shows the line and the message');
 eq(body(row('plot', { plot: {} })), { type: 'plot' }, 'a plot draws from its payload');
 eq(body(row('solver', { solver: {} })), { type: 'solver' }, 'so does a solver block');
 eq(R.model(row('plotopt'), {}), null, 'a plot option line has no row of its own');
 eq(R.model(row('solveropt'), {}), null, 'nor has a solver option line');
+eq(R.model(row('assign', { latex: 'x = 2', hidden: true }), {}), null, 'a line under !hide has no row (#135)');
+eq(R.model(row('plot', { plot: {}, hidden: true, snippet: 'S' }), { view: 'latex' }), null, 'in either view');
+eq(R.model(row('command', { source: '!hide', text: 'hidden' }), {}).head.command, '!hide', '!hide itself shows as a command');
+
+// --- the command indicator (#136) -------------------------------------------------------------
+const head = (r, view) => R.model(r, { view }).head;
+eq(head(row('command', { source: '!sigfigs 3  ', text: 'Results show 3' })), { command: '!sigfigs 3', effect: 'Results show 3' },
+  'a command names itself and what it did');
+for (const kind of ['plot', 'solver', 'regression', 'symsolve']) {
+  const r = row(kind, { source: '  !' + kind + ' a, b', latex: 'a = 1', plot: {}, solver: {} });
+  eq(head(r), { command: '!' + kind + ' a, b', effect: '' }, `a ${kind} block names the command it was called with`);
+  eq(head({ ...r, snippet: 'S' }, 'latex'), head(r), `in the LaTeX view too (${kind})`);
+}
+eq(head(row('command', { source: '!clear', text: 'Cleared', snippet: '% !clear' }), 'latex').command, '!clear',
+  'a command keeps its indicator over its snippet');
+for (const kind of ['assign', 'expr', 'heading', 'comment', 'error', 'blank', 'symdef'])
+  eq(head(row(kind, { source: '!plot nope' })), null, `no indicator on a ${kind} line`);
 
 // --- the common parts -------------------------------------------------------------------------
 const plot = R.model(row('plot', { n: 4, end: 6, stale: true, warning: 'w', plot: {} }), {});

@@ -517,6 +517,10 @@ def test_each_kind_of_line_shows_its_row(page):
                     [7, "row error"], [8, "row assign"], [9, "row solver stale"]]
     assert page.inner_text(".row[data-line='1'] .body") == "Loads"
     assert page.text_content(".row[data-line='2'] .body") == "!sigfigs 3  →  Results show 3 significant figures"
+    # Every `!` line shows the same indicator, naming the command as it was called (#136).
+    heads = page.eval_on_selector_all("#out .row .cmd", "cs => cs.map((c) => [+c.closest('.row').dataset.line, c.textContent])")
+    assert heads == [[2, "!sigfigs 3  →  Results show 3 significant figures"], [5, "!plot x, x = 0 .. 1"], [9, "!root y"]]
+    assert page.locator(".row[data-line='9'] .cmd + .solver-box").count() == 1
     assert page.inner_text(".row[data-line='4'] .body .src") == "nope +"
     assert page.locator(".row[data-line='3'] .katex").count() == 1
     assert page.locator(".row[data-line='9'] .stale-mark").count() == 1
@@ -532,6 +536,26 @@ def test_each_kind_of_line_shows_its_row(page):
     assert page.locator(".row.snip .copy").count() == 6 and page.locator(".row.error .copy").count() == 0
     assert page.locator(".row.snip .solver-tools").count() == 1
     assert page.inner_text(".row[data-line='3'] pre").startswith("x =")
+    assert page.inner_text(".row[data-line='5'] .cmd") == "!plot x, x = 0 .. 1"   # over the snippet too
+    page.click("#viewTypeset")
+
+
+def test_hide_and_show_hide_results_but_not_errors(page):
+    """Lines under !hide run but get no row until !show; errors still do (#135)."""
+    text = ("a = 2\n!hide\nb = a * 3\n!plot b*x, x = 0 .. 1\nD = [0, 1, 2; 1, 3, 5]\n!regression p, q\n  data: D\n"
+            "nope +\n!show\nc = b + q")
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    shown = "[...document.querySelectorAll('#out .row')].map((r) => +r.dataset.line).join()"
+    page.wait_for_function(f"{shown} === '1,2,8,9,10'")     # the rows of this sheet, not the one before
+    page.wait_for_selector(".row[data-line='10'] .katex")
+    heads = page.eval_on_selector_all("#out .row .cmd", "cs => cs.map((c) => c.textContent)")
+    assert heads == ["!hide  →  Results below are hidden until !show; errors still show", "!show  →  Results are shown again"]
+    assert page.inner_text(".row[data-line='8'] .body .src") == "nope +"
+    assert "8" in page.inner_text(".row[data-line='10'] .body")    # b and q were defined while hidden
+    page.click("#viewLatex")
+    page.wait_for_selector(".row.snip pre")
+    assert page.evaluate(shown) == "1,2,8,9,10"
     page.click("#viewTypeset")
 
 
