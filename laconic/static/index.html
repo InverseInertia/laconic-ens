@@ -116,7 +116,8 @@
     color: var(--text);
     background-color: transparent;
     border: 0; resize: none; margin: 0;
-    padding: 12px 16px;
+    /* Room to scroll the last line up to the middle, as editors allow (--overscroll: half the height). */
+    padding: 12px 16px var(--overscroll, 12px);
     white-space: pre; overflow: auto;
     tab-size: 2;
   }
@@ -127,7 +128,7 @@
   #srcBox > #src { grid-area: 1 / 1; position: relative; min-width: 0; min-height: 0; }
   #srcMarks {
     grid-area: 1 / 1; overflow: hidden; color: transparent; user-select: none;
-    font: 400 14px/var(--row) var(--mono); padding: 12px 16px; white-space: pre; tab-size: 2;
+    font: 400 14px/var(--row) var(--mono); padding: 12px 16px var(--overscroll, 12px); white-space: pre; tab-size: 2;
   }
   #srcMarks.wrapped { white-space: pre-wrap; overflow-wrap: break-word; }
   #srcMarks mark { color: transparent; background: color-mix(in srgb, var(--global) 20%, transparent); border-bottom: 1.5px dotted var(--global); }
@@ -1135,7 +1136,11 @@ function syncSrcMarks() {
   srcMarks.scrollTop = src.scrollTop; srcMarks.scrollLeft = src.scrollLeft;
 }
 src.addEventListener("scroll", syncSrcMarks);
-new ResizeObserver(syncSrcMarks).observe(src);
+new ResizeObserver(() => {
+  // Scrolling may go half a page past the last line, so the line being typed can sit mid-screen.
+  $("#srcBox").style.setProperty("--overscroll", `${Math.max(12, Math.round(src.clientHeight / 2))}px`);
+  syncSrcMarks();
+}).observe(src);
 // The marks sit under the textarea, so the pointer never reaches them; look underneath it instead.
 src.addEventListener("mousemove", (ev) => {
   const m = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.parentElement === srcMarks && el.tagName === "MARK");

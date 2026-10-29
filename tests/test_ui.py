@@ -739,3 +739,20 @@ def test_spellcheck_follows_the_caret_onto_comments_and_headings(page):
     spell(True)                     # a selection over the heading and the comment
     select(page, 0, len("## Beam\n# a coment\nx"))
     spell(False)                    # one that reaches the calculation
+
+
+def test_the_editor_scrolls_half_a_page_past_its_last_line(page):
+    """#129: the line being typed at the end of a long sheet can be brought up to mid-screen."""
+    reset(page, "~g = 5\n" + "\n".join(f"y{k} = g" for k in range(119)))
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector("#srcMarks mark >> nth=100", state="attached")
+    got = page.evaluate("""() => {
+        const s = document.querySelector('#src'), m = document.querySelector('#srcMarks');
+        s.scrollTop = s.scrollHeight;
+        s.dispatchEvent(new Event('scroll'));
+        const row = parseFloat(getComputedStyle(s).lineHeight);
+        const lastTop = 12 + 119 * row - s.scrollTop;   // the last line, from the top of the editor
+        return {lastTop, height: s.clientHeight, marks: m.scrollTop, src: s.scrollTop};
+    }""")
+    assert got["height"] * 0.35 < got["lastTop"] < got["height"] * 0.65, got
+    assert abs(got["marks"] - got["src"]) < 1, got       # the global marks scroll with the text

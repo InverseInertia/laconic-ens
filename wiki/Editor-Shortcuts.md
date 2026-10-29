@@ -33,6 +33,8 @@ These are off on comment lines, on the text lines under a plot (title, labels, a
 | `F2` | Rename the name at the caret everywhere |
 | `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+O` | Save, Save As, Open |
 
+The editor scrolls half a page past the last line, as most code editors do, so the line you are typing at the end of a long sheet can sit in the middle of the screen rather than at its bottom edge.
+
 Division is typed with the fraction key: `a`, `/`, then the denominator. Browsers reserve Ctrl+T and Ctrl+N, so use Alt+T in a normal tab.
 
 ## Highlighted text

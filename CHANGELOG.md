@@ -17,6 +17,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Points on plots**: a `points:` line under a plot draws a set of points as markers over its curves, given as `!regression` takes its data: `points: D` (a matrix with an x row and a y row) or `points: t, s` (two vectors, units and all). A plot header with no range, `!plot t, s` or `!plot D`, plots points alone, with axes fitted to them. Points are styled like any series (`color 2: red`, `marker 2: square`) and export to SVG, PNG and LaTeX. (#127)
 
 ### Changes
+- **The editor scrolls past the last line**: as in most code editors, you can scroll half a page beyond the end of the sheet, so the line you are typing at the bottom of a long sheet can sit in the middle of the screen. (#129)
 - **∀ for volume is now typed as the ∀ character**: press Ctrl+G after a `V` (again to go back), and the worksheet keeps the ∀ itself, as in `∀_cv = 0.2'm^3`. A name spelled `forall` is an ordinary name again; replace it with ∀ to keep the symbol. A Greek table you edited earlier needs a `V`→`∀` row, or Reset to defaults. (#125)
 
 ### Fixes
