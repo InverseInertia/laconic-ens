@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.5.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.0) (2026-10-29)
+
 ### New
 - **Spellcheck in comments and headings**: while you type a comment, heading or plot title line, the browser's spellchecker underlines misspelt words, until the caret moves to a calculation; it stays off while you edit calculations, so names and units are not marked. On Linux, LENS also switches spellcheck on in its app window's own browser profile, with a dictionary for your language, since that profile does not have your browser's settings. (#121)
 - **Changelog in Help**: the bottom of the Help window lists what changed in each release, and the **Changelog** link beside the version at the top jumps to it. (#122)
