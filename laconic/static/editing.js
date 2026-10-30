@@ -24,13 +24,14 @@
   const Symbols = typeof module !== 'undefined' && module.exports ? require('./symbols.js') : root.Symbols;
 
   // The extended characters behind Ctrl+G: a Mathcad-style Greek mapping. Capitals that look like Latin letters are left out.
+  // e gives ε (\varepsilon) and E the lunate ϵ (\epsilon), so a sheet can use both for different things.
   // 8 -> ∞ and V -> ∀ ride along: the free-stream subscript, and the struck-through V some fluid
   // mechanics texts use for volume.
   const DEFAULT_GREEK = {
     a: 'α', b: 'β', g: 'γ', d: 'δ', e: 'ε', z: 'ζ', h: 'η', q: 'θ', i: 'ι', k: 'κ',
     l: 'λ', m: 'μ', n: 'ν', x: 'ξ', o: 'ο', p: 'π', r: 'ρ', s: 'σ', t: 'τ', u: 'υ',
     f: 'φ', c: 'χ', y: 'ψ', w: 'ω',
-    G: 'Γ', D: 'Δ', Q: 'Θ', L: 'Λ', X: 'Ξ', P: 'Π', S: 'Σ', F: 'Φ', Y: 'Ψ', W: 'Ω',
+    E: 'ϵ', G: 'Γ', D: 'Δ', Q: 'Θ', L: 'Λ', X: 'Ξ', P: 'Π', S: 'Σ', F: 'Φ', Y: 'Ψ', W: 'Ω',
     8: '∞', V: '∀',
   };
 

@@ -66,7 +66,7 @@ def name_latex(name):
 
 
 _GREEK_CHARS = {
-    "α": "\\alpha", "β": "\\beta", "γ": "\\gamma", "δ": "\\delta", "ε": "\\epsilon",
+    "α": "\\alpha", "β": "\\beta", "γ": "\\gamma", "δ": "\\delta", "ε": "\\varepsilon",
     "ζ": "\\zeta", "η": "\\eta", "θ": "\\theta", "ι": "\\iota", "κ": "\\kappa",
     "λ": "\\lambda", "μ": "\\mu", "ν": "\\nu", "ξ": "\\xi", "ο": "o", "π": "\\pi",
     "ρ": "\\rho", "σ": "\\sigma", "τ": "\\tau", "υ": "\\upsilon", "φ": "\\phi",
@@ -75,6 +75,9 @@ _GREEK_CHARS = {
     "Π": "\\Pi", "Σ": "\\Sigma", "Φ": "\\Phi", "Ψ": "\\Psi", "Ω": "\\Omega",
     "Υ": "\\Upsilon", "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
     "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Χ": "X",
+    # ϵ is the lunate epsilon (Ctrl+G on E) and ε the open one (Ctrl+G on e), typeset as they look,
+    # so a sheet can use both for different things.
+    "ϵ": "\\epsilon",
     # Not Greek, but typed (Ctrl+G on V) and typeset the same way: ∀ is the struck-through V that
     # some fluid mechanics texts use for volume, to keep V for velocity.
     "∀": "\\forall",

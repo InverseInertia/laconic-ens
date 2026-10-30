@@ -12,6 +12,10 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### New
 - Added herobrine
 - **Show all the working with `!adnauseum`**: below it, each line shows every intermediate result, worked out innermost first, and every unit that cancels, struck through, with the result's units written out in SI base units and cancelled down when they differ from the arithmetic's. `!long` or `!short` ends it. (#146)
+- **Two epsilons**: Ctrl+G after `E` types the lunate ϵ, a different letter from the ε that `e` gives, so a sheet can use both for different things. A table of extended characters you edited earlier needs the `E` row added, or Reset to defaults. (#150)
+
+### Changes
+- **ε typesets as it looks**: ε is now printed as \varepsilon (the open ε) in the results and exports, and ϵ as \epsilon, where ε used to print as ϵ. (#150)
 
 ## [v0.5.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.1) (2026-10-30)
 
