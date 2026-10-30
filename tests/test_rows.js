@@ -24,7 +24,8 @@ eq(body(row('command', { source: '!sigfigs 3  ', text: 'sigfigs 3' })), { type: 
   'a command is all head: it shows itself and what it did');
 eq(body(row('error', { source: '  x = +', error: 'Bad' })), { type: 'error', source: 'x = +', message: 'Bad' },
   'an error shows the line and the message');
-eq(body(row('plot', { plot: {} })), { type: 'plot' }, 'a plot draws from its payload');
+eq(body(row('plot', { plot: {} })), { type: 'plot', pending: false }, 'a plot draws from its payload');
+eq(body(row('plot', { pending: true })), { type: 'plot', pending: true }, 'or says it is not drawn yet');
 eq(body(row('solver', { solver: {} })), { type: 'solver' }, 'so does a solver block');
 eq(R.model(row('plotopt'), {}), null, 'a plot option line has no row of its own');
 eq(R.model(row('solveropt'), {}), null, 'nor has a solver option line');
@@ -87,5 +88,14 @@ const solver = row('solver', { n: 3, end: 4, source: '  !root x  ', stale: true,
 eq([R.line(solver), R.head(solver), R.stale(solver), R.stale(row('assign'))], [3, '!root x', true, false], 'line, head, stale');
 const rs = [row('assign', { n: 1, source: 'x = 1' }), row('assign', { n: 2, source: 'y = x' })];
 eq(R.current(rs, ['x = 1', 'y = x + 1', 'z = 2']), [rs[0], null, null], 'a row only while its line reads the same');
+
+// --- which pending plot is drawn first ---------------------------------------------------------
+{
+  const p = (n, end, extra = {}) => row('plot', { n, end, pending: true, ...extra });
+  const rows = [p(2, 4), row('assign', { n: 5 }), p(10, 12), p(20, 21, { hidden: true }), p(30, 31), row('plot', { n: 40, end: 40, plot: {} })];
+  eq(R.plotOrder(rows, 11), [10, 2, 30, 20], 'nearest the focused line first, hidden ones last, drawn ones not at all');
+  eq(R.plotOrder(rows, 1), [2, 10, 30, 20], 'from the top');
+  eq(R.plotOrder(rows, 3), [2, 10, 30, 20], 'a caret inside a plot\'s block is on it');
+}
 
 console.log(`${n} row model checks passed`);

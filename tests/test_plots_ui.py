@@ -326,3 +326,26 @@ def test_typing_plot_options_indents_and_suggests_keys_and_values(page):
     page.wait_for_selector(".pl-area")
     page.wait_for_timeout(250)
     assert not page.query_selector(".row.error") and "#d55e00" in page.inner_html(".plot-wrap")   # drawn in red
+
+
+def test_plots_are_drawn_after_the_math_nearest_the_caret_first(page):
+    """The eval leaves plots pending; each shows "Drawing…" until /api/plot draws it, the plot
+    nearest the caret first, then says it is up to date."""
+    asked, held = [], []
+    page.route("**/api/plot", lambda route: (asked.append(route.request.post_data_json["line"]), held.append(route)))
+    text = "!plot x, x = 0 .. 1\n" + "a = 1\n" * 10 + "b = a + 1\n!plot x^2, x = 0 .. 1\n"
+    page.evaluate("t => { const s = document.querySelector('#src'); s.value = t; s.focus(); s.setSelectionRange(t.length, t.length);"
+                  " s.dispatchEvent(new Event('input')); }", text)
+    page.wait_for_selector(".plot-status[data-state='run']")
+    assert "b=a+1=1+1=2" in page.inner_text("#out")               # the math is there before any plot
+    assert page.locator(".plot-status[data-state='run']").count() == 2
+    page.wait_for_timeout(200)
+    assert asked == [13]                                          # the plot by the caret, and one at a time
+    held.pop().continue_()
+    page.wait_for_timeout(300)
+    assert asked == [13, 1]
+    held.pop().continue_()
+    page.wait_for_selector(".plot-status[data-state='run']", state="detached")
+    assert page.locator(".plot-status[data-state='ok']").count() == 2
+    assert "Up to date" in page.inner_text(".row.plot .plot-status")
+    assert page.locator(".plot-wrap svg.lens-plot").count() == 2

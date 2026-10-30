@@ -32,7 +32,7 @@ Where an expression is undefined (`1/x` at 0, `sqrt` of a negative) the line bre
 | `gaps` | `break` or `error` (`break`) |
 | `color`, `width`, `dash`, `marker`, `label` | per series. `color 2: red` is series 2; with no number it applies to every series. Colors are `#rrggbb`, `#rgb` or a name (`red`, `blue`, `green`, `orange`, `purple`, `sky`, `gray`, `black`, `navy`). `dash`: `solid`, `dashed`, `dotted`. `marker`: `none`, `circle`, `square` |
 | `note` | `"text" at (x, y)`: a dot and a label at a point in data coordinates. Repeat the line for more |
-| `points` | `D` or `x, y`: a set of points drawn as markers, read as `!regression` reads its `data:`. Repeat the line for more; see [Points](#points) |
+| `points` | `D` or `x, y`: a set of points drawn as markers, read as `!regression` reads its `data:`, then optionally the units the points are in (`D, 's, 'mm`). Repeat the line for more; see [Points](#points) |
 
 Options are checked as they are read. A bad one is reported on its own line and the plot is drawn without it (a bad `xview` falls back to `xlim`, then to automatic). A plot is limited to 100,000 points (series times samples) because it is redrawn on every edit.
 
@@ -61,9 +61,15 @@ D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]        pasted, no units
   yunit: 'm                                  and its y row in metres
 ```
 
-Without them, a points line on an axis with units says which line to add. Points that have units are converted to the axes' units as usual.
+Points in other units than the plot's take the units they are in after the data, x's then y's: `points: D, 'ms, 'mm` reads D's x row in milliseconds and its y row in millimetres, and they are drawn in the axes' units. `auto` leaves one as it is (`points: D, auto, 'mm`), and the header takes them too (`!plot D, 's, 'm`). Points that have units already are converted to the ones given.
+
+Without either, a points line on an axis with units says what to add. Points that have units are converted to the axes' units as usual.
 
 Each `points:` line is a series after the functions, numbered in order, so `color 2:`, `marker 2:` and `label 2:` style it. Points are drawn as markers with no line between them: a circle unless `marker: square`. Their values are converted to the axes' units, and a set whose units do not fit an axis is reported on its line. The label is the y vector's name, or the matrix's. A plot of points alone takes its axis names from the two vectors (`t [s]`, `v [m/s]`) and its x range from the points, with 5% to spare.
+
+## Drawing
+
+Plots are the slowest part of a sheet, so in the page they are drawn after the math: as you type, every calculation updates first, and the plots follow one at a time, the one nearest the line you are on first. Under each plot a status line says **⟳ Drawing…** (showing its last picture, dimmed) until it is drawn, then **✓ Up to date**. A plot whose lines and everything above it did not change comes back at once. The exports and the command line draw every plot as before.
 
 ## Defaults come in three layers
 

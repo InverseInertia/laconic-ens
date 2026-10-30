@@ -3,6 +3,7 @@ edit; for worksheet-sized documents that takes a few milliseconds. Settings
 (Greek table, global units, display preferences) live on the server, in `settings.py`."""
 import json
 import subprocess
+from collections import OrderedDict
 import threading
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,14 @@ class Sheet(BaseModel):
     title: str | None = None
     view: str = "typeset"  # or "latex"
     wrap: str = "inline"   # latex view: inline, display or align
+    plots: bool = True     # False: plots are pending rows, drawn one at a time by /api/plot
+
+
+class PlotBody(BaseModel):
+    text: str
+    line: int              # the plot's `!plot` line, 1-based
+    view: str = "typeset"
+    wrap: str = "inline"
 
 
 class RenameBody(BaseModel):
@@ -165,7 +174,15 @@ def index():
 
 
 def _run(sheet, siunitx):
-    return evaluate_sheet(sheet.text, siunitx=siunitx, global_units=settings.global_units())
+    return evaluate_sheet(sheet.text, siunitx=siunitx, global_units=settings.global_units(), plots=sheet.plots)
+
+
+def _rows(results, view, wrap):
+    if view == "latex":
+        # Export flavour (siunitx), so the snippets paste straight into a document.
+        # The exported .tex file always uses align* blocks.
+        return [{**r.to_json(), "snippet": snippet(r, wrap)} for r in results]
+    return [r.to_json() for r in results]
 
 
 @app.post("/api/eval")
@@ -173,11 +190,37 @@ def evaluate(sheet: Sheet):
     results = _run(sheet, sheet.view == "latex").results
     if any(r.solver for r in results):
         threading.Thread(target=jobs.warm, daemon=True).start()   # so the first Run does not wait for imports
-    if sheet.view == "latex":
-        # Export flavour (siunitx), so the snippets paste straight into a document.
-        # The exported .tex file always uses align* blocks.
-        return [{**r.to_json(), "snippet": snippet(r, sheet.wrap)} for r in results]
-    return [r.to_json() for r in results]
+    return _rows(results, sheet.view, sheet.wrap)
+
+
+# The rows /api/plot drew, by everything they depend on: the text down to the plot's last line
+# (nothing below a line changes it, but a unit definition anywhere does), the view and the
+# instance's units. Most edits leave most
+# plots alone, so asking again for those costs a lookup.
+_drawn, DRAWN_KEEP = OrderedDict(), 64
+
+
+@app.post("/api/plot")
+def plot(body: PlotBody):
+    """One plot that /api/eval left pending: the rows of its header and its option lines (a bad
+    option is reported on its line once the plot is built). 404 when no plot starts on `line`."""
+    b = scan(body.text).block(body.line)
+    if b is None or b.kind != "plot":
+        raise HTTPException(404, f"Line {body.line} is not a plot")
+    lines = scan(body.text).lines
+    units = tuple(map(tuple, settings.global_units()))
+    head = "".join(l.text + l.eol for l in lines[:b.end])
+    defs = tuple(l.text for l in lines[b.end:] if l.kind == "unitdef")   # units apply to the whole sheet
+    key = (head, defs, body.line, body.view, body.wrap, units)
+    if key in _drawn:
+        _drawn.move_to_end(key)
+        return _drawn[key]
+    ws = evaluate_sheet(body.text, siunitx=body.view == "latex", global_units=units, until=b.end, plots={body.line})
+    rows = _rows([r for r in ws.results if body.line <= r.n <= b.end], body.view, body.wrap)
+    _drawn[key] = rows
+    while len(_drawn) > DRAWN_KEEP:
+        _drawn.popitem(last=False)
+    return rows
 
 
 @app.post("/api/export", response_class=PlainTextResponse)

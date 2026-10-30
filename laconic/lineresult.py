@@ -119,6 +119,7 @@ class LineResult:
     block: object = None    # a block header: the sheettext Block it starts, drawn or failed
     payload: object = None  # PlotPayload, SolverPayload, RegressionPayload or LoopPayload
     symbols: dict = None    # this line's part of the symbol table
+    pending: bool = False   # a plot not drawn in this run (sheet.evaluate's `plots`); /api/plot draws it
 
     @property
     def end(self):
@@ -168,6 +169,8 @@ class LineResult:
                "stale": self.stale, "hidden": self.hidden, "symbols": self.symbols}
         if self.plot:
             row["plot"] = self.plot.to_json()
+        if self.pending:
+            row["pending"] = True
         if self.solver:
             row["solver"] = self.solver.to_json()
         if self.regression:

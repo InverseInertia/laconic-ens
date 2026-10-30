@@ -15,8 +15,8 @@ import pint
 from .evaluator import _TINY, EvalError
 from .latex import name_latex
 from .parser import parse_expr
-from .plotopts import BUILTIN, PALETTE, PlotError, canon
-from .regression import RegressionError, columns
+from .plotopts import BUILTIN, PALETTE, PlotError, canon, split_points, split_top
+from .regression import RegressionError, columns, in_unit
 from .si import reduce_si
 
 MAX_NOTES = 50
@@ -117,8 +117,15 @@ class Builder:
         return self.soft(line, run, (None, None))
 
     def points(self, srcs):
-        """The x and y quantities of one set of points, sorted by x, and a name for each axis."""
+        """The x and y quantities of one set of points, sorted by x, and a name for each axis. Units
+        after the data (`D, 's, 'mm`) are the ones the points are in: values without units take
+        them, values with units are converted (see regression.in_unit)."""
+        srcs, units = split_points(srcs)
         x, y = columns(self.ev, [self.ev.eval(self.parse(src)) for src in srcs], key="points")[0]
+        if len(units) > 0 and units[0] != "auto":
+            x = in_unit(self.ev, x, self.scalar(units[0]), "x", "the points' x unit")
+        if len(units) > 1 and units[1] != "auto":
+            y = in_unit(self.ev, y, self.scalar(units[1]), "y", "the points' y unit")
         for q, what in ((x, "x"), (y, "y")):
             if np.iscomplexobj(q.magnitude):
                 raise PlotError(f"The {what} values are complex; plot their re(), im(), abs() or arg()")
@@ -351,8 +358,15 @@ class Builder:
             except pint.errors.DimensionalityError:
                 msg = f"The {axis} values are in {q.units:~P}, and the {axis} axis is in {disp:~P}"
                 if q.dimensionless:
+                    unit = unit_source(self.ev, disp) or f"{disp:~P}"
+                    data, units = split_points(split_top(s[4]))
+                    units = (units + ["auto", "auto"])[:2]
+                    units[k - 1] = unit
+                    while units and units[-1] == "auto":
+                        units.pop()
                     msg = (f"The {axis} values have no units, and the {axis} axis is in {disp:~P}: give "
-                           f"`{axis}unit: {unit_source(self.ev, disp) or disp}` to read them in it")
+                           f"`{axis}unit: {unit}` to read them in it, or the units they are in after them, "
+                           f"`points: {', '.join(data + units)}`")
                 if s[0] is None:
                     raise EvalError(msg) from None
                 self.errors.append((s[0], msg))

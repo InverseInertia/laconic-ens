@@ -701,3 +701,20 @@ def test_points_without_units_are_read_in_the_units_the_plot_gives(  # #141
     assert sp["x"]["unit"] == "s" and sp["y"]["unit"] == "m" and sp["series"][0]["y"] == [1.1, 2.9, 5.2, 7.1]
     with_units = run(MEASURED + "!plot t, s\n  xunit: 'm\n")
     assert [r.kind for r in with_units][-1] == "error"           # points with units still convert
+
+
+def test_points_can_say_the_units_they_are_in():
+    base = "D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]\ng(t) = 1'm + 2'm/'s*t\n!plot g(t), t = 0's .. 3's\n"
+    sp = plot(base + "  points: D, 'ms, 'mm\n")                   # different units from the plot's own
+    assert sp["x"]["unit"] == "s" and sp["series"][1]["x"][:2] == [0, 0.001]
+    assert sp["series"][1]["y"][0] == pytest.approx(0.0011)
+    sp = plot(base + "  points: D, auto, 'm\n  xunit: 's\n")      # auto: the x row is read as the plot says
+    assert sp["series"][1]["x"] == [0, 1, 2, 3] and sp["series"][1]["y"][0] == pytest.approx(1.1)
+    sp = plot(MEASURED + "!plot t, s, 'min, 'km\n")                # data with units is converted
+    assert sp["x"]["unit"] == "min" and sp["series"][0]["x"][1] == pytest.approx(1 / 60)
+    (bad,) = [r for r in run(base + "  points: D, 's\n") if r.kind == "error"]
+    assert "y values have no units" in bad.error and "`points: D, 's, 'm`" in bad.error
+    (bad,) = [r for r in run(base + "  points: D * 'kg, 's\n") if r.kind == "error"]
+    assert "do not convert to s" in bad.error
+    (bad,) = [r for r in run(base + "  points: D, 's, 'm, 'kg\n") if r.kind == "error"]
+    assert "at most two units" in bad.error
