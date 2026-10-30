@@ -71,7 +71,7 @@ Each `points:` line is a series after the functions, numbered in order, so `colo
 
 ## Drawing
 
-Plots are the slowest part of a sheet, so in the page they are drawn after the math: as you type, every calculation updates first, and the plots follow one at a time, the one nearest the line you are on first. Under each plot a status line says **⟳ Drawing…** (showing its last picture, dimmed) until it is drawn, then **✓ Up to date**. A plot whose lines and everything above it did not change comes back at once. The exports and the command line draw every plot as before.
+Plots are the slowest part of a sheet, so in the page they are drawn after the math: as you type, every calculation updates first, and the plots follow one at a time, the one nearest the line you are on first. Under each plot a status line says **⟳ Drawing…** (showing its last picture, which fades to grey over two seconds, with its buttons still under it) until it is drawn, then **✓ Up to date**. A plot whose lines and everything above it did not change comes back at once. The exports and the command line draw every plot as before.
 
 ## Defaults come in three layers
 

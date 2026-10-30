@@ -349,3 +349,22 @@ def test_plots_are_drawn_after_the_math_nearest_the_caret_first(page):
     assert page.locator(".plot-status[data-state='ok']").count() == 2
     assert "Up to date" in page.inner_text(".row.plot .plot-status")
     assert page.locator(".plot-wrap svg.lens-plot").count() == 2
+
+
+def test_a_plot_being_redrawn_fades_slowly_and_keeps_its_buttons(page):
+    """#148: a plot redrawn quickly does not flicker grey, and the page below it does not move."""
+    show(page)
+    tools = box(page, "plot-tools")
+    held = []
+    page.route("**/api/plot", lambda route: held.append(route))
+    page.evaluate("t => { const s = document.querySelector('#src'); s.value = t; s.dispatchEvent(new Event('input')); }",
+                  SRC + "  color: red\n")
+    page.wait_for_selector(".plot-wrap.pending")
+    early = page.evaluate("+getComputedStyle(document.querySelector('.plot-wrap.pending')).opacity")
+    assert early > 0.8                                     # barely faded yet
+    assert page.get_by_role("button", name="PNG").is_visible() and page.get_by_role("button", name="SVG").is_visible()
+    assert abs(box(page, "plot-tools")["y"] - tools["y"]) < 1
+    page.wait_for_timeout(2300)
+    assert page.evaluate("+getComputedStyle(document.querySelector('.plot-wrap.pending')).opacity") < 0.5
+    for r in held:
+        r.continue_()
