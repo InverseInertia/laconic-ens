@@ -135,10 +135,18 @@
   #src.wrapped { white-space: pre-wrap; overflow-wrap: break-word; overflow-x: hidden; }
   #src:focus { outline: none; }
   /* Global names in the editor are marked on a copy of the text behind the transparent textarea. */
-  #srcBox { position: relative; min-width: 0; min-height: 0; display: grid; }
-  #srcBox > #src { grid-area: 1 / 1; position: relative; min-width: 0; min-height: 0; }
+  #srcBox { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  #srcBox > #src { grid-area: 1 / 2; position: relative; min-width: 0; min-height: 0; }
+  /* Line numbers, scrolled with the text. The extra bottom room covers a horizontal scrollbar under the text. */
+  #srcGutter {
+    grid-area: 1 / 1; overflow: hidden; user-select: none; min-height: 0;
+    padding: 12px 8px calc(var(--overscroll, 12px) + 24px) 10px; border-right: 1px solid var(--rule);
+    font: 400 calc(12px * var(--fs))/var(--row) var(--mono); color: var(--text-soft); text-align: right;
+  }
+  #srcGutter > div { height: var(--row); min-width: 3ch; }   /* room for 999 lines, so the text does not move as lines are added */
+  #srcGutter > div.on { color: var(--text); }
   #srcMarks {
-    grid-area: 1 / 1; overflow: hidden; color: transparent; user-select: none;
+    grid-area: 1 / 2; overflow: hidden; color: transparent; user-select: none;
     font: 400 calc(14px * var(--fs))/var(--row) var(--mono); padding: 12px 16px var(--overscroll, 12px); white-space: pre; tab-size: 2;
   }
   #srcMarks.wrapped { white-space: pre-wrap; overflow-wrap: break-word; }
@@ -224,7 +232,10 @@
   .row.plot .body { padding: 6px 0 4px; }
   .plot-wrap svg { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); background: #fff; user-select: none; }
   .plot-tools { display: flex; gap: 6px; margin-top: 5px; }
-  .plot-wrap.pending { opacity: .45; pointer-events: none; }
+  /* A plot being redrawn fades out slowly, so one that is drawn again at once does not flicker;
+     plotBody sets a negative delay to carry the fade on across re-evaluations. */
+  .plot-wrap.pending { opacity: .45; pointer-events: none; animation: plot-fade 2s ease-in both; }
+  @keyframes plot-fade { from { opacity: 1; } to { opacity: .45; } }
   .plot-status { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; font: 500 calc(13px * var(--fs))/1.35 var(--sans); color: var(--text-soft); }
   .plot-status .p-sym { flex: none; width: 1.2em; text-align: center; }
   .plot-status[data-state="run"] { color: var(--text); }
@@ -404,6 +415,7 @@
 </header>
 <main>
   <div id="srcBox">
+    <div id="srcGutter" aria-hidden="true"></div>
     <div id="srcMarks" aria-hidden="true"></div>
     <textarea id="src" class="grid-paper" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Worksheet source" aria-autocomplete="list" aria-controls="ac"></textarea>
   </div>
@@ -738,7 +750,7 @@ const store = Prefs.store({
   send: (prefs) => Api.send("/api/prefs", {prefs}),   // keepalive: a reload or a closed window does not cancel it
 });
 window.addEventListener("pagehide", () => store.flush());
-const src = $("#src"), out = $("#out"), nameEl = $("#name");
+const src = $("#src"), out = $("#out"), nameEl = $("#name"), srcGutter = $("#srcGutter");
 let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
 let tableText = null;   // the text `last` was evaluated from
 let acWaiting = false;  // or {force}: suggestions were made from an older table, and how they were asked for
@@ -895,7 +907,7 @@ async function evaluate() {
 // ---- drawing plots -------------------------------------------------------------
 // Plots are the slow part of a sheet, so /api/eval leaves them pending and they are drawn here one
 // at a time, nearest the focused line first (Rows.plotOrder). Until its turn, a plot shows its last
-// picture dimmed, under a "Drawing" status. A new edit stops the round (`seq`); the server keeps
+// picture fading out, under a "Drawing" status. A new edit stops the round (`seq`); the server keeps
 // what it drew, so a plot the edit did not touch comes back at once in the next round.
 const drawnPlots = new Map();   // a plot's `!plot` line as typed -> its last drawn row, shown while it is redrawn
 async function drawPlots(mine, text) {
@@ -917,6 +929,7 @@ function caretLine() { return src.value.slice(0, src.selectionStart).split("\n")
 
 function markActive() {
   const n = caretLine();
+  markGutter();
   out.querySelectorAll(".row.active").forEach((e) => e.classList.remove("active"));
   // The caret may be on one of a block's option lines, which have no row of their own.
   const m = Rows.at(shown, n), row = m && out.querySelector(`.row[data-line="${m.line}"]`);
@@ -1161,22 +1174,39 @@ function plotStatus(pending) {
   return d;
 }
 
+// When each plot being redrawn started to fade: a re-evaluation rebuilds its row, and the fade
+// carries on from where it was rather than starting again from full strength.
+const fadingPlots = new Map();   // a plot's `!plot` line as typed -> performance.now() at the start of its fade
+
 function plotBody(r) {
-  if (r.pending) {   // its last picture, dimmed and still, until it is drawn again
-    const box = document.createElement("div"), before = drawnPlots.get(Rows.head(r));
+  const box = document.createElement("div"), head = Rows.head(r);
+  if (r.pending) {   // its last picture, fading and still, until it is drawn again
+    const before = drawnPlots.get(head);
     if (before) {
       const wrap = document.createElement("div"); wrap.className = "plot-wrap pending";
       wrap.innerHTML = before.plot.svg;
-      box.append(wrap);
+      const now = performance.now();
+      if (!fadingPlots.has(head)) fadingPlots.set(head, now);
+      wrap.style.animationDelay = `${fadingPlots.get(head) - now}ms`;
+      // The buttons stay, so the page below does not move while the plot is redrawn.
+      box.append(wrap, plotTools(Rows.line(r), before.plot.moved));
     }
     box.append(plotStatus(true));
     return box;
   }
-  const box = document.createElement("div");
+  fadingPlots.delete(head);
   const wrap = document.createElement("div"); wrap.className = "plot-wrap";
   wrap.innerHTML = r.plot.svg;   // drawn by the server, which escapes every piece of text in it
   // A drag should not also count as a click that jumps the editor to this line.
   wrap.addEventListener("click", (ev) => ev.stopPropagation());
+  const n = Rows.line(r);
+  box.append(wrap, plotTools(n, r.plot.moved), plotStatus(false));
+  PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(n, patch));
+  return box;
+}
+
+// The buttons under a plot. Saving asks the server for the plot of the sheet as it is now.
+function plotTools(n, moved) {
   const tools = document.createElement("div"); tools.className = "plot-tools";
   const btn = (text, title, fn) => {
     const b = document.createElement("button");
@@ -1184,16 +1214,13 @@ function plotBody(r) {
     b.onclick = async (ev) => { ev.stopPropagation(); try { await fn(); } catch (e) { say(e.message || "Failed"); } };
     tools.append(b);
   };
-  const n = Rows.line(r);
-  if (r.plot.moved) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(n, {xview: null, yview: null}));
+  if (moved) btn("Reset view", "Remove the view set with the mouse (back to xlim and ylim, or automatic)", () => patchPlot(n, {xview: null, yview: null}));
   btn("SVG", "Save the picture exactly as shown (vector)", async () => download(`${stem()}-line${n}.svg`, await plotSvg(n), "image/svg+xml"));
   btn("PNG", "Save the picture exactly as shown (3\u00d7 resolution)", async () => downloadBlob(`${stem()}-line${n}.png`, await plotPng(n)));
   const hint = document.createElement("span"); hint.className = "hint";
   hint.textContent = "Drag to pan \u00b7 Ctrl+wheel to zoom \u00b7 double-click to reset";
   tools.append(hint);
-  box.append(wrap, tools, plotStatus(false));
-  PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(n, patch));
-  return box;
+  return tools;
 }
 
 // ---- global variables ----------------------------------------------------
@@ -1241,10 +1268,11 @@ function srcMarksOf(r, table) {
 }
 function paintSrcMarks() {
   const text = src.value.split("\n"), rows = Rows.current(last, text), table = symbols();
+  // One span per line, so the line numbers can take a wrapped line's height from it.
   const lines = text.map((line, i) => {
     const r = rows[i], marks = r ? srcMarksOf(r, table) : [];
-    if (!marks.length) return document.createTextNode(line + "\n");
-    const f = document.createDocumentFragment();
+    const f = document.createElement("span");
+    if (!marks.length) { f.textContent = line + "\n"; return f; }
     let pos = 0;
     for (const {c, len, global, symbol} of marks) {
       f.append(line.slice(pos, c));
@@ -1256,23 +1284,42 @@ function paintSrcMarks() {
     f.append(line.slice(pos) + "\n");
     return f;
   });
-  srcMarks.replaceChildren(...lines, " ");
+  srcMarks.replaceChildren(...lines, Object.assign(document.createElement("span"), {textContent: " "}));
   srcMarks.classList.toggle("wrapped", wrapped);
+  paintGutter();
   syncSrcMarks();
+}
+// The line numbers beside the editor, one row each, or as many as the line wraps to.
+function paintGutter() {
+  const spans = srcMarks.children, count = spans.length - 1;   // the last span is the end of the text
+  while (srcGutter.children.length > count) srcGutter.lastChild.remove();
+  while (srcGutter.children.length < count) {
+    srcGutter.append(Object.assign(document.createElement("div"), {textContent: srcGutter.children.length + 1}));
+  }
+  const tops = wrapped ? [...spans].map((e) => e.offsetTop) : null;
+  [...srcGutter.children].forEach((d, i) => { d.style.height = tops ? `${tops[i + 1] - tops[i]}px` : ""; });
+  markGutter();
+}
+function markGutter() {
+  const n = caretLine();
+  srcGutter.querySelector(".on")?.classList.remove("on");
+  srcGutter.children[n - 1]?.classList.add("on");
 }
 function syncSrcMarks() {
   srcMarks.style.paddingRight = `${16 + src.offsetWidth - src.clientWidth}px`;  // room for the textarea's scrollbar
   srcMarks.scrollTop = src.scrollTop; srcMarks.scrollLeft = src.scrollLeft;
+  srcGutter.scrollTop = src.scrollTop;
 }
 src.addEventListener("scroll", syncSrcMarks);
 new ResizeObserver(() => {
   // Scrolling may go half a page past the last line, so the line being typed can sit mid-screen.
   $("#srcBox").style.setProperty("--overscroll", `${Math.max(12, Math.round(src.clientHeight / 2))}px`);
+  if (wrapped) paintGutter();   // a new width rewraps the lines
   syncSrcMarks();
 }).observe(src);
 // The marks sit under the textarea, so the pointer never reaches them; look underneath it instead.
 src.addEventListener("mousemove", (ev) => {
-  const m = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.parentElement === srcMarks && el.tagName === "MARK");
+  const m = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.tagName === "MARK" && el.parentElement?.parentElement === srcMarks);
   const title = !m ? "" : m.dataset.symbol ? markTitle(m.dataset) : globalTitle(m.dataset.global);
   if (src.title !== title) src.title = title;
 });
@@ -1586,7 +1633,7 @@ const clampSplit = (f) => Math.min(0.85, Math.max(0.15, f));
 const loadSplit = () => { const f = store.get(splitKey(), null); setSplit(typeof f === "number" ? clampSplit(f) : null); };
 // The editor's share of the main area: its width, or its height when stacked.
 const currentSplit = () => {
-  const m = mainEl.getBoundingClientRect(), s = src.getBoundingClientRect();
+  const m = mainEl.getBoundingClientRect(), s = $("#srcBox").getBoundingClientRect();
   return stacked() ? s.height / m.height : s.width / m.width;
 };
 splitEl.addEventListener("pointerdown", (ev) => {
