@@ -50,7 +50,7 @@ _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
 # is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
 # (static/editing.js isTextAt; tests/sheettext_vectors.json holds the two together).
 PLOT_LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")
-SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "model", "r2")
+SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "model", "r2", "xunit", "yunit", "function")
 
 
 @dataclass(frozen=True)

@@ -238,6 +238,12 @@ eq(at('x = props("D", "T", T|', { force: true }).ctx.kind, 'name', 'a value argu
 eq(at('x = foo("D|').ctx, null, 'nothing in strings elsewhere');
 eq(at('x = props(min("D|').ctx, null, 'nor in a nested call');
 eq(A.candidates(at('r = props("|').ctx, { ...vocab, props: undefined }, 'r = props("'), [], 'nothing until the props list has arrived');
+vocab.props.humid = [['T', 'dry-bulb temperature', 'K', true, false], ['P', 'pressure', 'Pa', true, false],
+                     ['R', 'relative humidity, 0 to 1', '', true, false], ['M', 'viscosity', 'Pa*s', false, false]];
+eq(pick('w = haprops("|'), ['T', 'P', 'R', 'M'], 'haprops: the output is any humid air key');
+eq(pick('w = haprops("W", "T", T, "P", p, "|'), ['T', 'P', 'R'], 'its third input: only keys that can be inputs');
+eq(pick('w = haprops("W", "T", T, "P", p, "R", 0.5, "|'), [], 'it takes no fluid');
+eq(pick('w = haprops("Tcrit", "|'), ['T', 'P', 'R'], 'nor fixed properties');
 
 // --- the open list: when it opens, and what keys do to it --------------------------
 {

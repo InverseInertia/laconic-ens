@@ -313,3 +313,38 @@ def test_a_damaged_tags_entry_in_the_settings_file_is_ignored(config):
     assert settings.load()["tags"] == {"ok": ["W"]}
     (config / "settings.json").write_text('{"tags": ["W"]}', encoding="utf-8")
     assert settings.load()["tags"] == {}
+
+
+# ---- plots drawn after the math -------------------------------------------------------------
+PLOTS = "x0 = 2\n!plot x0*t, t = 0 .. 1\n  color: red\n  bogus: 1\ny = 3\n!plot t^2, t = 0 .. 1\n  ylim: nope .. 2\n"
+
+
+def test_eval_can_leave_plots_pending_and_still_reports_their_option_lines():
+    rows = server.evaluate(Sheet(text=PLOTS, plots=False))
+    assert [(r["n"], r["kind"], r.get("pending", False)) for r in rows][:2] == [(1, "assign", False), (2, "plot", True)]
+    assert "plot" not in rows[1] and rows[3]["kind"] == "error" and "bogus" in rows[3]["error"]
+    assert rows[6]["kind"] == "plotopt"                          # an option that fails only when drawn waits
+    assert "pending" not in server.evaluate(Sheet(text=PLOTS))[1]   # other clients get plots drawn
+
+
+def test_api_plot_draws_one_plot_with_its_option_lines():
+    rows = server.plot(server.PlotBody(text=PLOTS, line=6))
+    assert [r["n"] for r in rows] == [6, 7] and "svg" in rows[0]["plot"] and "pending" not in rows[0]
+    assert rows[1]["kind"] == "error" and "'nope' is not defined" in rows[1]["error"]
+    tex = server.plot(server.PlotBody(text=PLOTS, line=6, view="latex"))
+    assert "pgfplots" in tex[0]["snippet"] or "axis" in tex[0]["snippet"]
+    with pytest.raises(server.HTTPException):
+        server.plot(server.PlotBody(text=PLOTS, line=5))
+
+
+def test_api_plot_keeps_what_it_drew_until_something_it_reads_changes(monkeypatch):
+    server._drawn.clear()
+    calls = []
+    real = server.evaluate_sheet
+    monkeypatch.setattr(server, "evaluate_sheet", lambda *a, **k: calls.append(1) or real(*a, **k))
+    server.plot(server.PlotBody(text=PLOTS, line=2))
+    server.plot(server.PlotBody(text=PLOTS + "z = 9\n", line=2))          # below it: the same plot
+    assert len(calls) == 1
+    server.plot(server.PlotBody(text=PLOTS.replace("x0 = 2", "x0 = 3"), line=2))
+    server.plot(server.PlotBody(text=PLOTS + "'smoot = 2'm\n", line=2))   # a unit is defined for the whole sheet
+    assert len(calls) == 3

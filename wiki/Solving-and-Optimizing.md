@@ -87,6 +87,24 @@ y = [2.1, 3.9, 6.2, 7.8, 10.1] * 'N
 | `data:` | the points: a matrix with 2 rows (x, then y) and one column per point, or two vectors of the same length, `data: x, y` (row or column vectors). Every entry of a matrix shares one dimension, so x and y in different units need the two-vector form. A table pasted the other way up (one row per point) needs `transpose()` |
 | `degree:` | the polynomial's degree, 0 to 20. With several names the degree is one less than their number, and `degree:` may be left out; with one name it is needed |
 | `r2:` | a name for R² (1 − residual sum of squares / total sum of squares) |
+| `xunit:`, `yunit:` | the units of the x and y data. Data without units (a matrix pasted from a spreadsheet) takes them; data with units is converted to them. With one name and x without units, `yunit:` is the unit of the vector of coefficients |
+| `function:` | a name for the fitted polynomial as a function of one variable below the block: `function: f` (its variable is the x data's name, or x) or `function: f(t)` |
+
+```
+M = [0, 1, 2, 3; 0.1, 4.8, 19.7, 44.0]         pasted from a spreadsheet: no units
+!regression a, b, g
+  data: M
+  xunit: 's                                    the x row is in seconds
+  yunit: 'm                                    and the y row in metres: a in m, b in m/s, g in m/s²
+  function: s(t)                               s(t) = a + b·t + g·t²
+s(2's)                                         19.58 m
+!plot s(t), t = 0's .. 3's
+  points: M                                    the points over the fit, read in the plot's units
+  xunit: 's
+  yunit: 'm
+```
+
+The function reads the coefficients by name, as a model's does, and the row shows the polynomial under its name (`s(t) = a + b t + g t²`). A model defines its own function, so `function:` is for a polynomial.
 
 The coefficient of xᵏ has the units of y / xᵏ, so the fit is the same whatever units the data is typed in. A single name holds every coefficient as one vector only when x has no units, since otherwise each coefficient has units of its own. That vector lies as the x values do: a row for a matrix's x row or a row vector, a column for a column vector. Offset temperatures (°C, °F) are fitted in kelvin. A term whose part of y is rounding error (the zero coefficient of an exact fit) is shown as 0.
 

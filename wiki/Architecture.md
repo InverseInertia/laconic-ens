@@ -116,11 +116,12 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and bl
 | Endpoint | Purpose |
 |---|---|
 | `GET /` | the page, with the command help rows filled in from the registry and the version (`_version.py`) in the header and Help |
-| `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex` (and `latex_rows`, the same one stage per row), `error`, `warning`, `stale`, `hidden` (below `!hide`: the page and the exports leave the row out), its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line |
+| `POST /api/eval` | run a sheet; one row per line (`LineResult.to_json`): `n`, `end`, `kind`, `source`, the display parts `text`, `latex` (and `latex_rows`, the same one stage per row), `error`, `warning`, `stale`, `hidden` (below `!hide`: the page and the exports leave the row out), its part of the symbol table (`symbols: {defines, uses}`), and `plot: {svg, spec, moved}` or `solver: {...}` on those kinds; `view: "latex"` adds a `snippet` per line; `plots: false` (the page) leaves each plot as a row with `pending: true` and no picture |
 | `POST /api/export` | complete `.tex` document |
 | `POST /api/export/md`, `POST /api/export/pdf`, `POST /api/export/print` | Markdown note; PDF printed by a headless browser (501 without a Chromium-family browser; the app does not use it); the printable document, which the app's Export → PDF prints from a hidden frame |
 | `POST /api/save` | source with needed unit definitions appended |
 | `POST /api/rename` | rename a name or unit; returns edits (one per use) or a warning/error |
+| `POST /api/plot` | one pending plot drawn: the rows of its header and option lines, for the page to put in place of the pending ones; kept by the text down to the plot, so asking again after an edit below it is a lookup |
 | `POST /api/plotedit` | edits to one plot's option lines for a pan, zoom or reset (runs the sheet only as far as the plot) |
 | `POST /api/plotimage` | one plot as a standalone SVG |
 | `POST /api/solve/start`, `GET /api/solve/{job}`, `POST /api/solve/{job}/interrupt` | start, poll and interrupt a solver job |

@@ -22,7 +22,9 @@
  *                                                   expanded; `matrix` is then {size, expanded}
  *                                                   for the button that toggles it, else null
  *                  {type: "error", source, message} the line as typed and what is wrong
- *                  {type: "plot"} | {type: "solver"} drawn from the row's own payload
+ *                  {type: "plot", pending}          drawn from the row's own payload; `pending`:
+ *                                                   not drawn yet (plotOrder says when it is)
+ *                  {type: "solver"}                 drawn from the row's own payload
  *                  {type: "snippet", text, solver}  the LaTeX view; `solver`: add its controls
  *     warning      shown under the body, or ""
  *     stale        uses a solver result that is out of date
@@ -37,6 +39,9 @@
  *   stale(row)         it uses a solver result that is out of date
  *   current(rows, lines)  for each line of the editor's text (lines[i] is line i + 1), its row
  *                      while the line still reads as it did when the row was made, else null
+ *   plotOrder(rows, focus)  the header lines of the pending plots (the page's eval leaves plots
+ *                      to be drawn one at a time, after the math), in the order to draw them:
+ *                      nearest the focused line first, on screen before hidden ones
  */
 (function (root) {
   'use strict';
@@ -57,14 +62,14 @@
 
   // line kind -> its body, or null when the line has no row of its own. Other kinds are calculations.
   const BODY = {
-    blank: () => ({ type: 'text', text: '' }),
+    blank: null,   // blank lines keep the sheet text readable; the results are readable already (#143)
     heading: text,
     comment: text,
     meta: text,
     command: () => ({ type: 'none' }),
     symdef: text,
     error: (r) => ({ type: 'error', source: r.source.trim(), message: r.error }),
-    plot: () => ({ type: 'plot' }),
+    plot: (r) => ({ type: 'plot', pending: !!r.pending }),
     solver: () => ({ type: 'solver' }),
     plotopt: null,
     solveropt: null,
@@ -103,7 +108,12 @@
     return lines.map((l, i) => { const r = byLine.get(i + 1); return r && r.source === l ? r : null; });
   }
 
-  const api = { model, at, line, head, stale, current };
+  function plotOrder(rows, focus) {
+    const away = (r) => (focus < r.n ? r.n - focus : focus > r.end ? focus - r.end : 0) + (r.hidden ? 1e9 : 0);
+    return rows.filter((r) => r.pending).sort((a, b) => away(a) - away(b) || a.n - b.n).map((r) => r.n);
+  }
+
+  const api = { model, at, line, head, stale, current, plotOrder };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Rows = api;
 })(typeof window !== 'undefined' ? window : globalThis);

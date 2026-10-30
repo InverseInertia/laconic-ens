@@ -161,8 +161,6 @@
   .row .no { font: 400 calc(12px * var(--fs))/var(--row) var(--mono); color: var(--text-soft); text-align: right; padding-right: 12px; user-select: none; }
   .row.active { background: var(--hit); }
   .row .body { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
-  .row.blank { min-height: 14px; }
-  .row.blank .no { line-height: 14px; }
   .row.heading .body { font: 600 calc(17px * var(--fs))/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
   .row.comment .body { font: 400 calc(14px * var(--fs))/var(--row) var(--sans); color: var(--text-soft); }
   .row.error .body { font: 400 calc(13px * var(--fs))/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
@@ -226,6 +224,12 @@
   .row.plot .body { padding: 6px 0 4px; }
   .plot-wrap svg { display: block; max-width: 100%; height: auto; border: 1px solid var(--rule); background: #fff; user-select: none; }
   .plot-tools { display: flex; gap: 6px; margin-top: 5px; }
+  .plot-wrap.pending { opacity: .45; pointer-events: none; }
+  .plot-status { display: flex; align-items: baseline; gap: 6px; margin-top: 4px; font: 500 calc(13px * var(--fs))/1.35 var(--sans); color: var(--text-soft); }
+  .plot-status .p-sym { flex: none; width: 1.2em; text-align: center; }
+  .plot-status[data-state="run"] { color: var(--text); }
+  .plot-status[data-state="run"] .p-sym { display: inline-block; animation: spin 1.1s linear infinite; }
+  @media (prefers-reduced-motion: reduce) { .plot-status[data-state="run"] .p-sym { animation: none; } }
   .plot-tools button { padding: 1px 8px; font-size: calc(12.5px * var(--fs)); border-color: var(--rule); color: var(--text-soft); }
   .plot-tools button:hover { color: var(--on-ink); border-color: var(--ink); }
   .plot-tools .hint { font: 400 calc(12px * var(--fs)) var(--sans); color: var(--text-soft); align-self: center; margin-left: 6px; }
@@ -495,8 +499,9 @@ M = zeros(3, 3)
     <h3>Material properties <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Material-Properties" target="_blank" rel="noopener">Material Properties</a></h3>
     <pre>rho  = props("D", "T", 20'degC, "P", 1'atm, "Water")
 Tsat = props("T", "P", 5'bar, "Q", 0, "Water") -> 'degC
-Tc   = props("Tcrit", "Water")       <i>fixed properties need no state</i></pre>
-    <p><code>props</code> looks up about 130 fluids, mixtures, humid air and brines from CoolProp, the way CoolProp's <code>PropsSI</code> does: the output key, up to two state inputs, then the fluid. Inputs take any compatible unit; the result is in SI, so convert it with <code>-&gt;</code>. Type <code>"</code> inside <code>props(</code> for the keys and fluids.</p>
+Tc   = props("Tcrit", "Water")       <i>fixed properties need no state</i>
+w    = haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)   <i>humid air</i></pre>
+    <p><code>props</code> looks up about 130 fluids, mixtures and brines from CoolProp, the way CoolProp's <code>PropsSI</code> does: the output key, up to two state inputs, then the fluid. Inputs take any compatible unit; the result is in SI, so convert it with <code>-&gt;</code>. Type <code>"</code> inside <code>props(</code> for the keys and fluids. <code>haprops</code> gives humid air the way <code>HAPropsSI</code> does: the output key and three state inputs, one of them the pressure (<code>R</code> relative humidity, <code>W</code> humidity ratio, <code>B</code> wet bulb, <code>D</code> dew point).</p>
 
     <h3>Plots <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Plots" target="_blank" rel="noopener">Plots</a></h3>
     <pre>!plot M(x), V(x), x = 0'm .. L
@@ -504,9 +509,13 @@ Tc   = props("Tcrit", "Water")       <i>fixed properties need no state</i></pre>
   ylabel: M (kN&middot;m)
   color 2: red
   points: D               <i>measured points over the curves: an x row and a y row, or x, y</i>
+  points: E, 'ms, 'mm     <i>points in other units: x's, then y's (auto skips one)</i>
 
-!plot t, s                <i>points alone: two vectors, or a matrix D</i></pre>
-    <p>Indented <code>key: value</code> lines set the details; <code>!plotspec key: value</code> sets a default for every plot below it. Drag the plot to pan, <kbd>Ctrl</kbd> + wheel to zoom, double-click to reset. The new view is written back into the sheet as <code>xview:</code> and <code>yview:</code> lines, so <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes it. Each plot saves as SVG or PNG, and the LaTeX export draws it with <code>pgfplots</code>.</p>
+!plot F(x), x = 0 .. 1    <i>a vector of functions: one curve per entry</i>
+!plot t, s                <i>points alone: two vectors, or a matrix D</i>
+  xunit: 's                <i>points without units are read in the units the plot gives</i>
+  yunit: 'm</pre>
+    <p>Indented <code>key: value</code> lines set the details; <code>!plotspec key: value</code> sets a default for every plot below it. Drag the plot to pan, <kbd>Ctrl</kbd> + wheel to zoom, double-click to reset. The new view is written back into the sheet as <code>xview:</code> and <code>yview:</code> lines, so <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes it. Each plot saves as SVG or PNG, and the LaTeX export draws it with <code>pgfplots</code>. Plots are drawn after the math, nearest the line you are on first; the line under each says whether it is still drawing or up to date.</p>
 
     <h3>Solving and optimizing <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Solving-and-Optimizing" target="_blank" rel="noopener">Solving and Optimizing</a></h3>
     <pre>x = 1'm                   <i>starting values come from ordinary variables</i>
@@ -526,7 +535,10 @@ z = x * 2                 <i>below the block, x and y hold the solution</i>
 !regression a, b, c       <i>y = a + b x + c x&sup2;, lowest power first</i>
   data: D                 <i>or two vectors: data: t, s</i>
   model: y(x) = a + b*exp(c*x)  <i>optional: any function instead; y(x, z) takes data: x, z, y</i>
-  r2: R2                  <i>optional: a name for R&sup2;</i></pre>
+  r2: R2                  <i>optional: a name for R&sup2;</i>
+  xunit: 's                <i>optional: the units of data that has none, such as a pasted matrix</i>
+  yunit: 'm
+  function: f(t)          <i>optional: the fitted polynomial as a function below the block</i></pre>
     <p><code>!regression</code> fits a polynomial by least squares as the sheet runs, with no Run button. Each coefficient gets the units of y / x<sup>k</sup>, and the names it defines hold the fit below the block.</p>
 
     <h3>Symbolic math <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Symbolic-Math" target="_blank" rel="noopener">Symbolic Math</a></h3>
@@ -813,46 +825,92 @@ function commandHead(h) {
 let shown = [];   // the row models on screen
 function render(rows) {
   last = rows;
-  // A block's option lines are part of its row, so they get no row of their own (unless one is wrong).
+  // A block's option lines are part of its row, so they get no row of their own (unless one is wrong),
+  // and blank lines get none at all.
   const items = rows.map((r) => [r, Rows.model(r, {view, expanded})]).filter(([, m]) => m);
   shown = items.map(([, m]) => m);
-  out.replaceChildren(...items.map(([r, m]) => {
-    const row = document.createElement("div");
-    row.className = m.cls;
-    row.dataset.line = m.line;
-    const no = document.createElement("div"); no.className = "no"; no.textContent = m.line;
-    const body = document.createElement("div"); body.className = "body";
-    BODY[m.body.type](body, m.body, r);
-    if (m.head) body.prepend(commandHead(m.head));
-    if (m.warning) {
-      const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + m.warning;
-      body.append(w);
-    }
-    row.append(no, body);
-    if (m.stale) {
-      const s = document.createElement("span"); s.className = "stale-mark"; s.textContent = "\u26a0";
-      s.title = "Uses a solver result that is out of date"; s.setAttribute("aria-label", s.title);
-      row.append(s);
-    }
-    if (m.copy !== null) {
-      const copy = document.createElement("button");
-      copy.className = "copy"; copy.textContent = "Copy"; copy.ariaLabel = `Copy LaTeX for line ${m.line}`;
-      copy.onclick = (ev) => { ev.stopPropagation(); copyText(m.copy, `Copied line ${m.line}`); };
-      row.append(copy);
-    }
-    row.addEventListener("click", () => focusLine(m.line));
-    return row;
-  }));
+  out.replaceChildren(...items.map(([r, m]) => rowEl(r, m)));
   MathFit.fitAll(out);
   markActive();
   Solvers.after(rows);
   paintGlobals();
 }
 
+function rowEl(r, m) {
+  const row = document.createElement("div");
+  row.className = m.cls;
+  row.dataset.line = m.line;
+  const no = document.createElement("div"); no.className = "no"; no.textContent = m.line;
+  const body = document.createElement("div"); body.className = "body";
+  BODY[m.body.type](body, m.body, r);
+  if (m.head) body.prepend(commandHead(m.head));
+  if (m.warning) {
+    const w = document.createElement("div"); w.className = "g-warn"; w.textContent = "\u26a0 " + m.warning;
+    body.append(w);
+  }
+  row.append(no, body);
+  if (m.stale) {
+    const s = document.createElement("span"); s.className = "stale-mark"; s.textContent = "\u26a0";
+    s.title = "Uses a solver result that is out of date"; s.setAttribute("aria-label", s.title);
+    row.append(s);
+  }
+  if (m.copy !== null) {
+    const copy = document.createElement("button");
+    copy.className = "copy"; copy.textContent = "Copy"; copy.ariaLabel = `Copy LaTeX for line ${m.line}`;
+    copy.onclick = (ev) => { ev.stopPropagation(); copyText(m.copy, `Copied line ${m.line}`); };
+    row.append(copy);
+  }
+  row.addEventListener("click", () => focusLine(m.line));
+  return row;
+}
+
+// Rows that replace some of `last` (a plot just drawn, with its option lines): each is redrawn in
+// place, or put in after the rows above it, or taken out when it no longer shows.
+function replaceRows(rows) {
+  const byLine = new Map(rows.map((r) => [r.n, r]));
+  last = last.map((r) => byLine.get(r.n) || r);
+  for (const r of rows) {
+    const m = Rows.model(r, {view, expanded}), old = out.querySelector(`.row[data-line="${r.n}"]`);
+    if (!m) { if (old) old.remove(); continue; }
+    const el = rowEl(r, m);
+    if (old) { old.replaceWith(el); continue; }
+    const before = [...out.querySelectorAll(".row")].filter((e) => +e.dataset.line < r.n).pop();
+    if (before) before.after(el); else out.prepend(el);
+  }
+  shown = last.map((r) => Rows.model(r, {view, expanded})).filter(Boolean);
+  MathFit.fitAll(out);
+  markActive();
+  paintGlobals();
+}
+
 async function evaluate() {
   const mine = ++seq, text = src.value;
-  const res = await post("/api/eval");
-  if (mine === seq) { render(await res.json()); tableText = text; acRetry(); }
+  // Plots come back pending: the math shows at once, and the plots are drawn after it.
+  const res = await post("/api/eval", {plots: false});
+  if (mine !== seq) return;
+  render(await res.json()); tableText = text; acRetry();
+  await drawPlots(mine, text);
+}
+
+// ---- drawing plots -------------------------------------------------------------
+// Plots are the slow part of a sheet, so /api/eval leaves them pending and they are drawn here one
+// at a time, nearest the focused line first (Rows.plotOrder). Until its turn, a plot shows its last
+// picture dimmed, under a "Drawing" status. A new edit stops the round (`seq`); the server keeps
+// what it drew, so a plot the edit did not touch comes back at once in the next round.
+const drawnPlots = new Map();   // a plot's `!plot` line as typed -> its last drawn row, shown while it is redrawn
+async function drawPlots(mine, text) {
+  for (const n of Rows.plotOrder(last, caretLine())) {
+    let rows;
+    try {
+      rows = await Api.json("/api/plot", {text, line: n, view, wrap});
+    } catch (e) {
+      if (mine !== seq) return;
+      rows = last.filter((r) => r.n === n).map((r) => ({...r, pending: false, kind: "error", error: `The plot could not be drawn: ${e.message}`}));
+    }
+    if (mine !== seq) return;
+    for (const r of rows) if (r.plot) drawnPlots.set(Rows.head(r), r);
+    replaceRows(rows);
+  }
 }
 
 function caretLine() { return src.value.slice(0, src.selectionStart).split("\n").length; }
@@ -1094,7 +1152,26 @@ async function plotPng(line, scale = 3) {
   } finally { URL.revokeObjectURL(url); }
 }
 
+// The line under a plot that says whether it is drawn: "Drawing" until its turn, then "Up to date".
+function plotStatus(pending) {
+  const d = document.createElement("div");
+  d.className = "plot-status"; d.dataset.state = pending ? "run" : "ok"; d.setAttribute("role", "status");
+  const sym = document.createElement("span"); sym.className = "p-sym"; sym.textContent = pending ? "\u27f3" : "\u2713";
+  d.append(sym, pending ? "Drawing\u2026" : "Up to date");
+  return d;
+}
+
 function plotBody(r) {
+  if (r.pending) {   // its last picture, dimmed and still, until it is drawn again
+    const box = document.createElement("div"), before = drawnPlots.get(Rows.head(r));
+    if (before) {
+      const wrap = document.createElement("div"); wrap.className = "plot-wrap pending";
+      wrap.innerHTML = before.plot.svg;
+      box.append(wrap);
+    }
+    box.append(plotStatus(true));
+    return box;
+  }
   const box = document.createElement("div");
   const wrap = document.createElement("div"); wrap.className = "plot-wrap";
   wrap.innerHTML = r.plot.svg;   // drawn by the server, which escapes every piece of text in it
@@ -1114,7 +1191,7 @@ function plotBody(r) {
   const hint = document.createElement("span"); hint.className = "hint";
   hint.textContent = "Drag to pan \u00b7 Ctrl+wheel to zoom \u00b7 double-click to reset";
   tools.append(hint);
-  box.append(wrap, tools);
+  box.append(wrap, tools, plotStatus(false));
   PlotView.attach(wrap, r.plot.spec, (patch) => patchPlot(n, patch));
   return box;
 }
@@ -1704,6 +1781,21 @@ function openRename() {
   ($("#renameOld").value ? $("#renameNew") : $("#renameOld")).focus();
 }
 $("#renameBtn").onclick = openRename;
+// A name is typed in them as in the editor: a period for a subscript, Ctrl+G for an extended character.
+for (const id of ["#renameOld", "#renameNew"]) $(id).addEventListener("keydown", (ev) => {
+  const f = ev.target, mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
+  if (ev.isComposing) return;
+  const r = Editing.nameKeyAction(ev.key, mods, f.value, f.selectionStart, f.selectionEnd, ctx());
+  if (!r) return;
+  ev.preventDefault();
+  if (r.message) say(r.message);
+  if (r.insert === undefined) return;
+  f.setSelectionRange(r.from, r.to);
+  if (!document.execCommand("insertText", false, r.insert)) {
+    f.setRangeText(r.insert, r.from, r.to, "end"); f.dispatchEvent(new Event("input", {bubbles: true}));
+  }
+  f.setSelectionRange(r.caret, r.caret);
+});
 for (const id of ["#renameOld", "#renameNew"]) $(id).addEventListener("input", () => {
   $("#renameConfirm").value = ""; $("#renameGo").textContent = "Rename"; $("#renameErr").hidden = true;
 });

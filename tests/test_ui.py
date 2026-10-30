@@ -131,6 +131,21 @@ def test_f2_renames_the_name_at_the_caret(page):
     assert value(page) == "span = 4.5'm\nA = span * 2"
 
 
+
+def test_the_rename_fields_take_extended_characters_and_subscripts(page):
+    """#139: a new name is typed as in the editor, Ctrl+G and a period for a subscript included."""
+    reset(page, "s = 2\nA = s * 2")
+    select(page, 1, 1)
+    page.keyboard.press("F2")
+    page.wait_for_selector("#renameDlg[open]")
+    page.keyboard.type("s")
+    page.keyboard.press("Control+g")
+    page.keyboard.type(".max")
+    assert page.input_value("#renameNew") == "σ_max"
+    page.keyboard.press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.startsWith('σ_max')")
+    assert value(page) == "σ_max = 2\nA = σ_max * 2"
+
 def test_an_edit_the_user_asked_for_joins_the_undo_stack_wherever_the_focus_is(page):
     # Right after a dialog closes, some browsers leave the focus in its field (#75). When server
     # edits are made, and which way, is tested in test_editing.js; the name F2 fills in, in
@@ -563,7 +578,7 @@ def test_each_kind_of_line_shows_its_row(page):
     page.evaluate("document.querySelector('#src').dispatchEvent(new Event('click'))")
     assert page.get_attribute(".row.active", "data-line") == "9"
     page.click("#viewLatex")
-    page.wait_for_selector(".row.snip pre")
+    page.wait_for_selector(".row.snip[data-line='5'] pre")         # the plot's comes after the math's
     assert page.locator(".row.snip .copy").count() == 6 and page.locator(".row.error .copy").count() == 0
     assert page.locator(".row.snip .solver-tools").count() == 1
     assert page.inner_text(".row[data-line='3'] pre").startswith("x =")

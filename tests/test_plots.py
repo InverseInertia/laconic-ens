@@ -146,7 +146,7 @@ def test_undefined_names_fail_on_the_plot_line():
 
 
 def test_matrix_results_are_refused():
-    assert "single value" in run("!plot [1, 2], x = 0 .. 1")[0].error
+    assert "not a matrix" in run("!plot [1, 2; 3, 4], x = 0 .. 1")[0].error
 
 
 def test_range_must_increase_and_log_needs_positive():
@@ -686,3 +686,59 @@ def test_rename_reaches_a_points_line():
     text = MEASURED + "!plot t, s\n!plot x, x = 0 .. 1\n  points: t, s\n"
     out, _ = renamed(text, "t", "time")
     assert "!plot time, s" in out and "  points: time, s" in out
+
+
+def test_points_without_units_are_read_in_the_units_the_plot_gives(  # #141
+):
+    text = ("D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]\ng(t) = 1'm + 2'm/'s*t\n"
+            "!plot g(t), t = 0's .. 3's\n  points: D\n")
+    (bad,) = [r for r in run(text) if r.kind == "error"]
+    assert bad.n == 4 and "x values have no units, and the x axis is in s: give `xunit: 's`" in bad.error
+    sp = plot(text + "  xunit: 's\n  yunit: 'cm\n")
+    assert sp["y"]["unit"] == "cm" and sp["series"][1]["x"] == [0, 1, 2, 3] and sp["series"][1]["y"] == [1.1, 2.9, 5.2, 7.1]
+    assert sp["series"][0]["y"][0] == pytest.approx(100)          # the curve in the unit given
+    sp = plot("D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]\n!plot D\n  xunit: 's\n  yunit: 'm\n")
+    assert sp["x"]["unit"] == "s" and sp["y"]["unit"] == "m" and sp["series"][0]["y"] == [1.1, 2.9, 5.2, 7.1]
+    with_units = run(MEASURED + "!plot t, s\n  xunit: 'm\n")
+    assert [r.kind for r in with_units][-1] == "error"           # points with units still convert
+
+
+def test_points_can_say_the_units_they_are_in():
+    base = "D = [0, 1, 2, 3; 1.1, 2.9, 5.2, 7.1]\ng(t) = 1'm + 2'm/'s*t\n!plot g(t), t = 0's .. 3's\n"
+    sp = plot(base + "  points: D, 'ms, 'mm\n")                   # different units from the plot's own
+    assert sp["x"]["unit"] == "s" and sp["series"][1]["x"][:2] == [0, 0.001]
+    assert sp["series"][1]["y"][0] == pytest.approx(0.0011)
+    sp = plot(base + "  points: D, auto, 'm\n  xunit: 's\n")      # auto: the x row is read as the plot says
+    assert sp["series"][1]["x"] == [0, 1, 2, 3] and sp["series"][1]["y"][0] == pytest.approx(1.1)
+    sp = plot(MEASURED + "!plot t, s, 'min, 'km\n")                # data with units is converted
+    assert sp["x"]["unit"] == "min" and sp["series"][0]["x"][1] == pytest.approx(1 / 60)
+    (bad,) = [r for r in run(base + "  points: D, 's\n") if r.kind == "error"]
+    assert "y values have no units" in bad.error and "`points: D, 's, 'm`" in bad.error
+    (bad,) = [r for r in run(base + "  points: D * 'kg, 's\n") if r.kind == "error"]
+    assert "do not convert to s" in bad.error
+    (bad,) = [r for r in run(base + "  points: D, 's, 'm, 'kg\n") if r.kind == "error"]
+    assert "at most two units" in bad.error
+
+
+def test_a_vector_of_functions_is_a_series_per_entry():
+    sp = plot("f(x) = x\n!plot [f(x), x^2], x = 0 .. 1\n")
+    assert [s["label"] for s in sp["series"]] == ["f(x)", "x^2"] and sp["legend"] == "top right"
+    assert sp["series"][1]["y"][-1] == pytest.approx(1) and sp["series"][1]["y"][0] == pytest.approx(0)
+    text = ("F(x) = [x, x^2, x^3] * 'm\n!plot F(x), x*1'm, x = 0 .. 1\n  color 3: red\n"
+            "  points: [0, 1; 0, 1], auto, 'm\n  marker 5: square\n  yunit: 'mm\n")
+    sp = plot(text)
+    assert [s["label"] for s in sp["series"]] == ["F(x)_1", "F(x)_2", "F(x)_3", "x*1'm", "[0, 1; 0, 1]"]
+    assert sp["series"][2]["color"] == "#d55e00" and sp["series"][4]["marker"] == "square"   # numbered in order
+    assert sp["series"][2]["y"][-1] == pytest.approx(1000)                                       # in the y unit
+    gap = plot("!plot [sqrt(x), x], x = -1 .. 1\n")
+    assert None in gap["series"][0]["y"] and None not in gap["series"][1]["y"]                  # gaps per entry
+    assert not [r for r in run(text) if r.kind == "error"]
+
+
+@pytest.mark.parametrize("text, message", [
+    ("M(x) = [x, x; x, x]\n!plot M(x), x = 0 .. 1", "not a matrix"),
+    ("F(x) = [x, x^2]\n!plot F(x), x = 0 .. 1\n  color 4: red", "There is no series 4; this plot has 2"),
+])
+def test_a_matrix_is_not_a_set_of_series(text, message):
+    errors = [r.error for r in run(text) if r.kind == "error"]
+    assert errors and message in errors[0], errors

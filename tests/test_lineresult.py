@@ -167,12 +167,13 @@ def test_the_page_reads_every_row_the_server_sends():
               "console.log(JSON.stringify(rows.map((r) => { const m = R.model(r, {view: 'latex'});"
               " return m && [m.line, m.end, m.body.type]; })))")
     rows_js = Path(__file__).parents[1] / "laconic" / "static" / "rows.js"
-    for view, kinds in (("typeset", ["text", "text", "none", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
-                        ("latex", ["snippet", "text", "snippet", "snippet", "error", "snippet", "snippet", "snippet",
+    # the blank line (2) has no row in either view (#143)
+    for view, kinds in (("typeset", ["text", "none", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
+                        ("latex", ["snippet", "snippet", "snippet", "error", "snippet", "snippet", "snippet",
                                    "snippet", "snippet", "snippet"])):
         r = subprocess.run(["node", "-e", script, str(rows_js)], input=json.dumps(rows(text, view=view)),
                            capture_output=True, text=True, check=True)
         models = [m for m in json.loads(r.stdout) if m]
         assert [m[2] for m in models] == kinds, view
     lines = [(m[0], m[1]) for m in models]
-    assert (7, 9) in lines and (12, 13) in lines and not {8, 9, 13} & {a for a, _ in lines}
+    assert (7, 9) in lines and (12, 13) in lines and not {2, 8, 9, 13} & {a for a, _ in lines}

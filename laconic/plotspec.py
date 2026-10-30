@@ -15,8 +15,8 @@ import pint
 from .evaluator import _TINY, EvalError
 from .latex import name_latex
 from .parser import parse_expr
-from .plotopts import BUILTIN, PALETTE, PlotError, canon
-from .regression import RegressionError, columns
+from .plotopts import BUILTIN, PALETTE, PlotError, canon, split_points, split_top
+from .regression import RegressionError, columns, in_unit
 from .si import reduce_si
 
 MAX_NOTES = 50
@@ -83,12 +83,15 @@ class Builder:
             self.errors.append((line, msg))
             return fallback
 
-    def unit_option(self, line, src, current):
+    def unit_option(self, line, src, current, free=False):
+        """The unit an `xunit:` or `yunit:` line gives, which `current` must convert to. With
+        `free`, an axis that so far has only points without units takes any unit."""
         def run():
             q = self.scalar(src)
             if q.magnitude != 1:
                 raise PlotError("A unit option is a unit such as 'mm, not a quantity")
-            self.ev.Q(1, current).to(q.units)
+            if not (free and self._dimless(current)):
+                self.ev.Q(1, current).to(q.units)
             return q.units
         return self.soft(line, run, None)
 
@@ -114,8 +117,15 @@ class Builder:
         return self.soft(line, run, (None, None))
 
     def points(self, srcs):
-        """The x and y quantities of one set of points, sorted by x, and a name for each axis."""
+        """The x and y quantities of one set of points, sorted by x, and a name for each axis. Units
+        after the data (`D, 's, 'mm`) are the ones the points are in: values without units take
+        them, values with units are converted (see regression.in_unit)."""
+        srcs, units = split_points(srcs)
         x, y = columns(self.ev, [self.ev.eval(self.parse(src)) for src in srcs], key="points")[0]
+        if len(units) > 0 and units[0] != "auto":
+            x = in_unit(self.ev, x, self.scalar(units[0]), "x", "the points' x unit")
+        if len(units) > 1 and units[1] != "auto":
+            y = in_unit(self.ev, y, self.scalar(units[1]), "y", "the points' y unit")
         for q, what in ((x, "x"), (y, "y")):
             if np.iscomplexobj(q.magnitude):
                 raise PlotError(f"The {what} values are complex; plot their re(), im(), abs() or arg()")
@@ -126,10 +136,12 @@ class Builder:
 
     # ---- sampling ---------------------------------------------------------------
     def point(self, node, scope, gaps, var, xv):
+        """One sample of a series: a quantity, or None for a gap. A vector of functions (`[f(x), g(x)]`,
+        or a function that gives one) gives a vector, its undefined entries NaN (see `expand`)."""
         try:
             q = self.ev.eval(node, scope)
             if np.ndim(q.magnitude) != 0:
-                raise EvalError("A plotted expression must give a single value, not a matrix")
+                return self.entries(q, var, xv)
             m = q.magnitude
             if np.iscomplexobj(m):
                 if abs(m.imag) > _TINY * abs(m):
@@ -145,6 +157,37 @@ class Builder:
                 raise EvalError(f"The expression is undefined at {var} = {xv:.4g}. "
                                 "Use `gaps: break` to leave a gap there") from None
             return None
+
+    def entries(self, q, var, xv):
+        m = np.asarray(q.magnitude)
+        if m.ndim > 2 or (m.ndim == 2 and 1 not in m.shape):
+            raise EvalError("A plotted expression gives a single value or a vector of them (one series each), "
+                            "not a matrix")
+        m = m.ravel()
+        if np.iscomplexobj(m):
+            if np.any(np.abs(m.imag) > _TINY * np.abs(m)):
+                raise EvalError(f"The expression is complex at {var} = {xv:.4g}. Plot its re(), im(), abs() or arg() instead")
+            m = m.real
+        return self.ev.Q(np.where(np.isfinite(m), m, np.nan).astype(float), q.units)
+
+    @staticmethod
+    def expand(src, samples):
+        """A series' samples -> [(label, samples)], one per entry when it gave vectors: a literal
+        `[f(x), g(x)]` is labelled by its entries, anything else `F(x)_1`, `F(x)_2`, ..."""
+        sizes = {q.magnitude.size for q in samples if q is not None and np.ndim(q.magnitude)}
+        if not sizes:
+            return [(src, samples)]
+        if len(sizes) > 1 or any(q is not None and not np.ndim(q.magnitude) for q in samples):
+            raise EvalError(f"'{src}' gives vectors of different lengths along the range; each entry is one series")
+        (width,) = sizes
+        body = src.strip()
+        parts = split_top(body[1:-1].replace(";", ",")) if body.startswith("[") and body.endswith("]") else []
+        labels = parts if len(parts) == width and all(parts) else [f"{src}_{k + 1}" for k in range(width)]
+        out = []
+        for k, label in enumerate(labels):
+            col = [None if q is None or not math.isfinite(float(q.magnitude[k])) else q[k] for q in samples]
+            out.append((label, col))
+        return out
 
     def build(self, line, series_src, var, lo_src, hi_src, opts, header_points=None):
         """`header_points`: the sources of the points a header with no range plots (`!plot t, s`)."""
@@ -197,9 +240,9 @@ class Builder:
             xdisp = lo.units
         else:
             var, xdisp = sets[0][3][0], sets[0][1].units
-        if "xunit" in block:
-            xdisp = self.unit_option(at["xunit"], block["xunit"], xdisp) or xdisp
-        sets = self.in_axis(sets, 1, xdisp, "x")
+        xgiven = "xunit" in block and self.unit_option(at["xunit"], block["xunit"], xdisp, header_points is not None)
+        xdisp = xgiven or xdisp
+        sets = self.in_axis(sets, 1, xdisp, "x", bool(xgiven))
         if header_points is not None:
             px = np.concatenate([s[1] for s in sets])
             px = px[px > 0] if xlog else px
@@ -233,19 +276,28 @@ class Builder:
                 scope[var] = ev.Q(float(xv), xdisp)
                 for k, node in enumerate(nodes):
                     raw[k].append(self.point(node, scope, gaps, var, float(xv)))
+        # A vector of functions is a series per entry, numbered in order, before the points.
+        split = [part for src, qs in zip(series_src, raw) for part in self.expand(src, qs)]
+        extra = len(split) - len(series_src)
+        series_src, raw = [label for label, _ in split], [qs for _, qs in split]
+        if n * len(raw) > MAX_POINTS:
+            raise EvalError(f"{len(raw)} series of {n} samples is too many points to draw on every edit "
+                            f"(at most {MAX_POINTS}). Lower samples")
+        sets = [st[:5] + (st[5] + extra,) for st in sets]
+        count += extra
 
         # ---- the y axis ----
         first = next((q for qs in raw for q in qs if q is not None), None)
-        if first is None and sets:
+        only_points = first is None and bool(sets)
+        if only_points:
             first = sets[0][2][0]
         if first is None:
             ydisp = ev.Q(1).units
         else:
             ydisp = reduce_si(first, ev.ureg, ev.mode.freq).units if ev.mode.assume else first.units
-        if "yunit" in block and first is not None:
-            ydisp = self.unit_option(at["yunit"], block["yunit"], first.units) or ydisp
-        elif "yunit" in block:
-            ydisp = self.unit_option(at["yunit"], block["yunit"], ydisp) or ydisp
+        ygiven = "yunit" in block and self.unit_option(at["yunit"], block["yunit"],
+                                                       first.units if first is not None else ydisp, only_points)
+        ydisp = ygiven or ydisp
         ys = []
         for qs in raw:
             good = [q for q in qs if q is not None]
@@ -261,7 +313,7 @@ class Builder:
                                     "Plot them separately") from None
                 arr[[i for i, q in enumerate(qs) if q is not None]] = vals
             ys.append(arr)
-        sets = self.in_axis(sets, 2, ydisp, "y")
+        sets = self.in_axis(sets, 2, ydisp, "y", bool(ygiven))
         ys += [np.array(s[2], dtype=float) for s in sets]
         ylog = get("yscale", 0) == "log"
         if ylog:
@@ -276,7 +328,7 @@ class Builder:
 
         # ---- labels, series, notes ----
         xu, yu = unit_text(xdisp), unit_text(ydisp)
-        labels = [get("label", i, series_src[i]) for i in range(len(nodes))]
+        labels = [get("label", i, series_src[i]) for i in range(len(raw))]
         labels += [get("label", i, names[1]) for _, _, _, names, _, i in sets]
         xauto, yauto = "xlabel" not in block, "ylabel" not in block
         xlabel = block["xlabel"] if not xauto else (f"{var} [{xu}]" if xu else var)
@@ -289,7 +341,7 @@ class Builder:
         legend = get("legend", 0)
         legend = ("top right" if count > 1 else None) if legend == "auto" else (None if legend == "off" else legend)
         series = []
-        for i, arr in enumerate(ys[:len(nodes)]):
+        for i, arr in enumerate(ys[:len(raw)]):
             sx, sy = self.break_poles([float(v) for v in xs],
                                       [None if not math.isfinite(v) else float(v) for v in arr], ylim)
             series.append({
@@ -299,9 +351,9 @@ class Builder:
                 "x": sx, "y": sy, "line": True,
             })
         for k, (_, x, _, _, src, i) in enumerate(sets):   # points: markers, one per point, never joined
-            arr, marker = ys[len(nodes) + k], get("marker", i)
+            arr, marker = ys[len(raw) + k], get("marker", i)
             series.append({
-                "label": labels[len(nodes) + k], "src": src,
+                "label": labels[len(raw) + k], "src": src,
                 "color": get("color", i, PALETTE[i % len(PALETTE)]),
                 "width": get("width", i), "dash": get("dash", i), "marker": "circle" if marker == "none" else marker,
                 "x": [float(v) for v in x], "y": [None if not math.isfinite(v) else float(v) for v in arr],
@@ -332,16 +384,31 @@ class Builder:
             "inherited": {k: canon(k, v) for k, v in cfg.items()},
         }
 
-    def in_axis(self, sets, k, disp, axis):
-        """`sets` with part k (x or y) as plain numbers in the axis's unit. A set that does not fit
-        the axis is reported on its line and left out; the header's is the plot's error."""
+    def in_axis(self, sets, k, disp, axis, given=False):
+        """`sets` with part k (x or y) as plain numbers in the axis's unit. Values without units
+        are read in the axis's unit when the plot gives it (`xunit:`, `yunit:`), as a matrix pasted
+        without units needs. A set that does not fit the axis is reported on its line and left out;
+        the header's is the plot's error."""
         out = []
         for s in sets:
             q = s[k]
             try:
-                v = q.magnitude if self._dimless(disp) and q.dimensionless else q.to(disp).magnitude
+                if q.dimensionless and (given or self._dimless(disp)):
+                    v = q.to("dimensionless").magnitude
+                else:
+                    v = q.to(disp).magnitude
             except pint.errors.DimensionalityError:
                 msg = f"The {axis} values are in {q.units:~P}, and the {axis} axis is in {disp:~P}"
+                if q.dimensionless:
+                    unit = unit_source(self.ev, disp) or f"{disp:~P}"
+                    data, units = split_points(split_top(s[4]))
+                    units = (units + ["auto", "auto"])[:2]
+                    units[k - 1] = unit
+                    while units and units[-1] == "auto":
+                        units.pop()
+                    msg = (f"The {axis} values have no units, and the {axis} axis is in {disp:~P}: give "
+                           f"`{axis}unit: {unit}` to read them in it, or the units they are in after them, "
+                           f"`points: {', '.join(data + units)}`")
                 if s[0] is None:
                     raise EvalError(msg) from None
                 self.errors.append((s[0], msg))

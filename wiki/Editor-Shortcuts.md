@@ -30,7 +30,7 @@ These are off on comment lines, on the text lines under a plot (title, labels, a
 | `Tab`, `Shift+Tab` | Indent or unindent the line, or every highlighted line, by two spaces. Works with Math keys off. Press `Esc` first to move the focus out of the editor with `Tab` |
 | `Alt+Z` | Turn text wrapping in the editor on or off |
 | `Alt+L` | Switch between side-by-side and stacked views. See [Settings](Settings) |
-| `F2` | Rename the name at the caret everywhere |
+| `F2` | Rename the name at the caret everywhere. In the dialog a name is typed as in the editor: `.` after a name types the subscript `_`, and `Ctrl+G` the extended character |
 | `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+O` | Save, Save As, Open |
 
 The editor scrolls half a page past the last line, as most code editors do, so the line you are typing at the end of a long sheet can sit in the middle of the screen rather than at its bottom edge.
@@ -70,7 +70,7 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 | the value of an option with a few choices | its choices: a solver's `method:` (the methods that block kind takes, each with what it is for) and `autorun:`; a plot's `grid:`, `xscale:`, `yscale:`, `legend:`, `dash:`, `marker:`, `gaps:` and `color:` |
 | the value of an option that is an expression | names and units, as on any line: an equation, `data:`, a plot's `xlim:` or `points:`, a note's `at (x, y)`, after `'` in `xunit:` |
 | the unknowns in `!root x, y` | variables defined above |
-| `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`) |
+| `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`); inside `haprops(`, the humid air keys |
 
 `Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions, nor do option values that are text or a number (a title, `samples:`, `degree:`). Every block's options come from one table the server builds from the lists it reads the blocks with (`vocab.py` `blocks()`), so a new option is offered as soon as it exists.
 

@@ -17,6 +17,14 @@ form in one or more variables.
       data: t, s                                one vector per parameter, then y (or a matrix with
                                                 a row for each, then the y row)
 
+    M = [0, 1, 2, 3; 0.1, 4.8, 19.7, 44.0]      a matrix without units: give them to x and y
+    !regression c                               (yunit alone gives a vector of coefficients its unit)
+      data: M
+      degree: 2
+      xunit: 's
+      yunit: 'm
+      function: s(t)                            below the block, s(2's) is the fitted polynomial
+
 A block looks like a solver block (sheettext reads it as one, so its option lines, Rename and the
 editor's suggestions work the same), but a fit is quick and exact, so it is computed every time the
 sheet runs: there is no Run button and no stored result. Coefficient k has the units of y / x^k.
@@ -24,6 +32,7 @@ A model is fitted by scipy's least squares, from the coefficients' values above 
 have one (they carry the units, as a solver's starting values do), else from 1 in the units the
 model gives them (`model_units`). What the block defines is visible below it, like an assignment's
 name, and a model's function too."""
+import re
 import warnings
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -36,12 +45,15 @@ from .nodes import BinOp, Call, FuncDef, Name, Neg, refs
 from .parser import ParseError, parse_expr
 from .sheettext import definition, is_name
 
-KEYS = ("data", "degree", "model", "r2")
+KEYS = ("data", "degree", "model", "r2", "xunit", "yunit", "function")
 KEY_NOTES = {
     "data": "a matrix with an x row and a y row, one column per point; or two vectors: x, y",
     "degree": "the polynomial's degree; needed when one name holds every coefficient",
     "model": "the function to fit instead of a polynomial: y(x) = A*exp(-k*x), in the header's names",
     "r2": "a name to hold R², the coefficient of determination",
+    "xunit": "the unit of the x data, for data without units such as a pasted matrix: 's",
+    "yunit": "the unit of the y data, and so of a vector of coefficients: 'm",
+    "function": "a name for the fitted polynomial as a function below the block: f, or f(t)",
 }
 MAX_DEGREE = 20
 MAX_MODEL_POINTS = 5000   # a model is evaluated point by point, on every run of the sheet
@@ -62,11 +74,14 @@ class Block:
     model: object = None                        # the model: a FuncDef, `y(x, z) = body`
     model_src: str = ""
     r2: str = None
+    xunit: object = None                        # the units the data is in (nodes), when given
+    yunit: object = None
+    function: tuple = None                      # (name, parameter or None): the polynomial as a function
     errors: dict = field(default_factory=dict)  # option line number -> message
     problem: str = ""
 
     def nodes(self):
-        return list(self.data)
+        return list(self.data) + [u for u in (self.xunit, self.yunit) if u is not None]
 
 
 def _split_top(s):
@@ -148,7 +163,22 @@ def parse_block(handle):
         b.degree = len(names) - 1
     if b.r2 is not None and b.r2.lstrip("~") in bare:
         b.problem = b.problem or f"'{b.r2}' is already a coefficient"
+    if b.function is not None and not b.problem:
+        b.problem = _function_problem(b, bare)
     return b
+
+
+def _function_problem(b, bare):
+    """What is wrong with a block's `function:`, or ""."""
+    name, param = b.function
+    if b.model is not None:
+        return (f"The model defines its function already ({b.model.name.lstrip('~')}); "
+                f"function: is for a polynomial. Remove it")
+    if name.lstrip("~") in bare or (b.r2 and name.lstrip("~") == b.r2.lstrip("~")):
+        return f"'{name}' is already a name this block defines"
+    if param is not None and param in bare:
+        return f"'{param}' is a coefficient; give the function another variable: `function: {name}(x)`"
+    return ""
 
 
 def _model_problem(b, bare):
@@ -164,6 +194,8 @@ def _model_problem(b, bare):
     if len(b.data) not in (1, n):
         return (f"The model has {len(params)} variable{'s' * (len(params) != 1)}, so data is a matrix with {n} rows "
                 f"or {n} vectors: `data: {', '.join(params)}, {b.model.name.lstrip('~')}`")
+    if b.xunit is not None and len(params) > 1:
+        return "xunit: is for data with one x; with several variables, give each its units in the data"
     return ""
 
 
@@ -193,6 +225,15 @@ def _apply_option(b, key, value):
         if not is_name(value):
             raise RegressionError("r2 names the variable that holds R², e.g. `r2: R2`")
         b.r2 = value
+    elif key in ("xunit", "yunit"):
+        setattr(b, key, _expr(value))
+    elif key == "function":
+        m = re.fullmatch(r"\s*(\S+?)\s*(?:\(\s*([^()]*?)\s*\))?\s*", value)
+        name, param = (m.group(1), m.group(2)) if m else ("", None)
+        if not is_name(name) or (param is not None and (not is_name(param) or param.startswith("~"))):
+            raise RegressionError("function names the fitted polynomial, `function: f`, or with its variable, "
+                                  "`function: f(t)`")
+        b.function = (name, param)
 
 
 # ---- the fit -------------------------------------------------------------------------------------
@@ -222,7 +263,25 @@ def _multiplicative(q):
 
 def _points(b, ev, names=("x", "y")):
     cols, row = columns(ev, [ev.eval(node) for node in b.data], names)
+    if b.xunit is not None:
+        cols[0] = in_unit(ev, cols[0], ev.eval(b.xunit), names[0], "xunit")
+    if b.yunit is not None:
+        cols[-1] = in_unit(ev, cols[-1], ev.eval(b.yunit), names[-1], "yunit")
     return [_multiplicative(c) for c in cols], row
+
+
+def in_unit(ev, q, unit, what, key):
+    """Data `q` in the unit an option gives: values without units take it (a pasted matrix), and
+    values with units are converted to it."""
+    if np.ndim(unit.magnitude) or unit.magnitude != 1:
+        raise RegressionError(f"{key} is a unit such as 'm, not a quantity")
+    if q.dimensionless and not ev.Q(1, unit.units).dimensionless:
+        return ev.Q(q.to("dimensionless").magnitude, unit.units)
+    try:
+        return q.to(unit.units)
+    except pint.errors.DimensionalityError:
+        raise RegressionError(f"The {what} values are in {q.units:~P}, which do not convert to "
+                              f"{unit.units:~P} ({key})") from None
 
 
 def columns(ev, vals, names=("x", "y"), key="data"):
@@ -578,6 +637,20 @@ def _fit_model(b, ev):
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else (1.0 if ss_res == 0 else 0.0)
     coeffs = [ev.Q(float(v), u) for v, u in zip(sol.x, cunits)]
     return Fit(coeffs, r2, npts, None, "", "")
+
+
+def function_source(b, f):
+    """The block's polynomial as the body of its `function:`, in the coefficients' names, and the
+    function's variable: the one given, else the x data's name, else x."""
+    name, param = b.function
+    bare = {n.lstrip("~") for n in b.names}
+    param = param or next(p for p in (f.x_name.lstrip("~"), "x", "t", "u") if p and p not in bare)
+    if len(b.names) == 1 and f.degree > 0:
+        coeffs = [f"idx({b.names[0]}, {k + 1})" for k in range(f.degree + 1)]
+    else:
+        coeffs = list(b.names)
+    terms = [c if k == 0 else f"{c}*{param}" if k == 1 else f"{c}*{param}^{k}" for k, c in enumerate(coeffs)]
+    return name, param, " + ".join(terms)
 
 
 def _numbered(name, deg):

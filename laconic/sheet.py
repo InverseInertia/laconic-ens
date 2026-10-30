@@ -66,13 +66,15 @@ def run(text, siunitx=False, global_units=None):
     return evaluate(text, siunitx, global_units).results
 
 
-def evaluate(text, siunitx=False, global_units=None, until=None):
+def evaluate(text, siunitx=False, global_units=None, until=None, plots=True):
     """`global_units` are the instance's (name, definition) pairs. Units are
     defined before any line is evaluated, so a definition applies to the whole
     sheet, wherever it sits. With `until`, the run stops after that line: nothing below a
     line changes its result, so this is enough to read a block (its `needed` and
-    `declarations` then cover only the lines that ran)."""
-    return _run(text, siunitx, global_units, until)[0]
+    `declarations` then cover only the lines that ran). `plots` says which plots are drawn:
+    all (True), none (False) or the ones whose headers are in a set of line numbers. A plot
+    not drawn is a **pending** plot row; a plot defines nothing, so the lines below are the same."""
+    return _run(text, siunitx, global_units, until, plots)[0]
 
 
 def evaluator_at(text, line, global_units=None):
@@ -84,7 +86,7 @@ def evaluator_at(text, line, global_units=None):
     return ev
 
 
-def _run(text, siunitx=False, global_units=None, until=None):
+def _run(text, siunitx=False, global_units=None, until=None, plots=True):
     """Run the sheet. Returns the Worksheet and the evaluator as the last line left it."""
     sheet = scan(text)
     has_defs = any(l.kind == "unitdef" for l in sheet.lines)
@@ -112,7 +114,8 @@ def _run(text, siunitx=False, global_units=None, until=None):
             r, owned = run_block(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "plot":
-            r, owned = _run_plot(i, raw, sheet.block(i), ev, fmt, used)
+            draw = plots if isinstance(plots, bool) else i in plots
+            r, owned = (_run_plot if draw else _pending_plot)(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "loop":
             r, owned = _run_loop(i, raw, sheet.block(i), ev, fmt, used)
@@ -220,6 +223,21 @@ def _run_plot(i, raw, block, ev, fmt, used):
                       stale=ev.symbols.tainted(nodes)), owned
 
 
+def _pending_plot(i, raw, block, ev, fmt, used):
+    """A `!plot` line that is not drawn in this run: its row says so, and its option lines are read
+    only as far as their own text goes. The page draws it afterwards (/api/plot), so the math
+    above and below it shows without waiting for the slowest part of a sheet."""
+    owned = {}
+    for l in block.members:
+        o = l.option
+        try:
+            parse_option(o.key, o.arg, o.value)
+            owned[l.n] = LineResult(l.n, l.text, "plotopt")
+        except PlotError as e:
+            owned[l.n] = LineResult(l.n, l.text, "error", error=str(e))
+    return LineResult(i, raw, "plot", text="plot", block=block, pending=True), owned
+
+
 def _run_solver(i, raw, handle, ev, fmt, used):
     """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here
     (that is solvesession.py's): the stored result is compared by hash with the block's current
@@ -300,6 +318,9 @@ def _run_regression(i, raw, handle, ev, fmt, used):
         if block.model:
             m = block.model
             fkey = ev.symbols.define_function(m.name, m.params, m.body).key
+        elif block.function:
+            fname, param, body = regression.function_source(block, f)
+            fkey = ev.symbols.define_function(fname, [param], parse_expr(body)).key
     except Exception as e:
         return fail(describe(e))
     values = [_value(key, fmt.var(key), fmt.quantity(q)) for key, q in defined]
@@ -310,7 +331,7 @@ def _run_regression(i, raw, handle, ev, fmt, used):
         head = f"{fmt.var(fkey)}\\left({', '.join(name_latex(p) for p in m.params)}\\right)"
         model = f"{head} = {Printer(ev, fmt, local=m.params).tex(m.body)}"
     else:
-        model = _polynomial(f, defined, ev, fmt)
+        model = _polynomial(f, defined, ev, fmt, (fkey, param) if block.function else None)
     tex = r"\begin{gathered} " + model + r" \\ " + r",\quad ".join(v["latex"] for v in values) + r" \end{gathered}"
     info = RegressionPayload(block.names, f.degree, f.points, f.r2, model, values)
     return LineResult(i, raw, "regression", stages=[tex], block=handle, payload=info, stale=stale,
@@ -376,10 +397,15 @@ def _loop_code(top, printer, depth):
     return rows
 
 
-def _polynomial(f, defined, ev, fmt):
-    """The fitted polynomial in the names it defined: `y = a + b x + c x^2`."""
-    x = fmt.var(ev.vkey(f.x_name)) if f.x_name else "x"
-    y = fmt.var(ev.vkey(f.y_name)) if f.y_name else "y"
+def _polynomial(f, defined, ev, fmt, function=None):
+    """The fitted polynomial in the names it defined: `y = a + b x + c x^2`, or `f(x) = ...` with
+    `function`, (its key, its variable)."""
+    if function:
+        x = name_latex(function[1])
+        y = rf"{fmt.var(function[0], function=True)}\left({x}\right)"
+    else:
+        x = fmt.var(ev.vkey(f.x_name)) if f.x_name else "x"
+        y = fmt.var(ev.vkey(f.y_name)) if f.y_name else "y"
     if len(defined) == 1 and f.degree > 0:
         base = fmt.var(defined[0][0])
         coeffs = [f"{{{base}}}_{{{k + 1}}}" for k in range(f.degree + 1)]
@@ -399,7 +425,7 @@ def block_at(text, line, global_units=None):
     b = scan(text).block(line)
     if b is None:
         return None
-    return evaluate(text, global_units=global_units, until=b.end).block(line)
+    return evaluate(text, global_units=global_units, until=b.end, plots={line}).block(line)
 
 
 def solver_blocks(text, global_units=None):

@@ -9,6 +9,18 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Plot a vector of functions**: `!plot [f(x), g(x)], x = 0 .. 1`, or a function that gives a vector such as `F(x) = [x, x^2, x^3]`, draws one curve per entry, labelled by the entry (`f(x)`) or by its number (`F(x)_2`) and numbered with the other series for `color 2:` and the rest. (#144)
+- **Humid air properties**: `haprops` gives the properties of moist air from CoolProp's `HAPropsSI`, such as the humidity ratio `w = haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)`, the wet bulb (`"B"`), dew point (`"D"`), enthalpy and volume per kg of dry air. It takes the output key and three state inputs, one of them the pressure, converts their units as `props` does, and typing `"` inside it suggests the keys. See the wiki's Material Properties page. (#142)
+- **Regression units and functions, and fits plotted over their points**: under `!regression`, `xunit:` and `yunit:` give data without units, such as a matrix pasted from a spreadsheet, its units, so the coefficients come out in theirs (with one name for every coefficient, `yunit:` is the unit of the vector), and `function: f(t)` makes the fitted polynomial a function you can call and plot below the block. A plot's `points:` without units are now read in the plot's `xunit:` and `yunit:`, so the points can be drawn over a fitted curve with units; without them, the line says which to add. Points in other units than the plot's can say so after the data, x's unit then y's: `points: D, 'ms, 'mm` (`auto` skips one). (#141)
+
+### Changes
+- **Plots are drawn after the math**: as you type, every calculation updates first and the plots follow one at a time, the one nearest the line you are on first. Under each plot a status line says whether it is still drawing (showing its last picture, dimmed) or up to date, and a plot whose lines and everything above them did not change comes back at once. (#141)
+- **Blank lines no longer show in the results**: the empty lines you leave in the sheet to keep it readable are left out of the results pane, as the exports already left them out. (#143)
+
+### Fixes
+- **The Rename dialog takes extended characters and subscripts**: in F2's name fields, Ctrl+G now turns the letter before the caret into its extended character (`s` into σ) and a period after a name types the subscript underscore (`σ.max` gives `σ_max`), as in the editor, so a name can be renamed to one with Greek letters. (#139)
+
 ## [v0.5.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.0) (2026-10-29)
 
 ### New

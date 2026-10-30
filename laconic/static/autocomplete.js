@@ -25,7 +25,8 @@
  * (laconic/vocab.py blocks(), built from the tables the server parses the blocks with): the option
  * keys, a solver's unknown after `bounds `, the values of a key with a few choices (`method:`,
  * `grid:`, `color:`), and names and units in the keys whose values are expressions. From
- * vocab.props (fetched separately, it needs CoolProp), the quoted keys and fluid of props().
+ * vocab.props (fetched separately, it needs CoolProp), the quoted keys and fluid of props() and the
+ * keys of haprops() (`humid`).
  * context() needs the table, as opts.vocab, to know what a key's value is.
  */
 (function (root) {
@@ -74,8 +75,9 @@
   // The block the line starting at `ls` belongs to, {kind, unknowns}, or null (editing.js).
   const blockAt = Editing.blockAt;
 
-  // Inside a quoted argument of props(...) at `pos` (the line runs from `ls`, the quote opened at `q`):
-  // which argument it is, and the first argument's text. Null for any other string.
+  // Inside a quoted argument of props(...) or haprops(...) at `pos` (the line runs from `ls`, the quote
+  // opened at `q`): which argument it is, the first argument's text and whether it is haprops. Null
+  // for any other string.
   function propsArg(t, ls, q) {
     let depth = 0, arg = 0, quoted = false, i = q - 1;
     for (; i >= ls; i--) {
@@ -86,9 +88,10 @@
       else if (c === '(' || c === '[') { if (depth === 0) break; depth--; }
       else if (c === ',' && depth === 0) arg++;
     }
-    if (i < ls || t[i] !== '(' || !/(^|[^\p{L}\p{N}_])props\s*$/u.test(t.slice(ls, i))) return null;
+    const fn = i >= ls && t[i] === '(' && /(?:^|[^\p{L}\p{N}_])(ha)?props\s*$/u.exec(t.slice(ls, i));
+    if (!fn) return null;
     const first = /^\s*"([^"]*)"/.exec(t.slice(i + 1));
-    return { arg, output: first ? first[1] : '' };
+    return { arg, output: first ? first[1] : '', humid: !!fn[1] };
   }
 
   // What is being typed at `pos`:
@@ -118,7 +121,7 @@
       if (!pa) return null;
       const close = t.indexOf('"', pos);
       const closed = close >= 0 && close <= le;
-      return { kind: 'prop', start: q + 1, end: closed ? close : pos, query: t.slice(q + 1, pos), closed, arg: pa.arg, output: pa.output };
+      return { kind: 'prop', start: q + 1, end: closed ? close : pos, query: t.slice(q + 1, pos), closed, arg: pa.arg, output: pa.output, humid: pa.humid };
     }
     let s = pos;
     while (s > ls && WORD.test(t[s - 1])) s--;
@@ -201,14 +204,18 @@
     if (ctx.kind === 'prop') {
       const pv = vocab.props;
       if (!pv) return [];
-      const fixed = new Set(pv.keys.filter((k) => k[4]).map((k) => k[0]));
-      // props(output, in1, value1, in2, value2, fluid), or props(fixed output, fluid)
-      const what = ctx.arg === 0 ? 'output' : ctx.arg === 5 || (ctx.arg === 1 && fixed.has(ctx.output)) ? 'fluid'
+      const keys = ctx.humid ? pv.humid || [] : pv.keys;
+      const fixed = new Set(keys.filter((k) => k[4]).map((k) => k[0]));
+      // props(output, in1, value1, in2, value2, fluid), or props(fixed output, fluid);
+      // haprops(output, in1, value1, in2, value2, in3, value3), which takes no fluid
+      const what = ctx.arg === 0 ? 'output'
+        : ctx.humid ? (ctx.arg % 2 === 1 && ctx.arg <= 5 ? 'input' : null)
+        : ctx.arg === 5 || (ctx.arg === 1 && fixed.has(ctx.output)) ? 'fluid'
         : ctx.arg === 1 || ctx.arg === 3 ? 'input' : null;
       if (what === 'fluid') {
         pv.fluids.forEach(([name, detail], i) => add({ kind: 'fluid', insert: name, label: name, detail }, i, name, detail));
       } else if (what) {
-        pv.keys.forEach(([key, desc, unit, input, isFixed], i) => {
+        keys.forEach(([key, desc, unit, input, isFixed], i) => {
           if (what === 'input' && !input) return;
           add({ kind: 'property', insert: key, label: key, detail: desc + (unit ? ` [${unit}]` : '') + (isFixed ? ', no state needed' : '') }, i, key, desc);
         });

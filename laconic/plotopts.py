@@ -47,7 +47,7 @@ KEY_NOTES = {
     "ylabel": "the y axis label; empty removes it",
     "xlim": "low .. high, the x range shown; either end may be auto",
     "ylim": "low .. high, the y range shown; either end may be auto",
-    "points": "a matrix with an x row and a y row, or two vectors: x, y",
+    "points": "a matrix with an x row and a y row, or two vectors: x, y; then optionally their units: D, 's, 'mm",
     "color": "a series' color: #rrggbb or a name; `color 2:` for series 2",
     "label": "a series' name in the legend; `label 2:` for series 2",
     "dash": "a series' line: solid, dashed or dotted",
@@ -121,12 +121,25 @@ def parse_plot(args):
 
 
 def parse_points(v):
-    """`D` (a matrix with an x row and a y row) or `x, y` (two vectors) -> their sources."""
+    """`D` (a matrix with an x row and a y row) or `x, y` (two vectors), then optionally the units
+    the points are in, x's and y's (`D, 's, 'mm`; `auto` leaves one as it is) -> their sources."""
     parts = split_top(v)
-    if not 1 <= len(parts) <= 2 or not all(parts):
-        raise PlotError("points reads `points: D`, a matrix with an x row and a y row, "
-                        "or `points: x, y`, two vectors")
+    data, units = split_points(parts)
+    if any(p.startswith("'") for p in data[1:]):
+        raise PlotError("points takes at most two units, the x data's then the y data's: `points: D, 's, 'mm`")
+    if not 1 <= len(data) <= 2 or len(units) > 2 or not all(parts):
+        raise PlotError("points reads `points: D`, a matrix with an x row and a y row, or `points: x, y`, "
+                        "two vectors, then optionally the units they are in: `points: D, 's, 'mm`")
     return parts
+
+
+def split_points(parts):
+    """A points line's sources -> (the data's, the units'): the units are the unit literals at the end,
+    x's then y's, where `auto` stands for one not given."""
+    k = len(parts)
+    while k > 1 and len(parts) - k < 2 and (parts[k - 1].startswith("'") or parts[k - 1] == "auto"):
+        k -= 1
+    return parts[:k], parts[k:]
 
 
 def _number(key, v):
