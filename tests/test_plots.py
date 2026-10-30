@@ -146,7 +146,7 @@ def test_undefined_names_fail_on_the_plot_line():
 
 
 def test_matrix_results_are_refused():
-    assert "single value" in run("!plot [1, 2], x = 0 .. 1")[0].error
+    assert "not a matrix" in run("!plot [1, 2; 3, 4], x = 0 .. 1")[0].error
 
 
 def test_range_must_increase_and_log_needs_positive():
@@ -718,3 +718,27 @@ def test_points_can_say_the_units_they_are_in():
     assert "do not convert to s" in bad.error
     (bad,) = [r for r in run(base + "  points: D, 's, 'm, 'kg\n") if r.kind == "error"]
     assert "at most two units" in bad.error
+
+
+def test_a_vector_of_functions_is_a_series_per_entry():
+    sp = plot("f(x) = x\n!plot [f(x), x^2], x = 0 .. 1\n")
+    assert [s["label"] for s in sp["series"]] == ["f(x)", "x^2"] and sp["legend"] == "top right"
+    assert sp["series"][1]["y"][-1] == pytest.approx(1) and sp["series"][1]["y"][0] == pytest.approx(0)
+    text = ("F(x) = [x, x^2, x^3] * 'm\n!plot F(x), x*1'm, x = 0 .. 1\n  color 3: red\n"
+            "  points: [0, 1; 0, 1], auto, 'm\n  marker 5: square\n  yunit: 'mm\n")
+    sp = plot(text)
+    assert [s["label"] for s in sp["series"]] == ["F(x)_1", "F(x)_2", "F(x)_3", "x*1'm", "[0, 1; 0, 1]"]
+    assert sp["series"][2]["color"] == "#d55e00" and sp["series"][4]["marker"] == "square"   # numbered in order
+    assert sp["series"][2]["y"][-1] == pytest.approx(1000)                                       # in the y unit
+    gap = plot("!plot [sqrt(x), x], x = -1 .. 1\n")
+    assert None in gap["series"][0]["y"] and None not in gap["series"][1]["y"]                  # gaps per entry
+    assert not [r for r in run(text) if r.kind == "error"]
+
+
+@pytest.mark.parametrize("text, message", [
+    ("M(x) = [x, x; x, x]\n!plot M(x), x = 0 .. 1", "not a matrix"),
+    ("F(x) = [x, x^2]\n!plot F(x), x = 0 .. 1\n  color 4: red", "There is no series 4; this plot has 2"),
+])
+def test_a_matrix_is_not_a_set_of_series(text, message):
+    errors = [r.error for r in run(text) if r.kind == "error"]
+    assert errors and message in errors[0], errors

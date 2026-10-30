@@ -11,6 +11,8 @@ A `!plot` line draws one or more functions of one variable over a range, and [po
   note: "max" at (L / 2, M(L / 2))
 ```
 
+A vector of functions is a series per entry: `!plot [M(x), V(x)], x = 0'm .. L` draws the same two curves as `!plot M(x), V(x), ...`, and a function that gives a vector, `F(x) = [x, x^2, x^3]`, draws one curve per entry, labelled `F(x)_1`, `F(x)_2`, ... The entries are numbered in order with the other series, so `color 2:` is the second entry. A matrix with more than one row and column is not a set of series.
+
 The expressions can use any variable and function above them. They are sampled point by point (`samples`, default 400), so units are checked at every point and a result in kN·m is shown in kN·m. Several expressions share one y axis and must have compatible units; give incompatible ones separate plots.
 
 Where an expression is undefined (`1/x` at 0, `sqrt` of a negative) the line breaks there. A line that jumps from beyond one limit to beyond the other (a pole) is not joined across the picture. `gaps: error` turns an undefined point into an error instead.

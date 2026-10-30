@@ -578,7 +578,7 @@ def test_each_kind_of_line_shows_its_row(page):
     page.evaluate("document.querySelector('#src').dispatchEvent(new Event('click'))")
     assert page.get_attribute(".row.active", "data-line") == "9"
     page.click("#viewLatex")
-    page.wait_for_selector(".row.snip pre")
+    page.wait_for_selector(".row.snip[data-line='5'] pre")         # the plot's comes after the math's
     assert page.locator(".row.snip .copy").count() == 6 and page.locator(".row.error .copy").count() == 0
     assert page.locator(".row.snip .solver-tools").count() == 1
     assert page.inner_text(".row[data-line='3'] pre").startswith("x =")

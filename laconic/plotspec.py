@@ -136,10 +136,12 @@ class Builder:
 
     # ---- sampling ---------------------------------------------------------------
     def point(self, node, scope, gaps, var, xv):
+        """One sample of a series: a quantity, or None for a gap. A vector of functions (`[f(x), g(x)]`,
+        or a function that gives one) gives a vector, its undefined entries NaN (see `expand`)."""
         try:
             q = self.ev.eval(node, scope)
             if np.ndim(q.magnitude) != 0:
-                raise EvalError("A plotted expression must give a single value, not a matrix")
+                return self.entries(q, var, xv)
             m = q.magnitude
             if np.iscomplexobj(m):
                 if abs(m.imag) > _TINY * abs(m):
@@ -155,6 +157,37 @@ class Builder:
                 raise EvalError(f"The expression is undefined at {var} = {xv:.4g}. "
                                 "Use `gaps: break` to leave a gap there") from None
             return None
+
+    def entries(self, q, var, xv):
+        m = np.asarray(q.magnitude)
+        if m.ndim > 2 or (m.ndim == 2 and 1 not in m.shape):
+            raise EvalError("A plotted expression gives a single value or a vector of them (one series each), "
+                            "not a matrix")
+        m = m.ravel()
+        if np.iscomplexobj(m):
+            if np.any(np.abs(m.imag) > _TINY * np.abs(m)):
+                raise EvalError(f"The expression is complex at {var} = {xv:.4g}. Plot its re(), im(), abs() or arg() instead")
+            m = m.real
+        return self.ev.Q(np.where(np.isfinite(m), m, np.nan).astype(float), q.units)
+
+    @staticmethod
+    def expand(src, samples):
+        """A series' samples -> [(label, samples)], one per entry when it gave vectors: a literal
+        `[f(x), g(x)]` is labelled by its entries, anything else `F(x)_1`, `F(x)_2`, ..."""
+        sizes = {q.magnitude.size for q in samples if q is not None and np.ndim(q.magnitude)}
+        if not sizes:
+            return [(src, samples)]
+        if len(sizes) > 1 or any(q is not None and not np.ndim(q.magnitude) for q in samples):
+            raise EvalError(f"'{src}' gives vectors of different lengths along the range; each entry is one series")
+        (width,) = sizes
+        body = src.strip()
+        parts = split_top(body[1:-1].replace(";", ",")) if body.startswith("[") and body.endswith("]") else []
+        labels = parts if len(parts) == width and all(parts) else [f"{src}_{k + 1}" for k in range(width)]
+        out = []
+        for k, label in enumerate(labels):
+            col = [None if q is None or not math.isfinite(float(q.magnitude[k])) else q[k] for q in samples]
+            out.append((label, col))
+        return out
 
     def build(self, line, series_src, var, lo_src, hi_src, opts, header_points=None):
         """`header_points`: the sources of the points a header with no range plots (`!plot t, s`)."""
@@ -243,6 +276,15 @@ class Builder:
                 scope[var] = ev.Q(float(xv), xdisp)
                 for k, node in enumerate(nodes):
                     raw[k].append(self.point(node, scope, gaps, var, float(xv)))
+        # A vector of functions is a series per entry, numbered in order, before the points.
+        split = [part for src, qs in zip(series_src, raw) for part in self.expand(src, qs)]
+        extra = len(split) - len(series_src)
+        series_src, raw = [label for label, _ in split], [qs for _, qs in split]
+        if n * len(raw) > MAX_POINTS:
+            raise EvalError(f"{len(raw)} series of {n} samples is too many points to draw on every edit "
+                            f"(at most {MAX_POINTS}). Lower samples")
+        sets = [st[:5] + (st[5] + extra,) for st in sets]
+        count += extra
 
         # ---- the y axis ----
         first = next((q for qs in raw for q in qs if q is not None), None)
@@ -286,7 +328,7 @@ class Builder:
 
         # ---- labels, series, notes ----
         xu, yu = unit_text(xdisp), unit_text(ydisp)
-        labels = [get("label", i, series_src[i]) for i in range(len(nodes))]
+        labels = [get("label", i, series_src[i]) for i in range(len(raw))]
         labels += [get("label", i, names[1]) for _, _, _, names, _, i in sets]
         xauto, yauto = "xlabel" not in block, "ylabel" not in block
         xlabel = block["xlabel"] if not xauto else (f"{var} [{xu}]" if xu else var)
@@ -299,7 +341,7 @@ class Builder:
         legend = get("legend", 0)
         legend = ("top right" if count > 1 else None) if legend == "auto" else (None if legend == "off" else legend)
         series = []
-        for i, arr in enumerate(ys[:len(nodes)]):
+        for i, arr in enumerate(ys[:len(raw)]):
             sx, sy = self.break_poles([float(v) for v in xs],
                                       [None if not math.isfinite(v) else float(v) for v in arr], ylim)
             series.append({
@@ -309,9 +351,9 @@ class Builder:
                 "x": sx, "y": sy, "line": True,
             })
         for k, (_, x, _, _, src, i) in enumerate(sets):   # points: markers, one per point, never joined
-            arr, marker = ys[len(nodes) + k], get("marker", i)
+            arr, marker = ys[len(raw) + k], get("marker", i)
             series.append({
-                "label": labels[len(nodes) + k], "src": src,
+                "label": labels[len(raw) + k], "src": src,
                 "color": get("color", i, PALETTE[i % len(PALETTE)]),
                 "width": get("width", i), "dash": get("dash", i), "marker": "circle" if marker == "none" else marker,
                 "x": [float(v) for v in x], "y": [None if not math.isfinite(v) else float(v) for v in arr],
