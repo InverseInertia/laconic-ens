@@ -857,3 +857,23 @@ def test_the_editor_scrolls_half_a_page_past_its_last_line(page):
     }""")
     assert got["height"] * 0.35 < got["lastTop"] < got["height"] * 0.65, got
     assert abs(got["marks"] - got["src"]) < 1, got       # the global marks scroll with the text
+
+
+def test_the_editor_numbers_its_lines(page):
+    """#147: a number beside each line, as tall as the line is with wrapping on, scrolled with the text."""
+    reset(page, "a = 1\n" + "b = " + " + ".join(["a"] * 80) + "\n" + "\n".join(f"y{k} = 2" for k in range(60)))
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_function("document.querySelectorAll('#srcGutter > div').length === 62")
+    row = page.evaluate("parseFloat(getComputedStyle(document.querySelector('#src')).lineHeight)")
+    heights = page.evaluate("[...document.querySelectorAll('#srcGutter > div')].map(d => d.getBoundingClientRect().height)")
+    assert all(abs(h - row) < 1 for h in heights)
+    assert page.inner_text("#srcGutter > div >> nth=61") == "62"
+    page.keyboard.press("Alt+z")                       # wrapping: the long line takes several rows
+    heights = page.evaluate("[...document.querySelectorAll('#srcGutter > div')].map(d => d.getBoundingClientRect().height)")
+    assert heights[1] > 1.5 * row and abs(heights[0] - row) < 1 and abs(heights[2] - row) < 1
+    got = page.evaluate("""() => {
+        const s = document.querySelector('#src'), g = document.querySelector('#srcGutter');
+        s.scrollTop = 600; s.dispatchEvent(new Event('scroll'));
+        return [s.scrollTop, g.scrollTop];
+    }""")
+    assert abs(got[0] - got[1]) < 1, got
