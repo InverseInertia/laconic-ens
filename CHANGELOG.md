@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.5.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.1) (2026-10-30)
+
 ### New
 - **Plot a vector of functions**: `!plot [f(x), g(x)], x = 0 .. 1`, or a function that gives a vector such as `F(x) = [x, x^2, x^3]`, draws one curve per entry, labelled by the entry (`f(x)`) or by its number (`F(x)_2`) and numbered with the other series for `color 2:` and the rest. (#144)
 - **Humid air properties**: `haprops` gives the properties of moist air from CoolProp's `HAPropsSI`, such as the humidity ratio `w = haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)`, the wet bulb (`"B"`), dew point (`"D"`), enthalpy and volume per kg of dry air. It takes the output key and three state inputs, one of them the pressure, converts their units as `props` does, and typing `"` inside it suggests the keys. See the wiki's Material Properties page. (#142)
