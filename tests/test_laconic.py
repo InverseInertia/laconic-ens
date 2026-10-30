@@ -99,6 +99,13 @@ def test_greek_and_subscripts():
     assert r"\beta = \alpha \cdot 3" in r.latex
 
 
+def test_two_epsilons_are_two_names():
+    # #150: ε (Ctrl+G e) and ϵ (Ctrl+G E) are different variables, typeset as they look
+    r = last("ε = 2\nϵ = 3\nz = ε + ϵ")
+    assert r.text == "z = 5"
+    assert r"\varepsilon + \epsilon" in r.latex
+
+
 def test_infinity_subscript():
     # free-stream T_∞, typed with Ctrl+G 8 or spelled out as inf
     assert r"v_{\infty} = 3" in last("v_∞ = 3").latex

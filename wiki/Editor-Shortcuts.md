@@ -76,4 +76,4 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 
 ## Extended characters
 
-Ctrl+G uses a table of extended characters, editable under Settings → Extended characters. The Greek letters follow Mathcad: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν, x→ξ, o→ο, p→π, r→ρ, s→σ, t→τ, u→υ, f→φ, c→χ, y→ψ, w→ω, and `G D Q L X P S F Y W` for Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω. It also maps 8→∞ and V→∀ (the struck-through V for volume). A table you edited before these were added does not have their rows: add them, or press Reset to defaults.
+Ctrl+G uses a table of extended characters, editable under Settings → Extended characters. The Greek letters follow Mathcad: a→α, b→β, g→γ, d→δ, e→ε, z→ζ, h→η, q→θ, i→ι, k→κ, l→λ, m→μ, n→ν, x→ξ, o→ο, p→π, r→ρ, s→σ, t→τ, u→υ, f→φ, c→χ, y→ψ, w→ω, and `G D Q L X P S F Y W` for Γ Δ Θ Λ Ξ Π Σ Φ Ψ Ω. E gives the lunate ϵ, a different letter from e's ε, so a sheet can use both: ε typesets as \varepsilon and ϵ as \epsilon. It also maps 8→∞ and V→∀ (the struck-through V for volume). A table you edited before these (or E→ϵ) were added does not have their rows: add them, or press Reset to defaults.

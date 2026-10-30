@@ -205,6 +205,9 @@ eq(sim("v = 5'V|", [ctrl('<'), '3', '0']), "v = 5'V∠30|", 'Ctrl+< types the po
 eq(applyEdit(start("v = 5|"), E.keyAction(',', { ctrl: true, shift: true, alt: false, meta: false }, 'v = 5', 5, 5, {})).t, 'v = 5∠', 'Ctrl+Shift+, does too');
 eq(E.keyAction('<', { ctrl: true, shift: true, alt: false, meta: false }, '# a', 3, 3, {}), null, 'not in a comment');
 eq(sim('x = D|', [ctrl('g')]), 'x = Δ|', 'capital delta');
+eq(sim('x = e|', [ctrl('g')]), 'x = ε|', 'e -> epsilon');
+eq(sim('x = E|', [ctrl('g')]), 'x = ϵ|', 'E -> the lunate epsilon, a different letter');
+eq(sim('x = ϵ|', [ctrl('g')]), 'x = E|', 'lunate epsilon reverts to E');
 eq(sim('sigma = s|', [ctrl('g')]), 'sigma = σ|', 'only the preceding character');
 eq(sim('x = 5|', [ctrl('g')]), 'x = 5|', 'no mapping, no change');
 eq(sim('x = 8|', [ctrl('g')]), 'x = ∞|', '8 -> infinity');

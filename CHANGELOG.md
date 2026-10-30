@@ -13,9 +13,11 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - Added herobrine
 - **Show all the working with `!adnauseum`**: below it, each line shows every intermediate result, worked out innermost first, and every unit that cancels, struck through, with the result's units written out in SI base units and cancelled down when they differ from the arithmetic's. `!long` or `!short` ends it. (#146)
 - **Line numbers in the editor**: each line of the sheet has its number beside it, the same number the results show, and the line the caret is on is highlighted. With text wrapping on, the number sits beside the first row of a wrapped line. (#147)
+- **Two epsilons**: Ctrl+G after `E` types the lunate ϵ, a different letter from the ε that `e` gives, so a sheet can use both for different things. A table of extended characters you edited earlier needs the `E` row added, or Reset to defaults. (#150)
 
 ### Changes
 - **No flicker while plots are redrawn**: a plot being redrawn now fades slowly to grey over two seconds rather than dimming at once, so a quick redraw no longer flashes, and its SVG and PNG buttons stay under it, so the results below do not jump. (#148)
+- **ε typesets as it looks**: ε is now printed as \varepsilon (the open ε) in the results and exports, and ϵ as \epsilon, where ε used to print as ϵ. (#150)
 
 ## [v0.5.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.1) (2026-10-30)
 
