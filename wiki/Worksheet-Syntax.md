@@ -94,6 +94,7 @@ In the results, every `!` line is marked the same way, so you can see what was c
 | `!noassume` / `!assume` | keep results in the units the arithmetic produced / back to simplest SI |
 | `!trigdeg` / `!trigrad` | bare numbers in trig functions are degrees / radians (default) |
 | `!short` / `!long` | show only each line's final result / full steps again |
+| `!adnauseum` | show all the working: every intermediate result and every unit cancellation, see [Output and Export](Output-and-Export#all-the-working) |
 | `!hide` / `!show` | hide the results of the lines below / show them again; hidden lines still run, see [Output and Export](Output-and-Export#hiding-lines) |
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |

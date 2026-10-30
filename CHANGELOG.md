@@ -11,6 +11,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### New
 - Added herobrine
+- **Show all the working with `!adnauseum`**: below it, each line shows every intermediate result, worked out innermost first, and every unit that cancels, struck through, with the result's units written out in SI base units and cancelled down when they differ from the arithmetic's. `!long` or `!short` ends it. (#146)
 
 ## [v0.5.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.1) (2026-10-30)
 

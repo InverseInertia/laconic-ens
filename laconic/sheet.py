@@ -20,7 +20,7 @@ from .plotspec import Builder
 from .sheettext import scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import commands, loop, regression, solver, symsolve
+from . import adnauseum, commands, loop, regression, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -463,6 +463,7 @@ def _run_line(i, raw, s, ev, fmt, used):
         typed = literal or _bare_number(expr)
         # Explicit `->` conversions and typed-in quantities are shown as given;
         # computed results are reduced to simple SI unless !noassume is active.
+        computed = value   # before it is put in the units the line shows
         value = catalogue.settle_ratio(value)   # mm/mm stays only on a result that is only mm/mm
         if ev.mode.assume and not (literal or isinstance(expr, Convert)):
             value = reduce_si(value, ev.ureg, ev.mode.freq)
@@ -474,7 +475,13 @@ def _run_line(i, raw, s, ev, fmt, used):
         sig = 12 if typed else None
         res = fmt.quantity(value, sig)
         plain = fmt.plain(value, sig)
-        stages = [res] if typed or ev.mode.short else _dedupe([sym, sub, res])
+        working = []
+        if ev.mode.adnauseum and not typed:
+            try:
+                working = adnauseum.steps(ev, fmt, expr, ev.eval(expr.expr) if isinstance(expr, Convert) else computed, value)
+            except Exception:   # the working is extra: a line whose result worked out still shows it
+                working = []
+        stages = [res] if typed or ev.mode.short else _dedupe([sym, sub, *working, res])
         if isinstance(stmt, Assign):
             name = ev.symbols.define(stmt.name, value, text=plain, stale=stale)
             key = name.key

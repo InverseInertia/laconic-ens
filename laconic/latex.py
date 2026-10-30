@@ -542,6 +542,8 @@ def document(results, title=None, declarations=()):
     els = elements(results, commands=True)
     if any(isinstance(e, Figure) for e in els):
         out += [r"\usepackage{pgfplots}", r"\pgfplotsset{compat=newest}"]
+    if any(r"\cancel" in row for e in els for row in getattr(e, "rows", ())):   # !adnauseum's struck units
+        out.append(r"\usepackage{cancel}")
     out += list(declarations)
     out.append(r"\begin{document}")
     if title:

@@ -10,10 +10,26 @@ These change only how a result is printed. Values are stored as floats and the e
 | `!sigfigsbig n` | n significant figures with trailing zeros kept: `2.500` |
 | `!decplace n` | n decimal places |
 | `!short` / `!long` | final result only / full steps |
+| `!adnauseum` | every intermediate result and unit cancellation, until `!long` or `!short` |
 
 The last of `!sigfigs`, `!sigfigsbig` and `!decplace` wins. Plain notation is used between 1e-4 and 1e7, scientific notation outside. Typed-in numbers always show 12 significant figures, so a line that is only a typed-in number or quantity (`L = 12345.678'm`) shows it as typed; the setting rounds what the sheet computes. Matrices use the same formatter. `!sigfigs` and `!sigfigsbig` take 1 to 15, `!decplace` 0 to 15. See [Units](Units) for `!assume` and `!noassume`.
 
 Each calculation line shows up to three stages: the symbolic form, the form with values substituted, and the result.
+
+### All the working
+
+Below `!adnauseum`, a line shows every step between the substituted form and the result. The expression is worked out one level at a time, innermost first, each stage replacing the operations whose operands are already numbers with what they give. Before a product or quotient whose units cancel, a stage shows the numbers and the units apart with the cancelled units struck through, and when the result is shown in other units than the arithmetic gave, the arithmetic's units are written out in SI base units and cancelled down:
+
+```
+F = 10'kN
+L = 3'm
+!adnauseum
+W = F*L       W = F·L = 10 kN·3 m = 30 kN·m = 30000 (kg·m/s²)·m = 30000 kg·m²/s² = 30000 J
+v = 5'm/'s
+d = v * 2's   d = v·2 s = 5 m/s·2 s = 5·2 (m·s̶)/(s̶) = 10 m
+```
+
+`!long` returns to the three stages and `!short` to the result alone. The LaTeX export loads the `cancel` package when a line strikes a unit through.
 
 Blank lines are for keeping the sheet text readable, so the results pane and the exports leave them out: the results are laid out to be read already.
 

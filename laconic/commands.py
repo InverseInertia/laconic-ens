@@ -23,6 +23,7 @@ class SheetMode:
     angle: str = "radian"      # "degree" after !trigdeg: bare numbers in trig calls are degrees
     assume: bool = True        # False after !noassume: results keep their typed units
     short: bool = False        # True after !short: lines show only the final result, no steps
+    adnauseum: bool = False    # True after !adnauseum: lines show every intermediate result and unit cancellation
     sig: int = 4               # significant figures shown (!sigfigs, !sigfigsbig)
     places: int = None         # decimal places shown instead, after !decplace
     keep_zeros: bool = False   # !sigfigsbig: pad to exactly `sig` figures, 2.5 -> 2.500
@@ -138,6 +139,14 @@ def _setter(attr, value, text):
     return effect
 
 
+def _steps(short, adnauseum, text):
+    """!short, !long and !adnauseum each choose how much of a line's working is shown."""
+    def effect(mode, ev, _):
+        mode.short, mode.adnauseum = short, adnauseum
+        return text
+    return effect
+
+
 def _sigfigs(keep_zeros):
     def effect(mode, ev, n):
         mode.sig, mode.places, mode.keep_zeros = n, None, keep_zeros
@@ -209,6 +218,9 @@ _TRIG_HELP = ("Set the angle unit for <code>sin</code>, <code>cos</code>, <code>
               "explicit units such as <code>30'deg</code> always work")
 _SHORT_HELP = ("Below <code>!short</code>, each line shows only its final result, with its unit but no "
                "intermediate steps. <code>!long</code> restores the full display")
+_ADNAUSEUM_HELP = ("Below <code>!adnauseum</code>, each line shows all its working: every intermediate result, "
+                   "innermost first, and every unit that cancels, struck through, down to SI base units. "
+                   "<code>!long</code> or <code>!short</code> ends it")
 _HIDE_HELP = ("Below <code>!hide</code>, lines still run and define their names, but their results are not shown "
               "in the results or the exports, until <code>!show</code>. Errors are still shown, and so is a solver "
               "block that needs to be run")
@@ -238,9 +250,11 @@ COMMANDS = (
     Command("trigrad", NoArgs(), "trig functions use radians",
             _setter("angle", "radian", "Trig functions take and return radians"), _TRIG_HELP),
     Command("short", NoArgs(), "show only final results, no steps",
-            _setter("short", True, "Showing final results only, without steps"), _SHORT_HELP),
+            _steps(True, False, "Showing final results only, without steps"), _SHORT_HELP),
     Command("long", NoArgs(), "show steps again",
-            _setter("short", False, "Showing steps again"), _SHORT_HELP),
+            _steps(False, False, "Showing steps again"), _SHORT_HELP),
+    Command("adnauseum", NoArgs(), "show every intermediate result and unit cancellation",
+            _steps(False, True, "Showing every intermediate result and unit cancellation"), _ADNAUSEUM_HELP),
     Command("hide", NoArgs(), "hide the results below, until !show (they still run)",
             _setter("hidden", True, "Results below are hidden until !show; errors still show"), _HIDE_HELP),
     Command("show", NoArgs(), "show results again after !hide",
@@ -272,6 +286,7 @@ COMMANDS = (
             "run the indented lines once for each i: !loop i = 1 .. n"),
 )
 BY_NAME = {c.name: c for c in COMMANDS}
+_ALIASES = {"mordaunt": "adnauseum"}
 
 
 def run(line, mode, ev):
@@ -279,7 +294,7 @@ def run(line, mode, ev):
     evaluator's names). Returns the text the line shows; raises CommandError."""
     words = line.strip()[1:].split(None, 1)
     name = words[0] if words else ""
-    command = BY_NAME.get(name)
+    command = BY_NAME.get(_ALIASES.get(name, name))
     if command is None:
         raise CommandError(f"Unknown command '!{name}'. Available: " + ", ".join("!" + c.name for c in COMMANDS))
     value = command.args.parse(name, words[1].strip() if len(words) > 1 else "")
