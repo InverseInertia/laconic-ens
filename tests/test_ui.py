@@ -358,6 +358,34 @@ def test_theme_yaml_export_and_import(page):
     page.click("#themeImport")
     page.wait_for_selector("#alertDlg[open]")
     assert "not a #rrggbb color" in page.text_content("#alertMsg")
+    page.click("#alertBtns button")
+
+
+def test_herobrine(page):
+    var = "getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()"
+    page.click("#settingsBtn")
+    page.wait_for_selector("#settingsDlg[open]")
+    page.fill("#themeYaml", "colors:\n  ink: '#jeb'\n")
+    page.click("#themeImport")
+    first = page.evaluate(var)
+    page.wait_for_timeout(300)
+    assert page.evaluate(var) != first
+    page.click("#themeReset")
+    page.fill("#themeYaml", "seizure")
+    page.click("#themeImport")
+    page.wait_for_selector("#alertDlg[open]")
+    assert page.text_content("#alertTitle") == "Epilepsy Warning"
+    assert page.text_content("#alertMsg") == "It's not too late to go back."
+    assert page.locator("#alertBtns button").all_text_contents() == ["I'm sorry", "Ok", "No, I prefer suffering."]
+    page.click("text=No, I prefer suffering.")
+    assert not page.is_visible("#settingsDlg")
+    first = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()")
+    page.wait_for_timeout(100)
+    assert page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()") != first
+    page.click("#settingsBtn")
+    page.wait_for_timeout(100)
+    assert page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--paper').trim()") == "#00386b"
+    page.click("#settingsDlg .close")
 
 
 

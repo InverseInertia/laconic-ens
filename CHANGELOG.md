@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- Added herobrine
+
 ## [v0.5.1](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.1) (2026-10-30)
 
 ### New
