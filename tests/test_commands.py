@@ -31,6 +31,12 @@ CASES = {
               lambda rs: len(rs[2].stages) == 1 and rs[2].text == "M = 30380 J" and len(rs[3].stages) == 1),
     "long": ("w = 12'kN/'m\n!short\n!long\nM = w*(4.5'm)^2/8", 3, "Showing steps again",
              lambda rs: len(rs[3].stages) == 3),
+    "adnauseum": ("F = 10'kN\nv = 5'm/'s\n!adnauseum\nW = F*3'm\nd = v*2's\nq = 2*(3 + 4)\n!long\nF*2",
+                  3, "Showing every intermediate result and unit cancellation",
+                  lambda rs: rs[3].text == "W = 30000 J" and len(rs[3].stages) > 3
+                  and any(r"\cancel{\mathrm{s}}" in s for s in rs[4].stages)
+                  and [s for s in rs[5].stages] == ["2 \\cdot \\left(3 + 4\\right)", "2 \\cdot 7", "14"]
+                  and len(rs[7].stages) == 3),
     "hide": ("a = 1\n!hide\nb = a + 1\n!plot b*x, x = 0 .. 1\n!show\nc = b * 2", 2,
              "Results below are hidden until !show; errors still show",
              lambda rs: [r.hidden for r in rs] == [False, False, True, True, False, False] and rs[5].text == "c = 4"),
@@ -119,3 +125,23 @@ def test_hide_keeps_errors_and_solvers_that_need_running_in_sight():
     assert [r.n for r in rs if not r.hidden] == [1, 6, 10, 12, 17, 18]
     assert rs[5].kind == "error" and rs[9].kind == "error" and rs[11].solver.status == "none"
     assert rs[17].text == "b = 3"         # the hidden lines still defined a and p
+
+
+def test_adnauseum_cancels_units_down_to_si_base_units():
+    rs = run("F = 10'kN\nA = 2'm^2\n!adnauseum\ns = F/A\nx = 3'N / 4'kN")
+    stages = rs[3].stages
+    assert stages[-1].endswith(r"\mathrm{Pa}")
+    assert any(r"\cancel" in s and r"\mathrm{kg}" in s for s in stages)   # kN/m^2 written out in base units
+    assert any(r"\cancel{\mathrm{kg}}" in s for s in rs[4].stages)        # N/kN cancels to a number
+
+
+def test_the_hidden_alias_runs_adnauseum_and_is_not_listed():
+    assert run("!mordaunt")[0].text == "Showing every intermediate result and unit cancellation"
+    assert "mordaunt" not in {c.name for c in COMMANDS} and "mordaunt" not in help_rows()
+    assert "!mordaunt" not in run("!wipe")[0].error
+
+
+def test_tex_export_loads_cancel_only_when_a_unit_is_struck():
+    from laconic.exports import export
+    assert r"\usepackage{cancel}" in export("v = 5'm/'s\n!adnauseum\nd = v*2's", "tex")
+    assert r"\usepackage{cancel}" not in export("v = 5'm/'s\nd = v*2's", "tex")
