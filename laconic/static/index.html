@@ -144,6 +144,11 @@
     font: 400 calc(12px * var(--fs))/var(--row) var(--mono); color: var(--text-soft); text-align: right;
   }
   #srcGutter > div { height: var(--row); min-width: 3ch; }   /* room for 999 lines, so the text does not move as lines are added */
+  /* The fold arrow (#154) has room on every line, so the numbers stay put; it shows on hover, or when folded. */
+  #srcGutter { pointer-events: auto; }
+  #srcGutter .fold { display: inline-block; width: 1.4ch; text-align: left; cursor: pointer; opacity: 0; }
+  #srcGutter:hover .fold, #srcGutter > div.folded .fold { opacity: 1; }
+  #srcGutter > div.folded .fold { color: var(--ink); }
   #srcGutter > div.on { color: var(--text); }
   #srcMarks {
     grid-area: 1 / 2; overflow: hidden; color: transparent; user-select: none;
@@ -663,6 +668,11 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
       </select></label>
       <label class="set-check"><input type="checkbox" id="layoutAuto" checked> Switch automatically when the window is narrow</label>
     </section>
+    <section class="set-sec" id="editorSec">
+      <h3>Editor</h3>
+      <p class="note">With text wrapping on (Alt+Z), a matrix is shown one row per line, each row under the first, as MATLAB writes them; a vector of one column stays on its line. Only the editor shows the line breaks: the sheet keeps the matrix on one line. Kept on this machine.</p>
+      <label class="set-check"><input type="checkbox" id="matrixRowsBox" checked> Show matrices one row per line when wrapping</label>
+    </section>
     <section class="set-sec" id="updateSec">
       <h3>Updates</h3>
       <p class="note">When LENS starts, it asks GitHub whether a newer release is out, and if there is one shows a small button beside the version that updates LENS. Kept on this machine.</p>
@@ -722,6 +732,7 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
 <script src="/static/rows.js"></script>
 <script src="/static/mathfit.js"></script>
 <script src="/static/editing.js"></script>
+<script src="/static/editview.js"></script>
 <script src="/static/paste.js"></script>
 <script src="/static/plotview.js"></script>
 <script src="/static/solverview.js"></script>
@@ -751,12 +762,138 @@ const store = Prefs.store({
 });
 window.addEventListener("pagehide", () => store.flush());
 const src = $("#src"), out = $("#out"), nameEl = $("#name"), srcGutter = $("#srcGutter");
+// ---- the editor's view of the sheet (editview.js) ------------------------------------------
+// The textarea shows a view of the sheet text: folded lines (#154) and matrices one row per line
+// (#155). `ed` is the sheet text as the rest of the page reads and edits it, in its own offsets;
+// only this section reads the textarea's text and caret. An edit typed into the view is turned
+// back into one to the text. While the view is the text, the browser's undo is used as before;
+// once it has differed, setting the textarea's text has cleared that, so undo is the page's own.
+let model = "", lay = EditView.layout(""), folds = new Set(), ownUndo = false, lastDir = 0;
+let applying = false;   // an edit the page makes (apply) is going in: not typing
+let matrixRows = store.get("matrixRows", true) !== false;
+const undoStack = new EditView.History();
+function relayout(sel) {
+  const keep = sel || [ed.selectionStart, ed.selectionEnd];
+  lay = EditView.layout(model, {folds, rows: matrixRows && src.classList.contains("wrapped")});
+  if (!lay.identity) ownUndo = true;
+  if (src.value === lay.view && !sel) return;
+  if (src.value !== lay.view) {
+    const top = src.scrollTop, left = src.scrollLeft;
+    src.value = lay.view;
+    src.scrollTop = top; src.scrollLeft = left;
+  }
+  src.setSelectionRange(lay.toView(keep[0]), lay.toView(keep[1], keep[1] !== keep[0]));
+}
+function pruneFolds() {
+  if (!folds.size) return;
+  const can = EditView.foldable(model);
+  for (const n of [...folds]) if (!can.has(n)) folds.delete(n);
+}
+function commit(e, sel, typed = false) {
+  undoStack.record({text: model, sel: [e.from, e.to]}, e, typed);
+  folds = EditView.shift(folds, model, e);
+  model = model.slice(0, e.from) + e.insert + model.slice(e.to);
+  pruneFolds();
+  relayout(sel);
+}
+// The textarea's text changed (typing, or execCommand): the same change to the sheet text.
+function sync(ev) {
+  if (src.value === lay.view) return;
+  if (!(ev instanceof InputEvent)) {
+    // Set from outside the editor (a test, an extension): it is sheet text, not a view of it.
+    const before = model, sel = [src.selectionStart, src.selectionEnd];
+    model = src.value; folds = new Set();
+    undoStack.record({text: before, sel: [0, before.length]}, {from: 0, to: before.length, insert: model}, false);
+    relayout(sel);
+    return;
+  }
+  if (lay.identity && !folds.size && !(matrixRows && src.classList.contains("wrapped"))) {
+    // The common case, with nothing to map: the text is what the textarea holds.
+    const e = EditView.edit(lay, src.value, src.selectionEnd), before = model;
+    model = src.value; lay = EditView.layout(model);
+    if (e) undoStack.record({text: before, sel: [e.from, e.to]}, e, ev?.inputType === "insertText" && !applying);
+    return;
+  }
+  const dir = lastDir; lastDir = 0;
+  const e = EditView.widen(model, EditView.edit(lay, src.value, src.selectionEnd, dir));
+  if (!e) { const m = lay.toModel(Math.min(src.selectionStart, lay.view.length)); relayout([m, m]); return; }
+  if (e.unfold) {
+    const f = lay.folds.find((p) => p.n === e.unfold), m = lay.toModel(f.v0);
+    folds.delete(e.unfold); relayout([m, m]); paintSrcMarks(); say("Unfolded");
+    return;
+  }
+  const caret = e.from + e.insert.length;
+  commit(e, [caret, caret], ev?.inputType === "insertText" && !applying);
+}
+src.addEventListener("beforeinput", (ev) => {
+  lastDir = ev.inputType === "deleteContentBackward" ? -1 : ev.inputType === "deleteContentForward" ? 1 : 0;
+  if (ownUndo && (ev.inputType === "historyUndo" || ev.inputType === "historyRedo")) {
+    ev.preventDefault(); undo(ev.inputType === "historyRedo");
+  }
+});
+src.addEventListener("input", sync);
+function undo(redo) {
+  const cur = {text: model, sel: [ed.selectionStart, ed.selectionEnd]};
+  const s = redo ? undoStack.redo(cur) : undoStack.undo(cur);
+  if (!s) return;
+  model = s.text; pruneFolds(); relayout(s.sel || [0, 0]);
+  src.dispatchEvent(new Event("input", {bubbles: true}));
+}
+const ed = {
+  get value() { if (src.value !== lay.view) sync(); return model; },
+  set value(t) {
+    model = t; folds = new Set(); undoStack.clear(); ownUndo = false;
+    lay = EditView.layout(model, {rows: matrixRows && src.classList.contains("wrapped")});
+    if (!lay.identity) ownUndo = true;
+    src.value = lay.view;
+  },
+  get selectionStart() { if (src.value !== lay.view) sync(); return lay.toModel(src.selectionStart); },
+  get selectionEnd() { if (src.value !== lay.view) sync(); return lay.toModel(src.selectionEnd); },
+  setSelectionRange(a, b = a) { src.setSelectionRange(lay.toView(a), lay.toView(b, b !== a)); },
+  setRangeText(insert, from, to) {
+    if (src.value !== lay.view) sync();
+    commit({from, to, insert}, [from + insert.length, from + insert.length]);
+  },
+  toView: (m, before) => lay.toView(m, before),
+};
+// Folding (#154): the gutter's arrows, Alt+[ and Alt+]. A result row clicked opens what hides its line.
+function setFold(n, on) {
+  const regions = EditView.regions(model), end = regions.get(n) ?? n;
+  const at = ed.selectionStart, line = model.slice(0, at).split("\n").length;
+  folds[on ? "add" : "delete"](n);
+  let sel = null;
+  if (on && line > n && line <= end) {   // the caret was in what folded: put it at the end of the folded line
+    const lines = model.split("\n"), p = lines.slice(0, n).reduce((a, l) => a + l.length + 1, 0) - 1;
+    sel = [p, p];
+  }
+  relayout(sel); paintSrcMarks();
+}
+function foldAtCaret(on) {
+  const line = caretLine(), can = EditView.foldable(model), regions = EditView.regions(model);
+  if (!on) {
+    if (folds.has(line)) { setFold(line, false); return true; }
+    say("Nothing folded on this line"); return false;
+  }
+  let n = can.has(line) && !folds.has(line) ? line : 0;
+  if (!n) for (const [h, end] of regions) if (h < line && end >= line && !folds.has(h)) n = h;   // the innermost
+  if (!n) { say("Nothing to fold here"); return false; }
+  setFold(n, true);
+  return true;
+}
+function unfoldTo(n) {
+  if (!folds.size) return;
+  const regions = EditView.regions(model);
+  let changed = false;
+  for (const f of [...folds]) if (f === n || (f < n && (regions.get(f) ?? f) >= n)) { folds.delete(f); changed = true; }
+  if (changed) { relayout(); paintSrcMarks(); }
+}
+
 let timer = 0, seq = 0, last = [], view = "typeset", wrap = "inline";
 let tableText = null;   // the text `last` was evaluated from
 let acWaiting = false;  // or {force}: suggestions were made from an older table, and how they were asked for
 
 // The sheet as the export, save and eval endpoints take it.
-const sheetBody = (extra = {}) => ({text: src.value, title: nameEl.value, view, wrap, ...extra});
+const sheetBody = (extra = {}) => ({text: ed.value, title: nameEl.value, view, wrap, ...extra});
 const post = (path, extra) => Api.request(path, sheetBody(extra));
 
 // The server tags global names and symbols with \htmlData{global=name,symbol=name}; that is the only HTML command it emits.
@@ -896,7 +1033,7 @@ function replaceRows(rows) {
 }
 
 async function evaluate() {
-  const mine = ++seq, text = src.value;
+  const mine = ++seq, text = ed.value;
   // Plots come back pending: the math shows at once, and the plots are drawn after it.
   const res = await post("/api/eval", {plots: false});
   if (mine !== seq) return;
@@ -925,7 +1062,7 @@ async function drawPlots(mine, text) {
   }
 }
 
-function caretLine() { return src.value.slice(0, src.selectionStart).split("\n").length; }
+function caretLine() { return ed.value.slice(0, ed.selectionStart).split("\n").length; }
 
 function markActive() {
   const n = caretLine();
@@ -937,15 +1074,17 @@ function markActive() {
 }
 
 function focusLine(n) {
-  const lines = src.value.split("\n");
+  unfoldTo(n);   // a line the results were clicked on is shown, whatever was folded over it
+  const lines = ed.value.split("\n");
   const pos = lines.slice(0, n - 1).reduce((a, l) => a + l.length + 1, 0) + lines[n - 1].length;
-  src.focus(); src.setSelectionRange(pos, pos);
-  src.scrollTop = Math.max(0, (n - 4) * 28);
+  src.focus(); ed.setSelectionRange(pos, pos);
+  const row = src.value.slice(0, ed.toView(pos)).split("\n").length;   // its line in the view
+  src.scrollTop = Math.max(0, (row - 4) * 28);
   markActive();
 }
 
 src.addEventListener("input", () => {
-  store.set("text", src.value);
+  store.set("text", ed.value);
   clearTimeout(timer); timer = setTimeout(evaluate, 120);
   paintSrcMarks();
   if (!applying) acUpdate();
@@ -954,7 +1093,7 @@ for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActiv
 // Spellcheck comment and heading lines only: the textarea is one element, so it follows the caret.
 // Set only when it changes: Chromium drops the spelling marks each time it is set, even to the same value.
 const spellByLine = () => {
-  const on = Editing.isProse(src.value, src.selectionStart, src.selectionEnd);
+  const on = Editing.isProse(ed.value, ed.selectionStart, ed.selectionEnd);
   if (src.spellcheck !== on) src.spellcheck = on;
 };
 for (const ev of ["input", "keyup", "click", "focus", "select"]) src.addEventListener(ev, spellByLine);
@@ -992,7 +1131,7 @@ async function save(as) {
   const r = await SaveFile.save(as, {
     title: nameEl.value,
     current: fileHandle,
-    source: src.value,
+    source: ed.value,
     permission: (h) => (h.server ? "granted" : h.requestPermission({mode: "readwrite"})),
     pick: window.showSaveFilePicker && ((suggestedName) => showSaveFilePicker({suggestedName, types: LENS_TYPES})),
     render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
@@ -1013,7 +1152,7 @@ async function save(as) {
   say(r.message);
 }
 function load(text, name, handle = null) {
-  src.value = text; nameEl.value = name; fitName(); setFile(handle); evaluate();
+  ed.value = text; nameEl.value = name; fitName(); setFile(handle); evaluate();
 }
 $("#save").onclick = () => save(false);
 $("#saveAs").onclick = () => save(true);
@@ -1116,15 +1255,15 @@ document.addEventListener("keydown", (ev) => {
 // (laconic/blockedit.py); Editing.applyEdits decides whether and how they go in, through this
 // adapter onto the editor. False when the text changed meanwhile and nothing was made.
 const editor = {
-  text: () => src.value,
-  caret: () => src.selectionStart,
+  text: () => ed.value,
+  caret: () => ed.selectionStart,
   elsewhere: () => {
     const o = document.activeElement;
     return !!o && o !== src && o !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(o.tagName);
   },
   place: (r) => {
-    src.setRangeText(r.insert, r.from, r.to, "preserve");
-    src.setSelectionRange(r.caret, r.caret);
+    ed.setRangeText(r.insert, r.from, r.to, "preserve");
+    ed.setSelectionRange(r.caret, r.caret);
     src.dispatchEvent(new Event("input", {bubbles: true}));
   },
   apply: (r) => {
@@ -1140,7 +1279,7 @@ const applyEdits = (base, edits, asked = false) => Editing.applyEdits(editor, ba
 // asks the server for the option lines that say the same thing, and writes them into
 // the editor, so the worksheet alone redraws what you see.
 async function patchPlot(line, patch) {
-  const text = src.value;
+  const text = ed.value;
   let res;
   try { res = await Api.json("/api/plotedit", {text, line, patch}); } catch (e) { say(e.message); return false; }
   if (!res.ok) { say(res.error); return false; }
@@ -1267,21 +1406,25 @@ function srcMarksOf(r, table) {
   return [...at.values()].sort((a, b) => a.c - b.c);
 }
 function paintSrcMarks() {
-  const text = src.value.split("\n"), rows = Rows.current(last, text), table = symbols();
-  // One span per line, so the line numbers can take a wrapped line's height from it.
-  const lines = text.map((line, i) => {
-    const r = rows[i], marks = r ? srcMarksOf(r, table) : [];
+  const text = ed.value.split("\n"), rows = Rows.current(last, text), table = symbols(), shown = src.value;
+  const starts = [];
+  text.reduce((o, l) => { starts.push(o); return o + l.length + 1; }, 0);
+  // One span per line the view shows, so the line numbers can take a wrapped line's height from it
+  // (a matrix shown one row per line is one line of the sheet). Marks are placed through the view.
+  const lines = lay.lines.map(({n, v0, v1}) => {
+    const i = n - 1, r = rows[i], marks = r ? srcMarksOf(r, table) : [];
     const f = document.createElement("span");
-    if (!marks.length) { f.textContent = line + "\n"; return f; }
-    let pos = 0;
+    let pos = v0;
     for (const {c, len, global, symbol} of marks) {
-      f.append(line.slice(pos, c));
-      const m = document.createElement("mark"); m.textContent = line.slice(c, c + len);
+      const a = ed.toView(starts[i] + c), b = ed.toView(starts[i] + c + len, true);
+      if (a < pos || b > v1 || b <= a) continue;   // folded away
+      f.append(shown.slice(pos, a));
+      const m = document.createElement("mark"); m.textContent = shown.slice(a, b);
       if (global) m.dataset.global = global;
       if (symbol) { m.classList.add("sym"); m.dataset.symbol = symbol; }
-      f.append(m); pos = c + len;
+      f.append(m); pos = b;
     }
-    f.append(line.slice(pos) + "\n");
+    f.append(shown.slice(pos, v1) + "\n");
     return f;
   });
   srcMarks.replaceChildren(...lines, Object.assign(document.createElement("span"), {textContent: " "}));
@@ -1289,21 +1432,39 @@ function paintSrcMarks() {
   paintGutter();
   syncSrcMarks();
 }
-// The line numbers beside the editor, one row each, or as many as the line wraps to.
+// The line numbers beside the editor, one row each, or as many as the line wraps to, with an arrow
+// on each line that folds: ▾ to fold it, ▸ when it is folded.
 function paintGutter() {
-  const spans = srcMarks.children, count = spans.length - 1;   // the last span is the end of the text
+  const spans = srcMarks.children, shown = lay.lines, count = shown.length, can = EditView.foldable(model);
   while (srcGutter.children.length > count) srcGutter.lastChild.remove();
   while (srcGutter.children.length < count) {
-    srcGutter.append(Object.assign(document.createElement("div"), {textContent: srcGutter.children.length + 1}));
+    const d = document.createElement("div");
+    d.append(Object.assign(document.createElement("span"), {className: "fold"}), document.createElement("span"));
+    srcGutter.append(d);
   }
-  const tops = wrapped ? [...spans].map((e) => e.offsetTop) : null;
-  [...srcGutter.children].forEach((d, i) => { d.style.height = tops ? `${tops[i + 1] - tops[i]}px` : ""; });
+  const tops = wrapped || !lay.identity ? [...spans].map((e) => e.offsetTop) : null;
+  [...srcGutter.children].forEach((d, i) => {
+    const n = shown[i].n, folded = folds.has(n);
+    d.dataset.n = n;
+    d.lastChild.textContent = n;
+    d.firstChild.textContent = folded ? "\u25B8" : can.has(n) ? "\u25BE" : "";
+    d.firstChild.title = folded ? "Unfold (Alt+])" : can.has(n) ? "Fold (Alt+[)" : "";
+    d.classList.toggle("folded", folded);
+    d.style.height = tops ? `${tops[i + 1] - tops[i]}px` : "";
+  });
   markGutter();
 }
+srcGutter.addEventListener("mousedown", (ev) => {
+  const d = ev.target.closest(".fold") && ev.target.closest("#srcGutter > div");
+  if (!d || !d.firstChild.textContent) return;
+  ev.preventDefault();   // the editor keeps the focus
+  const n = +d.dataset.n;
+  setFold(n, !folds.has(n));
+});
 function markGutter() {
   const n = caretLine();
   srcGutter.querySelector(".on")?.classList.remove("on");
-  srcGutter.children[n - 1]?.classList.add("on");
+  srcGutter.querySelector(`[data-n="${n}"]`)?.classList.add("on");
 }
 function syncSrcMarks() {
   srcMarks.style.paddingRight = `${16 + src.offsetWidth - src.clientWidth}px`;  // room for the textarea's scrollbar
@@ -1351,7 +1512,7 @@ const mathKeys = $("#mathkeys");
 mathKeys.checked = store.get("mathkeys", true);
 mathKeys.onchange = () => { store.set("mathkeys", mathKeys.checked); src.focus(); };
 
-let statusTimer = 0, applying = false;
+let statusTimer = 0;
 function say(msg) {
   const el = $("#status"); el.textContent = msg;
   clearTimeout(statusTimer); statusTimer = setTimeout(() => (el.textContent = ""), 2500);
@@ -1384,16 +1545,16 @@ function alertDialog(title, message, buttons = ["Whoops", "Darn", "Shucks"], dan
 // execCommand keeps the browser's undo stack, so Ctrl+Z undoes a hotkey edit.
 function apply(r) {
   if (r.message) say(r.message);
-  if (r.select) src.setSelectionRange(r.select[0], r.select[1]);
-  else if (r.caretOnly !== undefined) src.setSelectionRange(r.caretOnly, r.caretOnly);
+  if (r.select) ed.setSelectionRange(r.select[0], r.select[1]);
+  else if (r.caretOnly !== undefined) ed.setSelectionRange(r.caretOnly, r.caretOnly);
   else if (r.insert !== undefined) {
     applying = true;
-    src.setSelectionRange(r.from, r.to);
+    ed.setSelectionRange(r.from, r.to);
     // execCommand edits whatever has the focus, so it is used only while the editor has it.
     let ok = document.activeElement === src
       && (r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert));
-    if (!ok) { src.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
-    src.setSelectionRange(...(r.sel || [r.caret, r.caret]));
+    if (!ok) { ed.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
+    ed.setSelectionRange(...(r.sel || [r.caret, r.caret]));
     applying = false;
   }
   markActive();
@@ -1402,7 +1563,7 @@ function apply(r) {
 
 src.addEventListener("beforeinput", (ev) => {
   if (applying || ev.isComposing || ev.inputType !== "insertText" || !ev.data || ev.data.length !== 1) return;
-  const r = Editing.charAction(ev.data, src.value, src.selectionStart, src.selectionEnd, ctx());
+  const r = Editing.charAction(ev.data, ed.value, ed.selectionStart, ed.selectionEnd, ctx());
   if (r) { ev.preventDefault(); apply(r); }
 });
 // Pasting a table (Excel, Obsidian/Markdown, CSV) becomes a matrix. Ctrl+Shift+V pastes plain text.
@@ -1410,7 +1571,7 @@ let plainPaste = false;
 src.addEventListener("paste", (ev) => {
   const plain = plainPaste; plainPaste = false;
   if (plain || !mathKeys.checked || !ev.clipboardData) return;
-  const r = Paste.pasteEdit(src.value, ev.clipboardData.getData("text/plain"), src.selectionStart, src.selectionEnd, {textLine: onCommentLine()});
+  const r = Paste.pasteEdit(ed.value, ev.clipboardData.getData("text/plain"), ed.selectionStart, ed.selectionEnd, {textLine: onCommentLine()});
   if (r) { ev.preventDefault(); apply(r); }
 });
 let escaped = false;
@@ -1418,21 +1579,37 @@ src.addEventListener("keydown", (ev) => {
   if (ev.isComposing) return;
   plainPaste = (ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.code === "KeyV";
   if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && ev.code === "KeyZ") { ev.preventDefault(); acClose(); setWrapped(!wrapped); return; }
+  if (ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey && (ev.code === "BracketLeft" || ev.code === "BracketRight")) {
+    ev.preventDefault(); acClose(); foldAtCaret(ev.code === "BracketLeft"); markActive(); return;
+  }
+  // Backspace at the start of a row a matrix is shown in (or Delete at the end of the one above)
+  // joins the two rows, rather than whatever the key does to the text there.
+  const v = src.selectionStart, plainKey = !ev.ctrlKey && !ev.altKey && !ev.metaKey && !ev.shiftKey;
+  if (plainKey && v === src.selectionEnd && ((ev.key === "Backspace" && v > 0 && lay.added(v - 1)) || (ev.key === "Delete" && lay.added(v)))) {
+    const m = lay.toModel(v), e = EditView.widen(model, {from: m, to: m, insert: "", dir: ev.key === "Backspace" ? -1 : 1});
+    ev.preventDefault();
+    if (e) apply({from: e.from, to: e.to, insert: e.insert, caret: e.from + e.insert.length});
+    return;
+  }
+  // The page's own undo, once the view has differed from the text (see `ed`).
+  if (ownUndo && (ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.code === "KeyZ" || (ev.code === "KeyY" && !ev.shiftKey))) {
+    ev.preventDefault(); acClose(); undo(ev.code === "KeyY" || ev.shiftKey); markActive(); return;
+  }
   if (acKey(ev)) return;
   if (ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key === " ") { ev.preventDefault(); acOpenByHand(); return; }
   // Tab indents instead of moving the focus; right after Esc it moves the focus as usual.
   const tabLeaves = escaped; escaped = ev.key === "Escape";
   if (ev.key === "Tab" && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !tabLeaves) {
     ev.preventDefault();
-    apply(Editing.indentLines(src.value, src.selectionStart, src.selectionEnd, ev.shiftKey));
+    apply(Editing.indentLines(ed.value, ed.selectionStart, ed.selectionEnd, ev.shiftKey));
     return;
   }
   const mods = {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey};
   if (mathKeys.checked && mods.alt && !mods.ctrl && !mods.shift && !mods.meta && ev.key === "ArrowDown") {
     ev.preventDefault(); shrinkSelection(); return;
   }
-  const before = [src.selectionStart, src.selectionEnd];
-  const r = Editing.keyAction(ev.key, mods, src.value, before[0], before[1], ctx());
+  const before = [ed.selectionStart, ed.selectionEnd];
+  const r = Editing.keyAction(ev.key, mods, ed.value, before[0], before[1], ctx());
   if (r) {
     ev.preventDefault();
     if (r.select) trailPush(before, r.select);
@@ -1443,7 +1620,7 @@ src.addEventListener("keydown", (ev) => {
 // ---- selections: grow and shrink by term, double-click ---------------------------
 // The trail is the chain of selections Alt+Up has produced, so Alt+Down can step back.
 let trail = [];
-const sameSel = (a) => a && a[0] === src.selectionStart && a[1] === src.selectionEnd;
+const sameSel = (a) => a && a[0] === ed.selectionStart && a[1] === ed.selectionEnd;
 function trailPush(from, to) {
   if (!sameSel(trail[trail.length - 1])) trail = [from];
   trail.push(to);
@@ -1452,14 +1629,14 @@ function shrinkSelection() {
   if (trail.length < 2 || !sameSel(trail[trail.length - 1])) { say("Nothing to shrink back to"); return; }
   trail.pop();
   const t = trail[trail.length - 1];
-  src.setSelectionRange(t[0], t[1]);
+  ed.setSelectionRange(t[0], t[1]);
   markActive();
 }
-const onCommentLine = () => Editing.isTextAt(src.value, src.selectionStart);
+const onCommentLine = () => Editing.isTextAt(ed.value, ed.selectionStart);
 src.addEventListener("dblclick", () => {
   if (!mathKeys.checked || onCommentLine()) return;
-  const n = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
-  if (n) { src.setSelectionRange(n[0], n[1]); trail = [n]; }
+  const n = Editing.snap(ed.value, ed.selectionStart, ed.selectionEnd);
+  if (n) { ed.setSelectionRange(n[0], n[1]); trail = [n]; }
 });
 
 // ---- suggestions -----------------------------------------------------------------
@@ -1487,7 +1664,7 @@ function caretXY(pos) {
   for (const p of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "tabSize", "paddingTop", "paddingLeft", "borderTopWidth", "borderLeftWidth"]) m.style[p] = cs[p];
   Object.assign(m.style, {position: "absolute", visibility: "hidden", whiteSpace: "pre", top: "0", left: "0"});
   if (wrapped) Object.assign(m.style, {whiteSpace: "pre-wrap", overflowWrap: "break-word", boxSizing: "border-box", width: src.clientWidth + "px", paddingRight: cs.paddingRight});
-  m.textContent = src.value.slice(0, pos);
+  m.textContent = src.value.slice(0, ed.toView(pos));
   const mark = document.createElement("span"); mark.textContent = "\u200b"; m.append(mark);
   document.body.append(m);
   const box = src.getBoundingClientRect();
@@ -1531,13 +1708,13 @@ const acEnv = () => ({vocab, symbols: symbols()});
 // Called after edits and when asked by hand. Nothing happens when suggestions are off,
 // when text is highlighted, or when there is nothing at the caret to complete.
 function acUpdate(force = false) {
-  const text = src.value;
-  const next = Autocomplete.open(text, src.selectionStart, src.selectionEnd,
+  const text = ed.value;
+  const next = Autocomplete.open(text, ed.selectionStart, ed.selectionEnd,
     {force, enabled: suggest.checked, fresh: tableText === text}, acEnv());
   if (!next) return acClose();
   if (next.props) {
     acClose();
-    loadProps().then(() => { if (vocab.props && src.value === text && document.activeElement === src) acUpdate(force); });
+    loadProps().then(() => { if (vocab.props && ed.value === text && document.activeElement === src) acUpdate(force); });
     return;
   }
   acShow(next);
@@ -1546,26 +1723,26 @@ function acUpdate(force = false) {
 // Names come from the symbol table of the last evaluation. When that was of older text, the
 // suggestions are worked out again once the evaluation of this text arrives.
 function acRetry() {
-  if (acWaiting && src.value === tableText && document.activeElement === src) acUpdate(acWaiting.force);
+  if (acWaiting && ed.value === tableText && document.activeElement === src) acUpdate(acWaiting.force);
 }
 // Ctrl+Space. With text highlighted, offer functions to wrap it in.
 function acOpenByHand() {
-  if (src.selectionStart === src.selectionEnd) { acUpdate(true); if (!ac) say("Nothing to suggest here"); return; }
+  if (ed.selectionStart === ed.selectionEnd) { acUpdate(true); if (!ac) say("Nothing to suggest here"); return; }
   if (onCommentLine()) return;
-  const range = Editing.snap(src.value, src.selectionStart, src.selectionEnd);
+  const range = Editing.snap(ed.value, ed.selectionStart, ed.selectionEnd);
   if (!range) { say("Highlight something on one line to wrap it"); return; }
-  src.setSelectionRange(range[0], range[1]);
-  acShow(Autocomplete.wrapping(src.value, range, "", 0, acEnv()));
+  ed.setSelectionRange(range[0], range[1]);
+  acShow(Autocomplete.wrapping(ed.value, range, "", 0, acEnv()));
 }
 function acAccept() {
-  const r = Autocomplete.pick(src.value, ac);
+  const r = Autocomplete.pick(ed.value, ac);
   acClose();
   if (r) { acSkip = true; apply(r); }
 }
 // Keys while the list is open. Returns true when the key was used.
 function acKey(ev) {
   if (!ac) return false;
-  const a = Autocomplete.key(ac, ev.key, {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}, src.value, acEnv());
+  const a = Autocomplete.key(ac, ev.key, {ctrl: ev.ctrlKey, alt: ev.altKey, shift: ev.shiftKey, meta: ev.metaKey}, ed.value, acEnv());
   if (a.use) ev.preventDefault();
   if (a.message) say(a.message);
   if (a.accept) acAccept();
@@ -1582,11 +1759,15 @@ let wrapped = false;
 function setWrapped(on, save = true) {
   wrapped = on;
   src.classList.toggle("wrapped", on);
+  relayout();   // matrices go one row per line, or back
   if (save) { store.set("wrapText", on); say(on ? "Text wrapping on" : "Text wrapping off"); }
   if (on) src.scrollLeft = 0;
   paintSrcMarks();
 }
 setWrapped(store.get("wrapText", false) === true, false);
+const matrixRowsBox = $("#matrixRowsBox");
+matrixRowsBox.checked = matrixRows;
+matrixRowsBox.onchange = () => { matrixRows = matrixRowsBox.checked; store.set("matrixRows", matrixRows); relayout(); paintSrcMarks(); };
 
 // ---- layout: side by side or stacked (Alt+L) -------------------------------------------
 // layout.js decides which; this draws it, stores it and runs the Settings controls.
@@ -1778,7 +1959,7 @@ for (const d of document.querySelectorAll("dialog:not(#alertDlg)")) {
 $("#keysTable").innerHTML = Shortcuts.tableHtml($("#commandHelp").innerHTML);  // shortcuts.js, with the command rows server.py filled in
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
 Solvers.init({
-  text: () => src.value,
+  text: () => ed.value,
   edit: applyEdits,
   say,
   typeset,
@@ -1799,7 +1980,7 @@ Api.json("/api/examples").then((list) => {
     const li = document.createElement("li"), b = document.createElement("button");
     b.textContent = "Open"; b.setAttribute("aria-label", `Open example ${ex.title}`);
     b.onclick = async () => {
-      if (src.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
+      if (ed.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
       const text = await Api.text(`/api/examples/${ex.name}`);
       load(text, ex.name);
       $("#helpDlg").close();
@@ -1846,7 +2027,7 @@ $("#greekReset").onclick = () => { greek = { ...Editing.DEFAULT_GREEK }; saveGre
 
 // ---- rename symbol -----------------------------------------------------------------
 function openRename() {
-  $("#renameOld").value = Editing.nameAt(src.value, src.selectionStart, src.selectionEnd);
+  $("#renameOld").value = Editing.nameAt(ed.value, ed.selectionStart, ed.selectionEnd);
   $("#renameNew").value = "";
   $("#renameErr").hidden = true;
   $("#renameConfirm").value = "";
@@ -1879,7 +2060,7 @@ document.addEventListener("keydown", (ev) => {
 $("#renameForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const err = $("#renameErr");
-  const text = src.value;
+  const text = ed.value;
   let res;
   try {
     res = await Api.json("/api/rename", {text, old: $("#renameOld").value, new: $("#renameNew").value, confirm: !!$("#renameConfirm").value});
@@ -1904,7 +2085,7 @@ $("#renameForm").addEventListener("submit", async (ev) => {
 // tags are changed here and stored whole (PUT /api/tags), so they land in settings.json.
 const ub = {data: null, userTags: {}, tag: null, sel: [0, 0]};
 async function openUnits() {
-  ub.sel = [src.selectionStart, src.selectionEnd];
+  ub.sel = [ed.selectionStart, ed.selectionEnd];
   $("#unitsDlg").showModal();
   if (!ub.data) $("#ubList").replaceChildren(Object.assign(document.createElement("p"), {className: "note ub-empty", textContent: "Loading units\u2026"}));
   try {
@@ -1981,7 +2162,7 @@ async function insertUnit(name) {
   src.focus();
   await new Promise(requestAnimationFrame);   // the focus has to be back in the editor for the undo stack
   const [from, to] = ub.sel;
-  const text = (src.value[from - 1] === "'" ? "" : "'") + name;
+  const text = (ed.value[from - 1] === "'" ? "" : "'") + name;
   apply({from, to, insert: text, caret: from + text.length});
 }
 $("#unitsBtn").onclick = openUnits;
@@ -2088,8 +2269,8 @@ async function openStartFile() {
   const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true} : null);
   let seen = null;
   try { seen = sessionStorage.getItem("lens:opened"); sessionStorage.setItem("lens:opened", o.path); } catch {}
-  if (seen === o.path && store.get("text", null) !== null) src.value = store.get("text", null);
-  else { src.value = o.text; store.set("text", o.text); }
+  if (seen === o.path && store.get("text", null) !== null) ed.value = store.get("text", null);
+  else { ed.value = o.text; store.set("text", o.text); }
   nameEl.value = f.name; fitName(); setFile(f.handle);
   return true;
 }
@@ -2152,7 +2333,7 @@ $("#checkUpdates").onchange = (ev) => {
   const [cfg] = await Promise.all([loadSettings(), loadVocab()]);
   if (!(await openStartFile())) {
     const text = store.get("text", null);
-    src.value = text ?? await Api.text("/static/example.lens");
+    ed.value = text ?? await Api.text("/static/example.lens");
   }
   wrap = store.get("wrap", "inline");
   $("#wrap").value = wrap;

@@ -24,6 +24,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_theme.js` | theme loading, contrast check, presets |
 | `node tests/test_shortcuts.js` | the shortcut table, and that the wiki lists its Ctrl/Alt keys |
 | `node tests/test_layout.js` | when the page stacks or goes side by side, and when it offers to stop switching |
+| `node tests/test_editview.js` | the editor's view: what folds, matrices one row per line, the map back to the text, and undo |
 | `node tests/test_rows.js` | the row model: what the results pane shows for each kind of line |
 | `node tests/test_matrixview.js` | collapsing large matrices, against the vectors the documents are held to |
 | `node tests/test_mathfit.js` | when a formula too wide for its room is shrunk or wrapped (the drawing is tested in Chromium) |
