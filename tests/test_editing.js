@@ -58,6 +58,12 @@ eq(sim('x = a|(b+c)', '/'), 'x = a / (b+c)|', 'bracketed term on the right');
 eq(sim('x = |', '/'), 'x = (|) / ()', 'no left term');
 eq(sim('x = a |', '/'), 'x = a / (|)', 'a space before the caret is absorbed');
 eq(sim('x = ~g|', '/'), 'x = ~g / (|)', 'global name is one term');
+eq(sim('x = f!|', '/'), 'x = f! / (|)', 'suffixed name is one term (#157)');
+eq(sim('x = f! |', ['/', 'g', 'ArrowRight']), 'x = f! / g|', 'suffixed numerator, typed denominator (#157)');
+eq(sim('x = v`@&|', '/'), 'x = v`@& / (|)', 'every suffix mark belongs to the name (#157)');
+eq(sim('x = a|g!', '/'), 'x = a / g!|', 'suffixed name on the right is the denominator (#157)');
+eq(sim('x = f!(t)|', '/'), 'x = f!(t) / (|)', 'call of a suffixed function is one term (#157)');
+eq(sim('x = a^b!|', '/'), 'x = a^b! / (|)', 'suffixed exponent stays with its power (#157)');
 eq(selEdit('x = a+b', 4, 7, (t, s, e) => E.charAction('/', t, s, e, {})), 'x = (a+b) / ()', 'selection wrapped as numerator');
 eq(E.charAction('/', 'x = a+b', 4, 7, {}).caret, 'x = (a+b) / ('.length, 'caret in denominator');
 

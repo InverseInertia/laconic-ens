@@ -13,6 +13,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Fold lines in the editor**: a heading folds the lines down to the next heading, and a block header (or any line) the lines indented under it, into one `⋯ 3 lines` placeholder, from the ▾ beside the line numbers or with Alt+[ (Alt+] unfolds). On a folded line, vectors and matrices fold to `[⋯]`. Typing into a placeholder, or clicking a result whose line is hidden, opens it again; the sheet itself is unchanged. (#154)
 - **Matrices one row per line when wrapping**: with text wrapping on, the editor shows a matrix one row per line after each `;`, lined up under the first row as MATLAB writes them, while the sheet keeps it on one line; a column vector such as `[1; 2; 3]` stays on its line. Backspace at the start of a row joins it to the row above. Settings → Editor turns it off. (#155)
 
+### Fixes
+- **`/` after a suffixed name**: typing `/` after a name ending in `!`, `` ` ``, `@` or `&` (`f! / g`) makes the whole name the numerator, and such a name to the right of the caret becomes the denominator, instead of the fraction losing the name or its suffix. (#157)
+
 ## [v0.5.2](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.2) (2026-11-02)
 
 ### New
