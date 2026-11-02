@@ -41,6 +41,14 @@
   // % appears only in the unit '%, so it belongs to the term like a unit's letters; $ only in front
   // of a symbol being declared ($x), so it belongs to that name like a global's ~.
   const isTok = (c) => isIdent(c) || c === '.' || c === "'" || c === '~' || c === '$' || c === '%';
+  // A name's suffix marks (f!, v`, x@, y&) end the name they follow, as sheettext's NAME has them.
+  const isSuffix = (c) => c === '`' || c === '!' || c === '@' || c === '&';
+  // Where the suffix marks ending at i start, if a name comes before them; i otherwise.
+  function suffixBack(t, i, ls) {
+    let s = i;
+    while (s > ls && isSuffix(t[s - 1])) s--;
+    return s < i && s > ls && isIdent(t[s - 1]) ? s : i;
+  }
 
   // The worksheet lexer, the same as laconic/sheettext.py (tests/sheettext_vectors.json holds
   // them together): quoted text, units, numbers and names. Python's \w is Unicode, so the
@@ -231,11 +239,15 @@
       const o = matchBack(t, i - 1, ls);
       if (o < 0) return i;
       let s = o;
-      if (c === ')') while (s > ls && isIdent(t[s - 1])) s--; // f(x), sqrt(x)
+      if (c === ')') { // f(x), sqrt(x), f!(x)
+        const k = suffixBack(t, s, ls);
+        if (k < s || isIdent(t[s - 1])) { s = k; while (s > ls && isIdent(t[s - 1])) s--; }
+      }
       return s;
     }
-    if (isTok(c)) {
-      let s = i;
+    const k = suffixBack(t, i, ls);
+    if (k < i || isTok(c)) {
+      let s = k;
       while (s > ls && isTok(t[s - 1])) s--;
       if (t[s] === "'") { // `12 'kN` with a space: pull in the number
         let k = s;
@@ -281,6 +293,7 @@
     } else if (isTok(c)) {
       e = j;
       while (e < le && isTok(t[e])) e++;
+      if (isIdent(t[e - 1])) while (e < le && isSuffix(t[e])) e++;
       if (t[e] === '(') {
         const m = matchFwd(t, e, le);
         if (m >= 0) e = m + 1;
