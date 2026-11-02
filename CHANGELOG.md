@@ -17,6 +17,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ### Fixes
 - **`/` after a suffixed name**: typing `/` after a name ending in `!`, `` ` ``, `@` or `&` (`f! / g`) makes the whole name the numerator, and such a name to the right of the caret becomes the denominator, instead of the fraction losing the name or its suffix. (#157)
 - **Rename keeps your place**: after a rename, the caret stays where it was in the editor, instead of jumping to the top of the sheet and taking the results with it. (#159)
+- **Function names with marks**: a function can be named with the same `` ` ``, `!`, `@` and `&` marks a variable can (`V@(x) = 2*x`, `~f!(n) = n + 1`), where before the line was not read as a definition. (#PR)
 
 ## [v0.5.2](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.2) (2026-11-02)
 

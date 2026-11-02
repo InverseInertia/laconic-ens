@@ -35,7 +35,7 @@ _SYMDEF_RE = re.compile(r"^~?\$")
 # A parameter is a name as a variable's is, with its ` ! @ & marks (`f(V`) = ...`), but no ~ or $.
 _PARAM = rf"{IDENT}[`!@&]*"
 _FUNC_RE = re.compile(
-    rf"^(~?{IDENT})\s*\(\s*({_PARAM}(?:\s*,\s*{_PARAM})*)\s*\)\s*=(?!=)\s*(.+)$")
+    rf"^(~?{_PARAM})\s*\(\s*({_PARAM}(?:\s*,\s*{_PARAM})*)\s*\)\s*=(?!=)\s*(.+)$")
 _UNITDEF_RE = re.compile(r"^'([^\W\d]\w*)\s*=(?!=)\s*(.+)$")
 _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 
