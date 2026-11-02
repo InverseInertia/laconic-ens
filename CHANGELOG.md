@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.5.2](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.2) (2026-11-02)
+
 ### New
 - **Show all the working with `!adnauseum`**: below it, each line shows every intermediate result, worked out innermost first, and every unit that cancels, struck through, with the result's units written out in SI base units and cancelled down when they differ from the arithmetic's. `!long` or `!short` ends it. (#146)
 - **Line numbers in the editor**: each line of the sheet has its number beside it, the same number the results show, and the line the caret is on is highlighted. With text wrapping on, the number sits beside the first row of a wrapped line. (#147)
