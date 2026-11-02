@@ -169,7 +169,7 @@
   #out > #globalsChip { position: sticky; top: 0; z-index: 2; display: block; margin: 0 0 4px auto; padding: 1px 8px; font: 400 calc(12px * var(--fs)) var(--sans); color: var(--text-soft); background: var(--paper); border: 1px dashed var(--rule); }
   #out > #globalsChip[hidden] { display: none; }
   #out > #globalsChip:hover { color: var(--on-ink); background: var(--ink); border-style: solid; }
-  #out { overflow: auto; padding: 12px 20px 60px 0; min-height: 0; font-size: calc(15px * var(--fs)); }
+  #out { overflow: auto; padding: 12px 20px var(--overscroll, 60px) 0; min-height: 0; font-size: calc(15px * var(--fs)); }
   .row { display: grid; grid-template-columns: 44px 1fr; align-items: start; min-height: var(--row); cursor: text; }
   .row .no { font: 400 calc(12px * var(--fs))/var(--row) var(--mono); color: var(--text-soft); text-align: right; padding-right: 12px; user-select: none; }
   .row.active { background: var(--hit); }
@@ -1064,13 +1064,19 @@ async function drawPlots(mine, text) {
 
 function caretLine() { return ed.value.slice(0, ed.selectionStart).split("\n").length; }
 
-function markActive() {
+// The row the caret's line shows in. When the caret moves to another row from the editor, that row is
+// brought to the middle of the results; otherwise (typing on the line, a redraw, the editor taking the
+// focus back from a dialog, a click on the results) it is only kept in view, so the results stay put.
+let activeRow = null;
+function markActive(center = true) {
   const n = caretLine();
   markGutter();
   out.querySelectorAll(".row.active").forEach((e) => e.classList.remove("active"));
   // The caret may be on one of a block's option lines, which have no row of their own.
   const m = Rows.at(shown, n), row = m && out.querySelector(`.row[data-line="${m.line}"]`);
-  if (row) { row.classList.add("active"); row.scrollIntoView({block: "nearest"}); }
+  const moved = !!m && m.line !== activeRow;
+  activeRow = m ? m.line : null;
+  if (row) { row.classList.add("active"); row.scrollIntoView({block: center && moved ? "center" : "nearest"}); }
 }
 
 function focusLine(n) {
@@ -1080,7 +1086,7 @@ function focusLine(n) {
   src.focus(); ed.setSelectionRange(pos, pos);
   const row = src.value.slice(0, ed.toView(pos)).split("\n").length;   // its line in the view
   src.scrollTop = Math.max(0, (row - 4) * 28);
-  markActive();
+  markActive(false);   // the row was picked in the results (or is the plot being moved), so it is in view
 }
 
 src.addEventListener("input", () => {
@@ -1478,6 +1484,8 @@ new ResizeObserver(() => {
   if (wrapped) paintGutter();   // a new width rewraps the lines
   syncSrcMarks();
 }).observe(src);
+// The results scroll half a page past their last row too, so the last rows can be centered like the editor's.
+new ResizeObserver(() => out.style.setProperty("--overscroll", `${Math.max(60, Math.round(out.clientHeight / 2))}px`)).observe(out);
 // The marks sit under the textarea, so the pointer never reaches them; look underneath it instead.
 src.addEventListener("mousemove", (ev) => {
   const m = document.elementsFromPoint(ev.clientX, ev.clientY).find((el) => el.tagName === "MARK" && el.parentElement?.parentElement === srcMarks);
@@ -1952,9 +1960,24 @@ async function openSettings(section, control) {
 $("#settingsBtn").onclick = () => openSettings();
 
 // ---- dialogs ---------------------------------------------------------------
+// A dialog gives the focus back to the editor where it was. Chromium, closing a dialog from a script
+// (a rename once it has been made), focuses the textarea with its caret at the start, and the rename
+// would then put it there (#159), so the selection and scroll the editor had when it lost the focus
+// are put back, unless the text changed since.
+let srcLeft = null;
+src.addEventListener("blur", () => {
+  srcLeft = {text: ed.value, sel: [ed.selectionStart, ed.selectionEnd], top: src.scrollTop, left: src.scrollLeft};
+});
+function refocusEditor() {
+  src.focus({preventScroll: true});
+  const was = srcLeft;
+  if (!was || was.text !== ed.value) return;
+  ed.setSelectionRange(...was.sel);
+  src.scrollTop = was.top; src.scrollLeft = was.left;
+}
 for (const d of document.querySelectorAll("dialog:not(#alertDlg)")) {
   d.querySelector(".close").onclick = () => d.close();
-  d.addEventListener("close", () => src.focus());
+  d.addEventListener("close", refocusEditor);
 }
 $("#keysTable").innerHTML = Shortcuts.tableHtml($("#commandHelp").innerHTML);  // shortcuts.js, with the command rows server.py filled in
 $("#keysBtn").onclick = () => $("#keysDlg").showModal();
@@ -2072,6 +2095,7 @@ $("#renameForm").addEventListener("submit", async (ev) => {
   }
   if (!res.ok) { err.textContent = res.error; err.hidden = false; return; }
   $("#renameDlg").close();
+  refocusEditor();   // now, so the rename keeps the caret where it was
   // Some browsers keep the focus in the closed dialog's field until the next frame, and an edit made
   // then misses the editor's undo stack. After it, the rename goes into the editor as one step that
   // Ctrl+Z takes back and Ctrl+Y makes again.
