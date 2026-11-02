@@ -579,7 +579,6 @@
     while (j > ls && isIdent(t[j - 1])) j--;
     if (j === s) return null;                  // nothing before the period
     if (/\p{N}/u.test(t[j])) return null;      // part of a number: decimal point
-    if (t[j - 1] === "'") return null;         // part of a unit
     return edit(s, s, '_', s + 1);
   }
 
@@ -753,7 +752,7 @@
   }
 
   // A one-line field that holds a name, such as Rename's: the math keys a name is typed with. A
-  // period after a name types its subscript underscore (`M.max` gives `M_max`) and Ctrl+G its
+  // period after a name or unit types its subscript underscore (`M.max` gives `M_max`, `'g.0` gives `'g_0`) and Ctrl+G its
   // extended character (`a` gives α), as in the editor; nothing else is a math key there.
   // `key` and `mods` are a keydown's; null when the key types as usual.
   function nameKeyAction(key, mods, t, s, e, ctx) {

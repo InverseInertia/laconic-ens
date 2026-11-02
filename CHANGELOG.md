@@ -15,6 +15,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ### Fixes
 - **`/` after a suffixed name**: typing `/` after a name ending in `!`, `` ` ``, `@` or `&` (`f! / g`) makes the whole name the numerator, and such a name to the right of the caret becomes the denominator, instead of the fraction losing the name or its suffix. (#157)
+- **Math keys in units**: a period after a unit types its subscript, as after a name, so `'g.0` gives `'g_0`; it was a literal period. The Greek letters Ctrl+G types are units too: `'μ_0`, `'ϵ_0`, `'μ_B` and `'μ_N` work alongside `'mu_0`, `'eps_0` and the rest, as `'σ`, `'ε_0`, `'Ω` and `'μm` already did. (#161)
 
 ## [v0.5.2](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.2) (2026-11-02)
 

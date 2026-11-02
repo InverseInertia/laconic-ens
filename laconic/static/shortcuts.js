@@ -22,7 +22,7 @@
     { id: 'mathkeys', rows: [
       { keys: ['/'], text: 'Fraction. Takes the term on the left as numerator and the term on the right, if any, as denominator. <code>a/</code> gives <code>a/(&nbsp;)</code>. After <code>A.</code> it gives <code>A./</code>' },
       { keys: ['\\'], text: 'Radical. <code>sqrt(&nbsp;)</code>, or wraps the selection' },
-      { keys: ['.'], text: 'Subscript after a name. <code>M.max</code> gives <code>M_max</code>. After a number it stays a decimal point' },
+      { keys: ['.'], text: 'Subscript after a name or unit. <code>M.max</code> gives <code>M_max</code>, <code>\'g.0</code> gives <code>\'g_0</code>. After a number it stays a decimal point' },
       { keys: ['^'], text: 'Exponent slot. <code>x^(&nbsp;)</code>' },
       { keys: ['→', ')'], or: true, text: 'Leave a slot. If it holds one simple term the parentheses go away: <code>x^(2)</code> becomes <code>x^2</code>' },
       { keys: ['Enter'], text: 'With only closing brackets left on the line, finishes the line instead of splitting it. After a block header (<code>!plot</code>, <code>!root</code>, <code>!regression</code>, ...) or one of its indented lines, the new line is indented to match; on a line that is only that indent, Enter removes it and leaves the block. Works with Math keys off' },

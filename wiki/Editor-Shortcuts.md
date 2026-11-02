@@ -10,7 +10,7 @@ These are off on comment lines, on the text lines under a plot (title, labels, a
 |---|---|
 | `/` | Fraction. Left term is the numerator, a term on the right (if any) the denominator, otherwise `a / ()` with the caret inside. After `A.` it gives `A ./ ` |
 | `\` | Radical, `sqrt()`, or wraps the selection |
-| `.` | Subscript after a name (`M.max` gives `M_max`). Decimal point after a number or unit |
+| `.` | Subscript after a name or unit (`M.max` gives `M_max`, `'g.0` gives `'g_0`). Decimal point after a number |
 | `^` | Exponent slot, `x^()` |
 | `→` or `)` | Leave a slot. One simple term loses its parentheses: `x^(2)` becomes `x^2` |
 | `= + - * -> .* ./` | Spaces are added around them. A sign (`-3`, `x^-1`) and `1e-3` stay tight |
