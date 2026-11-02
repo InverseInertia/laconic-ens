@@ -53,11 +53,13 @@ A line that uses a constant shows its value, even a single typed quantity (`3'mo
 | `'h_P` | Planck constant, shown as *h* (`'h` is the hour, shown as hr) | 6.62607015×10⁻³⁴ J·s |
 | `'hbar` (or `'ħ`) | reduced Planck constant, h/2π, typeset ħ | 1.05457181765×10⁻³⁴ J·s |
 | `'e` | elementary charge | 1.602176634×10⁻¹⁹ C |
-| `'sigma` | Stefan–Boltzmann constant | 5.67037441918×10⁻⁸ W/(m²·K⁴) |
+| `'sigma` (or `'σ`) | Stefan–Boltzmann constant | 5.67037441918×10⁻⁸ W/(m²·K⁴) |
 | `'G_N` | Newtonian constant of gravitation (`'G` is the gauss) | 6.6743×10⁻¹¹ m³/(kg·s²) |
 | `'g_0` | standard gravity | 9.80665 m/s² |
-| `'eps_0`, `'mu_0` | vacuum permittivity and permeability | 8.85418781879×10⁻¹² F/m, 1.25663706127×10⁻⁶ H/m |
+| `'eps_0` (or `'ε_0`), `'mu_0` (or `'μ_0`) | vacuum permittivity and permeability | 8.85418781879×10⁻¹² F/m, 1.25663706127×10⁻⁶ H/m |
 | `'m_e`, `'m_p` | electron and proton mass | 9.1093837139×10⁻³¹ kg, 1.67262192595×10⁻²⁷ kg |
+
+The Greek spellings are the ones Ctrl+G types: `'m` then Ctrl+G gives `'μ`, and a period after a unit types its subscript, so `'m` Ctrl+G `.0` gives `'μ_0` and `'g.0` gives `'g_0`. `'Ω` is the ohm and `'μm` the micrometre.
 
 The values are CODATA's, as Pint has them. To ask for another constant, open an issue; [Development](Development) says how to add one.
 

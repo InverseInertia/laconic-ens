@@ -57,6 +57,16 @@ CONSTANTS = [
     ("m_p", "proton mass", None),
 ]
 
+# The Greek spellings Ctrl+G types, for the units Pint spells another way. Ctrl+G on m types the
+# Greek μ (U+03BC) and on E the lunate ϵ, but Pint writes its constants with the micro sign µ
+# (U+00B5) and the open ε. Pint already takes 'σ, 'ε_0, 'Ω, 'π, 'α and μ as the micro prefix.
+GREEK_ALIASES = [
+    ("vacuum_permeability", "μ_0"),
+    ("vacuum_permittivity", "ϵ_0"),
+    ("bohr_magneton", "μ_B"),
+    ("nuclear_magneton", "μ_N"),
+]
+
 # What siunitx v3 defines itself, of the macro names Pint's siunitx format emits.
 # Any other Pint unit (foot, standard_gravity, ...) needs a \DeclareSIUnit of its own.
 # siunitx's \hour is left out on purpose: it prints h, the symbol of Planck's constant, so the
@@ -90,6 +100,8 @@ def define(ureg):
     for _, _, definition in CONSTANTS:
         if definition:
             ureg.define(definition)
+    for name, spelling in GREEK_ALIASES:
+        ureg.define(f"@alias {name} = {spelling}")
 
 
 @lru_cache(maxsize=8)

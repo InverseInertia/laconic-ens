@@ -389,6 +389,17 @@ def test_the_constants_have_their_codata_values():
     assert ureg.Quantity(1, "Av").to("").magnitude == pytest.approx(6.02214076e23, rel=1e-12)
 
 
+def test_the_greek_spellings_ctrl_g_types_are_units():
+    # Ctrl+G types the Greek μ and the lunate ϵ; Pint spells its constants with the micro sign
+    # and the open ε (#161).
+    ureg = registry()
+    for typed, plain in [("μ_0", "mu_0"), ("ϵ_0", "eps_0"), ("ε_0", "eps_0"), ("σ", "sigma"),
+                         ("μ_B", "mu_B"), ("μ_N", "mu_N"), ("Ω", "ohm"), ("μm", "um")]:
+        assert ureg.get_name(typed) == ureg.get_name(plain), typed
+    assert last("x = 2'μ_0").text == last("x = 2'mu_0").text
+    assert last("a = 2'g_0").text == "a = 19.61 m/s²"
+
+
 def test_a_constant_never_takes_a_variables_name():
     res = run("R = 5'ohm\nV = 2'A * R\np = 2'mol * 'R * 300'K / 1'm^3")
     assert res[1].text == "V = 10 V"
