@@ -859,6 +859,84 @@ def test_the_editor_scrolls_half_a_page_past_its_last_line(page):
     assert abs(got["marks"] - got["src"]) < 1, got       # the global marks scroll with the text
 
 
+_ROW_SPOT = """n => {
+    const o = document.querySelector('#out'), r = o.querySelector(`.row[data-line="${n}"]`);
+    if (!r) return null;
+    const a = r.getBoundingClientRect(), b = o.getBoundingClientRect();
+    return {mid: (a.top + a.bottom) / 2 - b.top, height: o.clientHeight, top: o.scrollTop, active: r.classList.contains('active')};
+}"""
+
+
+def _caret_to(page, pos):
+    page.evaluate("p => { const s = document.querySelector('#src'); s.focus(); s.setSelectionRange(p, p); s.dispatchEvent(new Event('keyup')); }", pos)
+
+
+def _long_sheet(page):
+    text = "\n".join(f"x{k} = {k}" for k in range(80))
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector('#out .row[data-line="80"]')
+    return text
+
+
+def test_the_results_center_the_row_the_editor_moves_to(page):
+    """#159: moving the caret to another line brings its row to the middle of the results."""
+    text = _long_sheet(page)
+    for k in (40, 79, 12):
+        _caret_to(page, text.index(f"x{k} = ") + 1)
+        got = page.evaluate(_ROW_SPOT, k + 1)
+        assert got["active"] and abs(got["mid"] - got["height"] / 2) < 30, (k, got)
+
+
+def test_the_results_stay_put_while_typing_on_a_line(page):
+    """#159: only a move to another line centers its row; typing on it does not scroll the results."""
+    text = _long_sheet(page)
+    _caret_to(page, text.index("x40 = ") + 1)
+    page.evaluate("document.querySelector('#out').scrollTop += 120")   # the user scrolls the results a little
+    before = page.evaluate(_ROW_SPOT, 41)
+    page.keyboard.type("0")
+    page.wait_for_function("document.querySelector('#out .row[data-line=\"41\"]').textContent.includes('x0')")
+    assert abs(page.evaluate(_ROW_SPOT, 41)["top"] - before["top"]) < 2
+
+
+def test_renaming_leaves_the_editor_and_results_where_they_were(page):
+    """#159: the rename dialog gives the focus back to the editor without moving it or the results."""
+    text = _long_sheet(page) + "\nL = 2\ny = L * 3"
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector('#out .row[data-line="82"]')
+    _caret_to(page, text.index("x40 = ") + 1)
+    spot = lambda: page.evaluate("() => [document.querySelector('#src').scrollTop, document.querySelector('#out').scrollTop]")
+    before = spot()
+    page.keyboard.press("F2")
+    page.wait_for_selector("#renameDlg[open]")
+    page.fill("#renameOld", "L")
+    page.fill("#renameNew", "span")
+    page.keyboard.press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.endsWith('y = span * 3')")
+    page.wait_for_function("document.querySelector('#out .row[data-line=\"82\"]').textContent.includes('span')")
+    assert page.evaluate("document.activeElement.id") == "src"
+    assert page.evaluate("document.querySelector('#src').selectionStart") == text.index("x40 = ") + 1
+    assert spot() == before
+    page.keyboard.press("F2")                            # nor does cancelling it
+    page.wait_for_selector("#renameDlg[open]")
+    page.keyboard.press("Escape")
+    page.wait_for_selector("#renameDlg", state="hidden")
+    assert page.evaluate("document.activeElement.id") == "src" and spot() == before
+
+
+def test_the_results_scroll_half_a_page_past_their_last_row(page):
+    """#159: as the editor does (#129), so the last rows can sit mid-screen."""
+    _long_sheet(page)
+    got = page.evaluate("""() => {
+        const o = document.querySelector('#out');
+        o.scrollTop = o.scrollHeight;
+        const rows = o.querySelectorAll('.row'), r = rows[rows.length - 1].getBoundingClientRect();
+        return {bottom: r.bottom - o.getBoundingClientRect().top, height: o.clientHeight};
+    }""")
+    assert got["bottom"] < got["height"] * 0.6, got
+
+
 def test_the_editor_numbers_its_lines(page):
     """#147: a number beside each line, as tall as the line is with wrapping on, scrolled with the text."""
     reset(page, "a = 1\n" + "b = " + " + ".join(["a"] * 80) + "\n" + "\n".join(f"y{k} = 2" for k in range(60)))
