@@ -4,6 +4,7 @@ Open **Settings** from the header. It holds:
 
 - **Reference:** the list of keys.
 - **Layout:** side by side (editor left, results right) or stacked (results on top, editor below). Alt+L switches between them at any time. With **Switch automatically when the window is narrow** on (the default), the page stacks when the window is 760 px wide or less and goes back to side by side when it widens; a view picked by hand holds until the next such switch. Turn it off and the view you pick always stays. If the layout switches itself six times in one session, a small note in the corner offers to turn automatic switching off: **Layout settings** opens this section, **Don't ask again** stops the note for good, and it can simply be ignored.
+- **Editor:** with **Show matrices one row per line when wrapping** on (the default) and text wrapping on (Alt+Z), the editor shows a matrix one row per line after each `;`, each row lined up under the first, as MATLAB writes them; a vector of one column (`[1; 2; 3]`) stays on its line. The breaks are only the editor's: the sheet, and the saved file, keep the matrix on one line. Backspace at the start of a row joins it to the row above.
 - **Updates:** with **Check for a new release when LENS starts** on (the default), LENS asks GitHub once each time it starts whether a newer release is out, in the background, and if there is one shows a small button with the new version beside the version in the header. Clicking it shows the release's notes and an **Update** button that runs the installer (see [Getting Started](Getting-Started#updating)). Offline, nothing is shown. Turn it off and LENS never asks.
 - **Extended characters:** the table behind Ctrl+G: Greek letters, and other characters such as ∞ and ∀.
 - **Global units:** units available in every sheet (see [Units](Units)). Nothing is stored unless every definition is valid.
@@ -14,7 +15,7 @@ Open **Settings** from the header. It holds:
 | Setting | Stored |
 |---|---|
 | Extended characters, global units, your unit tags (Units dialog) | on the machine running LENS, in `settings.json`, so they are the same in every browser and for the command line |
-| Theme, output view, wrapper, line wrapping, layout and automatic switching, the Math keys, Mark globals and Suggest checkboxes, the update check | on the machine running LENS, in `settings.json`, so they are the same in every browser and whatever port LENS runs on. Values an older build kept in the browser are moved there the first time the page opens |
+| Theme, output view, wrapper, line wrapping, layout and automatic switching, matrices one row per line, the Math keys, Mark globals and Suggest checkboxes, the update check | on the machine running LENS, in `settings.json`, so they are the same in every browser and whatever port LENS runs on. Values an older build kept in the browser are moved there the first time the page opens |
 | Split position and the unsaved worksheet text | in the browser (`localStorage`), per browser and per port |
 
 An extended-character table saved in the browser by an earlier build is copied to the server the first time the page loads.

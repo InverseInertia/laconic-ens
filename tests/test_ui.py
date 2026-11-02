@@ -877,3 +877,102 @@ def test_the_editor_numbers_its_lines(page):
         return [s.scrollTop, g.scrollTop];
     }""")
     assert abs(got[0] - got[1]) < 1, got
+
+
+FOLDING = "## Beam\nL = 2\n!plot x, x = 0 .. L\n  title: t\n  grid: on\n## Next\ny = 1"
+
+
+def sheet_text(page):
+    return page.evaluate("ed.value")
+
+
+def load_sheet(page, text):
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input', {bubbles: true}))")
+
+
+def test_a_block_folds_and_unfolds_from_the_gutter_and_the_keys(page):
+    """#154: the folded lines become one placeholder; the sheet itself is unchanged."""
+    load_sheet(page, FOLDING)
+    page.wait_for_selector("#out .row[data-line='7']")
+    page.hover("#srcGutter")
+    page.click("#srcGutter > div[data-n='3'] .fold")
+    assert value(page) == "## Beam\nL = 2\n!plot x, x = 0 .. L  ⋯ 2 lines\n## Next\ny = 1"
+    assert sheet_text(page) == FOLDING
+    assert page.eval_on_selector_all("#srcGutter > div", "ds => ds.map(d => d.dataset.n)") == ["1", "2", "3", "6", "7"]
+    page.keyboard.type("z")                                # typing after the last line goes in as usual
+    assert sheet_text(page) == FOLDING + "z"
+    page.click("#srcGutter > div[data-n='3'] .fold")
+    assert value(page) == FOLDING + "z"
+    # Alt+[ folds the heading the caret is under, Alt+] opens it again.
+    page.evaluate("ed.setSelectionRange(10, 10)")          # on line 2
+    page.keyboard.press("Alt+BracketLeft")
+    assert value(page) == "## Beam  ⋯ 4 lines\n## Next\ny = 1z"
+    page.keyboard.press("Alt+BracketRight")
+    assert value(page) == FOLDING + "z"
+
+
+def test_a_result_clicked_opens_the_fold_that_hides_its_line(page):
+    load_sheet(page, FOLDING)
+    page.wait_for_selector("#out .row[data-line='2']")
+    page.evaluate("ed.setSelectionRange(3, 3)")
+    page.keyboard.press("Alt+BracketLeft")
+    assert value(page).startswith("## Beam  ⋯")
+    page.click("#out .row[data-line='2']")
+    assert value(page) == FOLDING
+    assert page.evaluate("ed.selectionStart") == len("## Beam\nL = 2")
+
+
+def test_typing_into_a_placeholder_opens_it(page):
+    load_sheet(page, FOLDING)
+    page.evaluate("ed.setSelectionRange(3, 3)")
+    page.keyboard.press("Alt+BracketLeft")
+    page.keyboard.press("End")
+    page.keyboard.type("q")
+    assert value(page) == FOLDING
+    assert sheet_text(page) == FOLDING
+
+
+def test_vectors_and_matrices_fold_on_their_line(page):
+    load_sheet(page, "A = [1, 2; 3, 4]\nv = [1; 2; 3]")
+    page.evaluate("ed.setSelectionRange(0, 0)")
+    page.keyboard.press("Alt+BracketLeft")
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("Alt+BracketLeft")
+    assert value(page) == "A = [⋯]\nv = [⋯]"
+    assert sheet_text(page) == "A = [1, 2; 3, 4]\nv = [1; 2; 3]"
+
+
+def test_with_wrapping_a_matrix_shows_one_row_per_line_but_a_vector_does_not(page):
+    """#155: the rows are the view's; the sheet keeps the matrix on one line."""
+    load_sheet(page, "A = [1, 2; 3, 4]\nv = [1; 2; 3]")
+    page.keyboard.press("Alt+z")
+    try:
+        assert value(page) == "A = [1, 2;\n     3, 4]\nv = [1; 2; 3]"
+        assert sheet_text(page) == "A = [1, 2; 3, 4]\nv = [1; 2; 3]"
+        assert page.eval_on_selector_all("#srcGutter > div", "ds => ds.map(d => d.dataset.n)") == ["1", "2"]
+        # Typing in the second row edits the sheet's one line, and the rows stay lined up.
+        page.evaluate("ed.setSelectionRange(12, 12)")      # after the 3
+        page.keyboard.type("0")
+        assert sheet_text(page) == "A = [1, 2; 30, 4]\nv = [1; 2; 3]"
+        assert value(page) == "A = [1, 2;\n     30, 4]\nv = [1; 2; 3]"
+        page.keyboard.press("Control+z")                   # the page's own undo
+        assert sheet_text(page) == "A = [1, 2; 3, 4]\nv = [1; 2; 3]"
+        page.keyboard.press("Control+Shift+z")
+        assert sheet_text(page) == "A = [1, 2; 30, 4]\nv = [1; 2; 3]"
+        page.keyboard.type("; 5")
+        assert value(page) == "A = [1, 2;\n     30;\n     5, 4]\nv = [1; 2; 3]"
+        page.keyboard.press("Home")                        # Backspace at the start of a row joins it to the one above
+        page.keyboard.press("Backspace")
+        assert sheet_text(page) == "A = [1, 2; 30, 5, 4]\nv = [1; 2; 3]"
+        assert value(page) == "A = [1, 2;\n     30, 5, 4]\nv = [1; 2; 3]"
+        page.wait_for_selector("#out .row[data-line='1'] .katex")
+        # Settings -> Editor turns it off.
+        page.evaluate("document.querySelector('#matrixRowsBox').click()")
+        assert value(page) == "A = [1, 2; 30, 5, 4]\nv = [1; 2; 3]"
+        page.evaluate("document.querySelector('#matrixRowsBox').click()")
+        assert value(page) == "A = [1, 2;\n     30, 5, 4]\nv = [1; 2; 3]"
+    finally:
+        page.focus("#src")
+        page.keyboard.press("Alt+z")
+    assert value(page) == "A = [1, 2; 30, 5, 4]\nv = [1; 2; 3]"

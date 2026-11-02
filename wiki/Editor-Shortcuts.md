@@ -28,12 +28,17 @@ These are off on comment lines, on the text lines under a plot (title, labels, a
 | `Ctrl+Space` | Opens suggestions by hand. With text highlighted: pick a function to wrap it in |
 | `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
 | `Tab`, `Shift+Tab` | Indent or unindent the line, or every highlighted line, by two spaces. Works with Math keys off. Press `Esc` first to move the focus out of the editor with `Tab` |
-| `Alt+Z` | Turn text wrapping in the editor on or off |
+| `Alt+Z` | Turn text wrapping in the editor on or off. With it on, a matrix shows one row per line (see [Settings](Settings)) |
+| `Alt+[`, `Alt+]` | Fold the lines under the caret's heading or block, and the vectors and matrices on its line, into one line; unfold them. The arrows beside the line numbers do the same, and clicking a result opens whatever hides its line |
 | `Alt+L` | Switch between side-by-side and stacked views. See [Settings](Settings) |
 | `F2` | Rename the name at the caret everywhere. In the dialog a name is typed as in the editor: `.` after a name types the subscript `_`, and `Ctrl+G` the extended character |
 | `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+O` | Save, Save As, Open |
 
 The editor scrolls half a page past the last line, as most code editors do, so the line you are typing at the end of a long sheet can sit in the middle of the screen rather than at its bottom edge.
+
+## Folding
+
+A heading folds the lines down to the next heading of its level or higher; any other line folds the lines indented further under it, such as a plot's or solver's option lines or a loop's steps. The folded lines show as one placeholder at the end of the line, `  ⋯ 3 lines`, and on a folded line each vector or matrix (`[1; 2; 3]`, `[1, 2; 3, 4]`) shows as `[⋯]`. Hover over the line numbers for the ▾ beside each line that folds; a folded line shows ▸. `Alt+[` folds the caret's line, or the block or heading it is in, and `Alt+]` unfolds it. Typing into a placeholder, or clicking a result whose line is hidden, unfolds it. Folding changes only what the editor shows: the sheet, the results and the saved file are the same.
 
 Division is typed with the fraction key: `a`, `/`, then the denominator. Browsers reserve Ctrl+T and Ctrl+N, so use Alt+T in a normal tab.
 
