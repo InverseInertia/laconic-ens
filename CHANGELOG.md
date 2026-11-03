@@ -9,6 +9,13 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Symbols in matrices**: a matrix can hold symbols (`$a` then `M = [a, 2; 3, a^2]`), and `*`, `^`, `+`, `-`, `.*`, `./`, `det`, `inv`, `transpose`, `trace`, `solve`, `elem`, `idx`, `row` and `col` work on it symbolically, with a numeric matrix such as `A*v` taken as the matrix product. Once its symbols have values, it is worked out with units like any matrix. (#163)
+- **Check for updates in Help**: Help has a Check for updates button beside the version, which asks GitHub again for a newer release, so one that came out while LENS was open is found without closing it. It works even with the check at start turned off in Settings. (#164)
+
+### Fixes
+- **Reopening LENS finds a new release**: closing LENS and opening it again straight away reached the LENS still running, which kept the answer of its first update check, so a release that came out since was not offered. A new window now checks again, as does a page loaded more than six hours after the last check. (#165)
+
 ## [v0.5.3](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.3) (2026-11-02)
 
 ### New

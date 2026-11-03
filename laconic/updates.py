@@ -1,7 +1,9 @@
 """Telling the user about a newer release, and installing it (#134).
 
-The check asks the GitHub releases API once per run, in a background thread with a short timeout,
-and keeps the answer for the rest of the run. It never raises: offline, or on any odd answer, there
+The check asks the GitHub releases API in a background thread with a short timeout, and keeps the
+answer. It asks again when a window is handed to this LENS by a new launch (closing LENS and opening
+it again soon after reaches the LENS still running, #165), when Help's **Check for updates** asks
+(#164), and on a page load once the answer is more than `MAX_AGE` old. It never raises: offline, or on any odd answer, there
 is simply no update. Drafts, prereleases and tags that are not `vX.Y.Z` (the Linux installer's
 `installer-vX.Y.Z` tags) are not releases of LENS. A source checkout (`0+dev`) is never told to
 update.
@@ -28,6 +30,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,6 +41,7 @@ REPO = "InverseInertia/laconic-ens"
 API = f"https://api.github.com/repos/{REPO}/releases?per_page=20"
 RELEASES = f"https://github.com/{REPO}/releases"
 TIMEOUT = 5.0        # seconds for the release lookup
+MAX_AGE = 6 * 3600.0  # seconds a page load trusts the last answer for
 DOWNLOAD_TIMEOUT = 60.0
 SCRIPT = "install-linux.sh"   # the copy install-linux.sh keeps of itself in the install folder
 WIZARD_SUFFIX = "-windows-x64-install-wizard.exe"
@@ -162,18 +166,23 @@ def _exit_soon(delay=1.5):
 
 
 class Updater:
-    """One run's update check and the Update action. `check()` starts the lookup (once) and
-    returns at once; `result(wait)` gives the update, waiting up to `wait` seconds for the lookup."""
+    """The update check and the Update action. `check()` starts the lookup and returns at once: the
+    first time, or with `fresh` (the answer is asked for again), or once the last answer is older than
+    `max_age`; a lookup already running is not started twice. `result(wait)` gives the update,
+    waiting up to `wait` seconds for the lookup."""
 
     def __init__(self, fetch=_fetch, download=_download, spawn=_spawn, exit=_exit_soon, where=None,
-                 current=__version__):
+                 current=__version__, clock=time.monotonic):
         self._fetch, self._download, self._spawn, self._exit = fetch, download, spawn, exit
         self._where = where
         self.current = current
+        self._clock = clock
         self._lock = threading.Lock()
         self._done = threading.Event()
         self._thread = None
         self._release = None
+        self._failed = False
+        self._at = None   # when the last lookup finished
 
     @property
     def where(self):
@@ -181,29 +190,40 @@ class Updater:
             self._where = place()
         return self._where
 
-    def check(self):
+    def check(self, fresh=False, max_age=None):
         with self._lock:
-            if self._thread is None:
-                self._thread = threading.Thread(target=self._look, daemon=True, name="lens-update-check")
-                self._thread.start()
+            if self._thread is not None:
+                if not self._done.is_set():
+                    return   # one is on its way
+                stale = max_age is not None and self._at is not None and self._clock() - self._at > max_age
+                if not (fresh or stale):
+                    return
+            self._done.clear()
+            self._thread = threading.Thread(target=self._look, daemon=True, name="lens-update-check")
+            self._thread.start()
 
     def _look(self):
+        release, failed = None, False
         try:
-            if parse(self.current) is None:   # a source checkout: nothing to compare with, so no lookup
-                return
-            r = latest(self._fetch(API, TIMEOUT))
-            if r is not None and is_newer(r["tag_name"], self.current):
-                self._release = r
+            if parse(self.current) is not None:   # a source checkout: nothing to compare with, so no lookup
+                r = latest(self._fetch(API, TIMEOUT))
+                if r is not None and is_newer(r["tag_name"], self.current):
+                    release = r
         except Exception:   # offline, rate limited, an odd answer: no update, and no fuss
-            pass
+            failed = True
         finally:
+            self._release, self._failed, self._at = release, failed, self._clock()
             self._done.set()
 
-    def result(self, wait=0.0):
-        """{"checking": bool, "update": None or the update as the page shows it}."""
-        self.check()
+    def result(self, wait=0.0, fresh=False):
+        """{"checking": bool, "update": None or the update as the page shows it, "current": this
+        version's label, "dev": a build that is never checked, "failed": the lookup got no answer}.
+        `fresh` asks GitHub again (Help's Check for updates)."""
+        self.check(fresh=fresh)
         done = self._done.wait(wait)
-        return {"checking": not done, "update": self.describe(self._release) if done and self._release else None}
+        return {"checking": not done, "update": self.describe(self._release) if done and self._release else None,
+                "current": label(self.current), "dev": parse(self.current) is None,
+                "failed": done and self._failed}
 
     def describe(self, r):
         from .changelog import markdown

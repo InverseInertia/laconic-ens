@@ -166,7 +166,7 @@ def index():
     stored = settings.load()["prefs"]
     prefs = json.dumps(stored).replace("<", "\\u003c")
     if stored.get("checkUpdates") is not False:
-        updates.updater.check()   # in the background; the page asks for the answer later
+        updates.updater.check(max_age=updates.MAX_AGE)   # in the background; the page asks for the answer later
     return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
                         .replace(CHANGELOG_MARKER, changelog.html())
                         .replace(PREFS_MARKER, prefs).replace(PREF_KEYS_MARKER, json.dumps(list(settings.PREFS))),
@@ -369,12 +369,14 @@ def put_prefs(body: PrefsBody):
 
 
 @app.get("/api/update")
-def get_update(wait: float = 0):
-    """A newer release, if there is one: {"checking", "update"} (updates.py). `wait` is how long
-    to wait for the lookup, at most 10 s. Nothing is looked up when the user turned it off."""
-    if settings.load()["prefs"].get("checkUpdates") is False:
+def get_update(wait: float = 0, fresh: bool = False, asked: bool = False):
+    """A newer release, if there is one: {"checking", "update", ...} (updates.py). `wait` is how long
+    to wait for the lookup, at most 10 s; `fresh` asks GitHub again (Help's Check for updates, #164).
+    The user asked for that (`asked`, which the page's later polls for the answer send too), so it
+    looks even when the setting turned the check at start off."""
+    if not (fresh or asked) and settings.load()["prefs"].get("checkUpdates") is False:
         return {"checking": False, "update": None, "off": True}
-    return updates.updater.result(min(max(wait, 0.0), 10.0))
+    return updates.updater.result(min(max(wait, 0.0), 10.0), fresh=fresh)
 
 
 @app.post("/api/update")
@@ -509,5 +511,9 @@ def open_window(body: WindowBody):
         raise HTTPException(409, "this server does not open windows")
     path = sheets.hand(body.path)
     lifecycle.expect()
+    if settings.load()["prefs"].get("checkUpdates") is not False:
+        # LENS was opened again, maybe right after its window closed and before this server left
+        # (#165): look again, so a release that came out since is offered in the new window.
+        updates.updater.check(fresh=True)
     sheets.show(path)
     return {"ok": True}

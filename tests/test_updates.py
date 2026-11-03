@@ -46,9 +46,10 @@ class Fake:
     def exit(self):
         self.calls.append(("exit",))
 
-    def updater(self, where=Place("manual"), current="0.4.5"):
+    def updater(self, where=Place("manual"), current="0.4.5", clock=None):
+        kw = {"clock": clock} if clock else {}
         return Updater(fetch=self.fetch, download=self.download, spawn=self.spawn, exit=self.exit,
-                       where=where, current=current)
+                       where=where, current=current, **kw)
 
 
 def test_versions_compare_as_numbers():
@@ -85,9 +86,35 @@ def test_the_check_runs_once_and_is_kept():
     assert [c for c in fake.calls if c[0] == "fetch"] == [("fetch", updates.API)]
 
 
+def test_asking_again_looks_again_and_finds_a_release_out_since():
+    fake = Fake([rel("v0.4.5")])
+    up = fake.updater()
+    assert up.result(wait=5)["update"] is None
+    fake.releases = RELEASES   # v0.5.0 comes out while LENS is open
+    assert up.result(wait=5)["update"] is None   # kept
+    r = up.result(wait=5, fresh=True)
+    assert r["update"]["version"] == "0.5.0" and r["current"] == "v0.4.5" and r["dev"] is False
+    assert len([c for c in fake.calls if c[0] == "fetch"]) == 2
+
+
+def test_a_page_load_looks_again_once_the_answer_is_old():
+    now = [0.0]
+    fake = Fake()
+    up = fake.updater(clock=lambda: now[0])
+    up.result(wait=5)
+    up.check(max_age=60)
+    up.result(wait=5)
+    assert len(fake.calls) == 1
+    now[0] = 61
+    up.check(max_age=60)
+    up.result(wait=5)
+    assert len(fake.calls) == 2
+
+
 def test_nothing_is_offered_when_up_to_date_offline_or_a_dev_build():
     assert Fake().updater(current="0.5.0").result(wait=5)["update"] is None
-    assert Fake(OSError("offline")).updater().result(wait=5) == {"checking": False, "update": None}
+    off = Fake(OSError("offline")).updater().result(wait=5)
+    assert off["update"] is None and off["failed"] is True and off["checking"] is False
     assert Fake(ValueError("not JSON")).updater().result(wait=5)["update"] is None
     dev = Fake()
     assert dev.updater(current="0+dev").result(wait=5)["update"] is None
@@ -217,4 +244,28 @@ def test_the_page_starts_the_check_and_the_setting_turns_it_off(config, monkeypa
     assert fake.calls == []
     settings.save_prefs({"checkUpdates": None})
     server.index()
+    assert server.get_update(wait=5)["update"]["version"] == "0.5.0"
+
+
+def test_check_for_updates_looks_again_even_with_the_setting_off(config, monkeypatch):
+    fake = Fake()
+    monkeypatch.setattr(updates, "updater", fake.updater())
+    settings.save_prefs({"checkUpdates": False})
+    assert server.get_update(wait=5)["off"] is True
+    assert server.get_update(wait=5, fresh=True)["update"]["version"] == "0.5.0"
+    assert server.get_update(wait=5, asked=True)["update"]["version"] == "0.5.0"
+    assert len(fake.calls) == 1
+
+
+def test_a_window_handed_over_looks_again(config, monkeypatch):
+    """Closing LENS and opening it again soon after reaches the server still running (#165): the new
+    window is offered a release that came out since the server started."""
+    fake = Fake([rel("v0.4.5")])
+    monkeypatch.setattr(updates, "updater", fake.updater())
+    server.index()
+    assert server.get_update(wait=5)["update"] is None
+    fake.releases = RELEASES
+    shown = []
+    monkeypatch.setattr(server.sheets, "_open", shown.append)
+    assert server.open_window(server.WindowBody(path=None)) == {"ok": True}
     assert server.get_update(wait=5)["update"]["version"] == "0.5.0"

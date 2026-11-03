@@ -339,6 +339,9 @@
   .help .welcome h1 { margin: 0 0 6px; font: 600 28px var(--sans); }
   .help .welcome p { margin: 0 0 6px; }
   .help .welcome p.version { margin: 0 0 10px; font-size: 13px; color: var(--text-soft); }
+  .help .welcome p.version button.linklike { all: unset; cursor: pointer; text-decoration: underline; color: inherit; }
+  .help .welcome p.version button.linklike:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .help .welcome p.version button.linklike:disabled { cursor: default; opacity: 0.6; }
   #helpLogo { flex: none; width: 150px; height: 150px; }
   #helpLogo img, #helpLogo svg { display: block; width: 100%; height: 100%; }
   .help a { color: var(--text); }
@@ -454,7 +457,7 @@
       <div id="helpLogo"><img src="/static/logo.svg" alt=""></div>
       <div>
         <h1 id="helpTitle">Welcome to LENS</h1>
-        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a> &middot; <a href="#changelog" id="changelogLink">Changelog</a></p>
+        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a> &middot; <a href="#changelog" id="changelogLink">Changelog</a> &middot; <button id="checkNow" class="linklike">Check for updates</button> <span id="checkMsg" role="status"></span></p>
         <p>The Laconic Engineering Notebook System: a units-aware worksheet. Type one expression per line on the left and the typeset result appears on the right as you type. Copy LaTeX line by line, or export a whole document.</p>
         <p>Worksheets are plain-text <code>.lens</code> files, so they diff and merge in git. Units are marked with an apostrophe (<code>'kN</code>), so a bare name is always a variable.</p>
         <p><a href="https://github.com/inverseinertia/laconic-ens/wiki" target="_blank" rel="noopener">Read the full documentation on the wiki &rarr;</a></p>
@@ -675,7 +678,7 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
     </section>
     <section class="set-sec" id="updateSec">
       <h3>Updates</h3>
-      <p class="note">When LENS starts, it asks GitHub whether a newer release is out, and if there is one shows a small button beside the version that updates LENS. Kept on this machine.</p>
+      <p class="note">When LENS starts, it asks GitHub whether a newer release is out, and if there is one shows a small button beside the version that updates LENS. Kept on this machine. Help &rarr; Check for updates asks again at any time, even with this off.</p>
       <label class="set-check"><input type="checkbox" id="checkUpdates" checked> Check for a new release when LENS starts</label>
     </section>
     <section class="set-sec">
@@ -2317,6 +2320,26 @@ function showUpdate(u) {
   $("#updateLabel").textContent = u.label;
   $("#updateBtn").setAttribute("aria-label", `Update to LENS ${u.label}`);
 }
+// Help's Check for updates (#164): ask GitHub again now, whatever the setting, so a release that
+// came out while LENS was open is found without closing it.
+$("#checkNow").onclick = async () => {
+  const msg = $("#checkMsg");
+  $("#checkNow").disabled = true;
+  msg.textContent = "Checking…";
+  let r = null;
+  try {
+    r = await Api.json("/api/update?fresh=true&wait=10");
+    while (r.checking) r = await Api.json("/api/update?wait=10&asked=true");
+  } catch { r = {failed: true}; }
+  $("#checkNow").disabled = false;
+  if (r.update) {
+    showUpdate(r.update);
+    msg.textContent = `LENS ${r.update.label} is out.`;
+    $("#updateBtn").onclick();
+  } else if (r.dev) msg.textContent = "This is a development build, which is not checked for updates.";
+  else if (r.failed) msg.textContent = "Could not reach GitHub to check; try again later.";
+  else msg.textContent = `LENS ${r.current} is the newest release.`;
+};
 $("#updateBtn").onclick = () => {
   const u = update;
   $("#updateMsg").textContent = `LENS ${u.label} is out; this is ${u.current}.`;

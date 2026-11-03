@@ -17,7 +17,13 @@ symbol that carries its Pint quantity, so Pint and not sympy does unit arithmeti
 
 - when no symbol is left, the expression is worked out with Pint (`to_quantity`), units and all;
 - when symbols are left, the result is symbolic. A dimensionless number goes into it as a sympy
-  number; a number with units, or a matrix, is an error, since a symbolic result has no units.
+  number; a number with units is an error, since a symbolic result has no units.
+
+Matrices hold symbols too (#163): a matrix literal with a symbol in it is a sympy matrix, and a
+matrix variable that meets one is put in entry by entry (`lift`), so `*` is the matrix product,
+`^` a matrix power, `.*` and `./` elementwise, and det, inv, transpose, trace, solve and the
+indexing functions work on it (`_MATRIX`). Once no symbol is left, each entry is worked out with
+Pint and the entries are put back together as the evaluator builds a matrix.
 
 Symbols bind late: when a stored expression is used, each symbol in it takes the value of the
 variable of that name where it is used (`resolve`): below `m = 2'kg`, in a plot over m, or as a
@@ -66,6 +72,21 @@ class Value(sp.Dummy):
         if not self.q.dimensionless or (x and not 1e-4 <= abs(x) < 1e7):
             return PRECEDENCE["Mul"]
         return PRECEDENCE["Atom"]
+
+
+def is_matrix(x):
+    return isinstance(x, sp.MatrixBase)
+
+
+def lift(v):
+    """A Value holding a matrix as a sympy matrix of Values, one per entry, so sympy multiplies it as
+    a matrix; anything else as it is."""
+    if not isinstance(v, Value) or not np.ndim(v.q.magnitude):
+        return v
+    m = np.asarray(v.q.magnitude)
+    m = m.reshape(-1, 1) if m.ndim == 1 else m
+    label = f"an entry of {v.label}" if v.named else "a matrix entry"
+    return sp.ImmutableMatrix([[Value(label, v.q.__class__(x, v.q.units)) for x in row] for row in m.tolist()])
 
 
 def symbols_in(expr):
@@ -142,6 +163,124 @@ _ANGLES = {"sin", "cos", "tan", "asin", "acos", "atan", "arg"}
 _CONSTANTS = {"pi": sp.pi, "e": sp.E, "∞": sp.oo}
 
 
+# ---- matrices with symbols in them (#163) ---------------------------------------------------------
+def _shape(x):
+    return f"{x.rows}×{x.cols}" if is_matrix(x) else "a scalar"
+
+
+def _matrix_op(op, a, b):
+    """`a op b` where one side or both is a sympy matrix, by the evaluator's rules for matrices."""
+    try:
+        if op in ("+", "-", ".*", "./"):
+            if is_matrix(a) and is_matrix(b) and a.shape != b.shape:
+                raise EvalError(f"Shape mismatch for {op}: {_shape(a)} vs {_shape(b)}")
+            pair = {"+": lambda x, y: x + y, "-": lambda x, y: x - y,
+                    ".*": lambda x, y: x * y, "./": lambda x, y: x / y}[op]
+            if is_matrix(a) and is_matrix(b):   # entry by entry
+                return sp.ImmutableMatrix(a.rows, a.cols, [pair(x, y) for x, y in zip(a, b)])
+            m, other = (a, b) if is_matrix(a) else (b, a)
+            return m.applyfunc(lambda x: pair(x, other) if m is a else pair(other, x))   # a scalar spreads
+        if op == "*":
+            if is_matrix(a) and is_matrix(b) and a.cols != b.rows:
+                raise EvalError(f"Shape mismatch for *: {_shape(a)} * {_shape(b)}. Use .* for elementwise")
+            return sp.ImmutableMatrix(a * b)
+        if op == "/":
+            if is_matrix(b):
+                raise EvalError("Cannot divide by a matrix. Use solve(A, b) or inv(A)")
+            if b == 0:
+                raise EvalError("Division by zero")
+            return sp.ImmutableMatrix(a / b)
+        if op == "^":
+            if is_matrix(b):
+                raise EvalError("Exponent must be a dimensionless scalar")
+            k = _whole(b, "Matrix powers must be integers")
+            if a.rows != a.cols:
+                raise EvalError("A matrix power needs a square matrix")
+            return sp.ImmutableMatrix(a ** k)
+    except (sp.ShapeError, sp.NonSquareMatrixError, ValueError) as err:
+        raise EvalError(f"Shape mismatch for {op}: {err}") from None
+    raise EvalError(f"{op} does not take a matrix with symbols in it")
+
+
+def _whole(x, msg):
+    """A whole number from a built scalar with no symbols in it."""
+    if symbols_in(x):
+        raise EvalError(msg)
+    v = x
+    if isinstance(v, Value) or v.atoms(Value):
+        q = v.q if isinstance(v, Value) else None
+        if q is None or not q.dimensionless:
+            raise EvalError(msg)
+        v = number(q.to("dimensionless").magnitude)
+    if not v.is_number or not v.is_integer:
+        raise EvalError(msg)
+    return int(v)
+
+
+def _square(A, f):
+    if A.rows != A.cols:
+        raise EvalError(f"{f} needs a square matrix")
+    return A
+
+
+def _index(x, size, f, axis):
+    i = _whole(x, f"{f} needs a dimensionless whole number")
+    if not 1 <= i <= size:
+        raise EvalError(f"{f}: {axis} {i} is out of range 1..{size}")
+    return i - 1
+
+
+def _idx(ev, A, i):
+    if 1 in A.shape:
+        flat = list(A)
+        return flat[_index(i, len(flat), "idx", "index")]
+    return A[_index(i, A.rows, "idx", "row"), :]
+
+
+def _inv(ev, A):
+    _square(A, "inv")
+    if A.det() == 0:
+        raise EvalError("Matrix is singular")
+    return sp.ImmutableMatrix(A.inv())
+
+
+def _solve(ev, A, b):
+    _square(A, "solve")
+    if not is_matrix(b):
+        raise EvalError("solve needs a vector or matrix for b")
+    if A.rows != b.rows:
+        raise EvalError(f"Shape mismatch for solve: {_shape(A)} and {_shape(b)}")
+    if A.det() == 0:
+        raise EvalError("Matrix is singular")
+    return sp.ImmutableMatrix(sp.simplify(A.LUsolve(b)))
+
+
+# Functions of a matrix with symbols in it, by the sheet's name, and the arguments each takes.
+_MATRIX = {
+    "det": lambda ev, A: sp.factor(_square(A, "det").det()),
+    "inv": _inv,
+    "transpose": lambda ev, A: sp.ImmutableMatrix(A.T),
+    "trace": lambda ev, A: _square(A, "trace").trace(),
+    "solve": _solve,
+    "idx": _idx,
+    "elem": lambda ev, A, i, j: A[_index(i, A.rows, "elem", "row"), _index(j, A.cols, "elem", "column")],
+    "row": lambda ev, A, i: sp.ImmutableMatrix(A[_index(i, A.rows, "row", "row"), :]),
+    "col": lambda ev, A, j: sp.ImmutableMatrix(A[:, _index(j, A.cols, "col", "column")]),
+    "rows": lambda ev, A: sp.Integer(A.rows),
+    "cols": lambda ev, A: sp.Integer(A.cols),
+    "length": lambda ev, A: sp.Integer(len(A)),
+}
+_ARGS = {"solve": 2, "idx": 2, "elem": 3, "row": 2, "col": 2}
+
+
+def _arity(f, n):
+    return n == _ARGS.get(f, 1)
+
+
+def _wrong_args(f):
+    raise EvalError(f"Wrong number of arguments for {f}")
+
+
 class Builder:
     """Builds the sympy expression for an AST node. `scope` is what names mean (the sheet's values,
     or a plot's); `local` holds a user function's parameters, bound to sympy expressions."""
@@ -156,8 +295,8 @@ class Builder:
         return getattr(self, "b_" + type(n).__name__)(n)
 
     def numeric(self, n, label, named=False):
-        """`n` worked out by the numeric evaluator, as a Value."""
-        return Value(label, self.ev.eval(n, dict(self.names)), named)
+        """`n` worked out by the numeric evaluator, as a Value (a matrix of them for a matrix)."""
+        return lift(Value(label, self.ev.eval(n, dict(self.names)), named))
 
     def fallback(self, n, parts, what):
         """A node sympy has no form for: fine as a number, an error with a symbol in it."""
@@ -176,7 +315,7 @@ class Builder:
     def b_Name(self, n):
         v = _lookup(self.ev, n.name, self.names)
         if v is not None:
-            return resolve(self.ev, v, self.names) if is_symbolic(v) else Value(n.name, v, named=True)
+            return resolve(self.ev, v, self.names) if is_symbolic(v) else lift(Value(n.name, v, named=True))
         if n.name in _CONSTANTS:
             return _CONSTANTS[n.name]
         return self.ev.ev_Name(n, self.scope)   # raises the evaluator's own message
@@ -192,13 +331,15 @@ class Builder:
 
     def b_BinOp(self, n):
         a, b = self.build(n.left), self.build(n.right)
+        if is_matrix(a) or is_matrix(b):
+            return _matrix_op(n.op, a, b)
         if n.op == "+":
             return a + b
         if n.op == "-":
             return a - b
-        if n.op == "*":
+        if n.op in ("*", ".*"):
             return a * b
-        if n.op == "/":
+        if n.op in ("/", "./"):
             if b == 0:
                 raise EvalError("Division by zero")
             return a / b
@@ -210,7 +351,14 @@ class Builder:
         return self.fallback(n, (self.build(n.magnitude), self.build(n.angle)), "∠")
 
     def b_Matrix(self, n):
-        return self.fallback(n, [self.build(e) for row in n.rows for e in row], "A matrix")
+        rows = [[self.build(e) for e in row] for row in n.rows]
+        if not any(symbols_in(e) for row in rows for e in row):
+            return self.numeric(n, "a matrix")   # numbers: the evaluator's own rules (units, shapes)
+        if len({len(r) for r in rows}) != 1:
+            raise EvalError("Matrix rows must all have the same length")
+        if any(is_matrix(e) for row in rows for e in row):
+            raise EvalError("Matrix entries must be scalars")
+        return sp.ImmutableMatrix(rows)
 
     def b_Convert(self, n):
         return self.fallback(n, (self.build(n.expr),), "-> (a symbolic result has no units to convert)")
@@ -230,6 +378,11 @@ class Builder:
                 return Builder(ev, self.scope, dict(zip(params, args))).build(body)
             finally:
                 ev._calls.pop()
+        if f in _MATRIX and not any(isinstance(a, Str) for a in n.args):
+            args = [self.build(a) for a in n.args]
+            if args and is_matrix(args[0]) and symbols_in(args[0]):
+                return _MATRIX[f](ev, *args) if _arity(f, len(args)) else _wrong_args(f)
+            return self.fallback(n, args, f"{f}()")
         if f not in _FUNCS or any(isinstance(a, Str) for a in n.args):
             parts = [self.build(a) for a in n.args if not isinstance(a, Str)]
             return self.fallback(n, parts, f"{f}()")
@@ -237,6 +390,13 @@ class Builder:
             raise EvalError(f"Wrong number of arguments for {f}")
         x = self.build(n.args[0])
         degrees = ev.mode.angle == "degree" and f in _ANGLES
+        if is_matrix(x) and symbols_in(x):
+            if degrees:
+                raise EvalError(f"{f}() of a symbol works in radians, and !trigdeg is on. "
+                                f"Use !trigrad above this line")
+            return x.applyfunc(_FUNCS[f])   # entry by entry, as the evaluator does a matrix
+        if is_matrix(x):
+            return self.numeric(n, f"{f}()")
         if symbols_in(x):
             if degrees:
                 raise EvalError(f"{f}() of a symbol works in radians, and !trigdeg is on. "
@@ -252,7 +412,8 @@ def build(ev, node, scope=None):
 
 
 def to_symbolic(expr):
-    """`expr` with every Value put in as a sympy number. A Value with units or a matrix cannot be."""
+    """`expr` (a sympy expression or matrix) with every Value put in as a sympy number. A Value
+    with units, or a matrix inside a scalar expression, cannot be."""
     rep = {}
     for v in expr.atoms(Value):
         q = v.q
@@ -301,6 +462,8 @@ def to_quantity(ev, expr):
     q = lambda e: to_quantity(ev, e)
     if isinstance(expr, Value):
         return expr.q
+    if is_matrix(expr):
+        return ev.matrix([[q(expr[i, j]) for j in range(expr.cols)] for i in range(expr.rows)])
     if isinstance(expr, sp.Symbol):
         raise EvalError(f"'{expr.name}' is a symbol and has no value here")
     if expr.is_number and not expr.atoms(Value):
@@ -352,6 +515,13 @@ class _Latex(LatexPrinter):
     def _print_Float(self, e):
         return self.fmt.number(float(e))
 
+    def _print_MatrixBase(self, e):
+        """As latex.Printer writes a matrix, so the export's matrix rules read it the same."""
+        body = r" \\ ".join(" & ".join(self._print(e[i, j]) for j in range(e.cols)) for i in range(e.rows))
+        return r"\begin{bmatrix} " + body + r" \end{bmatrix}"
+
+    _print_ImmutableDenseMatrix = _print_MatrixBase
+
     def _print_Heaviside(self, e, exp=None):
         tex = rf"\operatorname{{H}}\left({self._print(e.args[0])}\right)"
         return f"{tex}^{{{exp}}}" if exp else tex
@@ -380,6 +550,12 @@ class _Plain(StrPrinter):
     def _print_ImaginaryUnit(self, e):
         return "i"
 
+    def _print_MatrixBase(self, e):
+        """As the sheet writes a matrix: [a, 2; 3, a^2]."""
+        return "[" + "; ".join(", ".join(self._print(e[i, j]) for j in range(e.cols)) for i in range(e.rows)) + "]"
+
+    _print_ImmutableDenseMatrix = _print_MatrixBase
+
 
 def latex(expr, ev, fmt):
     return _Latex(ev, fmt).doprint(expr)
@@ -393,6 +569,8 @@ def level(expr):
     """How tightly `expr` binds as latex() prints it, on latex.py's scale (ADD .. ATOM)."""
     if isinstance(expr, Value):
         return {PRECEDENCE["Add"]: ADD, PRECEDENCE["Mul"]: MUL}.get(expr.precedence, ATOM)
+    if is_matrix(expr):
+        return ATOM
     if expr.is_Add or expr.could_extract_minus_sign():
         return ADD
     if expr.is_Mul:
