@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### Fixes
+- Clicking a line in the results no longer scrolls it toward the top of the results, and no longer scrolls the editor to put that line at the top: both stay where they are when the line is already showing, and an editor line out of sight is brought to the middle. (#173)
+
 ## [v0.5.4](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.4) (2026-11-03)
 
 ### New
