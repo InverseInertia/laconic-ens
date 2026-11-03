@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.5.4](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.4) (2026-11-03)
+
 ### New
 - **Elementwise functions**: a period before a function's name calls it on each element of its matrix arguments, so `.f(A, B)` with `f(a, b) = a^2 + b` gives the matrix of `f(A_ij, B_ij)`. The matrices must be the same size, and a single number is passed to every call (`.f(A, 1)`). It works for your own functions and the built-ins. (#171)
 - **Symbols in matrices**: a matrix can hold symbols (`$a` then `M = [a, 2; 3, a^2]`), and `*`, `^`, `+`, `-`, `.*`, `./`, `det`, `inv`, `transpose`, `trace`, `solve`, `elem`, `idx`, `row` and `col` work on it symbolically, with a numeric matrix such as `A*v` taken as the matrix product. Once its symbols have values, it is worked out with units like any matrix. (#163)
