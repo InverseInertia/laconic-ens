@@ -1095,9 +1095,16 @@ function focusLine(n) {
   unfoldTo(n);   // a line the results were clicked on is shown, whatever was folded over it
   const lines = ed.value.split("\n");
   const pos = lines.slice(0, n - 1).reduce((a, l) => a + l.length + 1, 0) + lines[n - 1].length;
-  src.focus(); ed.setSelectionRange(pos, pos);
-  const row = src.value.slice(0, ed.toView(pos)).split("\n").length;   // its line in the view
-  src.scrollTop = Math.max(0, (row - 4) * 28);
+  // The editor is scrolled only when the line is out of sight, and then it is brought to the middle;
+  // a line already showing stays where it is. Taking the focus must not mark the caret's old line,
+  // whose row would be scrolled into view and push the clicked row out of place (#173).
+  const top = src.scrollTop;
+  focusing = true;
+  try { src.focus({preventScroll: true}); } finally { focusing = false; }
+  ed.setSelectionRange(pos, pos);
+  src.scrollTop = top;
+  const {y, h} = caretXY(pos), lineTop = y - src.getBoundingClientRect().top;
+  if (lineTop < 0 || lineTop + h > src.clientHeight) src.scrollTop = Math.max(0, top + lineTop - (src.clientHeight - h) / 2);
   markActive(false);   // the row was picked in the results (or is the plot being moved), so it is in view
 }
 
@@ -1107,7 +1114,9 @@ src.addEventListener("input", () => {
   paintSrcMarks();
   if (!applying) acUpdate();
 });
-for (const ev of ["keyup", "click", "focus"]) src.addEventListener(ev, markActive);
+let focusing = false;   // focusLine is moving the caret, so the focus it gives the editor marks nothing
+for (const ev of ["keyup", "click"]) src.addEventListener(ev, markActive);
+src.addEventListener("focus", () => { if (!focusing) markActive(); });
 // Spellcheck comment and heading lines only: the textarea is one element, so it follows the caret.
 // Set only when it changes: Chromium drops the spelling marks each time it is set, even to the same value.
 const spellByLine = () => {

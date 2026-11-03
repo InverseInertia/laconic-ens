@@ -978,6 +978,25 @@ def test_the_results_stay_put_while_typing_on_a_line(page):
     assert abs(page.evaluate(_ROW_SPOT, 41)["top"] - before["top"]) < 2
 
 
+def test_clicking_a_result_leaves_the_editor_put_when_its_line_shows(page):
+    """#173: a click on a row whose line is in sight moves the caret there but does not scroll the editor;
+    a line out of sight is brought to the middle of the editor."""
+    _long_sheet(page)
+    spot = lambda: page.evaluate("() => [document.querySelector('#src').scrollTop, document.querySelector('#out').scrollTop]")
+    page.evaluate("document.querySelector('#src').scrollTop = 0")
+    page.click('#out .row[data-line="6"]')
+    assert page.evaluate("document.querySelector('#src').value.slice(0, document.querySelector('#src').selectionStart).split('\\n').length") == 6
+    assert spot()[0] == 0
+    page.evaluate("document.querySelector('#out').querySelector('.row[data-line=\"70\"]').scrollIntoView()")
+    before = spot()
+    page.click('#out .row[data-line="70"]')
+    got = page.evaluate("""() => { const s = document.querySelector('#src');
+        const top = 12 + parseFloat(getComputedStyle(s).lineHeight) * 69 - s.scrollTop;
+        return {top, height: s.clientHeight}; }""")
+    assert abs(got["top"] - got["height"] / 2) < 40, got
+    assert spot()[1] == before[1]                         # the results did not move
+
+
 def test_renaming_leaves_the_editor_and_results_where_they_were(page):
     """#159: the rename dialog gives the focus back to the editor without moving it or the results."""
     text = _long_sheet(page) + "\nL = 2\ny = L * 3"
