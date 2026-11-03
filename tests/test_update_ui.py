@@ -59,3 +59,24 @@ def test_the_setting_turns_the_check_off(page, monkeypatch):
     page.wait_for_timeout(500)
     assert page.is_hidden("#updateBtn") and fake.calls == []
     assert not page.is_checked("#checkUpdates")
+
+
+def test_help_checks_for_updates_while_lens_is_open(page, monkeypatch):
+    """Help's Check for updates asks GitHub again, so a release that came out while LENS was open is
+    found without closing it (#164)."""
+    from test_updates import rel
+    fake = Fake([rel("v0.4.5")])
+    monkeypatch.setattr(updates, "updater", fake.updater())
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    page.wait_for_timeout(300)
+    assert page.is_hidden("#updateBtn")
+    page.click("#helpBtn")
+    page.click("#checkNow")
+    page.wait_for_function("document.querySelector('#checkMsg').textContent.includes('newest')")
+    assert "v0.4.5" in page.inner_text("#checkMsg")
+    fake.releases = [rel("v0.5.0")]
+    page.click("#checkNow")
+    page.wait_for_selector("#updateDlg[open]")
+    assert "v0.5.0" in page.inner_text("#updateMsg")
+    assert page.is_visible("#updateBtn")

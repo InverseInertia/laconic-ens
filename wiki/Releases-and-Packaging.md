@@ -45,7 +45,7 @@ Push a tag such as `v0.2.0` on main (`git tag v0.2.0 && git push origin v0.2.0`)
 
 ## Updating from LENS
 
-`laconic/updates.py` asks `https://api.github.com/repos/InverseInertia/laconic-ens/releases` once per run (in the background, 5 s timeout) for the newest release that is not a draft or a prerelease and is tagged `vX.Y.Z` (so `installer-v*` tags never count), and compares it with `_version.py` as numbers; a `0+dev` checkout never asks. The page shows a button beside the version when it is newer. What **Update** does depends on how the program was installed:
+`laconic/updates.py` asks `https://api.github.com/repos/InverseInertia/laconic-ens/releases` in the background (5 s timeout) when LENS starts, again when another launch hands a window over to the running LENS (#165) or when Help → Check for updates asks (#164), and on a page load more than six hours after the last answer, for the newest release that is not a draft or a prerelease and is tagged `vX.Y.Z` (so `installer-v*` tags never count), and compares it with `_version.py` as numbers; a `0+dev` checkout never asks. The page shows a button beside the version when it is newer. What **Update** does depends on how the program was installed:
 
 | Install | Recognised by | Update |
 |---|---|---|

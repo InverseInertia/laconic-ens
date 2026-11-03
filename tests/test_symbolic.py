@@ -96,8 +96,46 @@ def test_a_number_with_units_cannot_go_into_a_symbolic_result():
     assert r.error == ("L (2 m) has units, and a symbolic result cannot carry units. "
                        "Declare L a symbol too ($L), or give the symbols values above this line")
     assert "props() has them" in last('$q\nprops("D", "T", 300\'K, "P", 1\'atm, "Water") * q').error
-    assert "matrix" in last("$q\nexp(q) * [1, 2]").error
+    assert "has them" in last("$q\nq * [1, 2]*1'm").error
     assert "-> (a symbolic result has no units to convert) takes numbers only" in last("$q\nq -> 'm").error
+
+
+# ---- matrices (#163) --------------------------------------------------------------------------
+def test_a_matrix_holds_symbols():
+    r = rows("$a\nM = [a, 2; 3, a^2]\nv = [a; 1]\nw = M*v\nd = det(M)")
+    assert r[1].text == "M = [a, 2; 3, a^2]"
+    assert r[1].stages[-1] == r"\begin{bmatrix} a & 2 \\ 3 & a^{2} \end{bmatrix}"
+    assert r[3].stages[-1] == r"\begin{bmatrix} a^{2} + 2 \\ a^{2} + 3 \cdot a \end{bmatrix}"
+    assert r[3].text == "w = [a^2 + 2; a^2 + 3*a]"
+    assert r[4].text == "d = a^3 - 6"
+
+
+def test_a_numeric_matrix_meets_a_symbolic_one_as_a_matrix():
+    r = rows("A = [1, 2; 3, 4]\n$a\nv = [a; 1]\nA*v\nv*A\n[a, 1] .* [2, 3]\n[a, 1] + 1\nexp(a) * [1, 2]")
+    assert r[3].text == "[a + 2; 3*a + 4]"
+    assert r[4].kind == "error" and "Shape mismatch for *: 2×1 * 2×2" in r[4].error
+    assert r[5].text == "[2*a, 3]"
+    assert r[6].text == "[a + 1, 2]"
+    assert r[7].text == "[exp(a), 2*exp(a)]"
+
+
+def test_matrix_functions_take_symbols():
+    src = "$k, $a\nK = k*[1, -1; -1, 1]\n"
+    assert last(src + "transpose([a; 1])").text == "[a, 1]"
+    assert last(src + "elem(K, 1, 2)").text == "-k"
+    assert last(src + "idx([a; 1], 1)").text == "a"
+    assert last(src + "trace(K)").text == "2*k"
+    assert last(src + "K^2").text == "[2*k^2, -2*k^2; -2*k^2, 2*k^2]"
+    assert last(src + "solve([a, 1; 1, 2], [1; 0])").text == "[2/(2*a - 1); -1/(2*a - 1)]"
+    assert last(src + "inv(K)").error == "Matrix is singular"
+    assert last(src + "det([a, 1])").error == "det needs a square matrix"
+    assert last(src + "sin([a, 0])").text == "[sin(a), 0]"
+
+
+def test_a_symbolic_matrix_is_worked_out_with_units_once_its_symbols_have_values():
+    r = rows("$k\nK = k*[1, -1; -1, 1]\nk = 2'N/'m\nK2 = K\nf = K*[1; 0]*1'm")
+    assert r[3].text.startswith("K2 = [") and r[3].text.endswith("N/m")
+    assert r[4].kind != "error" and r[4].text.endswith("N")
 
 
 def test_symbols_bind_late_and_are_worked_out_with_units():

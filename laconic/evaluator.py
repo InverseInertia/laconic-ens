@@ -366,7 +366,10 @@ class Evaluator:
             return self._as_numpy(a) ** n
 
     def ev_Matrix(self, n, scope):
-        rows = [[self.eval(e, scope) for e in row] for row in n.rows]
+        return self.matrix([[self.eval(e, scope) for e in row] for row in n.rows])
+
+    def matrix(self, rows):
+        """One matrix Quantity from rows of scalar quantities, in the first entry's units."""
         if len({len(r) for r in rows}) != 1:
             raise EvalError("Matrix rows must all have the same length")
         unit0 = rows[0][0].units

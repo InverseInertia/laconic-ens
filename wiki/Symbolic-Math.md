@@ -48,7 +48,7 @@ Functions sympy knows go in as functions: `sqrt abs floor ceil heaviside sin cos
 A symbolic result has **no units**. So:
 
 - A number without units (typed, or a variable holding one) goes in as that number. Decimals keep the sheet's display precision when shown.
-- A number **with** units, a matrix, a `->` conversion or a call sympy does not know (`props`, the matrix functions) cannot go into a symbolic result. The line says so, for example `L (2 m) has units, and a symbolic result cannot carry units. Declare L a symbol too ($L), or give the symbols values above this line`.
+- A number **with** units, a `->` conversion or a call sympy does not know (`props`, `eig` and the other numeric matrix functions) cannot go into a symbolic result. The line says so, for example `L (2 m) has units, and a symbolic result cannot carry units. Declare L a symbol too ($L), or give the symbols values above this line`.
 
 Symbols **bind late**. When a stored expression is used, each symbol in it takes the value of the variable of that name where it is used. So once every symbol in an expression has a value, the expression is a number, worked out with Pint, **units and all**:
 
@@ -64,6 +64,23 @@ w = acc -> 'ft/'s^2       16.4 ft/s²
 The middle stage shows the expression with the values put in. The same works wherever the sheet needs a number: a plot over a symbol draws its expression (`$t`, `y = t^2`, `!plot y, t = 0 .. 1`), a numeric `!root` can read a derived formula, and a user function's parameter named like a symbol gives it its value inside the function.
 
 A symbol still without a value where a number is needed is an error: `'x' is a symbol and has no value here`.
+
+### Matrices
+
+A matrix can hold symbols, and a numeric matrix that meets one is put in entry by entry:
+
+```
+$a, $k
+M = [a, 2; 3, a^2]
+w = M*[a; 1]              [a² + 2; a² + 3·a]
+d = det(M)                a³ − 6
+K = k*[1, -1; -1, 1]
+K^2                       [2·k², −2·k²; −2·k², 2·k²]
+k = 2'N/'m
+K                         [2, −2; −2, 2] N/m
+```
+
+`*` is the matrix product (`.*` and `./` work entry by entry), `^` a whole-number matrix power, and `+` and `-` take two matrices of one shape or a matrix and a number. `det`, `inv`, `transpose`, `trace`, `solve(A, b)`, `elem`, `idx`, `row`, `col`, `rows`, `cols` and `length` take a matrix with symbols, and a function sympy knows (`sin`, `exp` and the rest) works on each entry. Once every symbol has a value, the matrix is worked out with units like any other, so its entries must share one dimension then.
 
 ### Angles
 
@@ -97,4 +114,4 @@ Symbolic results print in the LaTeX, Markdown and PDF exports the way they look 
 - Symbols have no assumptions (real, positive), so sympy keeps the general answer: `sqrt(x^2)` stays as it is, and `x^2 = -1` has the solutions ±i.
 - Results are what sympy gives, without a separate simplify step.
 - A solve sympy finds hard can take a while, and it runs as you type. Its answer is kept for the same equations, so other edits do not solve it again.
-- There are no symbolic matrices, derivatives or integrals yet.
+- There are no symbolic derivatives or integrals yet, and `eig`, `norm` and the other numeric matrix functions need a matrix without symbols.
