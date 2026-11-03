@@ -38,7 +38,8 @@ app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
 HELP_MARKER = "      <!-- command help: rows generated from commands.COMMANDS by server.py -->"
 VERSION_MARKER = "{{version}}"  # in index.html; replaced with the program's version (_version.py)
-CHANGELOG_MARKER = "      <!-- changelog: rendered from CHANGELOG.md by server.py -->"
+CHANGELOG_MARKER = "      <!-- changelog: rendered from CHANGELOG.md by server.py -->"   # the newest section, in Help
+FULL_CHANGELOG_MARKER = "    <!-- full changelog: rendered from CHANGELOG.md by server.py -->"   # every section, in its dialog
 PREFS_MARKER = "{{prefs}}"      # in index.html; replaced with the stored display preferences (settings.py)
 PREF_KEYS_MARKER = "{{prefkeys}}"  # in index.html; replaced with the preference keys (settings.PREFS)
 EXAMPLES = Path(__file__).parent / "examples"  # shipped with the program, so always there to open
@@ -168,7 +169,8 @@ def index():
     if stored.get("checkUpdates") is not False:
         updates.updater.check(max_age=updates.MAX_AGE)   # in the background; the page asks for the answer later
     return HTMLResponse(page.replace(HELP_MARKER, help_rows()).replace(VERSION_MARKER, version_label())
-                        .replace(CHANGELOG_MARKER, changelog.html())
+                        .replace(CHANGELOG_MARKER, changelog.html(latest=True))
+                        .replace(FULL_CHANGELOG_MARKER, changelog.html())
                         .replace(PREFS_MARKER, prefs).replace(PREF_KEYS_MARKER, json.dumps(list(settings.PREFS))),
                         headers={"cache-control": "no-cache"})
 

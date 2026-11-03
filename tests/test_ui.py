@@ -404,16 +404,21 @@ def test_pasted_table_becomes_matrix(page):
     assert value(page) == "# note "
 
 
-def test_help_ends_with_the_changelog_and_the_link_scrolls_to_it(page):
+def test_help_shows_the_newest_release_and_the_full_changelog_has_its_own_dialog(page):
+    """#166: Help ends with the newest section only; the whole changelog opens in its own dialog."""
     page.click("#helpBtn")
     page.wait_for_selector("#helpDlg[open]")
-    url = page.url
-    assert page.locator("#changelog h4").count() > 0
+    assert page.locator("#changelog h4").count() == 1
     assert page.evaluate("document.querySelector('#helpDlg .dlg-body').lastElementChild.id") == "changelog"
+    page.click("#changelogFull")
+    page.wait_for_selector("#changelogDlg[open]")
+    assert page.locator("#changelogDlg h4").count() > 1
+    assert page.locator("#changelogDlg h4 >> nth=0").inner_text() == page.locator("#changelog h4").inner_text()
+    page.click("#changelogDlg .close")
+    assert page.evaluate("document.querySelector('#helpDlg').open")   # back in Help
     page.click("#changelogLink")
-    page.wait_for_function("""() => { const b = document.querySelector('#helpDlg .dlg-body').getBoundingClientRect(),
-        t = document.querySelector('#changelog').getBoundingClientRect(); return Math.abs(t.top - b.top) < 40; }""")
-    assert page.url == url   # the address is left alone
+    page.wait_for_selector("#changelogDlg[open]")
+    page.click("#changelogDlg .close")
     page.click("#changelogTop")
     page.wait_for_function("document.querySelector('#helpDlg .dlg-body').scrollTop == 0")
     page.click("#helpDlg .close")
@@ -505,6 +510,54 @@ def test_save_writes_back_to_the_opened_file(page):
     # Renaming the sheet means a new file.
     page.fill("#name", "other")
     assert page.get_attribute("#save", "title") == "Save the worksheet (Ctrl+S)"
+
+
+# A real file handle (the origin's private file system), which IndexedDB can keep.
+OPFS = """async () => {
+  const root = await navigator.storage.getDirectory();
+  const h = await root.getFileHandle("beam.lens", {create: true});
+  const w = await h.createWritable(); await w.write("x = 2"); await w.close();
+  window.showOpenFilePicker = async () => [h];
+}"""
+# The keys kept in LENS's handle store, read without reading the handles back: headless Chromium
+# crashes reading a file handle out of IndexedDB, which a browser with a window does not.
+KEPT = """() => new Promise((resolve) => {
+  const r = indexedDB.open("lens", 1);
+  r.onsuccess = () => { const q = r.result.transaction("files").objectStore("files").getAllKeys();
+                        q.onsuccess = () => { r.result.close(); resolve(q.result); }; };
+})"""
+
+
+def test_the_file_a_sheet_came_from_is_kept_for_after_a_reload(page):
+    """#168: the handle of the file a sheet was opened from is kept in IndexedDB, and forgotten
+    when the sheet is renamed (the next save is a new file)."""
+    page.evaluate(OPFS)
+    page.click("#open")
+    page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
+    page.wait_for_function(f"({KEPT})().then((k) => k.includes('sheet'))")
+    page.fill("#name", "other")
+    page.wait_for_function(f"({KEPT})().then((k) => !k.includes('sheet'))")
+
+
+def test_after_a_reload_the_sheet_keeps_its_name_and_text(page):
+    """#168: the sheet's name, as opened, saved or typed, is kept with its text, so a reload no
+    longer leaves an opened file's text under the default name "sheet"."""
+    page.evaluate(FAKE_FS)
+    page.click("#open")
+    page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
+    assert page.input_value("#name") == "beam"
+    page.evaluate(FAKE_FS)
+    page.click("#saveAs")   # Save As renames the sheet to the file it was saved as
+    page.wait_for_function("document.querySelector('#name').value === 'copy'")
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
+    assert page.input_value("#name") == "copy"
+    page.fill("#name", "other")
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value === 'x = 2'")
+    assert page.input_value("#name") == "other"
 
 
 def test_the_sheet_name_field_grows_to_fit_a_long_name(page):
