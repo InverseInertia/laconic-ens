@@ -350,10 +350,11 @@
   .help ul.examples li { display: flex; align-items: center; gap: 10px; }
   #changelog { margin-top: 24px; padding-top: 4px; border-top: 1px solid var(--rule); }
   #changelog h3 { margin-top: 14px; }
-  #changelog h4 { margin: 16px 0 4px; font: 600 15px var(--sans); }
-  #changelog h4 a { text-decoration: none; }
-  #changelog h5 { margin: 8px 0 4px; font: 600 12px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); }
-  #changelog ul ul { margin: 4px 0 0; }
+  .changelog h4 { margin: 16px 0 4px; font: 600 15px var(--sans); }
+  .changelog h4 a { text-decoration: none; }
+  .changelog h5 { margin: 8px 0 4px; font: 600 12px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--text-soft); }
+  .changelog ul ul { margin: 4px 0 0; }
+  #changelogDlg .dlg-body > h4:first-child { margin-top: 0; }
   @media (max-width: 560px) { .help .welcome { flex-direction: column; text-align: center; } }
   .u-empty { color: var(--text-soft); font-size: 13.5px; }
 
@@ -457,7 +458,7 @@
       <div id="helpLogo"><img src="/static/logo.svg" alt=""></div>
       <div>
         <h1 id="helpTitle">Welcome to LENS</h1>
-        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a> &middot; <a href="#changelog" id="changelogLink">Changelog</a> &middot; <button id="checkNow" class="linklike">Check for updates</button> <span id="checkMsg" role="status"></span></p>
+        <p class="version" id="helpVersion">LENS {{version}} &middot; <a href="https://github.com/inverseinertia/laconic-ens/releases" target="_blank" rel="noopener">Releases</a> &middot; <button id="changelogLink" class="linklike">Changelog</button> &middot; <button id="checkNow" class="linklike">Check for updates</button> <span id="checkMsg" role="status"></span></p>
         <p>The Laconic Engineering Notebook System: a units-aware worksheet. Type one expression per line on the left and the typeset result appears on the right as you type. Copy LaTeX line by line, or export a whole document.</p>
         <p>Worksheets are plain-text <code>.lens</code> files, so they diff and merge in git. Units are marked with an apostrophe (<code>'kN</code>), so a bare name is always a variable.</p>
         <p><a href="https://github.com/inverseinertia/laconic-ens/wiki" target="_blank" rel="noopener">Read the full documentation on the wiki &rarr;</a></p>
@@ -596,10 +597,18 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
     <h3>Settings <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Settings" target="_blank" rel="noopener">Settings</a></h3>
     <p>Settings has six parts: <strong>Reference</strong> (every key and command), <strong>Layout</strong> (side by side or stacked; <kbd>Alt</kbd>+<kbd>L</kbd> switches), <strong>Updates</strong> (whether LENS checks for a new release), <strong>Extended characters</strong> (the table behind <kbd>Ctrl</kbd>+<kbd>G</kbd>), <strong>Global units</strong> and <strong>Theme</strong> (colors, fonts, text size and paper style). Settings are stored on this machine, so every browser shows the same ones, and the command line uses the same global units. Press <kbd>F1</kbd> any time to bring this window back.</p>
 
-    <section id="changelog" aria-labelledby="changelogTitle">
-      <h3 id="changelogTitle">Changelog <a class="wiki" href="#helpTitle" id="changelogTop">Back to top</a></h3>
+    <section id="changelog" class="changelog" aria-labelledby="changelogTitle">
+      <h3 id="changelogTitle">What's new <a class="wiki" href="#helpTitle" id="changelogTop">Back to top</a></h3>
       <!-- changelog: rendered from CHANGELOG.md by server.py -->
+      <p><button id="changelogFull">Full changelog</button></p>
     </section>
+  </div>
+</dialog>
+
+<dialog id="changelogDlg" aria-labelledby="changelogDlgTitle">
+  <div class="dlg-head"><h2 id="changelogDlgTitle">Changelog</h2><button class="close">Close</button></div>
+  <div class="dlg-body help changelog">
+    <!-- full changelog: rendered from CHANGELOG.md by server.py -->
   </div>
 </dialog>
 
@@ -1129,12 +1138,39 @@ document.fonts.ready.then(fitName);
 // Which file a save goes to is decided in savefile.js; this is its adapter onto the browser.
 // A sheet the program was started with (a double-clicked .lens file) has a stand-in handle,
 // {name, server: true}, that the server writes through.
+// The handle and the sheet's name are kept in this browser (#168), so after a reload, or LENS
+// closed and opened again, Ctrl+S still writes to the same file under the same name. A handle
+// can only be kept in IndexedDB; the stand-in for a start file is not kept (openStartFile finds
+// it again).
 let fileHandle = null;
 const LENS_TYPES = [{description: "LENS worksheet", accept: {"text/plain": [".lens"]}}];
-function setFile(handle) {
+const handleStore = (mode, fn) => new Promise((resolve, reject) => {
+  const req = indexedDB.open("lens", 1);
+  req.onupgradeneeded = () => req.result.createObjectStore("files");
+  req.onerror = () => reject(req.error);
+  req.onsuccess = () => {
+    const db = req.result, tx = db.transaction("files", mode);
+    let r;
+    try { r = fn(tx.objectStore("files")); } catch (e) { db.close(); reject(e); return; }   // a handle that cannot be kept
+    tx.oncomplete = () => { db.close(); resolve(r && r.result); };
+    tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
+  };
+});
+function keepHandle(handle) {
+  const kept = handle && !handle.server ? handle : null;
+  try {
+    handleStore("readwrite", (s) => (kept ? s.put(kept, "sheet") : s.delete("sheet"))).catch(() => {});
+  } catch {}
+}
+async function keptHandle() {
+  try { return (await handleStore("readonly", (s) => s.get("sheet"))) || null; } catch { return null; }
+}
+function setFile(handle, keep = true) {
   fileHandle = handle;
   $("#save").title = SaveFile.buttonTitle(handle);
+  if (keep) keepHandle(handle);
 }
+const keepName = () => store.set("name", nameEl.value);
 
 async function save(as) {
   const r = await SaveFile.save(as, {
@@ -1157,16 +1193,17 @@ async function save(as) {
   if (r.kind === "failed") say(r.message);
   if (r.kind !== "saved") return;
   setFile(r.handle);
-  nameEl.value = r.name; fitName();
+  nameEl.value = r.name; fitName(); keepName();   // the sheet takes the name it was saved under
   say(r.message);
 }
 function load(text, name, handle = null) {
-  ed.value = text; nameEl.value = name; fitName(); setFile(handle); evaluate();
+  ed.value = text; store.set("text", text);
+  nameEl.value = name; fitName(); keepName(); setFile(handle); evaluate();
 }
 $("#save").onclick = () => save(false);
 $("#saveAs").onclick = () => save(true);
 // Renaming the sheet means a new file: the next Save asks where, rather than overwriting the old one.
-nameEl.addEventListener("input", () => setFile(null));
+nameEl.addEventListener("input", () => { setFile(null); keepName(); });
 // Export menu: one header button, a list of formats under it.
 const exportList = $("#exportList");
 function showExports(open) {
@@ -1997,8 +2034,10 @@ addEventListener("pagehide", () => {
   if (a) Api.beacon(`/api/solve/${a.job}/interrupt`, {});
 });
 $("#helpBtn").onclick = () => $("#helpDlg").showModal();
-// The changelog links scroll Help, without touching the address.
-$("#changelogLink").onclick = (ev) => { ev.preventDefault(); $("#changelog").scrollIntoView({block: "start", behavior: "smooth"}); };
+// Help shows the newest release's changes (#166); the whole changelog has its own dialog.
+const showChangelog = () => { $("#changelogDlg").showModal(); $("#changelogDlg .dlg-body").scrollTop = 0; };
+$("#changelogLink").onclick = showChangelog;
+$("#changelogFull").onclick = showChangelog;
 $("#changelogTop").onclick = (ev) => { ev.preventDefault(); $("#helpDlg .dlg-body").scrollTo({top: 0, behavior: "smooth"}); };
 // Worked examples come from the program itself, so they are there however it was installed.
 Api.json("/api/examples").then((list) => {
@@ -2298,7 +2337,7 @@ async function openStartFile() {
   try { seen = sessionStorage.getItem("lens:opened"); sessionStorage.setItem("lens:opened", o.path); } catch {}
   if (seen === o.path && store.get("text", null) !== null) ed.value = store.get("text", null);
   else { ed.value = o.text; store.set("text", o.text); }
-  nameEl.value = f.name; fitName(); setFile(f.handle);
+  nameEl.value = f.name; fitName(); keepName(); setFile(f.handle);
   return true;
 }
 
@@ -2381,6 +2420,12 @@ $("#checkUpdates").onchange = (ev) => {
   if (!(await openStartFile())) {
     const text = store.get("text", null);
     ed.value = text ?? await Api.text("/static/example.lens");
+    // The name and file the stored text was last opened from or saved to (#168).
+    if (text !== null) {
+      nameEl.value = store.get("name", nameEl.value) || ""; fitName();
+      const kept = await keptHandle();
+      if (kept && !fileHandle) setFile(kept, false);
+    }
   }
   wrap = store.get("wrap", "inline");
   $("#wrap").value = wrap;

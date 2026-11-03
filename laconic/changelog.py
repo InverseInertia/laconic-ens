@@ -1,4 +1,4 @@
-"""The changelog, shown at the bottom of Help.
+"""The changelog: its newest section at the bottom of Help, and the whole of it in its own dialog.
 
 `CHANGELOG.md` lives at the repository root. A source checkout (and an editable install) reads it
 from there; an installed wheel and the frozen program carry a copy inside the package
@@ -133,10 +133,11 @@ def markdown(text):
     return _body(re.sub(r"<!--.*?-->", "", text, flags=re.S).splitlines())
 
 
-def to_html(text, version=__version__):
-    """The changelog's sections as HTML, newest first. An empty Unreleased section is left out.
-    A release build (version stamped from its tag) is made before the release job gives the tag
-    its own section, so there Unreleased is shown under the release's version."""
+def to_html(text, version=__version__, latest=False):
+    """The changelog's sections as HTML, newest first, or only the newest with `latest`. An empty
+    Unreleased section is left out. A release build (version stamped from its tag) is made before
+    the release job gives the tag its own section, so there Unreleased is shown under the
+    release's version."""
     parts = sections(text)
     tags = {m.group(1) for heading, _ in parts if (m := _TAG.match(heading))}
     html = []
@@ -148,11 +149,14 @@ def to_html(text, version=__version__):
             if not version.endswith("+dev") and "v" + version not in tags:
                 heading = "v" + version
         html.append(f"<h4>{inline(heading)}</h4>{body}")
+        if latest:
+            break
     return "\n".join(html)
 
 
-def html(version=__version__):
-    """What Help shows: the rendered changelog, or a note when there is none to show."""
+def html(version=__version__, latest=False):
+    """The rendered changelog (only its newest section with `latest`, as Help shows it), or a
+    note when there is none to show."""
     text = read()
-    rendered = to_html(text, version) if text else ""
+    rendered = to_html(text, version, latest) if text else ""
     return rendered or MISSING

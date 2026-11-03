@@ -1,4 +1,4 @@
-"""The changelog at the bottom of Help: finding CHANGELOG.md, rendering it, and shipping it."""
+"""The changelog (its newest section at the bottom of Help, all of it in its own dialog): finding CHANGELOG.md, rendering it, and shipping it."""
 from pathlib import Path
 
 from laconic import changelog, server
@@ -80,11 +80,23 @@ def test_help_ends_with_the_changelog_and_links_to_it(monkeypatch, tmp_path):
     monkeypatch.setenv("LENS_CONFIG_DIR", str(tmp_path))
     page = server.index().body.decode()
     assert "<!-- changelog:" not in page
-    assert '<a href="#changelog" id="changelogLink">Changelog</a>' in page
+    assert '<button id="changelogLink" class="linklike">Changelog</button>' in page
     help_dialog = page[page.index('<dialog id="helpDlg"'):]
     help_dialog = help_dialog[:help_dialog.index("</dialog>")]
     section = help_dialog[help_dialog.index('<section id="changelog"'):]
-    assert changelog.html() in section and section.rstrip().endswith("</section>\n  </div>")
+    assert changelog.html(latest=True) in section and section.rstrip().endswith("</section>\n  </div>")
+    assert changelog.html() not in section   # only the newest release in Help (#166)
+    full = page[page.index('<dialog id="changelogDlg"'):]
+    assert changelog.html() in full[:full.index("</dialog>")]
+
+
+def test_latest_is_only_the_newest_section():
+    assert changelog.to_html(SAMPLE, "0+dev", latest=True).count("<h4>") == 1
+    assert changelog.to_html(SAMPLE, "0+dev", latest=True).startswith(changelog.to_html(SAMPLE, "0+dev").split("\n")[0])
+    text = SAMPLE.replace("<!-- nothing yet -->", "### Fixes\n- Something. (#9)")
+    latest = changelog.to_html(text, "0+dev", latest=True)
+    assert latest.startswith("<h4>Unreleased</h4><h5>Fixes</h5>") and "v0.2.0" not in latest
+
 
 
 def test_builds_ship_a_copy():
