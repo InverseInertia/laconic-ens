@@ -53,8 +53,10 @@ class Implicit:
 
 @dataclass(frozen=True)
 class Call:
+    """`f(x)`, or `.f(A, B)` (`elementwise`): f applied to each element of equal-sized matrices."""
     func: str
     args: tuple
+    elementwise: bool = False
 
 
 @dataclass(frozen=True)

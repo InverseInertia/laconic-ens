@@ -8,7 +8,22 @@ F = [10; 5] * 'kN              a unit on its own is 1 of that unit
 x = solve(A, F)
 A * B                          matrix product (scaling if one side is scalar)
 A .* B     A ./ B              elementwise
+.f(A, B)                       f on each element: f(A_ij, B_ij), any function
 ```
+
+## Elementwise functions
+
+A period before a function's name calls it once for each element and gathers the answers into a matrix of the same size: `.f(A, B)` is the matrix of `f(A_ij, B_ij)`. It works for user functions and built-ins alike, so a function written for single numbers (one with `*`, `^` or `/` of its parameters, which mean matrix products on matrices) can be run over whole matrices.
+
+```
+f(a, b) = a^2 + b
+A = [1, 2; 3, 4]
+B = [10, 20; 30, 40]
+C = .f(A, B)          [11, 24; 39, 56]
+D = .f(A, 1)          a single number goes to every call: [2, 5; 10, 17]
+```
+
+Every matrix argument must be the same size, and the function must give one number for each element, in units that agree with each other. The arguments must be numbers: a symbol, or text, is refused.
 
 ## Functions
 
