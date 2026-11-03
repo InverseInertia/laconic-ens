@@ -38,6 +38,8 @@ LINES = [
       ("command", None), ("expr", None), ("funcdef", None), ("unitdef", None)]),
     ("!plot x, x = 0 .. 1\n  title: A\n  grid: off\n\nx = 2",
      [("plot", 1), ("plotopt", 1), ("plotopt", 1), ("blank", None), ("assign", None)]),
+    ("!plugin pipenet\n  A = [1; 1]\n  # why\n  #@ state {}\nQ = A\n!pluginvar Q, A",
+     [("plugin", 1), ("pluginline", 1), ("pluginline", 1), ("pluginline", 1), ("assign", None), ("pluginvar", None)]),
     ("!plot x, x = 0 .. 1\n  y = 2",                       # only option lines belong to a plot
      [("plot", 1), ("assign", None)]),
     ("!root x\n  equation: x = 1\n  # aside\n  y = 2\n  #@ result {}\n\n  z = 1",

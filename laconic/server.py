@@ -20,7 +20,7 @@ from . import changelog, evaluate as evaluate_sheet, snippet
 from .exports import export as export_sheet
 from .sheet import block_at
 from .sheettext import scan
-from . import settings, unittags, updates
+from . import plugins, settings, unittags, updates
 from .blockedit import to_json
 from ._version import label as version_label
 from .commands import help_rows
@@ -101,6 +101,13 @@ class SolveEditBody(BaseModel):
     text: str
     line: int
     autorun: bool
+
+
+class PluginWriteBody(BaseModel):
+    text: str
+    line: int                          # the `!plugin` line, 1-based
+    state: dict | None = None          # what the plugin keeps in its `#@ state` line
+    outputs: dict[str, str] = {}       # name -> expression, for its `name = value` lines, in order
 
 
 class TextBody(BaseModel):
@@ -357,6 +364,39 @@ def solve_edit(body: SolveEditBody):
         return {"ok": True, "edits": to_json(body.text, edits)}
     except SolverError as e:
         return {"ok": False, "error": str(e)}
+
+
+@app.get("/api/plugins/{name}")
+def plugin_manifest(name: str, fresh: bool = False):
+    """A plugin's manifest, fetched (once, or again with `fresh`) from where plugins come from
+    (plugins.source). `{ok: false, error}` when it cannot be had: offline, or no such plugin."""
+    try:
+        m = plugins.fetch(name, fresh=fresh)
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "name": name, "title": m.get("title", name), "version": m.get("version", ""),
+            "url": f"/plugins/{name}/{m.get('entry', 'index.html')}"}
+
+
+@app.get("/plugins/{name}/{path}")
+def plugin_file(name: str, path: str):
+    """One file of a fetched plugin, sandboxed by its headers (plugins.CSP)."""
+    try:
+        data, kind = plugins.file(name, path)
+    except plugins.PluginError as e:
+        raise HTTPException(404, str(e))
+    return Response(data, media_type=kind, headers={"content-security-policy": plugins.CSP,
+                                                     "cache-control": "no-cache", "x-content-type-options": "nosniff"})
+
+
+@app.post("/api/pluginwrite")
+def plugin_write(body: PluginWriteBody):
+    """Edits that write what a plugin sent (its state and its `name = value` lines) into its block."""
+    try:
+        e = plugins.edits(body.text, body.line, body.state, body.outputs)
+    except plugins.PluginError as err:
+        return {"ok": False, "error": str(err)}
+    return {"ok": True, "edits": to_json(body.text, e)}
 
 
 @app.get("/api/settings")

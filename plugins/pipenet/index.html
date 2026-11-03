@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipe network</title>
+<style>
+  :root {
+    --paper: #ffffff; --paper-deep: #eef3f8; --grid: #e3eaf1; --text: #1d2b3a; --text-soft: #5b7086;
+    --ink: #1f5fa8; --on-ink: #ffffff; --rule: #9fb4c8; --err: #c62828; --sans: system-ui, sans-serif; --mono: ui-monospace, monospace;
+    --hi: #e08a00;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--paper); color: var(--text); font: 400 13px/1.4 var(--sans); display: grid;
+         grid-template-columns: 200px minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr); }
+  @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: auto minmax(300px, 1fr) auto; } }
+  aside { padding: 10px; overflow: auto; background: var(--paper-deep); border-right: 1px solid var(--rule); }
+  aside.right { border-right: 0; border-left: 1px solid var(--rule); }
+  h3 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: .04em; color: var(--text-soft); margin: 12px 0 6px; }
+  h3:first-child { margin-top: 0; }
+  button, select, input { font: inherit; color: var(--text); background: var(--paper); border: 1px solid var(--rule); border-radius: 0; }
+  button { cursor: pointer; padding: 3px 8px; }
+  button:hover { border-color: var(--ink); }
+  button.on, button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  button:disabled { opacity: .45; cursor: default; }
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .palette button { padding: 2px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+  .palette button svg { width: 100%; height: 100%; }
+  .row-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+  label.f { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 6px; margin: 4px 0; }
+  label.f input, label.f select { width: 100%; padding: 2px 4px; }
+  label.c { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+  .hint { color: var(--text-soft); font-size: 12px; margin: 6px 0; }
+  main { overflow: auto; position: relative; }
+  #canvas { display: block; touch-action: none; user-select: none; cursor: crosshair; }
+  #empty { position: absolute; left: 24px; top: 20px; max-width: 420px; pointer-events: none; color: var(--text-soft); }
+  #empty strong { color: var(--text); }
+  #empty button { pointer-events: auto; margin-top: 8px; }
+  .msgs { list-style: none; margin: 0; padding: 0; }
+  .msgs li { padding: 3px 0; cursor: pointer; }
+  .msgs li.err { color: var(--err); }
+  .msgs li.warn { color: var(--text-soft); }
+  #segments, #sinks { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { text-align: right; padding: 2px 4px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  tr.sel td { background: var(--grid); }
+  tbody tr { cursor: pointer; }
+  .stale { opacity: .6; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; }
+  .kv span:nth-child(odd) { color: var(--text-soft); }
+</style>
+</head>
+<body>
+<aside>
+  <h3>Tools</h3>
+  <div class="tools">
+    <button data-tool="draw" title="Drag from tile to tile to lay pipe; the shapes follow">Draw</button>
+    <button data-tool="select" title="Click a tile to see and change it">Select</button>
+    <button data-tool="erase" title="Click or drag to take tiles away">Erase</button>
+  </div>
+  <h3>Shapes</h3>
+  <div class="palette" id="palette"></div>
+  <p class="hint">Pick a shape and click squares to put it down; click a tile of the same shape to turn it. <kbd>R</kbd> turns the selected tile, <kbd>Del</kbd> removes it.</p>
+  <h3>Edit</h3>
+  <div class="row-btns">
+    <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="redo" title="Redo (Ctrl+Y)">Redo</button>
+    <button id="clear" title="Remove every tile">Clear</button>
+  </div>
+  <h3>View</h3>
+  <div class="row-btns">
+    <button id="zoomOut" title="Smaller">−</button>
+    <button id="zoomFit" title="Fit the window">Fit</button>
+    <button id="zoomIn" title="Larger">+</button>
+    <span class="hint" id="zoomLevel"></span>
+  </div>
+  <h3>Network</h3>
+  <label class="f">Length unit <select id="unitL"><option>ft</option><option>m</option><option>in</option><option>mm</option></select></label>
+  <label class="f">Square length <input id="cell" type="number" min="0" step="any"></label>
+  <label class="f">Diameter unit <select id="unitD"><option>in</option><option>mm</option><option>ft</option><option>m</option></select></label>
+  <label class="f">Diameter <input id="dia" type="number" min="0" step="any"></label>
+  <label class="c"><input id="ret" type="checkbox"> Return pipe matches the supply (doubles length and fittings)</label>
+  <label class="f">On the drawing <select id="labels"><option value="values">Values</option><option value="numbers">Numbers</option><option value="none">Nothing</option></select></label>
+</aside>
+<main>
+  <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick
+    <em>Draw</em> and drag between them. Pipes join at tees; the sheet works out the flow in each branch.<br>
+    <button id="example">Start from an example</button></div>
+  <svg id="canvas"></svg>
+</main>
+<aside class="right">
+  <h3>Selected</h3>
+  <div id="inspector"><p class="hint">Click a tile with Select (or click without dragging while drawing).</p></div>
+  <h3>Check</h3>
+  <ul class="msgs" id="msgs"></ul>
+  <h3>Segments</h3>
+  <div id="segments"></div>
+  <h3>Sinks</h3>
+  <div id="sinks"></div>
+  <p class="hint" id="about"></p>
+</aside>
+<script src="pipenet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -9,6 +9,10 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Plugins**: `!plugin name` opens a plugin, a page of its own that writes the indented `name = value` lines under it, and `!pluginvar a, b` sends the sheet's values back to it. A plugin is fetched the first time a sheet asks for it and kept; it runs in a sandbox that can only talk to its own block. The lines it writes are ordinary lines of the sheet, so the sheet calculates, exports and runs from the command line without it. (#153)
+- **Pipe network plugin** (`!plugin pipenet`): lay out a fluid loop on a grid that grows as you draw, with one source (the pump), any number of sinks, and straights, elbows, tees and crossovers in every orientation, placed from a palette or drawn by dragging. It writes the upstream matrix and each segment's length, diameter and fittings into the sheet, and draws the flows and pressure drops the sheet works out on the pipes. The new Pipe network example solves such a loop for equal pressure drops. (#153)
+
 ### Fixes
 - Clicking a line in the results no longer scrolls it toward the top of the results, and no longer scrolls the editor to put that line at the top: both stay where they are when the line is already showing, and an editor line out of sight is brought to the middle. (#173)
 

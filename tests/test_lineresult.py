@@ -146,6 +146,18 @@ def test_a_regression_row_is_typeset_math_with_its_fit():
     assert [s["name"] for s in r["symbols"]["defines"]] == ["a", "b"]
 
 
+def test_a_plugin_row_carries_its_name_state_and_outputs_and_a_pluginvar_row_its_values():
+    out = rows('!plugin pipenet\n  A = [1, 0; 1, 1]\n  #@ state {"v":1}\nQ = A * [1; 2] * \'L/\'s\n!pluginvar Q\n')
+    r = out[0]
+    assert set(r) == set(COMMON) | {"plugin"} and (r["kind"], r["end"]) == ("plugin", 3)
+    assert r["plugin"] == {"name": "pipenet", "state": {"v": 1}, "outputs": ["A"]}
+    assert out[1]["kind"] == "assign" and out[2]["kind"] == "pluginline"
+    v = out[4]
+    assert set(v) == set(COMMON) | {"pluginvar"} and v["kind"] == "pluginvar"
+    assert v["pluginvar"] == {"values": [{"name": "Q", "unit": "m³/s", "shape": [2, 1],
+                                          "mag": [[pytest.approx(0.001)], [pytest.approx(0.003)]]}]}
+
+
 def test_a_solver_row_carries_its_state():
     s = rows(ROOT)[1]["solver"]
     assert set(s) == SOLVER_KEYS

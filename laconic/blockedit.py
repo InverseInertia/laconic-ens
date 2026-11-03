@@ -10,10 +10,12 @@ applies them as one undoable change (`Editing.merge` in static/editing.js).
     ed.remove("autorun")                 every `autorun:` line
     ed.store_result(record)              the `#@ result` line, replacing any earlier one
     ed.append("# checked by hand")       any other block-owned line
+    ed.assign("L", "[1; 2] 'm")          under a plugin: the line defining L, replaced where it is or added
+    ed.store_state({"cells": []})        under a plugin: its `#@ state` line, replacing any earlier one
     ed.edits()                           -> [Edit], as small as possible, against `text`
 
 The editor keeps the block's indent (that of its first owned line, or two spaces) and the file's
-line endings, and keeps the stored result last. It checks nothing about the values it writes;
+line endings, and keeps the stored result (a plugin's state) last. It checks nothing about the values it writes;
 plotopts.py and solver.py do that."""
 import json
 from dataclasses import dataclass
@@ -75,12 +77,13 @@ class _Member:
     eol: str            # its own line ending, "" on a last line with none
     key: str = None     # of an option line
     arg: str = None
-    result: bool = False
+    result: bool = False   # a solver's stored result or a plugin's state: kept last
+    defines: str = None    # the name a `name = value` line defines
 
 
 class BlockEditor:
-    """Collects changes to the lines of one plot or solver block; `edits()` says what they come to.
-    `kind` is "plot" or "solver", or None when `header` does not start a block, in which case
+    """Collects changes to the lines of one block; `edits()` says what they come to.
+    `kind` is "plot", "solver", "loop" or "plugin", or None when `header` does not start a block, in which case
     every change raises ValueError."""
 
     def __init__(self, text, header):
@@ -95,7 +98,9 @@ class BlockEditor:
         self._end = at + sum(len(l.text) + len(l.eol) for l in b.lines) - len(b.lines[-1].eol)   # last line's text
         self._eol = b.lines[0].eol or newline(text)
         self._members = [_Member(l.text, l.eol, l.option.key if l.option else None,
-                                 _arg(l.option.arg) if l.option else None, l.result is not None)
+                                 _arg(l.option.arg) if l.option else None,
+                                 l.result is not None or l.state is not None,
+                                 l.definition.name if l.definition else None)
                          for l in b.members]
         self.indent = b.members[0].indent if b.members else "  "
 
@@ -135,6 +140,24 @@ class BlockEditor:
         self._check()
         self._drop([m for m in self._members if m.result])
         self._add("#@ result " + json.dumps(record, separators=(",", ":")), result=True)
+
+    def assign(self, name, expr):
+        """Write `name = expr`: over the first line that defines `name` (keeping its indent),
+        removing any others, or as a new line."""
+        self._check()
+        same = [m for m in self._members if m.defines == name and not m.result]
+        if not same:
+            self._add(f"{name} = {expr}", defines=name)
+            return
+        first = same[0]
+        first.text = first.text[:len(first.text) - len(first.text.lstrip(" \t"))] + f"{name} = {expr}"
+        self._drop(same[1:])
+
+    def store_state(self, state):
+        """Store a plugin's `state` (a dict, written as compact JSON) as its `#@ state` line, last."""
+        self._check()
+        self._drop([m for m in self._members if m.result])
+        self._add("#@ state " + json.dumps(state, separators=(",", ":"), ensure_ascii=False), result=True)
 
     def append(self, line):
         """Add a line the block owns (a comment, an option written by hand), indented like the rest."""

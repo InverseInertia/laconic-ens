@@ -1,6 +1,7 @@
 """Runs a whole worksheet top to bottom. Each line either produces a result or
 an error; an error never stops later lines (lines that depend on a failed
 variable fail on their own with 'x is not defined')."""
+import json
 import math
 import re
 from dataclasses import dataclass, field
@@ -11,16 +12,17 @@ from . import catalogue
 from .blockedit import newline
 from .evaluator import EvalError, Evaluator, is_symbolic
 from .latex import Fmt, Printer, name_latex
-from .lineresult import LineResult, LoopPayload, PlotPayload, RegressionPayload, SolverPayload
+from .lineresult import (LineResult, LoopPayload, PlotPayload, PluginPayload, PluginVarPayload, RegressionPayload,
+                         SolverPayload)
 from .nodes import Assign, Call, Convert, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
 from .plotspec import Builder
-from .sheettext import scan
+from .sheettext import is_name, scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import adnauseum, commands, loop, regression, solver, symsolve
+from . import adnauseum, commands, loop, plugins, regression, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -120,6 +122,12 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         elif l.kind == "loop":
             r, owned = _run_loop(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
+        elif l.kind == "plugin":
+            results.append(_run_plugin(i, raw, sheet.block(i)))
+        elif l.kind == "pluginline":
+            results.append(_run_plugin_line(l, ev, fmt, used))
+        elif l.kind == "pluginvar":
+            results.append(_run_pluginvar(i, raw, s, ev))
         elif l.kind == "blank":
             results.append(LineResult(i, raw, "blank"))
         elif l.kind in ("heading", "meta"):
@@ -381,6 +389,94 @@ def _run_loop(i, raw, handle, ev, fmt, used):
     text = "; ".join(plain) + f"  (ran {done.passes} {times})" if plain else f"ran {done.passes} {times}"
     return LineResult(i, raw, "loop", stages=[tex], text=text, block=handle, stale=stale,
                       payload=LoopPayload(code, values, done.passes)), owned
+
+
+def _run_plugin(i, raw, handle):
+    """A `!plugin name` line. The plugin itself runs in the page (plugins.py serves it); the sheet
+    only reads which plugin it is, the state it last saved and the names its lines define. Those
+    lines run below as ordinary assignments (`_run_plugin_line`), so a sheet works the same
+    without the plugin: on another machine, offline, from the command line."""
+    name = handle.args.strip()
+    if not name:
+        return LineResult(i, raw, "error", error="A plugin block reads `!plugin name`, e.g. `!plugin pipenet`",
+                          block=handle)
+    if not plugins.valid_name(name):
+        return LineResult(i, raw, "error", block=handle,
+                          error=f"'{name}' is not a plugin name: lower-case letters, digits, - and _, starting with a letter")
+    state, warning = None, ""
+    for l in handle.members:
+        if l.state is not None:
+            try:
+                state = json.loads(l.state)
+            except ValueError:
+                warning = "The plugin's #@ state line could not be read; the plugin starts empty"
+            if not isinstance(state, dict):
+                state = None
+    outputs = [l.definition.name for l in handle.members if l.definition]
+    text = f"plugin {name}" + (f": defines {', '.join(outputs)}" if outputs else "")
+    return LineResult(i, raw, "plugin", text=text, block=handle, warning=warning,
+                      payload=PluginPayload(name, state, outputs))
+
+
+def _run_plugin_line(l, ev, fmt, used):
+    """A line a `!plugin` block owns: a `name = value` line the plugin wrote, run as an assignment;
+    its `#@ state` line, which shows nothing; or a comment."""
+    s = l.text.strip()
+    if l.state is not None:
+        return LineResult(l.n, l.text, "pluginline")
+    if l.comment:
+        return LineResult(l.n, l.text, "comment", text=s.lstrip("#").strip())
+    if l.definition is None:
+        return LineResult(l.n, l.text, "error",
+                          error="A plugin block holds the `name = value` lines its plugin writes, and its #@ state line")
+    return _run_line(l.n, l.text, s, ev, fmt, used)
+
+
+def _run_pluginvar(i, raw, s, ev):
+    """`!pluginvar a, b`: the values of `a` and `b` here, for the page to send to the sheet's
+    plugins (a pipe network shows the flows the sheet worked out on its drawing)."""
+    rest = s[len("!pluginvar"):].strip()
+    names = [n.strip() for n in rest.split(",")] if rest else []
+    if not names or not all(is_name(n) for n in names):
+        return LineResult(i, raw, "error", error="!pluginvar reads `!pluginvar a, b`: the variables to send to the plugins")
+    values, nodes = [], []
+    try:
+        for n in names:
+            node = parse_expr(n)
+            nodes.append(node)
+            values.append(_plugin_value(n, ev.eval(node)))
+    except Exception as e:
+        return LineResult(i, raw, "error", error=describe(e))
+    text = "Sent to the plugins: " + ", ".join(names)
+    return LineResult(i, raw, "pluginvar", text=text, stale=ev.symbols.tainted(nodes),
+                      payload=PluginVarPayload(values))
+
+
+def _plugin_value(name, q):
+    """One `!pluginvar` value as the page sends it to a plugin: {name, unit, shape, mag}."""
+    if is_symbolic(q) or not isinstance(q, pint.Quantity):
+        raise EvalError(f"{name} is not a number, so it cannot be sent to a plugin")
+    mag = q.magnitude
+    try:
+        import numpy as np
+        arr = np.asarray(mag)
+        if np.iscomplexobj(arr):
+            if np.any(np.imag(arr) != 0):
+                raise EvalError(f"{name} is complex; a plugin takes real numbers only")
+            arr = np.real(arr)
+        arr = arr.astype(float)
+    except (TypeError, ValueError):
+        raise EvalError(f"{name} is not a number, so it cannot be sent to a plugin") from None
+    data = _finite(arr.tolist())   # NaN and ±inf are not JSON; they go as null
+    unit = "" if q.dimensionless and str(q.units) == "dimensionless" else f"{q.units:~P}"
+    return {"name": name, "unit": unit, "shape": list(arr.shape), "mag": data}
+
+
+def _finite(x):
+    """`x`, a number or nested lists of them, with each number that is not finite made None."""
+    if isinstance(x, list):
+        return [_finite(v) for v in x]
+    return x if isinstance(x, (int, float)) and math.isfinite(x) else None
 
 
 def _loop_code(top, printer, depth):

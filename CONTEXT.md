@@ -11,10 +11,10 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : One line of sheet text, numbered from 1 as the editor numbers it. It carries its **kind**, its **owner**, its **expression spans** and its line ending (`eol`) separately from its text.
 
 **Line kind**
-: What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `unitdef`, `funcdef`, `assign`, `symdef` (`$a, $b`), `expr`, a block header (`plot`, `solver`, `loop`) or a line a block owns (`plotopt`, `solveropt`, `loopline`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
+: What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `pluginvar` (`!pluginvar a, b`), `unitdef`, `funcdef`, `assign`, `symdef` (`$a, $b`), `expr`, a block header (`plot`, `solver`, `loop`, `plugin`) or a line a block owns (`plotopt`, `solveropt`, `loopline`, `pluginline`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
 
 **Block**
-: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!loop`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` or `!symsolve` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py` or `symbolic.py`. A `!loop` owns every indented, non-blank line under it, as a solver does; a `!loop` among them, with the lines indented further under it, is a loop inside it, which `loop.py` reads out of the indentation.
+: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!loop`, `!plugin`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` or `!symsolve` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py` or `symbolic.py`. A `!loop` or a `!plugin` owns every indented, non-blank line under it, as a solver does; a `!loop` among them, with the lines indented further under it, is a loop inside it, which `loop.py` reads out of the indentation.
 
 **Owner**
 : The block a line belongs to (a header owns itself), or none.
@@ -53,6 +53,23 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Symbolic solve**: a `!symsolve x, y` block with `equation:` lines, solved by sympy each run (nothing stored). With one solution, or the one `pick: n` names, the unknowns hold it below the block.
 
+## Plugins (`plugins.py`, `static/plugins.js`)
+
+**Plugin**
+: A page a sheet opens with `!plugin name`, kept in a folder of its own: a `manifest.json` that lists its files and its page (`entry`), and those files. It is fetched the first time a sheet asks for it (**plugin source**) and kept under the settings folder. The page runs it in a sandboxed frame, so it reaches nothing but its own block, through messages.
+
+**Plugin block**
+: A `!plugin name` header and the indented lines it owns: the `name = value` lines the plugin writes (the **plugin outputs**), any comments, and its **plugin state** line. The outputs run as ordinary assignments, so the sheet needs no plugin to calculate.
+
+**Plugin state**
+: The `#@ state {...}` line at the end of a plugin block: what the plugin keeps of its own (a layout), as compact JSON. The block editor writes it, last, as it writes a solver's stored result; the sheet only hands it back to the plugin.
+
+**Plugin source** (`plugins.source()`)
+: Where plugins are fetched from: `LENS_PLUGIN_SOURCE` (a folder or an address), the `plugins/` folder of a source checkout, or else this repository's `plugins/` folder on GitHub.
+
+**Plugin input**
+: A value a `!pluginvar a, b` line sends to the sheet's plugins: its name, units, shape and magnitude, as it is on that line. The page sends every plugin the inputs of every `!pluginvar` line after each run of the sheet.
+
 ## Line results (`lineresult.py`)
 
 **Line result** (`LineResult`)
@@ -71,7 +88,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : On a block header's result, the sheettext **Block** it starts, whether the block drew or failed. `sheet.block_at(text, line)` finds a block by its header, and `sheet.solver_blocks(text)` finds every solver block. Both read the text to find the blocks and run the sheet only as far as they need (`evaluate(..., until=)`).
 
 **Payload**
-: The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) `r.solver` (`SolverPayload`: status, hash, values, stored record) or `r.regression` (`RegressionPayload`: degree, points, R², the polynomial, values). On every other line each is None, a failed block header included.
+: The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) `r.solver` (`SolverPayload`: status, hash, values, stored record), `r.regression` (`RegressionPayload`: degree, points, R², the polynomial, values), `r.plugin` (`PluginPayload`: the plugin's name, its state, the names its lines define) or `r.pluginvar` (`PluginVarPayload`: the values a `!pluginvar` line sends). On every other line each is None, a failed block header included.
 
 **Regression block**
 : `!regression a, b, c` with a `data:` line: a least-squares polynomial through points, the columns of a 2-row matrix (x row, y row) or two vectors. The header names the coefficients, lowest power first, or one name holds them all as a vector (with `degree:`). A `model:` line (`f(x, z) = a + b*x*z`) fits that function instead: its parameters are the data's variables (a vector or matrix row each, then y), the header names its coefficients, and their units are worked out from it. `xunit:` and `yunit:` give data without units (a pasted matrix) its units, and `function: f(t)` makes a polynomial fit a function. It is fitted every time the sheet runs, so it has no stored result and no Run; it defines its names (and the `r2:` name, and a model's or `function:`'s function) like an assignment.
@@ -129,7 +146,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : Replace `text[from:to]` with `insert`. The server answers every change to the sheet text with a short list of edits against the text it was sent, never a whole new text. On the wire, offsets count UTF-16 code units, as the page's strings do.
 
 **Block editor** (`BlockEditor`)
-: The one writer of the lines a block owns. It sets, removes or replaces an option line, stores a result (always last), and appends other block-owned lines, keeping the block's **indent** and the file's **line ending**, and returns at most one minimal edit.
+: The one writer of the lines a block owns. It sets, removes or replaces an option line, stores a result or a plugin's state (always last), writes a plugin's `name = value` lines, and appends other block-owned lines, keeping the block's **indent** and the file's **line ending**, and returns at most one minimal edit.
 
 **Block indent**
 : The indent of a block's first owned line, or two spaces for a block with none. New lines take it; a rewritten line keeps its own.

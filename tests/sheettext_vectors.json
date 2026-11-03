@@ -59,7 +59,10 @@
     {"text": "!root\n  equation: x = 1", "line": 2, "block": {"kind": "root", "unknowns": []}},
     {"text": "!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    x = i*j", "line": 3, "block": {"kind": "loop", "unknowns": []}},
     {"text": "!loop i = 1 .. 3\n  S = S + i", "line": 2, "block": {"kind": "loop", "unknowns": []}},
-    {"text": "!loop i = 1 .. 3\n  S = S + i\nT = S", "line": 3, "block": null}
+    {"text": "!loop i = 1 .. 3\n  S = S + i\nT = S", "line": 3, "block": null},
+    {"text": "!plugin pipenet\n  A = [1; 1]\n  #@ state {\"v\":1}", "line": 3, "block": {"kind": "plugin", "unknowns": []}},
+    {"text": "!plugin pipenet\n  A = [1; 1]", "line": 2, "block": {"kind": "plugin", "unknowns": []}},
+    {"text": "!pluginvar Q\n  y = 2", "line": 2, "block": null}
   ],
   "names_at": [
     {"text": "σ_max = 3", "caret": 2, "name": "σ_max"},
