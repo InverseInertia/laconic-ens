@@ -218,19 +218,19 @@ def test_every_block_indents_on_enter_and_suggests_its_options(page, above, head
 
 def test_split_can_be_dragged(page):
     box = page.locator("#split").bounding_box()
-    before = page.locator("#src").bounding_box()["width"]
+    before = page.locator("#srcBox").bounding_box()["width"]
     y = box["y"] + 100
     page.mouse.move(box["x"] + box["width"] / 2, y)
     page.mouse.down()
     page.mouse.move(box["x"] + 200, y, steps=5)
     page.mouse.up()
-    after = page.locator("#src").bounding_box()["width"]
+    after = page.locator("#srcBox").bounding_box()["width"]
     assert after > before + 150
     page.reload()
     page.wait_for_function("document.querySelector('#src').value.length > 0")
-    assert abs(page.locator("#src").bounding_box()["width"] - after) < 2
+    assert abs(page.locator("#srcBox").bounding_box()["width"] - after) < 2
     page.locator("#split").dblclick()
-    assert abs(page.locator("#src").bounding_box()["width"] - before) < 2
+    assert abs(page.locator("#srcBox").bounding_box()["width"] - before) < 2
 
 
 def resize(page, width):
