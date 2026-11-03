@@ -407,7 +407,26 @@ def get_opened(sheet: str | None = None):
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         return {"file": path.name, "error": f"Could not open {path.name}: {e}"}
-    return {"file": path.name, "path": str(path), "text": text, "writable": writable(path)}
+    out = {"file": path.name, "path": str(path), "text": text, "writable": writable(path)}
+    if out["writable"] and (claim := sheets.claim(path)):
+        out["claim"] = claim
+    return out
+
+
+class ClaimBody(BaseModel):
+    path: str
+    claim: str
+
+
+@app.post("/api/opened/claim")
+def claim_opened(body: ClaimBody):
+    """A sheet this server once opened, named again by the page after LENS was closed and opened
+    without it (#168): its ?sheet= token, so Save writes to it again; {} for a claim that does not
+    match, or a file that has gone."""
+    token = sheets.reclaim(body.path, body.claim)
+    if token is None:
+        return {}
+    return {"sheet": token, "file": sheets.get(token).name}
 
 
 @app.post("/api/opened/save")

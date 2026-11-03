@@ -481,7 +481,7 @@ FAKE_FS = """() => {
   window.written = []; window.picks = 0;
   const handle = (name, text) => ({
     name, getFile: async () => new File([text], name),
-    requestPermission: async () => "granted",
+    queryPermission: async () => "prompt", requestPermission: async () => "granted",
     createWritable: async () => { let buf = ""; return {
       write: async (t) => { buf += t; }, close: async () => { window.written.push([name, buf]); } }; },
   });
@@ -766,6 +766,32 @@ def test_a_sheet_the_program_was_started_with_opens_and_saves_back(page, tmp_pat
     page.wait_for_function("document.querySelector('#src').value.length > 0")
     assert page.input_value("#src") == "x = 4"
     assert page.get_attribute("#save", "title") == "Save to beam.lens (Ctrl+S)"
+
+
+def test_a_start_file_is_saved_to_again_after_lens_is_opened_without_it(page, tmp_path, sheets):
+    """#168: LENS closed (or updated) and opened again from its shortcut, without the file, still
+    saves the sheet to the file it was started with, rather than asking where with "Replace?"."""
+    sheet = tmp_path / "beam.lens"
+    sheet.write_text("x = 2\n", encoding="utf-8")
+    sheets.start(sheet)
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.startsWith('x = 2')")
+    sheets.clear()                              # the next launch is not given the file
+    page.evaluate("() => { sessionStorage.clear(); }")
+    page.reload()
+    page.wait_for_function("document.querySelector('#save').title === 'Save to beam.lens (Ctrl+S)'")
+    assert page.input_value("#name") == "beam"
+    reset(page, "x = 3\n")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.keyboard.press("Control+s")
+    page.wait_for_function("document.querySelector('#status').textContent.includes('Saved beam.lens')")
+    assert sheet.read_text(encoding="utf-8").startswith("x = 3")
+    # A forged claim is refused: the page falls back to asking where to save.
+    page.evaluate("localStorage.setItem('lens:file', JSON.stringify({path: '/tmp/elsewhere.lens', claim: 'x'}))")
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    page.wait_for_timeout(300)
+    assert page.get_attribute("#save", "title") == "Save the worksheet (Ctrl+S)"
 
 
 def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(page, server, tmp_path, sheets):

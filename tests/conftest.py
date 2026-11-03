@@ -26,6 +26,13 @@ def no_update_check(monkeypatch):
                                                             exit=refuse, where=updates.Place("manual")))
 
 
+@pytest.fixture(autouse=True)
+def claim_key(monkeypatch):
+    """The key for claims on opened sheets (opened.py), so no test writes one to the user's settings."""
+    from laconic import opened
+    monkeypatch.setattr(opened, "_key", lambda: b"test key")
+
+
 @pytest.fixture(scope="module")
 def server(tmp_path_factory):
     uvicorn = pytest.importorskip("uvicorn")
