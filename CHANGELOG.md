@@ -10,6 +10,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ## Unreleased
 
 ### New
+- **Elementwise functions**: a period before a function's name calls it on each element of its matrix arguments, so `.f(A, B)` with `f(a, b) = a^2 + b` gives the matrix of `f(A_ij, B_ij)`. The matrices must be the same size, and a single number is passed to every call (`.f(A, 1)`). It works for your own functions and the built-ins. (#171)
 - **Symbols in matrices**: a matrix can hold symbols (`$a` then `M = [a, 2; 3, a^2]`), and `*`, `^`, `+`, `-`, `.*`, `./`, `det`, `inv`, `transpose`, `trace`, `solve`, `elem`, `idx`, `row` and `col` work on it symbolically, with a numeric matrix such as `A*v` taken as the matrix product. Once its symbols have values, it is worked out with units like any matrix. (#163)
 - **Full changelog in its own window**: Help now shows only the newest release's changes, under What's new, and the Changelog link beside the version (or Full changelog below What's new) opens the whole changelog in a window of its own. (#166)
 - **Check for updates in Help**: Help has a Check for updates button beside the version, which asks GitHub again for a newer release, so one that came out while LENS was open is found without closing it. It works even with the check at start turned off in Settings. (#164)

@@ -423,6 +423,38 @@ class Evaluator:
 
     def ev_Call(self, n, scope):
         args = [a.value if isinstance(a, Str) else self.eval(a, scope) for a in n.args]
+        if n.elementwise:
+            return self._elementwise(n, args)
+        return self._call(n, args)
+
+    def _elementwise(self, n, args):
+        """`.f(A, B)`: f called once for each element, with that element of every matrix
+        argument (a single number is passed to every call), giving a matrix of the same size."""
+        name = "." + n.func
+        if any(isinstance(a, str) for a in args):
+            raise EvalError(f"{name} works on numbers and matrices, not text")
+        shapes = list(dict.fromkeys(np.shape(a.magnitude) for a in args if _ndim(a)))
+        if not shapes:
+            return self._call(n, args)
+        if len(shapes) > 1:
+            raise EvalError(f"{name} needs its matrices to be the same size, got "
+                            + " and ".join("×".join(map(str, sh)) for sh in shapes))
+        shape = shapes[0]
+        out = []
+        for idx in np.ndindex(shape):
+            r = self._call(n, [self.Q(_array(a.magnitude)[idx], a.units) if _ndim(a) else a for a in args])
+            if isinstance(r, str) or _ndim(r):
+                raise EvalError(f"{name} needs {n.func} to give one number for each element")
+            out.append(r)
+        units = out[0].units
+        try:
+            mags = [r.to(units).magnitude for r in out]
+        except pint.errors.DimensionalityError:
+            raise EvalError(f"{name} gives results whose units do not match each other") from None
+        return self.Q(_array(mags).reshape(shape), units)
+
+    def _call(self, n, args):
+        """f(*args), f a user function or a built-in."""
         fkey = self.fkey(n.func)
         if fkey in self.funcs:
             if any(isinstance(a, str) for a in args):

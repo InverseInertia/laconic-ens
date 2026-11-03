@@ -40,6 +40,7 @@ u& = 3                         bar over a variable
 | `/` | divide (not by a matrix: use `solve` or `inv`) |
 | `^` | power; matrix powers need whole exponents |
 | `.*` `./` | elementwise |
+| `.f(...)` | call `f` on each element of equal-sized matrices: `.f(A, B)` is the matrix of `f(A_ij, B_ij)` (see [Matrices](Matrices#elementwise-functions)) |
 | `∠` | polar complex number, `10'V∠30'deg` (Ctrl+<); binds between `*` and `+` |
 | `->` | convert to the units on the right |
 

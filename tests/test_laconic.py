@@ -51,6 +51,19 @@ def test_matmul_vs_elementwise():
     assert "1 & 4" in last("[1,2;3,4] .* [1,2;3,4]").latex
 
 
+def test_a_period_before_a_function_calls_it_element_by_element():
+    f = "f(a, b) = a^2 + b\nA = [1, 2; 3, 4]\nB = [10, 20; 30, 40]\n"
+    assert "11 & 24 \\\\ 39 & 56" in last(f + ".f(A, B)").latex       # not the matrix square A^2 + B
+    assert "2 & 5 \\\\ 10 & 17" in last(f + ".f(A, 1)").latex         # a number goes to every call
+    assert "4 & 7" in last(f + ".f([1'm, 2'm], 3'm^2)").latex and "m}^{2}" in last(f + ".f([1'm, 2'm], 3'm^2)").latex
+    assert last(f + "1 + .f(2, 3)").text.endswith("8")                      # numbers only: one call
+    assert "1.414" in last(".sqrt([1, 2])").latex                          # built-ins too
+    assert last(f + ".f(A, [1, 2])").error == ".f needs its matrices to be the same size, got 2×2 and 1×2"
+    assert last("g(x) = [x, x]\n.g([1, 2])").error == ".g needs g to give one number for each element"
+    assert last("h(n) = (1'm)^n\n.h([1, 2])").error == ".h gives results whose units do not match each other"
+    assert "symbol" in last("$s\n.sqrt([1, s])").error
+
+
 def test_offset_units():
     assert "68" in last("20'degC -> 'degF").latex
     assert "68" in last("20'°C -> 'degF").latex

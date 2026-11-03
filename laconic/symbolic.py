@@ -365,6 +365,8 @@ class Builder:
 
     def b_Call(self, n):
         ev, f = self.ev, n.func
+        if n.elementwise:   # numbers only: the evaluator calls f element by element
+            return self.fallback(n, [self.build(a) for a in n.args if not isinstance(a, Str)], f".{f}()")
         fkey = ev.fkey(f)
         if fkey in ev.funcs:
             params, body = ev.funcs[fkey]

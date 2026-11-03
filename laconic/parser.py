@@ -53,6 +53,7 @@ GRAMMAR = r"""
         | "∞"                       -> infinity
         | "(" expr ")"
         | NAME "(" args ")"         -> call
+        | "." NAME "(" args ")"     -> ecall
         | "[" row (";" row)* "]"    -> matrix
 
 args: expr ("," expr)*
@@ -95,6 +96,7 @@ class _ToAst(Transformer):
     def args(self, *a): return tuple(a)
     def row(self, *a): return tuple(a)
     def call(self, name, args): return Call(str(name), args)
+    def ecall(self, name, args): return Call(str(name), args, elementwise=True)
     def matrix(self, *rows): return Matrix(tuple(rows))
 
 
