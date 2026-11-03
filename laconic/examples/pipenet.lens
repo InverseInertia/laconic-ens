@@ -1,0 +1,132 @@
+## Pipe network
+# A hydronic loop with eight loads, solved for the flows that give every path from the pump to a load the same
+# pressure drop. The `!plugin pipenet` block below lays the loop out: open it to change the pipes, and the sheet
+# follows. The solver re-runs on its own (autorun) when the network changes.
+
+## Physical properties of loop fluid
+
+T_water = 90'degF
+ρ = props("D", "T", T_water, "P", 1'atm, "Water")
+μ = props("V", "T", T_water, "P", 1'atm, "Water")
+
+Re(D_h, V@) = (ρ * V@ * D_h) / μ
+
+## Pipe Properties
+
+ε_PVC = 0.002 'mm
+f_T(d_h) = (log10(ε_PVC / (3.7 * d_h)))^-2 * 0.25
+
+## Major Losses via Niazkhar formulation for the Darcy Friction Factor.
+# The best closed form approximation for the Moody Chart currently known.
+A(ε_D, Re) = -2 * log10(ε_D / 3.7 + 4.5547 / Re^0.8784)
+B(ε_D, Re) = -2 * log10(ε_D / 3.7 + (2.15 * A(ε_D, Re)) / Re)
+C(ε_D, Re) = -2 * log10(ε_D / 3.7 + (2.15 * B(ε_D, Re)) / Re)
+f_D_Niazkhar(ε_D, Re) = (A(ε_D, Re) - (B(ε_D, Re) - A(ε_D, Re))^2 / (C(ε_D, Re) - 2 * B(ε_D, Re) + A(ε_D, Re)))^(-2)
+
+# Darcy-Weisbach head loss
+V@(D_h, ∀`) = 4 * ∀` / (pi * D_h^2)
+ΔP_DW(ε, D_h, ∀`, L, ΣK) = (f_D_Niazkhar(ε / D_h, Re(D_h, (4 * ∀` / (pi * D_h^2)))) * L / D_h + ΣK) * (ρ * (4 * ∀` / (pi * D_h^2))^2 / 2)
+
+## SWEP BPHE Pressure Drop Functions.
+# Raw Data from SWEP SSP
+SWEP_B26W = [5.000, 10.00, 15.00, 20.00, 25.00, 30.00, 35.00; 0.2664, 0.9126, 1.915, 3.325, 5.101, 7.236, 9.725]
+SWEP_DB300 = [15.00, 20.00, 25.00, 30.00, 35.00, 40.00, 45.00; 1.493, 2.571, 3.921, 5.535, 7.408, 9.535, 11.91]
+
+# Quadratic Regression
+!regression B26
+  degree: 2
+  data: SWEP_B26W
+!regression DB_300
+  degree: 2
+  data: SWEP_DB300
+
+# Function Definitions
+~polyvec_2(x) = [1; x; x^2]
+~polyvec_4(x) = [1; x; x^2; x^3; x^4]
+SWEP_B26W(∀`) = idx(B26 * polyvec_2(∀` * ('gal / ('min))^(-1)), 1) * 'psi
+!plot SWEP_B26W(x), x = 10 'gal / 'min .. 35 'gal / ('min)
+  yunit: 'psi
+  xunit: 'gal / ('min)
+SWEP_DB300(∀`) = idx(DB_300 * polyvec_2(∀` * ('gal / ('min))^(-1)), 1) * 'psi
+!plot SWEP_DB300(x), x = 15 'gal / 'min .. 45 'gal / ('min)
+  yunit: 'psi
+  xunit: 'gal / ('min)
+
+SWEP(∀`, curve) = idx([SWEP_B26W(∀`), SWEP_DB300(∀`)], curve)
+
+## Grundfos Pump Curves
+# Raw data from online product information
+GRUND_43100A = transpose([21.4, 10.2; 2.3, 27.7; 0.7, 27.9; 5.45, 26.1; 3.9, 27.1; 10.1, 22; 27.6, 4.6; 7, 25.1; 14.6, 17.3; 18.15, 13.4; 23.36, 8.3; 25.5, 6.5; 31.76, 1.7; 29.6, 3.3; 11.7, 20.5; 19.8, 11.9; 13.2, 18.7; 16.55, 15.2; 8.6, 23.7])
+GRUND_43100B = transpose([37.6, 11.7; 3.96, 30; 1.24, 30.2; 9.14, 28.9; 6.8, 29.5; 18.5, 24.8; 44.7, 5.9; 12.4, 27.7; 27.2, 19.5; 32.54, 15.6; 39.95, 9.7; 42.8, 7.5; 49.7, 2; 47.15, 4; 20.8, 23.5; 35.2, 13.5; 24.1, 21.4; 29.95, 17.5; 16.7, 25.8])
+GRUND_43100C = transpose([42.1, 16.6; 4.24, 30.9; 0.6, 31.1; 11.2, 29.9; 8.1, 30.5; 63.6, 1.1; 55.8, 6.9; 15.14, 29.1; 27.7, 24.9; 33.6, 21.7; 46.9, 13.3; 51.04, 10.4; 61.46, 2.6; 59.7, 4; 20.4, 27.7; 37.5, 19.5; 23.35, 26.6; 30.8, 23.3; 17.9, 28.4])
+
+!regression G_43100A
+  data: GRUND_43100A
+  degree: 4
+
+!regression G_43100B
+  data: GRUND_43100B
+  degree: 4
+
+!regression G_43100C
+  data: GRUND_43100C
+  degree: 4
+
+GRUND_43100A(∀`) = idx(G_43100A * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
+GRUND_43100B(∀`) = idx(G_43100B * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
+GRUND_43100C(∀`) = idx(G_43100C * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
+
+!plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x), x = 0 'gal / 'min .. 60 'gal / ('min)
+  title: "Grundfos 43-100 F Pump Curves"
+  points: hstack(GRUND_43100A, GRUND_43100B, GRUND_43100C), 'gal / 'min, 'ft_H2O
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
+  label 1: "Speed 1"
+  label 2: "Speed 2"
+  label 3: "Speed 3"
+  label 4: "raw data" 
+
+GRUND_43100(∀`, curve) = idx([GRUND_43100C(∀`), GRUND_43100C(∀`), GRUND_43100C(∀`)], curve)
+
+## Pipe Network
+# Open the plugin under this block to lay the loop out on a grid: one source (the pump), a sink for each
+# load, and the pipes between them. It writes the lines below, one entry per segment (the pipe between
+# two junctions: the spurs to the sinks first, then the rest from the source outwards) or per sink:
+#   A            the upstream matrix: one row per segment, one column per sink (spur), 1 where the segment carries that spur's water
+#   L!, D_h!     each segment's length (doubled for the return) and diameter
+#   K_fT!        each segment's fittings as equivalent lengths, so that ΣK = K_fT * f_T
+#   exchangers!  the exchanger curve each spur ends at; speeds! the speed of its circulator
+!plugin pipenet
+  A = [1, 0, 0, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 0, 0; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 0, 0, 0, 1; 1, 1, 1, 1, 1, 1, 1, 1; 1, 1, 1, 1, 1, 1, 1, 0; 1, 1, 1, 1, 1, 1, 0, 0; 1, 1, 1, 1, 1, 0, 0, 0; 1, 1, 1, 1, 0, 0, 0, 0; 1, 1, 1, 0, 0, 0, 0, 0; 0, 1, 1, 0, 0, 0, 0, 0]
+  L! = [60; 80; 40; 80; 100; 80; 100; 80; 40; 60; 60; 60; 60; 60; 20] * 'ft
+  D_h! = [4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4] * 'in
+  K_fT! = [40; 100; 120; 180; 180; 180; 180; 180; 0; 40; 40; 40; 40; 40; 120]
+  exchangers! = [1; 1; 1; 1; 1; 1; 1; 1]
+  speeds! = [2; 2; 2; 2; 2; 2; 2; 2]
+  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"ret":true,"labels":"values","cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10},"2,19":{"t":"pipe","p":10},"2,20":{"t":"sink","p":8,"x":1,"s":2},"1,2":{"t":"pipe","p":5},"0,2":{"t":"pipe","p":6},"0,3":{"t":"pipe","p":10},"0,4":{"t":"sink","p":8,"x":1,"s":2},"3,5":{"t":"pipe","p":5},"4,5":{"t":"pipe","p":5},"5,5":{"t":"pipe","p":3},"5,6":{"t":"pipe","p":10},"5,7":{"t":"sink","p":8,"x":1,"s":2},"1,8":{"t":"pipe","p":5},"0,8":{"t":"pipe","p":6},"0,9":{"t":"pipe","p":10},"0,10":{"t":"sink","p":8,"x":1,"s":2},"3,11":{"t":"pipe","p":5},"4,11":{"t":"pipe","p":5},"5,11":{"t":"pipe","p":3},"5,12":{"t":"pipe","p":10},"5,13":{"t":"sink","p":8,"x":1,"s":2},"1,14":{"t":"pipe","p":5},"0,14":{"t":"pipe","p":6},"0,15":{"t":"pipe","p":10},"0,16":{"t":"sink","p":8,"x":1,"s":2},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5},"5,17":{"t":"pipe","p":3},"5,18":{"t":"pipe","p":10},"5,19":{"t":"sink","p":8,"x":1,"s":2},"3,18":{"t":"pipe","p":10},"3,19":{"t":"sink","p":8,"x":1,"s":2}}}
+
+## Pressure Drop Solver
+# init vector
+∀_des! = ones(cols(A), 1) * (121 / (cols(A))) * ('gal / 'min)
+# fitting losses from the fittings the plugin counted
+ΣK! = K_fT! .* .f_T(D_h!)
+# Target pressure drop pump parameter. The pump operates off of pressure sensor data so that it will automatically ramp down the flow rate when individual spurs are shut off during maintenance. Functionally tweaks the total flow rate of the pipe tree.
+Δp_target = 0.1 'psi
+
+# root solver finds where all pressure drops across all paths are equal. A * ∀_des! produces a vector of flow rates in all pipe segments, and transpose(A) * .ΔP_DW produces a vector of pressure drops across all paths from source to spur.
+residual(∀_des!) = transpose(A) * .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK!) + .SWEP(∀_des!, exchangers!) - .GRUND_43100(∀_des!, speeds!) - Δp_target
+!root ∀_des!
+  equation: residual(∀_des!)
+  autorun: on
+  #@ result {"hash":"b35ca56943b3","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.001959772842570522],[0.0019556844801579282],[0.001956632449426695],[0.0019708052793417025],[0.001990497610173212],[0.0020212048564360176],[0.0020624968605561208],[0.002117952686021923]],"unit":"meter ** 3 / second"}],"nfev":27,"message":"The solution converged.","resid":5.98e-07}
+## Output
+!short
+∀! = A * ∀_des! -> 'gal / 'min
+Δp_paths = .ΔP_DW(ε_PVC, D_h!, ∀!, L!, ΣK!) -> 'psi
+Δp_spur = transpose(A) * .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK!) -> 'psi
+Δp_hx = .SWEP(∀_des!, exchangers!) -> 'psi
+Δp_circ = .GRUND_43100(∀_des!, speeds!) -> 'psi
+Δp_residual = residual(∀_des!)
+# Back to the drawing: flow and pressure drop in each segment, and the pressure drop to each spur
+!pluginvar ∀!, Δp_paths, Δp_spur

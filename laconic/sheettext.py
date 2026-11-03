@@ -7,8 +7,8 @@ anything; this is the one place that reads the shape of the text.
     sheet.owner(5)               the plot or solver Block that line 5 belongs to, or None
     sheet.line(5).tokens("name") the names in its expressions, with their columns
 
-A plot owns the `key: value` lines indented under it; a solver block and a `!loop` own every
-indented, non-blank line under it. Lines are numbered from 1 and split on "\\n" only, so the numbers are
+A plot owns the `key: value` lines indented under it; a solver block, a `!loop` and a `!plugin`
+own every indented, non-blank line under it. Lines are numbered from 1 and split on "\\n" only, so the numbers are
 the editor's; a "\\r" before the "\\n" belongs to the line's `eol`, not its text.
 
 The lexer patterns (NAME, UNIT, NUMBER, STRING) are the grammar's terminals as well. The
@@ -42,9 +42,14 @@ _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 _PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
 _LOOP_RE = re.compile(r"^!loop(?:[ \t]+(.*\S))?[ \t]*$")
 _SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*\S))?[ \t]*$")
+# `!plugin pipenet`: a plugin's block (plugins.py). It owns the `name = value` lines the plugin writes
+# and its `#@ state {...}` line. `!pluginvar a, b` names the variables the sheet sends to plugins.
+_PLUGIN_RE = re.compile(r"^!plugin(?:[ \t]+(.*\S))?[ \t]*$")
+_PLUGINVAR_RE = re.compile(r"^!pluginvar(?:[ \t]|$)")
 _PLOT_OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
+_STATE_RE = re.compile(r"^[ \t]+#@[ \t]*state[ \t]+(\{.*\})[ \t]*$")
 
 # Option values that are expressions. Everything else under a block (titles, colours, methods)
 # is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
@@ -135,11 +140,13 @@ class Line:
     n: int              # 1-based
     text: str           # without its line ending
     eol: str            # "\n", "\r\n", or "" on a last line with none
-    kind: str           # blank heading meta comment command unitdef funcdef assign symdef expr plot plotopt solver solveropt loop loopline
+    kind: str           # blank heading meta comment command pluginvar unitdef funcdef assign symdef expr plot plotopt
+                        # solver solveropt loop loopline plugin pluginline
     block: int = None   # header line of the plot or solver block that owns this line (the header owns itself)
     spans: tuple = ()   # (start, end) of each part that holds expressions
     option: Option = None   # under a block: the parsed option line
     result: str = None      # under a solver: the JSON of a stored `#@ result` line
+    state: str = None       # under a plugin: the JSON of its `#@ state` line
     comment: bool = False   # a `#` line (comment, heading or meta), also when a block owns it
     definition: Definition = None
 
@@ -166,9 +173,9 @@ class Line:
 
 @dataclass
 class Block:
-    """A `!plot`, solver or `!loop` header and the lines it owns."""
-    kind: str           # "plot", "solver" or "loop"
-    command: str        # "plot", "root", "minimize", "maximize", "regression", "symsolve" or "loop"
+    """A `!plot`, solver, `!loop` or `!plugin` header and the lines it owns."""
+    kind: str           # "plot", "solver", "loop" or "plugin"
+    command: str        # "plot", "root", "minimize", "maximize", "regression", "symsolve", "loop" or "plugin"
     args: str           # what follows the command on the header line
     lines: list = field(default_factory=list)   # the header Line, then the owned lines
 
@@ -229,6 +236,10 @@ def _kind(s):
         return "plot"
     if _LOOP_RE.match(s):
         return "loop"
+    if _PLUGIN_RE.match(s):
+        return "plugin"
+    if _PLUGINVAR_RE.match(s):
+        return "pluginvar"
     if s.startswith("##"):
         return "heading"
     if s.startswith("#@"):
@@ -275,6 +286,13 @@ def scan(text):
             line.spans = _solver_spans(line.option)
         elif cur and cur.kind == "plot" and (o := plot_option(t)):
             line.option, line.spans = o, _plot_spans(t, o)
+        elif cur and cur.kind == "plugin" and t[:1] in (" ", "\t") and s:
+            m = _STATE_RE.match(t)
+            line.state = m.group(1) if m else None
+            if not line.comment:
+                line.spans = ((0, len(t)),)
+                d = definition(s)
+                line.definition = d if d and d.kind == "assign" else None
         elif cur and cur.kind == "loop" and t[:1] in (" ", "\t") and s:
             if _LOOP_RE.match(s):
                 line.spans = _header_spans(t)
@@ -284,21 +302,25 @@ def scan(text):
                 line.definition = d if d and d.kind == "assign" else None
         else:
             cur = None
-            if line.kind in ("solver", "plot", "loop"):
+            if line.kind in ("solver", "plot", "loop", "plugin"):
                 if line.kind == "solver":
                     m = _SOLVER_RE.match(s)
                     cur = Block("solver", m.group(1), m.group(2) or "")
+                elif line.kind == "plugin":
+                    cur = Block("plugin", "plugin", _PLUGIN_RE.match(s).group(1) or "")
                 elif line.kind == "loop":
                     cur = Block("loop", "loop", _LOOP_RE.match(s).group(1) or "")
                 else:
                     cur = Block("plot", "plot", _PLOT_RE.match(s).group(1))
                 blocks[n] = cur
                 line.spans = _header_spans(t)
+            elif line.kind == "pluginvar":
+                line.spans = _header_spans(t)
             elif line.kind not in ("blank", "heading", "meta", "comment", "command"):
                 line.spans = ((0, len(t)),)
         if cur:
             if cur.lines and line.kind != "unitdef":   # a unit definition is one wherever it is
-                line.kind = "loopline" if cur.kind == "loop" else cur.kind + "opt"
+                line.kind = {"loop": "loopline", "plugin": "pluginline"}.get(cur.kind, cur.kind + "opt")
             line.block = cur.lines[0].n if cur.lines else n
             cur.lines.append(line)
         if line.kind in ("unitdef", "funcdef", "assign", "symdef", "expr"):

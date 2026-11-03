@@ -27,6 +27,17 @@ def no_update_check(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def no_plugin_fetch(monkeypatch):
+    """No test fetches a plugin from GitHub: a test that wants one gives a source of its own
+    (LENS_PLUGIN_SOURCE or plugins.fetcher). A source checkout's own plugins/ folder still serves."""
+    from laconic import plugins
+
+    def refuse(url, timeout=None):
+        raise OSError("tests do not use the network")
+    monkeypatch.setattr(plugins, "fetcher", refuse)
+
+
+@pytest.fixture(autouse=True)
 def claim_key(monkeypatch):
     """The key for claims on opened sheets (opened.py), so no test writes one to the user's settings."""
     from laconic import opened

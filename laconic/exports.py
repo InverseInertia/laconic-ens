@@ -82,7 +82,8 @@ def element(r, commands=False):
         return Paragraph([r.text])
     if r.kind == "error":
         return Error(r.n, r.error)
-    if r.kind in ("command", "symdef"):   # a symbol declaration is kept as typed, like a command
+    if r.kind in ("command", "symdef", "plugin", "pluginvar"):   # kept as typed, like a command: a symbol
+        # declaration, a plugin's header (the lines it wrote are calculations) and what a sheet sends it
         return Source(r.n, r.source.strip()) if commands else None
     if r.plot:
         return Figure(r.n, r.plot)

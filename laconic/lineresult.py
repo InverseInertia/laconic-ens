@@ -13,8 +13,9 @@ Every result answers one small interface, whatever its kind:
     r.symbols                        its part of the symbol table (see symbols.py)
 
 What only one kind has is its payload, behind `r.plot` (PlotPayload), `r.solver`
-(SolverPayload), `r.regression` (RegressionPayload) or `r.loop` (LoopPayload); each is None on
-every other line, a block header that failed included.
+(SolverPayload), `r.regression` (RegressionPayload), `r.loop` (LoopPayload), `r.plugin`
+(PluginPayload) or `r.pluginvar` (PluginVarPayload); each is None on every other line, a block
+header that failed included.
 
 `r.to_json()` is the row `/api/eval` sends. Its shape is pinned by tests/test_lineresult.py,
 so a change to it is a deliberate one; static/rows.js is the page's reader of it."""
@@ -105,6 +106,30 @@ class LoopPayload:
 
 
 @dataclass
+class PluginPayload:
+    """A `!plugin` block (see sheet._run_plugin): which plugin it is, what the plugin last saved in
+    its `#@ state` line, and the names its `name = value` lines define. The page runs the plugin
+    (plugins.py serves it) and hands it these."""
+    name: str
+    state: dict             # None when the block has no readable state line yet
+    outputs: list           # the names the block's lines define, in order
+
+    def to_json(self):
+        return asdict(self)
+
+
+@dataclass
+class PluginVarPayload:
+    """A `!pluginvar a, b` line (see sheet._run_pluginvar): the value of each name it lists, as the
+    page sends it to the sheet's plugins: {name, unit, shape, mag}. `mag` is the magnitude in
+    `unit` (a number, or nested lists of rows), real numbers only."""
+    values: list
+
+    def to_json(self):
+        return {"values": self.values}
+
+
+@dataclass
 class LineResult:
     n: int
     source: str
@@ -117,7 +142,7 @@ class LineResult:
     stale: bool = False     # reads a value from a solver whose result is out of date
     hidden: bool = False    # below !hide: it ran, but the results pane and the exports leave it out
     block: object = None    # a block header: the sheettext Block it starts, drawn or failed
-    payload: object = None  # PlotPayload, SolverPayload, RegressionPayload or LoopPayload
+    payload: object = None  # PlotPayload, SolverPayload, RegressionPayload, LoopPayload, PluginPayload or PluginVarPayload
     symbols: dict = None    # this line's part of the symbol table
     pending: bool = False   # a plot not drawn in this run (sheet.evaluate's `plots`); /api/plot draws it
 
@@ -150,6 +175,14 @@ class LineResult:
         return self.payload if isinstance(self.payload, LoopPayload) else None
 
     @property
+    def plugin(self):
+        return self.payload if isinstance(self.payload, PluginPayload) else None
+
+    @property
+    def pluginvar(self):
+        return self.payload if isinstance(self.payload, PluginVarPayload) else None
+
+    @property
     def latex(self):
         parts = [p for p in ([self.lhs] if self.lhs else []) + self.stages if p]
         return " = ".join(parts)
@@ -175,4 +208,8 @@ class LineResult:
             row["solver"] = self.solver.to_json()
         if self.regression:
             row["regression"] = self.regression.to_json()
+        if self.plugin:
+            row["plugin"] = self.plugin.to_json()
+        if self.pluginvar:
+            row["pluginvar"] = self.pluginvar.to_json()
         return row

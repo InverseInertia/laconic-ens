@@ -1,0 +1,8 @@
+{
+  "name": "pipenet",
+  "title": "Pipe network",
+  "version": "1.0.0",
+  "description": "Lay out a fluid loop on a grid: one source, any number of sinks, joined by straights, elbows, tees and crossovers. Writes the upstream matrix and the segment lengths, diameters and fittings into the sheet, and draws the sheet's flows and pressure drops on the pipes.",
+  "entry": "index.html",
+  "files": ["index.html", "pipenet.js", "app.js"]
+}

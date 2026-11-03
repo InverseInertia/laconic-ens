@@ -30,6 +30,8 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `node tests/test_mathfit.js` | when a formula too wide for its room is shrunk or wrapped (the drawing is tested in Chromium) |
 | `node tests/test_unitbrowser.js` | the units dialog: search, tag filters, adding and removing your tags |
 | `node tests/test_symbols.js` | reading the symbol table out of the eval rows |
+| `node tests/test_plugins.js` | the page's side of plugins: the blocks and inputs in the rows, and which messages from a plugin are taken |
+| `node tests/test_pipenet.js` | the pipenet plugin's model: tile shapes, the walk of the network, the matrix and vectors it writes, what is wrong with a layout, the values on the drawing |
 | `python tests/stress/run_solver_stress.py` | about 35 heavy solver cases (Rosenbrock up to 100 variables, a 1000-equation system, CoolProp inside residuals, Hock-Schittkowski 71, timeouts) through the worker process |
 
 | File | Covers |
@@ -44,10 +46,11 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `test_solver.py`, `test_solverjobs.py` | solver blocks, the solve session, and the worker process with its runner |
 | `test_symbolic.py` | symbols (`$x`, `~$g`), symbolic expressions, units and late binding, `!symsolve`, and their errors, exports and rename |
 | `test_loop.py` | `!loop` blocks: what they leave below, entries, loops inside loops, errors, Rename and exports |
+| `test_plugins.py` | `!plugin` blocks and `!pluginvar` lines, the edits a plugin's write makes, fetching and keeping plugins (with a stand-in network; `conftest.py` refuses any real fetch), the files served and the endpoints, and the Pipe network example |
 | `test_regression.py`, `matrix_vectors.json` | `!regression` blocks (the fit, units, errors, exports), and large matrices collapsed in documents; the vectors are shared with `test_matrixview.js` |
 | `test_install_linux.py` | `packaging/install-linux.sh` run in a throwaway home folder with a stand-in program and a stand-in `curl` serving fake releases: the launcher it writes, what `--uninstall` removes, installing and updating to the latest release, the copy of itself it keeps in the install folder (which LENS's Update runs), `--release`, what it does offline or when a download fails, stopping a LENS still running from the install folder, and installer 1.0.0 updating through `packaging/v1-bridge.sh` |
 | `test_updates.py` | the update check and the Update action (`updates.py`) with a stand-in GitHub and installer: version comparison, which release counts, what Update does for each kind of install, the endpoints and the setting. `conftest.py` makes the check offline for every other test, so no test reaches the network |
-| `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py`, `test_regression_ui.py`, `test_update_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
+| `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py`, `test_regression_ui.py`, `test_update_ui.py`, `test_plugin_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
 
 Browser tests are skipped unless `playwright` is installed (`pip install playwright`; set `CHROMIUM_PATH` to use an existing browser). One test compiles an exported document with plots and is skipped unless `pdflatex` (with pgfplots and siunitx v3) is installed.
 
@@ -67,6 +70,7 @@ Static files are served from `laconic/static/`; reload the page after editing JS
 - **A field on the eval rows:** add it to `LineResult` (or to a payload, if only one kind has it) and to `to_json`, update the expected shape in `test_lineresult.py`, and read it in `rows.js` (or the payload's own reader: `plotview.js`, `solverview.js`).
 - **A physical constant:** add a line to `CONSTANTS` in `catalogue.py`: the spelling a sheet types, what it is, and `None` when Pint already knows that spelling (`'R`, `'c`). For a spelling Pint lacks, the third item is the Pint definition that adds it: `"@alias planck_constant = h_P"` for another name of a Pint constant, or `"Av = avogadro_number"` for a new unit with its own symbol. The editor's suggestions, the *constants* tag in the units dialog and the "show its value" rule pick it up from there. Add its row to the table in [Units](Units), and its CODATA 2022 value (Pint's) to `test_the_constants_have_their_codata_values` in `tests/test_units.py`, which fails for a constant without one.
 - **A standard unit tag:** add it to `STANDARD_TAGS` in `unittags.py`, as a list of unit spellings and Pint dimensions in brackets (`"[pressure]"`); the order there is the order of the dialog's tag buttons. Add a unit to an existing tag the same way. List the tag in [Units](Units).
+- **A plugin:** a folder under `plugins/` with a `manifest.json` that lists its files and its page (see [Plugins](Plugins) for the messages). A source checkout serves it from there as you work on it; once it is on `main`, every LENS fetches it from GitHub the first time a sheet asks for it. Keep its logic in plain functions that load under Node, as `plugins/pipenet/pipenet.js` does, test them with a `tests/test_*.js` suite listed in `test_editing_node.py`, and add a browser test for what it writes into a sheet.
 - **A unit that needs special handling** (its own dimension, a reduction rule, an export spelling, an error or hint): add it to the unit catalogue, `catalogue.py`. A currency is one entry in `CURRENCIES`.
 
 ## The Linux installer's version

@@ -1,0 +1,84 @@
+"""Plugins in the real page (Chromium, through Playwright), with the pipenet plugin from this
+checkout's plugins/ folder: the frame, what it writes into the sheet and what the sheet sends it.
+Skipped when Playwright or a browser is not available, like test_ui.py."""
+import pytest
+
+pytest.importorskip("playwright.sync_api")
+from uihelpers import reset, value  # noqa: E402
+
+SHEET = "!plugin pipenet\nQ = A * ones(cols(A), 1) * 'gal/'min -> 'gal/'min\n!pluginvar Q\n"
+
+
+def show(page, text):
+    reset(page, text)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+
+
+def opened(page):
+    page.wait_for_selector(".plugin-box button:has-text('Open'):not([disabled])")
+    page.wait_for_function("document.querySelector('.plugin-status').textContent.startsWith('Pipe network')")
+    page.click(".plugin-box button:has-text('Open')")
+    page.wait_for_selector("#pluginDlg[open] .plugin-frame:not([hidden])")
+    return page.frame_locator("#pluginFrames .plugin-frame")
+
+
+def test_the_plugin_writes_its_network_into_its_block_and_shows_the_sheets_values(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes('#@ state')")
+    text = value(page)
+    assert text.startswith("!plugin pipenet\n  A = [1, 0, 0, 0, 0, 0, 0, 0; ")
+    for name in ("L! = [", "D_h! = [", "K_fT! = [", "exchangers! = [", "speeds! = ["):
+        assert f"\n  {name}" in text
+    # the sheet runs on what it wrote, and Q comes back to the frame, one value per segment
+    frame.locator("#segments th:has-text('Q gal/min')").wait_for()
+    assert frame.locator("#segments tbody tr").count() == 15
+    assert frame.locator("#segments tbody tr").first.locator("td").last.inner_text() == "1"
+    assert frame.locator("#msgs").inner_text().startswith("One source, 8 sinks, 15 segments")
+    page.click("#pluginDlg .close")
+    page.wait_for_selector(".plugin-box img.plugin-preview")   # the row shows the plugin's picture
+
+
+def test_a_network_drawn_with_the_mouse_reaches_the_sheet(page):
+    show(page, SHEET)
+    frame = opened(page)
+    box = frame.locator("#canvas").bounding_box()
+    cell = 56   # pipenet.js CELL; an empty grid starts at row 0, column 0
+    at = lambda r, c: (box["x"] + (c + 0.5) * cell, box["y"] + (r + 0.5) * cell)
+    frame.locator("#palette button[title='Source, E']").click()
+    page.mouse.click(*at(2, 1))
+    frame.locator("#palette button[title='Sink, W']").click()
+    page.mouse.click(*at(2, 5))
+    frame.locator("button[data-tool=draw]").click()
+    page.mouse.move(*at(2, 1))
+    page.mouse.down()
+    for c in range(2, 6):
+        page.mouse.move(*at(2, c), steps=3)
+    page.mouse.up()
+    page.wait_for_function("document.querySelector('#src').value.includes('  A = [1]\\n')")
+    assert "  L! = [80] * 'ft\n" in value(page)    # four squares of 10 ft, doubled for the return
+    frame.locator("#segments th:has-text('Q gal/min')").wait_for()
+
+
+def test_an_edit_to_the_state_in_the_sheet_reaches_the_plugin(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes('#@ state')")
+    assert frame.locator("#empty").is_hidden()
+    show(page, '!plugin pipenet\n  #@ state {"v":1,"cells":{}}\n')
+    frame.locator("#empty").wait_for(state="visible")
+
+
+def test_the_frame_is_sandboxed_from_the_page(page):
+    show(page, SHEET)
+    opened(page)
+    assert page.evaluate("document.querySelector('.plugin-frame').contentDocument") is None
+    assert page.get_attribute(".plugin-frame", "sandbox") == "allow-scripts"
+
+
+def test_a_plugin_that_does_not_exist_says_so_and_the_sheet_still_runs(page):
+    show(page, "!plugin nosuchplugin\n  x = 2\ny = x + 1\n")
+    page.wait_for_function("document.querySelector('.plugin-status.err')?.textContent.includes(\"no plugin 'nosuchplugin'\")")
+    assert "3" in page.inner_text(".row[data-line='3'] .body")
