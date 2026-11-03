@@ -206,6 +206,34 @@ def test_opened_sheet_is_served_and_saved_back(tmp_path):
     assert sheet.read_bytes() == b"x = 3\r\n"
 
 
+def test_a_start_file_can_be_claimed_again_by_a_later_launch(tmp_path):
+    """#168: the page keeps the claim /api/opened gave it, and a later launch without the file
+    gets a ?sheet= token for it back, so Save still writes there."""
+    sheet = tmp_path / "beam.lens"
+    sheet.write_text("x = 2\n", encoding="utf-8")
+    sheets.start(sheet)
+    got = server.get_opened()
+    sheets.clear()
+    back = server.claim_opened(server.ClaimBody(path=got["path"], claim=got["claim"]))
+    assert back["file"] == "beam.lens"
+    assert server.save_opened(server.TextBody(text="x = 3\n"), back["sheet"]) == {"ok": True}
+    assert sheet.read_text(encoding="utf-8") == "x = 3\n"
+    # A claim for another path, a made-up one, or a file that has gone gets nothing.
+    other = tmp_path / "other.lens"
+    other.write_text("", encoding="utf-8")
+    assert server.claim_opened(server.ClaimBody(path=str(other), claim=got["claim"])) == {}
+    assert server.claim_opened(server.ClaimBody(path=got["path"], claim="0" * 64)) == {}
+    sheet.unlink()
+    assert server.claim_opened(server.ClaimBody(path=got["path"], claim=got["claim"])) == {}
+
+
+def test_a_txt_start_file_has_no_claim(tmp_path):
+    sheet = tmp_path / "old.txt"
+    sheet.write_text("x = 2", encoding="utf-8")
+    sheets.start(sheet)
+    assert "claim" not in server.get_opened()
+
+
 def test_an_opened_txt_file_is_read_but_never_written(tmp_path):
     sheet = tmp_path / "old.txt"
     sheet.write_text("x = 2", encoding="utf-8")
@@ -348,3 +376,9 @@ def test_api_plot_keeps_what_it_drew_until_something_it_reads_changes(monkeypatc
     server.plot(server.PlotBody(text=PLOTS.replace("x0 = 2", "x0 = 3"), line=2))
     server.plot(server.PlotBody(text=PLOTS + "'smoot = 2'm\n", line=2))   # a unit is defined for the whole sheet
     assert len(calls) == 3
+
+
+def test_the_claim_key_is_made_once_and_kept(tmp_path):
+    from laconic import opened
+    key = opened._key_in(tmp_path / "cfg")
+    assert len(key) == 32 and opened._key_in(tmp_path / "cfg") == key == (tmp_path / "cfg" / "opened.key").read_bytes()

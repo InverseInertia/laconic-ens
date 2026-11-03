@@ -15,7 +15,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 - **Check for updates in Help**: Help has a Check for updates button beside the version, which asks GitHub again for a newer release, so one that came out while LENS was open is found without closing it. It works even with the check at start turned off in Settings. (#164)
 
 ### Fixes
-- **Save keeps its file after a reload**: the sheet's name and the file it was opened from or saved to are now remembered with its text, so after a reload, or LENS closed and opened again, Ctrl+S writes back to that file instead of asking for a new one under the name "sheet". An opened file's text is kept straight away, not only once you type. Save As still renames the sheet to the file it was saved as. (#168)
+- **Save keeps its file after a reload**: the sheet's name and the file it was opened from or saved to are now remembered with its text, so after a reload, or LENS closed and opened again, Ctrl+S writes back to that file instead of asking for a new one under the name "sheet". That includes a sheet opened by double-clicking its `.lens` file and then reopened from the LENS shortcut, which asked whether to replace the file. An opened file's text is kept straight away, not only once you type. Save As still renames the sheet to the file it was saved as. (#168)
 - **Reopening LENS finds a new release**: closing LENS and opening it again straight away reached the LENS still running, which kept the answer of its first update check, so a release that came out since was not offered. A new window now checks again, as does a page loaded more than six hours after the last check. (#165)
 
 ## [v0.5.3](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.5.3) (2026-11-02)

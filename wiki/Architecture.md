@@ -68,7 +68,7 @@ The whole sheet is re-run on every edit (a few milliseconds at worksheet size), 
 | `unittags.py` | The units dialog's tags: the standard tag list (units and Pint dimensions) and the cleaning of the user's tags before they are stored |
 | `settings.py` | The per-user settings file (the Ctrl+G extended characters, stored as `greek`, global units, the user's unit tags, the page's display preferences including the theme and whether to check for updates, and whether the welcome was shown) |
 | `server.py` | FastAPI app. It writes the preference keys (`settings.PREFS`) into the page |
-| `opened.py` | The sheets this server's windows are opened on (the start file, and sheets another launch handed over, by token), and which may be written back (`.lens` only) |
+| `opened.py` | The sheets this server's windows are opened on (the start file, and sheets another launch handed over, by token), and which may be written back (`.lens` only); the claim the page keeps on a start file, an HMAC of its path under a key in the settings folder, so a later launch without the file can save to it again (#168) |
 | `markdown.py` | Export elements to a Markdown note in Obsidian's style: `$$` math in the live preview's flavour, plots as embedded SVG |
 | `pdfdoc.py` | Export elements to a plain, page-broken HTML document. The page prints it from a hidden frame with the browser's print dialog; the CLI's `--pdf` prints it with a headless Chromium-family browser |
 | `browser.py` | Finds a Chromium-family browser for the app window and the CLI's PDF export, the user's default first; `LENS_CHROMIUM` overrides |

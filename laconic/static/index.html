@@ -1140,8 +1140,9 @@ document.fonts.ready.then(fitName);
 // {name, server: true}, that the server writes through.
 // The handle and the sheet's name are kept in this browser (#168), so after a reload, or LENS
 // closed and opened again, Ctrl+S still writes to the same file under the same name. A handle
-// can only be kept in IndexedDB; the stand-in for a start file is not kept (openStartFile finds
-// it again).
+// can only be kept in IndexedDB. For a start file the server's claim on it is kept instead
+// ({path, claim}, opened.py), which a later launch without the file hands back for a ?sheet=
+// token, so the server writes to it again.
 let fileHandle = null;
 const LENS_TYPES = [{description: "LENS worksheet", accept: {"text/plain": [".lens"]}}];
 const handleStore = (mode, fn) => new Promise((resolve, reject) => {
@@ -1157,6 +1158,8 @@ const handleStore = (mode, fn) => new Promise((resolve, reject) => {
   };
 });
 function keepHandle(handle) {
+  if (handle && handle.server && handle.claim) store.set("file", {path: handle.path, claim: handle.claim});
+  else store.remove("file");
   const kept = handle && !handle.server ? handle : null;
   try {
     handleStore("readwrite", (s) => (kept ? s.put(kept, "sheet") : s.delete("sheet"))).catch(() => {});
@@ -1177,12 +1180,14 @@ async function save(as) {
     title: nameEl.value,
     current: fileHandle,
     source: ed.value,
-    permission: (h) => (h.server ? "granted" : h.requestPermission({mode: "readwrite"})),
+    // Asked only when not already given, so a file allowed once this visit saves without a prompt.
+    permission: async (h) => (h.server || (await h.queryPermission({mode: "readwrite"})) === "granted"
+      ? "granted" : h.requestPermission({mode: "readwrite"})),
     pick: window.showSaveFilePicker && ((suggestedName) => showSaveFilePicker({suggestedName, types: LENS_TYPES})),
     render: async () => { const res = await post("/api/save"); return res.ok ? res.text() : null; },
     write: async (h, text) => {
       if (h.server) {
-        const r = await Api.json(openedApi("/api/opened/save"), {text});
+        const r = await Api.json(h.sheet ? `/api/opened/save?sheet=${encodeURIComponent(h.sheet)}` : openedApi("/api/opened/save"), {text});
         if (!r.ok) throw new Error(r.error);
         return;
       }
@@ -2332,7 +2337,7 @@ async function openStartFile() {
   try { o = await Api.json(openedApi("/api/opened")); } catch { return false; }
   if (!o.file) return false;
   if (o.error) { say(o.error); return false; }
-  const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true} : null);
+  const f = SaveFile.opened(o.file, o.writable ? {name: o.file, server: true, path: o.path, claim: o.claim} : null);
   let seen = null;
   try { seen = sessionStorage.getItem("lens:opened"); sessionStorage.setItem("lens:opened", o.path); } catch {}
   if (seen === o.path && store.get("text", null) !== null) ed.value = store.get("text", null);
@@ -2423,8 +2428,15 @@ $("#checkUpdates").onchange = (ev) => {
     // The name and file the stored text was last opened from or saved to (#168).
     if (text !== null) {
       nameEl.value = store.get("name", nameEl.value) || ""; fitName();
-      const kept = await keptHandle();
-      if (kept && !fileHandle) setFile(kept, false);
+      const file = store.get("file", null);
+      if (file && file.path && file.claim) {   // a start file, from an earlier launch
+        let r = {};
+        try { r = await Api.json("/api/opened/claim", {path: file.path, claim: file.claim}); } catch {}
+        if (r.sheet) setFile({name: r.file, server: true, sheet: r.sheet, ...file}, false);
+      } else {
+        const kept = await keptHandle();
+        if (kept && !fileHandle) setFile(kept, false);
+      }
     }
   }
   wrap = store.get("wrap", "inline");
