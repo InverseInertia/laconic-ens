@@ -52,8 +52,11 @@
   .row-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   label.f { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 6px; margin: 4px 0; }
   label.f input, label.f select { width: 100%; }
-  .pair { display: grid; grid-template-columns: 1fr auto; gap: 2px; }
-  .pair select { width: auto; }
+  /* A field whose control needs the room (a list of long choices, a value with its unit): its name
+     above, the control the full width of the panel below. */
+  label.f.stack { grid-template-columns: 1fr; gap: 2px; margin: 6px 0; }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(76px, auto); gap: 4px; }
+  .pair input, .pair select { width: 100%; }
   label.c { display: flex; align-items: center; gap: 6px; margin: 6px 0; cursor: pointer; }
   .hint { color: var(--text-soft); font-size: 12px; margin: 6px 0; }
   main { overflow: auto; position: relative; }
@@ -119,17 +122,17 @@
   <h3>Network</h3>
   <label class="f">Length unit <select id="unitL"><option>ft</option><option>m</option><option>in</option><option>mm</option></select></label>
   <label class="f">Square length <input id="cell" type="number" min="0" step="any"></label>
-  <label class="f">Pipe size <select id="size" title="Nominal pipe size: each segment's D_h is its inside diameter in the schedule below. A segment can take another size (Select a tile)"></select></label>
+  <label class="f stack">Pipe size <select id="size" title="Nominal pipe size: each segment's D_h is its inside diameter in the schedule below. A segment can take another size (Select a tile)"></select></label>
   <label class="f">Schedule <select id="sch"><option value="40">Sch 40</option><option value="80">Sch 80</option></select></label>
   <label class="f" id="diaRow">Bore <input id="dia" type="number" min="0" step="any"></label>
   <label class="f">Diameter unit <select id="unitD"><option>in</option><option>mm</option><option>ft</option><option>m</option></select></label>
-  <label class="f">Return pipe <select id="ret" title="The same as the supply: the return runs beside the supply and matches it. Laid out on its own: draw it on the Return side">
+  <label class="f stack">Return pipe <select id="ret" title="The same as the supply: the return runs beside the supply and matches it. Laid out on its own: draw it on the Return side">
     <option value="same">Same as supply</option><option value="separate">Laid out on its own</option></select></label>
-  <label class="f" title="The pressure difference the pump's controller holds (Δp_target): it sets the loop's total flow">Pump target Δp
+  <label class="f stack" title="The pressure difference the pump's controller holds (Δp_target): it sets the loop's total flow">Pump target Δp
     <span class="pair"><input id="dpv" type="number" min="0" step="any"><select id="dpu"></select></span></label>
-  <label class="f">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
+  <label class="f stack">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
     <option value="1">Crane</option><option value="2">Hooper 2-K</option><option value="3">Darby 3-K</option></select></label>
-  <label class="f">On the drawing <select id="labels"><option value="values">Values</option><option value="numbers">Numbers</option><option value="none">Nothing</option></select></label>
+  <label class="f stack">On the drawing <select id="labels"><option value="values">Values</option><option value="numbers">Numbers</option><option value="none">Nothing</option></select></label>
 </aside>
 <main>
   <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick

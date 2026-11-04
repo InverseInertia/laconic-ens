@@ -314,7 +314,7 @@
         if (pick.value === 'custom') u.d = seg.D;
         else if (pick.value !== 'net') u.nps = pick.value;
       });
-      parts.push(el('label', { class: 'f' }, 'Segment pipe', pick));
+      parts.push(el('label', { class: 'f stack' }, 'Segment pipe', pick));
       if (first.d) parts.push(field(`Segment bore (${state.units.D})`, first.d, String(seg.D), (v) => { const x = positive(v); if (x) setAll((u) => { u.d = x; }); }));
     }
     if (t.t === 'sink' && pad) {
