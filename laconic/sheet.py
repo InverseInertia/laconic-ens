@@ -454,10 +454,27 @@ def _run_plugin_line(l, ev, fmt, used):
     return _run_line(l.n, l.text, s, ev, fmt, used)
 
 
+_NAMES_RE = re.compile(r"([^\W\d]\w*)\s*:\s*(.*)\Z")
+
+
 def _run_pluginvar(i, raw, s, ev):
     """`!pluginvar a, b`: the values of `a` and `b` here, for the page to send to the sheet's
-    plugins (a pipe network shows the flows the sheet worked out on its drawing)."""
+    plugins (a pipe network shows the flows the sheet worked out on its drawing).
+
+    `!pluginvar list: f, g, h` sends a list of names instead, in order, under the name `list`: what
+    a number in the sheet picks (`exchangers: SWEP_B26W, SWEP_DB300` names exchanger curves 1 and 2),
+    so a plugin can show the names. Each must be a variable or function defined here."""
     rest = s[len("!pluginvar"):].strip()
+    m = _NAMES_RE.match(rest)
+    if m:
+        listed = [n.strip() for n in m.group(2).split(",")] if m.group(2).strip() else []
+        if not listed or not all(is_name(n) for n in listed):
+            return LineResult(i, raw, "error", error=f"!pluginvar {m.group(1)}: reads `!pluginvar {m.group(1)}: a, b`: names, in order")
+        unknown = [n for n in listed if ev.vkey(n) not in ev.vars and ev.fkey(n) not in ev.funcs]
+        if unknown:
+            return LineResult(i, raw, "error", error=f"'{unknown[0]}' is not defined")
+        return LineResult(i, raw, "pluginvar", text=f"Sent to the plugins: {m.group(1)}, the names {', '.join(listed)}",
+                          payload=PluginVarPayload([{"name": m.group(1), "names": [n.lstrip("~") for n in listed]}]))
     names = [n.strip() for n in rest.split(",")] if rest else []
     if not names or not all(is_name(n) for n in names):
         return LineResult(i, raw, "error", error="!pluginvar reads `!pluginvar a, b`: the variables to send to the plugins")

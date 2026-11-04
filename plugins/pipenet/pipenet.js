@@ -12,7 +12,7 @@
  *
  * The state the plugin keeps in its block's `#@ state` line:
  *
- *   {v: 1, units: {L: "ft", D: "in"}, cell: 10, D: 4, ret: "same", method: 1, labels: "values",
+ *   {v: 1, units: {L: "ft", D: "in"}, cell: 10, D: 4, ret: "same", method: 1, show: {...},
  *    cells: {"r,c": tile}, rcells: {"r,c": tile}}
  *   ret: "same", the return pipe runs beside the supply and matches it, so its lines are the supply's;
  *        or "separate", the return is a layout of its own, `rcells`, drawn on a second layer
@@ -22,7 +22,9 @@
  *        supply layer's pad only (syncPads keeps the pads of the two layers in the same squares)
  *   method: how the sheet works out fitting losses: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K (METHODS)
  *   dp: the pressure difference the pump holds, {v, u} (u one of DP_UNITS), written as Δp_target
- *   labels: what the drawing shows beside the pipes: "values" (the sheet's), "numbers" or "none"
+ *   show: what the drawing shows: {numbers, size, L, D, hx, pump} each true or false (segment numbers;
+ *        each segment's pipe size, length and bore; each sink's exchanger curve and pump curve), and
+ *        `hide`, the names of the sheet's !pluginvar values left off it (any other is shown)
  *   nps, sch: the network's pipe, a nominal size (PIPE_SIZES) or null for a diameter D of its own, and
  *        its schedule, "40" or "80"
  *   tile: {t: "pipe"|"source"|"sink", p: sides, L?: length of this tile, nps?: its pipe size, d?: or diameter,
@@ -113,7 +115,7 @@
 
   function blank() {
     return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, nps: '4', sch: '40', ret: 'same', method: 1, dp: { v: 0.1, u: 'psi' },
-      labels: 'values', cells: {}, rcells: {} };
+      show: { numbers: true, size: false, L: false, D: false, hx: false, pump: false, hide: [] }, cells: {}, rcells: {} };
   }
 
   // A state as given, with anything missing or odd replaced by the default, and tiles cleaned.
@@ -130,7 +132,10 @@
       method: [1, 2, 3].includes(s.method) ? s.method : b.method,
       dp: { v: s.dp && typeof s.dp.v === 'number' && isFinite(s.dp.v) && s.dp.v >= 0 ? s.dp.v : b.dp.v,
             u: s.dp && DP_UNITS.includes(s.dp.u) ? s.dp.u : b.dp.u },
-      labels: ['values', 'numbers', 'none'].includes(s.labels) ? s.labels : b.labels, cells: {}, rcells: {},
+      show: Object.fromEntries(Object.entries(b.show).map(([k, d]) => [k, k === 'hide'
+        ? (s.show && Array.isArray(s.show.hide) ? s.show.hide.filter((n) => typeof n === 'string').slice(0, 100) : [])
+        : s.show && typeof s.show[k] === 'boolean' ? s.show[k] : d])),
+      cells: {}, rcells: {},
     };
     const clean = (cells, into, supply) => {
       for (const [k, t] of Object.entries(cells || {})) {
@@ -338,6 +343,7 @@
     const out = { segments: [], rsegments: [], sinks: [], legend: [], unplaced: [] };
     const nSeg = net.s.order.length, nRet = net.r.order.length, nSink = net.sinks.length;
     for (const v of inputs || []) {
+      if (Array.isArray(v.names)) continue;   // a list of names (curveNames), not values to draw
       const flat = flatten(v.mag);
       if (flat === null) { out.unplaced.push(v.name); continue; }
       const item = { name: v.name, unit: v.unit, values: flat, stale: !!v.stale };
@@ -351,6 +357,14 @@
     }
     return out;
   }
+
+  // What a sink's numbers pick, by the names the sheet gives them: `!pluginvar exchangers: f, g` names
+  // exchanger curves 1 and 2, `!pluginvar speeds: ...` the pump curves. {exchangers, speeds}: a list each, or null.
+  function curveNames(inputs) {
+    const find = (n) => { const v = (inputs || []).find((x) => x.name === n && Array.isArray(x.names)); return v ? v.names : null; };
+    return { exchangers: find('exchangers'), speeds: find('speeds') };
+  }
+  const curveName = (names, i) => (names && names[i - 1]) || `curve ${i}`;
 
   function flatten(m) {
     if (typeof m === 'number' || m === null) return [m];
@@ -476,21 +490,28 @@
       const x0 = anchor === 'start' ? px : px - w;
       balloons.push({ ax, ay, px: x0, py: py - 12, x: x0, y: py - 12, w, h: hgt, lines });
     };
-    const show = state.labels || 'values';
-    if (!net.errors.length && show !== 'none') {
+    const show = state.show || blank().show, hidden = new Set(show.hide || []);
+    const names = curveNames(opts.inputs);
+    if (!net.errors.length) {
       const a = front === 'r' ? net.r : net.s, cells = front === 'r' ? state.rcells : state.cells;
-      const own = front === 'r' && !net.same ? vals.rsegments : vals.segments, prefix = front === 'r' && !net.same ? 'R' : '';
+      const own = (front === 'r' && !net.same ? vals.rsegments : vals.segments).filter((v) => !hidden.has(v.name));
+      const prefix = front === 'r' && !net.same ? 'R' : '';
       for (const s of a.segments) {
         if (!s.tiles.length || s.row === undefined) continue;
         const mine = s.tiles.length > 1 ? s.tiles.slice(0, -1) : s.tiles;   // not the tee or sink it ends at
         const mid = mine[Math.floor((mine.length - 1) / 2)];
         const [r, c] = at(mid), cx = x(c) + h, cy = y(r) + h;
-        const lines = show === 'values' ? own.map((v) => ({ text: `${v.name} ${fmt(v.values[s.row], v.unit)}`, soft: v.stale })) : [];
+        const lines = [];
+        if (show.size) lines.push({ text: s.nps ? `${s.nps}" Sch ${state.sch}` : `bore ${fmt(s.D, state.units.D)}` });
+        if (show.L) lines.push({ text: `L ${fmt(s.L, state.units.L)}` });
+        if (show.D) lines.push({ text: `D_h ${fmt(s.D, state.units.D)}` });
+        for (const v of own) lines.push({ text: `${v.name} ${fmt(v.values[s.row], v.unit)}`, soft: v.stale });
         if (lines.length) {
           const vertical = !(cells[mid].p & (E | W));
           if (vertical) balloon(cx, cy, cx + 16, cy - (lines.length * LH) / 2 + 9, lines);
           else balloon(cx, cy, cx - 8, cy + 28, lines);
         }
+        if (!show.numbers) continue;
         const rr = prefix ? 12 : 10;
         obstacles.push({ x: cx - rr - 2, y: cy - rr - 2, w: 2 * rr + 4, h: 2 * rr + 4 });
         out.push(`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${esc(th.paper)}" stroke="${esc(front === 'r' ? th.ret : th.ink)}" stroke-width="2"/>`);
@@ -504,11 +525,14 @@
       net.sinks.forEach((sink, j) => {
         const [r, c] = at(sink.key), cy = y(r) + h;
         const lines = [{ text: sink.name, bold: true }];
-        if (show === 'values') for (const v of vals.sinks) lines.push({ text: `${v.name} ${fmt(v.values[j], v.unit)}`, soft: v.stale });
+        if (show.hx) lines.push({ text: `hx ${curveName(names.exchangers, sink.x)}` });
+        if (show.pump) lines.push({ text: `pump ${curveName(names.speeds, sink.s)}` });
+        for (const v of vals.sinks) if (!hidden.has(v.name)) lines.push({ text: `${v.name} ${fmt(v.values[j], v.unit)}`, soft: v.stale });
         if (cells[sink.key] && cells[sink.key].p === E) balloon(x(c) + 8, cy, x(c) + 2, y(r) + 14, lines, 'end');   // the pipe comes from the right
         else balloon(x(c) + CELL - 8, cy, x(c) + CELL - 2, y(r) + 14, lines);
       });
     }
+    vals.legend = vals.legend.filter((v) => !hidden.has(v.name));
     if (vals.legend.length) {
       const lines = vals.legend.map((v) => ({ text: `${v.name} = ${fmt(v.values[0], v.unit)}`, soft: v.stale }));
       const w = Math.max(...lines.map((l) => l.text.length)) * 6.4 + 10;
@@ -683,7 +707,7 @@
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
     blank, normalize, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
-    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, spread };
+    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, spread, curveNames, curveName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);

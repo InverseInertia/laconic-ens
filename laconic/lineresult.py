@@ -123,7 +123,8 @@ class PluginPayload:
 class PluginVarPayload:
     """A `!pluginvar a, b` line (see sheet._run_pluginvar): the value of each name it lists, as the
     page sends it to the sheet's plugins: {name, unit, shape, mag}. `mag` is the magnitude in
-    `unit` (a number, or nested lists of rows), real numbers only."""
+    `unit` (a number, or nested lists of rows), real numbers only. A list of names
+    (`!pluginvar list: a, b`) is {name, names}."""
     values: list
 
     def to_json(self):

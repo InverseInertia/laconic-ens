@@ -131,7 +131,7 @@
     for (const btn of document.querySelectorAll('[data-layer]')) btn.setAttribute('aria-pressed', String(btn.dataset.layer === front()));
     document.body.dataset.layer = front();
     if (state.ret === 'separate') document.body.dataset.two = ''; else delete document.body.dataset.two;
-    $('#labels').value = state.labels;
+    showSets();
     $('#method').value = String(state.method);
     setNum($('#dpv'), state.dp.v); $('#dpu').value = state.dp.u;
     messages(); inspector(); tables();
@@ -268,7 +268,27 @@
   $('#dpu').replaceChildren(...P.DP_UNITS.map((u) => Object.assign(document.createElement('option'), { value: u, textContent: u.replace('_', ' ') })));
   $('#dpv').onchange = (e) => { const x = parseFloat(e.target.value); if (isFinite(x) && x >= 0) edit(() => { state.dp.v = x; }); else refresh(); };
   $('#dpu').onchange = (e) => edit(() => { state.dp.u = e.target.value; });
-  $('#labels').onchange = (e) => edit(() => { state.labels = e.target.value; });
+  // On the drawing: a checkbox for each set of data the balloons can show, the plugin's own (segment
+  // numbers, pipe sizes, lengths, bores, each sink's curves) and each of the sheet's !pluginvar values.
+  const BUILT_IN = [['numbers', 'Segment numbers'], ['size', 'Pipe size'], ['L', 'Length'], ['D', 'D_h (bore)'],
+    ['hx', 'Exchanger curve'], ['pump', 'Pump curve']];
+  function showSets() {
+    const box = $('#showSets');
+    if (box.contains(document.activeElement)) return;
+    const check = (label, on, set) => {
+      const input = el('input', { type: 'checkbox' });
+      input.checked = on;
+      input.onchange = () => edit(() => set(input.checked));
+      return el('label', {}, input, label);
+    };
+    const sheetSets = [...new Set(inputs.filter((v) => !Array.isArray(v.names)).map((v) => v.name))];
+    box.replaceChildren(
+      ...BUILT_IN.map(([k, label]) => check(label, state.show[k], (on) => { state.show[k] = on; })),
+      ...(sheetSets.length ? [el('div', { class: 'sub' }, "The sheet's values")] : []),
+      ...sheetSets.map((n) => check(n, !state.show.hide.includes(n), (on) => {
+        state.show.hide = state.show.hide.filter((x) => x !== n).concat(on ? [] : [n]);
+      })));
+  }
 
   // The pipe sizes, nominal size and the bore in the schedule chosen, for the size lists.
   const sizeOptions = (select, extra) => {
@@ -289,6 +309,18 @@
     input.onchange = () => set(input.value);
     return el('label', { class: 'f' }, label, input);
   };
+
+  // A sink's exchanger or pump curve: picked by the names the sheet gives them (`!pluginvar exchangers:
+  // ...`, `!pluginvar speeds: ...`), else by number. A number past the names is kept, and said so.
+  function curvePick(label, names, value, set) {
+    if (!names) return field(label + ' (number)', value, '1', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) set(x); }));
+    const pick = el('select', { 'aria-label': label });
+    pick.append(...names.map((n, i) => el('option', { value: String(i + 1) }, n)));
+    if (value > names.length) pick.append(el('option', { value: String(value) }, `${value}: not named in the sheet`));
+    pick.value = String(value);
+    pick.onchange = () => edit(() => set(+pick.value));
+    return el('label', { class: 'f stack' }, label, pick);
+  }
 
   function inspector() {
     const box = $('#inspector'), t = selected && cells()[selected];
@@ -320,8 +352,9 @@
     }
     if (t.t === 'sink' && pad) {
       parts.push(field('Name', pad.name, 'S' + ((net.sinks.findIndex((s) => s.key === selected) + 1) || ''), (v) => edit(() => { if (v.trim()) pad.name = v.trim().slice(0, 40); else delete pad.name; }), 'text'));
-      parts.push(field('Exchanger curve', pad.x, '1', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) pad.x = x; })));
-      parts.push(field('Pump speed', pad.s, '2', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) pad.s = x; })));
+      const names = P.curveNames(inputs);
+      parts.push(curvePick('Exchanger curve', names.exchangers, pad.x, (x) => { pad.x = x; }));
+      parts.push(curvePick('Pump curve', names.speeds, pad.s, (x) => { pad.s = x; }));
     }
     parts.push(el('div', { class: 'row-btns' },
       el('button', { onclick: () => edit(() => { t.p = P.rotate(t.p); }) }, 'Turn (R)'),
@@ -402,10 +435,12 @@
     else {
       $('#segments').replaceChildren(segmentTable(net.s, vals.segments, '', front() === 's'));
       $('#rsegments').replaceChildren(apart ? segmentTable(net.r, vals.rsegments, 'R', front() === 'r') : '');
-      const shead = el('tr', {}, el('th', {}, 'Sink'), el('th', {}, 'curve'), el('th', {}, 'speed'),
+      const names = P.curveNames(inputs);
+      const shead = el('tr', {}, el('th', {}, 'Sink'), el('th', {}, 'exchanger'), el('th', {}, 'pump'),
         ...vals.sinks.map((v) => el('th', {}, v.name + (v.unit ? ` ${v.unit}` : ''))));
       const srows = net.sinks.map((s, j) => el('tr', { class: selected === s.key ? 'sel' : '', onclick: () => { selected = s.key; refresh(); } },
-        el('td', {}, `${j + 1} ${s.name}`), el('td', {}, String(s.x)), el('td', {}, String(s.s)),
+        el('td', {}, `${j + 1} ${s.name}`), el('td', { class: 'name' }, P.curveName(names.exchangers, s.x)),
+        el('td', { class: 'name' }, P.curveName(names.speeds, s.s)),
         ...vals.sinks.map((v) => el('td', { class: v.stale ? 'stale' : '' }, P.fmt(v.values[j])))));
       $('#sinks').replaceChildren(el('table', {}, el('thead', {}, shead), el('tbody', {}, ...srows)));
     }

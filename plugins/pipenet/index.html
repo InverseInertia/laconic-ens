@@ -49,6 +49,8 @@
   .k-hollow { height: 5px !important; border: 1.5px solid var(--rule); }
   .k-dash { border-top: 2px dashed var(--ink); }
   body:not([data-two]) .k-back-row { display: none; }
+  .checks label { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
+  .checks .sub { color: var(--text-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 8px 0 2px; }
   .row-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   label.f { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 6px; margin: 4px 0; }
   label.f input, label.f select { width: 100%; }
@@ -77,7 +79,7 @@
   th { color: var(--text-soft); font-weight: 500; }
   th, td { text-align: right; padding: 2px 4px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
   td { font-family: var(--mono); }
-  th:first-child, td:first-child { text-align: left; font-family: var(--sans); }
+  th:first-child, td:first-child, td.name { text-align: left; font-family: var(--sans); }
   tbody tr:hover td { background: var(--hit); }
   tr.sel td { background: var(--grid); }
   tbody tr { cursor: pointer; }
@@ -132,7 +134,8 @@
     <span class="pair"><input id="dpv" type="number" min="0" step="any"><select id="dpu"></select></span></label>
   <label class="f stack">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
     <option value="1">Crane</option><option value="2">Hooper 2-K</option><option value="3">Darby 3-K</option></select></label>
-  <label class="f stack">On the drawing <select id="labels"><option value="values">Values</option><option value="numbers">Numbers</option><option value="none">Nothing</option></select></label>
+  <h3>On the drawing</h3>
+  <div id="showSets" class="checks"></div>
 </aside>
 <main>
   <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick
