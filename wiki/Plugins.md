@@ -58,6 +58,7 @@ Lays out a fluid loop for a sheet that solves it for equal pressure drops, so yo
 | `A_r`, `L_r!`, `D_r!`, `N_fit_r!`, `K_extra_r!` | the same for the return's segments. `A_r`'s columns are the same sinks in the same order as `A`'s. With the return the same as the supply, these are copies of the supply's lines |
 | `exchangers!`, `speeds!` | each sink's exchanger curve number and pump speed |
 | `fit_method!` | the fitting-loss method chosen: 1 Crane, 2 Hooper 2-K, 3 Darby 3-K |
+| `Δp_target` | the pressure difference the pump's controller holds (Network → Pump target Δp, in psi, kPa, Pa, bar or ft of water), which sets the loop's total flow |
 
 With these, `A * Q_spur` is the flow in every supply segment and `A_r * Q_spur` in every return segment, and each sink's path loses `transpose(A) * Δp_supply + transpose(A_r) * Δp_return` in its pipes, out and back.
 

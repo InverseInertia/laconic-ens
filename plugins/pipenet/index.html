@@ -47,6 +47,8 @@
   .row-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   label.f { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 6px; margin: 4px 0; }
   label.f input, label.f select { width: 100%; }
+  .pair { display: grid; grid-template-columns: 1fr auto; gap: 2px; }
+  .pair select { width: auto; }
   label.c { display: flex; align-items: center; gap: 6px; margin: 6px 0; cursor: pointer; }
   .hint { color: var(--text-soft); font-size: 12px; margin: 6px 0; }
   main { overflow: auto; position: relative; }
@@ -117,6 +119,8 @@
   <label class="f">Diameter unit <select id="unitD"><option>in</option><option>mm</option><option>ft</option><option>m</option></select></label>
   <label class="f">Return pipe <select id="ret" title="The same as the supply: the return runs beside the supply and matches it. Laid out on its own: draw it on the Return side">
     <option value="same">Same as supply</option><option value="separate">Laid out on its own</option></select></label>
+  <label class="f" title="The pressure difference the pump's controller holds (Δp_target): it sets the loop's total flow">Pump target Δp
+    <span class="pair"><input id="dpv" type="number" min="0" step="any"><select id="dpu"></select></span></label>
   <label class="f">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
     <option value="1">Crane</option><option value="2">Hooper 2-K</option><option value="3">Darby 3-K</option></select></label>
   <label class="f">On the drawing <select id="labels"><option value="values">Values</option><option value="numbers">Numbers</option><option value="none">Nothing</option></select></label>
