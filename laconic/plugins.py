@@ -46,7 +46,7 @@ MAX_FILE = 2_000_000          # bytes; a plugin is a page, not a dataset
 _NAME = re.compile(r"[a-z][a-z0-9_-]{0,39}\Z")
 _FILE = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.-]{0,79}\Z")   # a file name: no folders, no leading dot
 _TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
-          ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2"}
+          ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".lens": "text/plain; charset=utf-8"}
 _lock = threading.Lock()
 
 # Served with every plugin file. The frame is sandboxed by the page as well (`sandbox="allow-scripts"`,
@@ -123,6 +123,9 @@ def _manifest(data, name):
         raise PluginError(f"The plugin '{name}' names no page to open (its entry)")
     if any(Path(f).suffix not in _TYPES for f in files):
         raise PluginError(f"The plugin '{name}' lists a kind of file plugins cannot have")
+    t = m.get("template")
+    if t is not None and (t not in files or Path(t).suffix != ".lens"):
+        raise PluginError(f"The plugin '{name}' names a template sheet it does not list")
     return m
 
 
@@ -231,7 +234,7 @@ def install_folder(path):
 
 def _summary(m, name):
     return {"name": name, "title": m.get("title", name), "version": str(m.get("version", "")),
-            "description": m.get("description", ""), "origin": m.get("origin", "")}
+            "description": m.get("description", ""), "origin": m.get("origin", ""), "template": bool(m.get("template"))}
 
 
 def installed():
@@ -330,3 +333,84 @@ def edits(text, line, state=None, outputs=None):
             raise PluginError("A plugin's state is a JSON object")
         ed.store_state(state)
     return ed.edits()
+
+
+# ---- a plugin's own sheet ------------------------------------------------------------------------
+# A plugin may ship the sheet it is made for (the manifest's `template`, a .lens file it lists): the
+# calculation around its block. LENS offers it among the examples and from the plugin, and tells the
+# plugin which of its lines a sheet has changed or lost (`differences`), so a user who deleted or
+# edited one by accident is told.
+
+def template(name):
+    """(title, text) of the sheet a fetched plugin ships, or None. Never fetches."""
+    if not valid_name(name):
+        return None
+    here = _local(name)
+    try:
+        m = _manifest((here / "manifest.json").read_bytes(), name)
+    except (OSError, PluginError):
+        return None
+    if not m.get("template"):
+        return None
+    try:
+        text = (here / m["template"]).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    from .sheettext import scan
+    heading = next((ln.text.strip().lstrip("#").strip() for ln in scan(text).lines if ln.kind == "heading"), None)
+    return heading or m.get("title", name), text
+
+
+def templates():
+    """[{name, title}] of the fetched plugins that ship a sheet."""
+    out = []
+    for p in installed():
+        t = template(p["name"])
+        if t:
+            out.append({"name": p["name"], "title": t[0]})
+    return out
+
+
+def _parts(text):
+    """What a sheet holds outside its plugin blocks, by what it is: {key: (label, {content, ...})}.
+    A definition is keyed by its name (a global's ~ dropped), a block by its header line, any other
+    `!` line by itself; content is the definition's parameters and body, or a block's owned lines
+    without a stored result, with spaces dropped. Comments, blank lines and stored results are not
+    compared, nor is anything a plugin block owns (the plugin writes it)."""
+    from .sheettext import scan
+    sheet = scan(text)
+    squeeze = lambda s: "".join(s.split())
+    out = {}
+
+    def add(key, label, content):
+        out.setdefault(key, (label, set()))[1].add(content)
+    for ln in sheet.lines:
+        owner = sheet.owner(ln.n)
+        if owner is not None:
+            if owner.kind == "plugin" or ln.n != owner.header:
+                continue
+            members = "\n".join(squeeze(m.text) for m in owner.members
+                                if m.result is None and m.state is None and not m.comment)
+            add(("block", squeeze(ln.text)), ln.text.strip(), members)
+        elif ln.definition is not None and ln.kind in ("assign", "funcdef", "unitdef"):
+            d = ln.definition
+            name = d.name.lstrip("~")
+            add(("def", name), ("'" + name) if d.kind == "unitdef" else name, squeeze(",".join(d.params) + "=" + d.body))
+        elif ln.kind in ("command", "pluginvar"):
+            add(("line", squeeze(ln.text)), ln.text.strip(), "")
+    return out
+
+
+def differences(text, original):
+    """How the sheet `text` differs from a plugin's `original` sheet: {"missing": [...], "changed": [...]},
+    each a list of what the original has, in its order: a name it defines, or a `!` line. A name the
+    sheet defines differently is changed; one it does not define, or a `!` line it lacks, is missing.
+    What the sheet adds is not counted."""
+    have, want = _parts(text), _parts(original)
+    missing, changed = [], []
+    for key, (label, contents) in want.items():
+        if key not in have:
+            missing.append(label)
+        elif not contents & have[key][1]:
+            changed.append(label)
+    return {"missing": missing, "changed": changed}

@@ -12,10 +12,12 @@
  *
  * The state the plugin keeps in its block's `#@ state` line:
  *
- *   {v: 1, units: {L: "ft", D: "in"}, cell: 10, D: 4, ret: true, labels: "values", cells: {"r,c": tile}}
+ *   {v: 1, units: {L: "ft", D: "in"}, cell: 10, D: 4, ret: true, method: 1, labels: "values", cells: {"r,c": tile}}
+ *   method: how the sheet works out fitting losses: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K (METHODS)
  *   labels: what the drawing shows beside the pipes: "values" (the sheet's), "numbers" or "none"
  *   tile: {t: "pipe"|"source"|"sink", p: sides, L?: length of this tile, d?: diameter,
- *          k?: extra fittings (equivalent L/D, as K/f_T), name?, x?: exchanger curve, s?: pump speed}
+ *          k?: extra loss coefficient K on this tile (a valve, from its datasheet), name?,
+ *          x?: exchanger curve, s?: pump speed}
  *
  * `analyze(state)` walks the tree from the source. The water splits only at tees, so the network is
  * a set of segments, each the pipe from one junction to the next: a segment that ends at a sink is
@@ -27,9 +29,13 @@
  *          that sink's water. With the spurs first, its top is the identity
  *   L      each segment's length: the sum of its tiles' lengths (a tile is `cell` long unless it says)
  *   D      each segment's diameter (that of its first tile, or the default)
- *   K      each segment's fittings, as equivalent lengths in diameters (Crane TP-410: K = (L/D)·f_T):
- *          30 for an elbow, 20 for a tee passed straight through, 60 for a tee's branch, plus any `k`
- *   With `ret`, L and K are doubled: the return pipe runs beside the supply and matches it.
+ *   n      each segment's fittings, counted by kind (FITTINGS): 90° elbows, tees the flow passes
+ *          straight through (runs), and tees the flow turns through (branches). A segment owns the
+ *          tee it leaves through, so a tee counts once on each segment that leaves it: as a run on the
+ *          one straight on, as a branch on the others. The sheet turns the counts into K with the
+ *          coefficient table of the method chosen
+ *   K      each segment's extra loss coefficients (`k` on its tiles), added to the fittings' as they are
+ *   With `ret`, L, n and K are doubled: the return pipe runs beside the supply and matches it.
  *
  * `outputs(state, analysis)` gives the sheet lines; `draw(...)` the picture, as SVG text.
  */
@@ -43,7 +49,11 @@
   const OPP = { [N]: S, [E]: W, [S]: N, [W]: E };
   const CW = { [N]: E, [E]: S, [S]: W, [W]: N };
   const NAMES = { [N]: 'N', [E]: 'E', [S]: 'S', [W]: 'W' };
-  const K_ELBOW = 30, K_RUN = 20, K_BRANCH = 60;
+  // The kinds of fitting counted, in the order of N_fit!'s columns and of the sheet's coefficient
+  // tables' rows; and the methods the sheet offers for turning the counts into K (fit_method!).
+  const FITTINGS = ['elbow', 'run', 'branch'];
+  const ELBOW = 0, RUN = 1, BRANCH = 2;
+  const METHODS = { 1: 'Crane TP-410: K = (L/D)·f_T', 2: 'Hooper 2-K', 3: 'Darby 3-K' };
 
   const key = (r, c) => `${r},${c}`;
   const at = (k) => k.split(',').map(Number);
@@ -62,7 +72,7 @@
   }
 
   function blank() {
-    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, ret: true, labels: 'values', cells: {} };
+    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, ret: true, method: 1, labels: 'values', cells: {} };
   }
 
   // A state as given, with anything missing or odd replaced by the default, and tiles cleaned.
@@ -75,6 +85,7 @@
       units: { L: ['ft', 'm', 'in', 'mm'].includes(s.units && s.units.L) ? s.units.L : b.units.L,
                D: ['in', 'mm', 'ft', 'm'].includes(s.units && s.units.D) ? s.units.D : b.units.D },
       cell: num(s.cell, b.cell), D: num(s.D, b.D), ret: s.ret !== false,
+      method: [1, 2, 3].includes(s.method) ? s.method : b.method,
       labels: ['values', 'numbers', 'none'].includes(s.labels) ? s.labels : b.labels, cells: {},
     };
     for (const [k, t] of Object.entries(s.cells || {})) {
@@ -109,8 +120,10 @@
 
     const segs = result.segments;
     const tileLen = (k) => (cells[k].L !== undefined ? cells[k].L : state.cell);
-    const newSeg = (parent, from, out, k0) => {
-      const s = { id: segs.length, parent, from, out, tiles: [], L: 0, K: k0, D: null, sink: null, children: [], ends: null };
+    const newSeg = (parent, from, out, kind) => {
+      const n = [0, 0, 0];
+      if (kind !== null) n[kind] = 1;
+      const s = { id: segs.length, parent, from, out, tiles: [], L: 0, n, K: 0, D: null, sink: null, children: [], ends: null };
       segs.push(s);
       if (parent !== null) segs[parent].children.push(s.id);
       return s;
@@ -137,18 +150,18 @@
         if (sh === 'source') { fail(k, 'The pipe runs back into the source'); return; }
         if (sh === 'stub') { fail(k, 'Dead end: this pipe connects on one side only'); return; }
         if (sh === 'straight' || sh === 'cross') { from = k; out = OPP[into]; continue; }
-        if (sh === 'elbow') { from = k; out = bits(tile.p).find((d) => d !== into); seg.K += K_ELBOW; continue; }
+        if (sh === 'elbow') { from = k; out = bits(tile.p).find((d) => d !== into); seg.n[ELBOW] += 1; continue; }
         // a tee: the segment ends, and one starts down each other side
         const outs = bits(tile.p).filter((d) => d !== into);
         const straight = OPP[into];
         const runs = outs.includes(straight);
         seg.ends = k;
         const rank = (d) => (d === straight ? 0 : d === CW[straight] ? 1 : 2);   // straight on, then right, then left
-        for (const d of outs.slice().sort((p, q) => rank(p) - rank(q))) walk(newSeg(seg.id, k, d, runs && d === straight ? K_RUN : K_BRANCH), k, d);
+        for (const d of outs.slice().sort((p, q) => rank(p) - rank(q))) walk(newSeg(seg.id, k, d, runs && d === straight ? RUN : BRANCH), k, d);
         return;
       }
     };
-    const first = newSeg(null, src, bits(cells[src].p)[0], 0);
+    const first = newSeg(null, src, bits(cells[src].p)[0], null);
     walk(first, src, first.out);
     return finish(result, state);
   }
@@ -200,9 +213,11 @@
       A: '[' + a.A.map((r) => r.join(', ')).join('; ') + ']',
       'L!': `${column(segs.map((s) => s.L * twice))} * '${state.units.L}`,
       'D_h!': `${column(segs.map((s) => s.D))} * '${state.units.D}`,
-      'K_fT!': column(segs.map((s) => s.K * twice)),
+      'N_fit!': '[' + segs.map((s) => s.n.map((x) => num(x * twice)).join(', ')).join('; ') + ']',
+      'K_extra!': column(segs.map((s) => s.K * twice)),
       'exchangers!': column(a.sinks.map((s) => s.x)),
       'speeds!': column(a.sinks.map((s) => s.s)),
+      'fit_method!': String(state.method),
     };
   }
 
@@ -397,6 +412,28 @@
     return a.segments.find((s) => s.tiles.includes(k)) || null;
   }
 
+  // ---- an example to start from: a trunk with three branches each way, eight loads ------------
+  function example() {
+    const s = blank(), path = (ks) => { for (let i = 1; i < ks.length; i++) connect(s, ks[i - 1], ks[i]); };
+    const line = (r0, c0, r1, c1) => {
+      const ks = [];
+      for (let r = r0, c = c0; ; ) {
+        ks.push(key(r, c));
+        if (r === r1 && c === c1) return ks;
+        if (c !== c1) c += Math.sign(c1 - c); else r += Math.sign(r1 - r);
+      }
+    };
+    place(s, '2,0', { t: 'source', p: E });
+    path(line(2, 0, 2, 20));
+    for (const c of [2, 8, 14]) {
+      path(line(2, c, 0, c)); path(line(0, c, 0, c + 2));                  // up, then along
+      path(line(2, c + 3, 5, c + 3)); path(line(5, c + 3, 5, c + 5));      // down, then along
+    }
+    path(line(3, 17, 3, 19));
+    for (const k of ['0,4', '5,7', '0,10', '5,13', '0,16', '3,19', '5,19', '2,20']) place(s, k, { t: 'sink', p: 0, auto: true });
+    return s.cells;
+  }
+
   // The palette: every shape in every orientation.
   const PALETTE = [
     { t: 'pipe', p: N | S, label: 'Straight' }, { t: 'pipe', p: E | W, label: 'Straight' },
@@ -407,8 +444,8 @@
     { t: 'sink', p: W, label: 'Sink' }, { t: 'sink', p: N, label: 'Sink' }, { t: 'sink', p: E, label: 'Sink' }, { t: 'sink', p: S, label: 'Sink' },
   ];
 
-  const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, K_ELBOW, K_RUN, K_BRANCH, key, at, bits, step, rotate, shape,
-    blank, normalize, analyze, outputs, placed, flatten, fmt, bounds, draw, connect, erase, place, segmentAt, PALETTE };
+  const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
+    blank, normalize, analyze, outputs, placed, flatten, fmt, bounds, draw, connect, erase, place, segmentAt, PALETTE, example };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);

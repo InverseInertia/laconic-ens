@@ -439,7 +439,29 @@ def plugin_manifest(name: str, fresh: bool = False):
     except plugins.PluginError as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "name": name, "title": m.get("title", name), "version": m.get("version", ""),
-            "url": f"/plugins/{name}/{m.get('entry', 'index.html')}"}
+            "url": f"/plugins/{name}/{m.get('entry', 'index.html')}", "template": bool(m.get("template"))}
+
+
+class PluginCheckBody(BaseModel):
+    text: str
+
+
+@app.get("/api/plugins/{name}/template", response_class=PlainTextResponse)
+def plugin_template(name: str):
+    """The sheet a plugin ships (its manifest's `template`), if it has been fetched."""
+    t = plugins.template(name)
+    if t is None:
+        raise HTTPException(404, f"The plugin '{name}' has no sheet of its own here")
+    return t[1]
+
+
+@app.post("/api/plugins/{name}/check")
+def plugin_check(name: str, body: PluginCheckBody):
+    """Which lines of the plugin's own sheet `text` has changed or lost (plugins.differences)."""
+    t = plugins.template(name)
+    if t is None:
+        return {"ok": False, "error": f"The plugin '{name}' has no sheet of its own here"}
+    return {"ok": True, **plugins.differences(body.text, t[1])}
 
 
 @app.get("/plugins/{name}/{path}")
@@ -556,7 +578,10 @@ def _example_title(path):
 
 @app.get("/api/examples")
 def list_examples():
-    return [{"name": p.stem, "title": _example_title(p)} for p in sorted(EXAMPLES.glob("*.lens"))]
+    """The examples shipped with the program, then the sheets of the plugins kept here (`plugin`: its
+    name; the page fetches it from /api/plugins/{name}/template)."""
+    return ([{"name": p.stem, "title": _example_title(p)} for p in sorted(EXAMPLES.glob("*.lens"))]
+            + [{"name": t["name"], "title": t["title"], "plugin": t["name"]} for t in plugins.templates()])
 
 
 @app.get("/api/examples/{name}")

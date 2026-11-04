@@ -67,6 +67,9 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Plugin source** (`plugins.source()`)
 : Where plugins are fetched from: `LENS_PLUGIN_SOURCE` (a folder or an address), the `plugins/` folder of a source checkout, or else this repository's `plugins/` folder on GitHub.
 
+**Plugin sheet**
+: The sheet a plugin ships, named by its manifest's `template`: the calculation around its block. LENS lists it with the examples, and after each run tells the plugin which of its names and `!` lines the open sheet has changed or lost (`plugins.differences`), so the plugin can warn of one deleted by accident.
+
 **Plugin input**
 : A value a `!pluginvar a, b` line sends to the sheet's plugins: its name, units, shape and magnitude, as it is on that line. The page sends every plugin the inputs of every `!pluginvar` line after each run of the sheet.
 

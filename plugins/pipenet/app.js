@@ -1,6 +1,7 @@
 /* The pipenet plugin's page: the grid editor around pipenet.js, and the messages to and from LENS
  * (laconic/static/plugins.js). Every change is saved into the plugin's block: the layout as its
- * `#@ state` line, and the network as the A, L!, D_h!, K_fT!, exchangers! and speeds! lines the
+ * `#@ state` line, and the network as the A, L!, D_h!, N_fit!, K_extra!, exchangers!, speeds! and
+ * fit_method! lines the
  * sheet calculates with. The sheet's `!pluginvar` values come back and are drawn on the pipes. */
 (function () {
   'use strict';
@@ -47,6 +48,7 @@
     if (ev.source !== window.parent) return;
     const m = ev.data;
     if (m && m.type === 'lens:theme' && m.theme) { applyTheme(m.theme); refresh(); return; }
+    if (m && m.type === 'lens:check') { drift(m); return; }
     if (!m || m.type !== 'lens:update') return;
     if (m.theme) applyTheme(m.theme);
     inputs = Array.isArray(m.inputs) ? m.inputs : [];
@@ -106,6 +108,7 @@
     setNum($('#cell'), state.cell); setNum($('#dia'), state.D);
     $('#ret').checked = state.ret;
     $('#labels').value = state.labels;
+    $('#method').value = String(state.method);
     messages(); inspector(); tables();
     schedulePreview();
   }
@@ -195,7 +198,7 @@
   $('#undo').onclick = undo;
   $('#redo').onclick = redo;
   $('#clear').onclick = () => { edit(() => { state.cells = {}; selected = null; }); refresh(true); };
-  $('#example').onclick = () => { edit(() => { state.cells = example(); }); refresh(true); };
+  $('#example').onclick = () => { edit(() => { state.cells = P.example(); }); refresh(true); };
 
   document.addEventListener('keydown', (ev) => {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
@@ -216,6 +219,7 @@
   $('#cell').onchange = (e) => { const x = positive(e.target.value); if (x) edit(() => { state.cell = x; }); else refresh(); };
   $('#dia').onchange = (e) => { const x = positive(e.target.value); if (x) edit(() => { state.D = x; }); else refresh(); };
   $('#ret').onchange = (e) => edit(() => { state.ret = e.target.checked; });
+  $('#method').onchange = (e) => edit(() => { state.method = +e.target.value; });
   $('#labels').onchange = (e) => edit(() => { state.labels = e.target.value; });
 
   // ---- the panels on the right -------------------------------------------------------------
@@ -238,10 +242,10 @@
     const sh = P.shape(t), parts = [];
     parts.push(el('div', { class: 'kv' },
       el('span', {}, 'Tile'), el('span', {}, `${sh} at row ${r}, column ${c}`),
-      ...(seg && seg.row !== undefined ? [el('span', {}, 'Segment'), el('span', {}, `${seg.row + 1}: ${P.fmt(seg.L)} ${state.units.L} long, ${P.fmt(seg.D)} ${state.units.D}, fittings ${P.fmt(seg.K)}·f_T`)] : [])));
+      ...(seg && seg.row !== undefined ? [el('span', {}, 'Segment'), el('span', {}, `${seg.row + 1}: ${P.fmt(seg.L)} ${state.units.L} long, ${P.fmt(seg.D)} ${state.units.D}, ${fittings(seg.n)}${seg.K ? `, extra K ${P.fmt(seg.K)}` : ''}`)] : [])));
     if (t.t !== 'source') {
       parts.push(field(`Length (${state.units.L})`, t.L, String(state.cell), (v) => edit(() => { const x = positive(v); if (x) t.L = x; else delete t.L; })));
-      parts.push(field('Extra fittings (L/D)', t.k, '0', (v) => edit(() => { const x = parseFloat(v); if (isFinite(x) && x > 0) t.k = x; else delete t.k; })));
+      parts.push(field('Extra K (a valve, from its datasheet)', t.k, '0', (v) => edit(() => { const x = parseFloat(v); if (isFinite(x) && x > 0) t.k = x; else delete t.k; })));
       parts.push(field(`Segment diameter (${state.units.D})`, seg ? seg.D : t.d, String(state.D), (v) => edit(() => {
         const x = positive(v), tiles = seg ? seg.tiles : [selected];
         for (const k of tiles) { const u = state.cells[k]; if (!u || u.t === 'source') continue; if (x) u.d = x; else delete u.d; }
@@ -270,19 +274,46 @@
       (m.key ? `(${m.key.replace(',', ', ')}) ` : '') + m.msg)));
   }
 
+  // The sheet against this plugin's own (pipenet.lens), as LENS compares them after each run: a small
+  // warning naming what was changed or deleted, so a line lost by accident does not go unnoticed.
+  function drift(m) {
+    const box = $('#drift'), missing = Array.isArray(m.missing) ? m.missing : [], changed = Array.isArray(m.changed) ? m.changed : [];
+    box.hidden = !missing.length && !changed.length;
+    if (box.hidden) { box.replaceChildren(); return; }
+    const list = (words, names) => {
+      const p = el('div', {}, words + ' ');
+      names.slice(0, 12).forEach((n, i) => p.append(...(i ? [', '] : []), el('code', {}, n)));
+      if (names.length > 12) p.append(` and ${names.length - 12} more`);
+      return p;
+    };
+    box.replaceChildren(el('strong', {}, '⚠ This sheet differs from the plugin\'s own'),
+      ...(changed.length ? [list('Changed:', changed)] : []), ...(missing.length ? [list('Missing:', missing)] : []),
+      el('div', { class: 'hint' }, 'Fine if you meant it. Otherwise copy the lines back from the original.'),
+      el('button', { onclick: () => post({ type: 'lens:open-template' }) }, 'Open the original sheet'));
+  }
+
+  // "2 elbows, 1 branch" for a segment's fitting counts (N_fit!'s row, before the return doubles it).
+  function fittings(n) {
+    const words = [['elbow', 'elbows'], ['tee run', 'tee runs'], ['tee branch', 'tee branches']];
+    const said = n.map((x, i) => (x ? `${x} ${words[i][x === 1 ? 0 : 1]}` : '')).filter(Boolean);
+    return said.length ? said.join(', ') : 'no fittings';
+  }
+
   function tables() {
     const vals = P.placed(inputs, analysis), a = analysis;
     const ok = !a.errors.length && a.sinks.length;
     const twice = state.ret ? 2 : 1;
     if (!ok) { $('#segments').replaceChildren(); $('#sinks').replaceChildren(); }
     else {
-      const head = el('tr', {}, el('th', {}, '#'), el('th', {}, `L ${state.units.L}`), el('th', {}, `D ${state.units.D}`), el('th', {}, 'L/D fit'),
+      const head = el('tr', {}, el('th', {}, '#'), el('th', {}, `L ${state.units.L}`), el('th', {}, `D ${state.units.D}`), el('th', { title: '90° elbows' }, 'Ell'), el('th', { title: 'tees passed straight through' }, 'Run'),
+        el('th', { title: "tees' branches" }, 'Br'), el('th', { title: 'extra K' }, 'K+'),
         ...vals.segments.map((v) => el('th', {}, v.name + (v.unit ? ` ${v.unit}` : ''))));
       const rows = a.order.map((id, i) => {
         const s = a.segments[id];
         const tr = el('tr', { class: selected && s.tiles.includes(selected) ? 'sel' : '', onclick: () => { selected = s.tiles[0]; refresh(); } },
           el('td', {}, String(i + 1) + (s.sink ? ` → ${a.sinks.find((k) => k.seg === id).name}` : '')),
-          el('td', {}, P.fmt(s.L * twice)), el('td', {}, P.fmt(s.D)), el('td', {}, P.fmt(s.K * twice)),
+          el('td', {}, P.fmt(s.L * twice)), el('td', {}, P.fmt(s.D)),
+          ...s.n.map((x) => el('td', {}, String(x * twice))), el('td', {}, P.fmt(s.K * twice)),
           ...vals.segments.map((v) => el('td', { class: v.stale ? 'stale' : '' }, P.fmt(v.values[i]))));
         return tr;
       });
@@ -299,28 +330,6 @@
     if (vals.unplaced.length) notes.push(`Not drawn (not one per segment or per sink): ${vals.unplaced.join(', ')}`);
     if (!inputs.length) notes.push('Add `!pluginvar Q, Δp` below the calculation to see the sheet\'s values here.');
     $('#about').textContent = notes.join('. ');
-  }
-
-  // ---- an example to start from: a trunk with three branches each way, eight loads ------------
-  function example() {
-    const s = P.blank(), path = (ks) => { for (let i = 1; i < ks.length; i++) P.connect(s, ks[i - 1], ks[i]); };
-    const line = (r0, c0, r1, c1) => {
-      const ks = [];
-      for (let r = r0, c = c0; ; ) {
-        ks.push(P.key(r, c));
-        if (r === r1 && c === c1) return ks;
-        if (c !== c1) c += Math.sign(c1 - c); else r += Math.sign(r1 - r);
-      }
-    };
-    P.place(s, '2,0', { t: 'source', p: P.E });
-    path(line(2, 0, 2, 20));
-    for (const c of [2, 8, 14]) {
-      path(line(2, c, 0, c)); path(line(0, c, 0, c + 2));                  // up, then along
-      path(line(2, c + 3, 5, c + 3)); path(line(5, c + 3, 5, c + 5));      // down, then along
-    }
-    path(line(3, 17, 3, 19));
-    for (const k of ['0,4', '5,7', '0,10', '5,13', '0,16', '3,19', '5,19', '2,20']) P.place(s, k, { t: 'sink', p: 0, auto: true });
-    return s.cells;
   }
 
   window.addEventListener('resize', () => refresh());   // the frame is sized when its dialog opens
