@@ -37,4 +37,11 @@ eq(P.check({ type: 'lens:preview', svg: '<svg xmlns="http://www.w3.org/2000/svg"
 assert.ok(P.imageUrl('<svg>#</svg>').startsWith('data:image/svg+xml;charset=utf-8,%3Csvg%3E%23'));
 n++;
 
+// --- a picked folder ---------------------------------------------------------------------------
+{
+  const f = (path) => ({ name: path.split('/').pop(), webkitRelativePath: path });
+  const got = P.folderFiles([f('pipenet/manifest.json'), f('pipenet/app.js'), f('pipenet/old/app.js')]);
+  eq([got.name, [...got.files.keys()]], ['pipenet', ['manifest.json', 'app.js']], "a folder's own files, not those below it");
+}
+
 console.log(`plugins: ${n} checks passed`);

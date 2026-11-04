@@ -142,7 +142,18 @@ def main():
                     help="Windows build: open double-clicked .lens files in LENS, with their own icon")
     ap.add_argument("--unregister-files", action="store_true", help="undo --register-files")
     ap.add_argument("--export-examples", metavar="DIR", help="copy the example worksheets into DIR and exit")
+    ap.add_argument("--install-plugin", metavar="DIR",
+                    help="install the plugin in folder DIR (one holding a manifest.json) and exit")
     a = ap.parse_args()
+
+    if a.install_plugin:
+        from . import plugins
+        try:
+            m = plugins.install_folder(a.install_plugin)
+        except plugins.PluginError as e:
+            sys.exit(str(e))
+        print(f"installed {m.get('title', '')} ({Path(a.install_plugin).resolve().name}) into {plugins.cache_dir()}")
+        return
 
     if a.register_files or a.unregister_files:
         from .fileassoc import main as files

@@ -384,6 +384,25 @@ def plugin_index():
         return {"ok": False, "error": str(e)}
 
 
+class PluginUploadBody(BaseModel):
+    name: str | None = None            # the folder's name, used when the manifest names none
+    files: dict[str, str]              # file name -> its bytes, base64
+
+
+@app.post("/api/pluginupload")
+def plugin_upload(body: PluginUploadBody):
+    """Install a plugin from a folder the user picked in Settings (its files, sent by the page)."""
+    import base64
+    try:
+        files = {k: base64.b64decode(v, validate=True) for k, v in body.files.items()}
+        m = plugins.install_files(files, name=body.name)
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    except ValueError:
+        return {"ok": False, "error": "The folder's files could not be read"}
+    return {"ok": True, "name": m.get("name") or body.name, "title": m.get("title", ""), "version": m.get("version", "")}
+
+
 @app.post("/api/plugins/{name}/install")
 def plugin_install(name: str):
     """Fetch a plugin because the user asked (Settings, or a block's Install): fetched again if kept,

@@ -295,7 +295,7 @@ def test_with_automatic_downloads_off_a_sheet_fetches_nothing_but_installing_doe
 
 def test_the_installed_and_available_plugins_and_removing_one(remote):
     assert plugins.installed() == []
-    assert plugins.available() == [{"name": "demo", "title": "Demo", "version": "1.0", "description": "A demo"}]
+    assert plugins.available() == [{"name": "demo", "title": "Demo", "version": "1.0", "description": "A demo", "origin": ""}]
     plugins.fetch("demo")
     assert [p["name"] for p in plugins.installed()] == ["demo"]
     plugins.remove("demo")
@@ -347,3 +347,65 @@ def test_the_settings_endpoints(remote):
     assert c.delete("/api/plugins/demo").json()["ok"] is False
     assert c.post("/api/plugins/nope/install").json()["ok"] is False
     settings.save_prefs({"autoPlugins": None})
+
+
+# ---- installing from a folder (a plugin that is not on GitHub) ----------------------------------
+
+def test_a_plugin_folder_is_installed_and_never_fetched_over(remote, cfg):
+    d = make(cfg / "mine", name="local")
+    m = plugins.install_folder(d)
+    assert m["origin"] == "folder" and (cfg / "cfg" / "plugins" / "local" / "app.js").read_text() == "1"
+    assert [(p["name"], p["origin"]) for p in plugins.installed()] == [("local", "folder")]
+    assert plugins.fetch("local", fresh=True)["title"] == "Demo"     # Reload: kept, not looked for on GitHub
+    assert not any("local" in u for u in remote)
+    plugins.remove("local")
+    assert plugins.installed() == []
+
+
+def test_a_plugin_folder_takes_the_manifests_name_and_must_be_whole(remote, cfg):
+    d = make(cfg / "mine", name="folder-name", manifest={"name": "real", "entry": "index.html", "files": ["index.html", "app.js"]})
+    plugins.install_folder(d)
+    assert [p["name"] for p in plugins.installed()] == ["real"]
+    (d / "app.js").unlink()
+    with pytest.raises(plugins.PluginError, match="lists app.js, which the folder does not have"):
+        plugins.install_folder(d)
+    with pytest.raises(plugins.PluginError, match="no manifest.json"):
+        plugins.install_folder(cfg / "mine")
+    bad = make(cfg / "mine", name="Bad Name", manifest={"entry": "index.html", "files": ["index.html"]})
+    with pytest.raises(plugins.PluginError, match="not a plugin name"):
+        plugins.install_folder(bad)
+
+
+def test_the_command_line_installs_a_plugin_folder(remote, cfg, capsys, monkeypatch):
+    import sys
+    from laconic.__main__ import main
+    d = make(cfg / "mine", name="local")
+    monkeypatch.setattr(sys, "argv", ["lens", "--install-plugin", str(d)])
+    main()
+    assert "installed Demo (local)" in capsys.readouterr().out
+    assert [p["name"] for p in plugins.installed()] == ["local"]
+    monkeypatch.setattr(sys, "argv", ["lens", "--install-plugin", str(cfg / "nowhere")])
+    with pytest.raises(SystemExit, match="no manifest.json"):
+        main()
+
+
+def test_the_upload_endpoint(remote):
+    import base64
+    from fastapi.testclient import TestClient
+    from laconic.server import app
+    c = TestClient(app)
+    b64 = lambda s: base64.b64encode(s.encode()).decode()
+    files = {"manifest.json": b64(json.dumps({"title": "Up", "entry": "index.html", "files": ["index.html"]})), "index.html": b64("<p>")}
+    assert c.post("/api/pluginupload", json={"name": "up", "files": files}).json() == {"ok": True, "name": "up", "title": "Up", "version": ""}
+    assert c.get("/api/plugins/up").json()["ok"] is True
+    assert c.get("/plugins/up/index.html").text == "<p>"
+    r = c.post("/api/pluginupload", json={"name": "up", "files": {"index.html": b64("x")}}).json()
+    assert r["ok"] is False and "no manifest.json" in r["error"]
+    assert c.post("/api/pluginupload", json={"name": "up", "files": {"manifest.json": "%%%"}}).json()["ok"] is False
+
+
+def test_a_folder_source_takes_no_installs(cfg, monkeypatch):
+    make(cfg / "src")
+    monkeypatch.setenv("LENS_PLUGIN_SOURCE", str(cfg / "src"))
+    with pytest.raises(plugins.PluginError, match="put the plugin's folder there"):
+        plugins.install_folder(make(cfg / "mine", name="other"))

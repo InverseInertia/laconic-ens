@@ -25,7 +25,9 @@
      imageUrl(svg)  the data: URL a preview is shown from
 
    Settings → Plugins is drawn by settings(box): installed plugins (Update, Remove), the source's
-   others (Install), and an install by name; install(name) and remove(name) do the work.
+   others (Install), an install by name, and Install from a folder (a plugin on this computer, sent
+   to /api/pluginupload); install(name), installFolder(files) and remove(name) do the work.
+     folderFiles(list)  a picked folder's name and its own files, by file name (pure)
 
    The page is the host: Plugins.init({text, edit, say, dialog, frames, title, auto}) where
    `edit(text, edits)` makes server edits against `text` (false when the sheet has changed since). */
@@ -214,6 +216,46 @@
     return true;
   }
 
+  // The files of a folder the user picked (an <input webkitdirectory>'s files, each with its
+  // `webkitRelativePath`, "pipenet/app.js"): the folder's name and its own files, not those in folders below.
+  function folderFiles(list) {
+    const files = new Map();
+    let name = null;
+    for (const f of list) {
+      const parts = (f.webkitRelativePath || f.name).split('/');
+      if (parts.length > 2) continue;
+      if (parts.length === 2) name = parts[0];
+      files.set(parts[parts.length - 1], f);
+    }
+    return { name, files };
+  }
+
+  const base64 = async (file) => {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  };
+
+  // Install the plugin in a folder the user picked: its manifest and the files it lists go to the
+  // server, which checks them and keeps the plugin (a plugin not on GitHub, or one being written).
+  async function installFolder(list) {
+    const { name, files } = folderFiles(list);
+    const man = files.get('manifest.json');
+    if (!man) { host.say('That folder has no manifest.json, so it is not a plugin'); return false; }
+    let listed = [];
+    try { listed = JSON.parse(await man.text()).files || []; } catch { host.say("That folder's manifest.json is not JSON"); return false; }
+    const body = { name, files: {} };
+    for (const f of ['manifest.json', ...listed]) if (typeof f === 'string' && files.has(f)) body.files[f] = await base64(files.get(f));
+    let res;
+    try { res = await Api.json('/api/pluginupload', body); } catch (err) { res = { ok: false, error: err.message }; }
+    if (!res.ok) { host.say(res.error); return false; }
+    manifests.delete(res.name);
+    for (const e of entries.values()) if (e.name === res.name) { e.preview = null; load(e, false); }
+    host.say(`Installed ${res.title || res.name}${res.version ? ' ' + res.version : ''} from a folder`);
+    return true;
+  }
+
   // A removed plugin keeps running in a sheet already showing it, until the page is loaded again.
   async function remove(name) {
     let res;
@@ -238,7 +280,8 @@
     const item = (p, buttons) => {
       const row = el('div', 'plugin-item');
       const text = el('div', 'plugin-about');
-      text.append(el('strong', '', p.title || p.name), el('span', 'plugin-meta', ` ${p.name}${p.version ? ' · ' + p.version : ''}`));
+      text.append(el('strong', '', p.title || p.name),
+        el('span', 'plugin-meta', ` ${p.name}${p.version ? ' · ' + p.version : ''}${p.origin === 'folder' ? ' · from a folder' : ''}`));
       if (p.description) text.append(el('div', 'plugin-desc', p.description));
       row.append(text, ...buttons);
       return row;
@@ -248,12 +291,20 @@
     if (mine.folder) list.append(el('p', 'note', `Plugins are read from the folder ${mine.folder}, as they are there: nothing is downloaded, kept or removed.`));
     if (!mine.installed.length) list.append(el('p', 'note', 'No plugins installed.'));
     for (const p of mine.installed)
-      list.append(item(p, mine.folder ? [] : [btn('Update', () => install(p.name)), btn('Remove', () => remove(p.name))]));
+      list.append(item(p, mine.folder ? [] : [...(p.origin === 'folder' ? [] : [btn('Update', () => install(p.name))]), btn('Remove', () => remove(p.name))]));
     const by = el('div', 'set-acts');
     const name = el('input'); name.placeholder = 'plugin name'; name.setAttribute('aria-label', 'Plugin name to install');
     const go = btn('Install', () => install(name.value.trim()));
     name.onkeydown = (ev) => { if (ev.key === 'Enter') go.click(); };
     by.append(name, go);
+    if (!mine.folder) {
+      const pick = el('input'); pick.type = 'file'; pick.hidden = true; pick.webkitdirectory = true; pick.id = 'pluginFolder';
+      pick.onchange = async () => { if (pick.files.length && await installFolder(pick.files)) again(); };
+      const choose = el('button', '', 'Install from a folder…');
+      choose.title = 'Install a plugin kept on this computer: pick its folder, the one with its manifest.json';
+      choose.onclick = () => pick.click();
+      by.append(choose, pick);
+    }
     box.replaceChildren(el('h4', '', 'Installed'), list, el('h4', '', 'Available'), offer, by);
     if (mine.folder) { offer.append(el('p', 'note', 'The same as above.')); return; }
     offer.append(el('p', 'note', 'Looking for plugins…'));
@@ -303,7 +354,7 @@
     for (const box of document.querySelectorAll(`.plugin-box[data-key="${CSS.escape(e.key)}"]`)) fill(box, e, null);
   }
 
-  const api = { blocks, inputs, check, imageUrl, init, after, build, open, reload, install, remove, settings,
+  const api = { blocks, inputs, check, imageUrl, folderFiles, init, after, build, open, reload, install, installFolder, remove, settings,
     get current() { return current; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plugins = api;
