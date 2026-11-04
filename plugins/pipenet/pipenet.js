@@ -304,9 +304,12 @@
   }
   const column = (xs) => '[' + xs.map(num).join('; ') + ']';
 
-  // {name: expression} for the block's lines (of `network(state)`), or {} when the network has an error.
+  // {name: expression} for the block's lines (of `network(state)`). While the network has an error, only
+  // the settings that do not depend on it (the method, the pump's target) are written; the rest stay
+  // as they were until it is fixed.
   function outputs(state, net) {
-    if (net.errors.length || !net.sinks.length) return {};
+    const settings = { 'fit_method!': String(state.method), Δp_target: `${num(state.dp.v)} '${state.dp.u}` };
+    if (net.errors.length || !net.sinks.length) return settings;
     const lines = (a, A, names) => {
       const segs = a.order.map((id) => a.segments[id]);
       return {
@@ -322,8 +325,7 @@
       ...lines(net.r, net.Ar, ['A_r', 'L_r!', 'D_r!', 'N_fit_r!', 'K_extra_r!']),
       'exchangers!': column(net.sinks.map((s) => s.x)),
       'speeds!': column(net.sinks.map((s) => s.s)),
-      'fit_method!': String(state.method),
-      Δp_target: `${num(state.dp.v)} '${state.dp.u}`,
+      ...settings,
     };
   }
 

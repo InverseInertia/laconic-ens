@@ -192,7 +192,8 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   const bad = P.network(s);
   assert.ok(bad.errors.length && bad.errors.every((e) => e.layer === 'r' && e.msg.startsWith('Return: ')), "the return's errors say they are the return's");
   n++;
-  eq(P.outputs(s, bad), {}, 'and nothing is written while the return is broken');
+  eq(P.outputs(s, bad), { 'fit_method!': '1', Δp_target: "0.1 'psi" },
+    'and while the return is broken only the settings are written: the method and the pump\'s target');
   // taking a pad away on one layer takes it off both
   P.onLayer(s, 'r', (v) => { delete v.cells['0,5']; });
   eq([!!s.cells['0,5'], !!s.rcells['0,5']], [false, false], 'a pad taken away on one layer goes from both');

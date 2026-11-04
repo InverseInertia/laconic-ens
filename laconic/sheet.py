@@ -100,6 +100,7 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         if l.kind == "unitdef":
             defs[l.n] = _define_unit(l.n, l.text, l.text.strip(), ev, fmt, here, used)
     results, owned = [], {}   # `owned`: option lines of a plot, handled when the plot ran
+    written = {}              # a name a plugin block's lines define -> that block's header result
     for l in sheet.lines:
         if until is not None and l.n > until:
             break
@@ -124,6 +125,8 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
             results.append(r)
         elif l.kind == "plugin":
             results.append(_run_plugin(i, raw, sheet.block(i)))
+            if results[-1].plugin:
+                written.update(dict.fromkeys((n.lstrip("~") for n in results[-1].plugin.outputs), results[-1]))
         elif l.kind == "pluginline":
             results.append(_run_plugin_line(l, ev, fmt, used))
         elif l.kind == "pluginvar":
@@ -141,8 +144,9 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
         _add_notes(results[-1], ev.notes)
+        replaces = _replaces_plugin(l, results[-1], written)
         # Hidden: run under !hide and still under it after (so !hide and !show themselves show).
-        results[-1].hidden = hiding and ev.mode.hidden and _hideable(results[-1])
+        results[-1].hidden = hiding and ev.mode.hidden and _hideable(results[-1]) and not replaces
     for r, l in zip(results, sheet.lines):
         r.symbols = _symbols(ev.symbols, l)
     ws = Worksheet(text, results, ev.symbols)
@@ -416,6 +420,24 @@ def _run_plugin(i, raw, handle):
     text = f"plugin {name}" + (f": defines {', '.join(outputs)}" if outputs else "")
     return LineResult(i, raw, "plugin", text=text, block=handle, warning=warning,
                       payload=PluginPayload(name, state, outputs))
+
+
+def _replaces_plugin(l, r, written):
+    """A line outside a plugin block that defines a name the block's lines define replaces the plugin's
+    value below it, which is easy to miss (a sheet made before the plugin wrote that name, say): the
+    line is warned and never hidden, and the block's payload lists it, so the plugin can say so too."""
+    d = l.definition
+    if l.kind == "pluginline" or d is None or d.kind not in ("assign", "funcdef") or r.kind == "error":
+        return False
+    head = written.get(d.name.lstrip("~"))
+    if head is None:
+        return False
+    plugin = head.plugin
+    plugin.overridden.append({"name": d.name.lstrip("~"), "line": l.n})
+    note = (f"{d.name.lstrip('~')} is written by the {plugin.name} plugin (line {head.n}), and this line replaces its "
+            f"value below here, so a change made in the plugin does not reach the lines below. Delete this line to use the plugin's")
+    r.warning = ". ".join(filter(None, [r.warning, note]))
+    return True
 
 
 def _run_plugin_line(l, ev, fmt, used):

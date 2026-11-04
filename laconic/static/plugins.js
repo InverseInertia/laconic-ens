@@ -11,7 +11,9 @@
                      left out when the sheet has not been run since the plugin's last write (so a
                      late answer cannot undo what the plugin just did); `inputs` are the values of
                      every `!pluginvar` line, [{name, unit, shape, mag}]; `outputs` the names its
-                     block's lines define; `theme` the page's THEME variables, without their `--`
+                     block's lines define; `overridden` [{name, line}] the lines outside its block that
+                     define one of them again, replacing the plugin's value; `theme` the page's THEME
+                     variables, without their `--`
      plugin -> page  {type: "lens:ready"}      ready for its first update
                      {type: "lens:write", state, outputs: {name: "expression"}}
                                                write these into its block (/api/pluginwrite)
@@ -53,7 +55,8 @@
     return rows.filter((r) => r.kind === 'plugin' && r.plugin).map((r) => {
       const k = seen.get(r.plugin.name) || 0;
       seen.set(r.plugin.name, k + 1);
-      return { key: `${r.plugin.name}#${k}`, line: r.n, name: r.plugin.name, state: r.plugin.state, outputs: r.plugin.outputs };
+      return { key: `${r.plugin.name}#${k}`, line: r.n, name: r.plugin.name, state: r.plugin.state, outputs: r.plugin.outputs,
+               overridden: r.plugin.overridden || [] };
     });
   }
 
@@ -174,7 +177,7 @@
       }
       e.line = b.line;
       e.outputs = b.outputs;
-      const update = { inputs: vals, outputs: b.outputs };
+      const update = { inputs: vals, outputs: b.outputs, overridden: b.overridden };
       if (startedAt > e.wroteAt) update.state = b.state;   // older rows than its last write: keep its own
       e.last = update;
       send(e);

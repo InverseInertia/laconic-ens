@@ -113,6 +113,7 @@ class PluginPayload:
     name: str
     state: dict             # None when the block has no readable state line yet
     outputs: list           # the names the block's lines define, in order
+    overridden: list = field(default_factory=list)   # {name, line}: a later line outside the block that defines one again
 
     def to_json(self):
         return asdict(self)
