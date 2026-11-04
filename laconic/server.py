@@ -366,12 +366,53 @@ def solve_edit(body: SolveEditBody):
         return {"ok": False, "error": str(e)}
 
 
+@app.get("/api/plugins")
+def plugin_list():
+    """The plugins kept here, whether a sheet may fetch one it asks for, and the source folder
+    when plugins are read from one (then nothing is fetched, kept or removed)."""
+    src = plugins.source()
+    return {"auto": plugins.auto(), "folder": str(src) if isinstance(src, Path) else None,
+            "installed": plugins.installed()}
+
+
+@app.get("/api/pluginindex")
+def plugin_index():
+    """The plugins the source offers (its index.json), or `{ok: false, error}` offline."""
+    try:
+        return {"ok": True, "plugins": plugins.available()}
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/plugins/{name}/install")
+def plugin_install(name: str):
+    """Fetch a plugin because the user asked (Settings, or a block's Install): fetched again if kept,
+    and whether or not automatic downloads are on."""
+    try:
+        m = plugins.fetch(name, fresh=True, asked=True)
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "name": name, "title": m.get("title", name), "version": m.get("version", "")}
+
+
+@app.delete("/api/plugins/{name}")
+def plugin_remove(name: str):
+    try:
+        plugins.remove(name)
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True}
+
+
 @app.get("/api/plugins/{name}")
 def plugin_manifest(name: str, fresh: bool = False):
     """A plugin's manifest, fetched (once, or again with `fresh`) from where plugins come from
-    (plugins.source). `{ok: false, error}` when it cannot be had: offline, or no such plugin."""
+    (plugins.source). `{ok: false, error}` when it cannot be had: offline, or no such plugin, or
+    (`notInstalled: true`) not kept here while automatic downloads are off."""
     try:
         m = plugins.fetch(name, fresh=fresh)
+    except plugins.NotInstalled as e:
+        return {"ok": False, "error": str(e), "notInstalled": True}
     except plugins.PluginError as e:
         return {"ok": False, "error": str(e)}
     return {"ok": True, "name": name, "title": m.get("title", name), "version": m.get("version", ""),

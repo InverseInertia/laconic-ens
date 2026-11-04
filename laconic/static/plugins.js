@@ -24,7 +24,10 @@
      check(msg)     a message from a plugin, checked and cleaned, or null
      imageUrl(svg)  the data: URL a preview is shown from
 
-   The page is the host: Plugins.init({text, edit, say, dialog, frames, title}) where
+   Settings → Plugins is drawn by settings(box): installed plugins (Update, Remove), the source's
+   others (Install), and an install by name; install(name) and remove(name) do the work.
+
+   The page is the host: Plugins.init({text, edit, say, dialog, frames, title, auto}) where
    `edit(text, edits)` makes server edits against `text` (false when the sheet has changed since). */
 (function (root) {
   'use strict';
@@ -127,6 +130,7 @@
     if (e.frame) { e.frame.remove(); e.frame = null; }
     const m = await manifest(e.name, fresh);
     if (entries.get(e.key) !== e) return;
+    e.notInstalled = !m.ok && !!m.notInstalled;
     if (!m.ok) { e.error = m.error; paint(e); return; }
     e.manifest = m;
     e.frame = frameFor(e);
@@ -197,6 +201,71 @@
     if (e) { e.preview = null; load(e, true); }
   }
 
+  // ---- installing and removing (a block's Install button, and Settings → Plugins) --------------
+  // Installing is the user's own request, so it fetches whether or not sheets may (`autoPlugins`).
+  async function install(name) {
+    let res;
+    try { res = await Api.json(`/api/plugins/${encodeURIComponent(name)}/install`, {}); }
+    catch (err) { res = { ok: false, error: err.message }; }
+    if (!res.ok) { host.say(res.error); return false; }
+    manifests.delete(name);
+    for (const e of entries.values()) if (e.name === name) { e.preview = null; load(e, false); }
+    host.say(`Installed ${res.title}${res.version ? ' ' + res.version : ''}`);
+    return true;
+  }
+
+  // A removed plugin keeps running in a sheet already showing it, until the page is loaded again.
+  async function remove(name) {
+    let res;
+    try { res = await Api.json(`/api/plugins/${encodeURIComponent(name)}`, undefined, 'DELETE'); }
+    catch (err) { res = { ok: false, error: err.message }; }
+    if (!res.ok) { host.say(res.error); return false; }
+    manifests.delete(name);
+    host.say(`Removed the ${name} plugin`);
+    return true;
+  }
+
+  // Settings → Plugins: the plugins kept on this machine, with Update and Remove; the ones the
+  // plugin source offers, with Install; and a name to install by hand. `box` is filled afresh.
+  async function settings(box) {
+    const list = el('div', 'plugin-list'), offer = el('div', 'plugin-list');
+    let mine;
+    try { mine = await Api.json('/api/plugins'); }
+    catch (err) { box.replaceChildren(el('p', 'note', `The plugins could not be listed: ${err.message}`)); return; }
+    host.auto.checked = mine.auto;
+    host.auto.disabled = !!mine.folder;
+    const have = new Set(mine.installed.map((p) => p.name));
+    const item = (p, buttons) => {
+      const row = el('div', 'plugin-item');
+      const text = el('div', 'plugin-about');
+      text.append(el('strong', '', p.title || p.name), el('span', 'plugin-meta', ` ${p.name}${p.version ? ' · ' + p.version : ''}`));
+      if (p.description) text.append(el('div', 'plugin-desc', p.description));
+      row.append(text, ...buttons);
+      return row;
+    };
+    const again = () => settings(box);
+    const btn = (label, fn) => { const b = el('button', '', label); b.onclick = async () => { b.disabled = true; await fn(); again(); }; return b; };
+    if (mine.folder) list.append(el('p', 'note', `Plugins are read from the folder ${mine.folder}, as they are there: nothing is downloaded, kept or removed.`));
+    if (!mine.installed.length) list.append(el('p', 'note', 'No plugins installed.'));
+    for (const p of mine.installed)
+      list.append(item(p, mine.folder ? [] : [btn('Update', () => install(p.name)), btn('Remove', () => remove(p.name))]));
+    const by = el('div', 'set-acts');
+    const name = el('input'); name.placeholder = 'plugin name'; name.setAttribute('aria-label', 'Plugin name to install');
+    const go = btn('Install', () => install(name.value.trim()));
+    name.onkeydown = (ev) => { if (ev.key === 'Enter') go.click(); };
+    by.append(name, go);
+    box.replaceChildren(el('h4', '', 'Installed'), list, el('h4', '', 'Available'), offer, by);
+    if (mine.folder) { offer.append(el('p', 'note', 'The same as above.')); return; }
+    offer.append(el('p', 'note', 'Looking for plugins…'));
+    let index;
+    try { index = await Api.json('/api/pluginindex'); } catch (err) { index = { ok: false, error: err.message }; }
+    if (!box.contains(offer)) return;
+    if (!index.ok) { offer.replaceChildren(el('p', 'note', index.error)); return; }
+    const more = index.plugins.filter((p) => !have.has(p.name));
+    offer.replaceChildren(...(more.length ? more.map((p) => item(p, [btn('Install', () => install(p.name))]))
+      : [el('p', 'note', 'All the available plugins are installed.')]));
+  }
+
   // The body of a `!plugin` row: the plugin's picture, what it is doing, and Open.
   function build(r, rows) {
     const b = blocks(rows || [r]).find((x) => x.line === r.n);
@@ -223,9 +292,9 @@
     const openBtn = el('button', '', 'Open');
     openBtn.disabled = !e || !e.frame;
     openBtn.onclick = (ev) => { ev.stopPropagation(); open(key); };
-    const again = el('button', '', e && e.error ? 'Try again' : 'Reload');
-    again.title = 'Fetch the plugin again';
-    again.onclick = (ev) => { ev.stopPropagation(); reload(key); };
+    const again = el('button', '', e && e.notInstalled ? 'Install' : e && e.error ? 'Try again' : 'Reload');
+    again.title = e && e.notInstalled ? `Download the ${name} plugin and keep it` : 'Fetch the plugin again';
+    again.onclick = (ev) => { ev.stopPropagation(); if (e && e.notInstalled) install(name); else reload(key); };
     tools.append(openBtn, again, say);
     box.append(tools);
   }
@@ -234,7 +303,8 @@
     for (const box of document.querySelectorAll(`.plugin-box[data-key="${CSS.escape(e.key)}"]`)) fill(box, e, null);
   }
 
-  const api = { blocks, inputs, check, imageUrl, init, after, build, open, reload, get current() { return current; } };
+  const api = { blocks, inputs, check, imageUrl, init, after, build, open, reload, install, remove, settings,
+    get current() { return current; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plugins = api;
 })(typeof window !== 'undefined' ? window : globalThis);
