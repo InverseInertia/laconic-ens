@@ -219,13 +219,15 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     ws = evaluate(text)
     assert not [r for r in ws.results if r.kind == "error"]
     head = next(r for r in ws.results if r.plugin)
-    assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "exchangers!", "speeds!", "fit_method!"]
+    assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "A_r", "L_r!", "D_r!", "N_fit_r!",
+                                   "K_extra_r!", "exchangers!", "speeds!", "fit_method!"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar).pluginvar.values
-    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "Δp_spur"] and sent[0]["unit"] == "gal/min"
+    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur"]
+    assert sent[0]["unit"] == "gal/min"
 
 
-@pytest.mark.parametrize("method, first", [(1, 0.6533), (2, 0.2624), (3, 0.6748)])
+@pytest.mark.parametrize("method, first", [(1, 0.3267), (2, 0.1311), (3, 0.337)])
 def test_each_fitting_loss_method_gives_the_segments_their_K(method, first):
     """Crane (L/D * f_T for steel), Hooper 2-K and Darby 3-K on the plugin's sheet, from its own tables."""
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
@@ -453,3 +455,19 @@ def test_the_fonts_may_be_borrowed_by_a_sandboxed_plugin_frame():
     c = TestClient(app)
     assert c.get("/static/fonts/ibm-plex-sans-latin-400-normal.woff2").headers["access-control-allow-origin"] == "*"
     assert "access-control-allow-origin" not in c.get("/static/rows.js").headers
+
+
+def test_the_plugins_sheet_solves_a_return_laid_out_on_its_own():
+    """A_r, L_r! and the rest differ from the supply's: each path is its supply, its exchanger and its return."""
+    import re
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    text = re.sub(r"\n  L_r! = \[[^\n]*", "\n  L_r! = [30; 40; 20; 40; 50; 40; 50; 40; 50; 100; 30; 30; 30; 30; 10] * 'ft", text)
+    text = re.sub(r"\n  #@ result [^\n]*", "", text)
+    from laconic.solvesession import solve_all
+    solved = solve_all(text, log=lambda m: None)
+    ws = evaluate(solved)
+    assert next(r for r in ws.results if r.solver).solver.current
+    sent = {v["name"]: v for v in next(r for r in ws.results if r.pluginvar).pluginvar.values}
+    flat = lambda v: [x[0] for x in v["mag"]]
+    assert flat(sent["∀!"]) == pytest.approx(flat(sent["∀_r!"]))    # the same pipes, so the same flows
+    assert flat(sent["Δp_r"])[9] > 2 * flat(sent["Δp_paths"])[9]     # but the longer return loses more

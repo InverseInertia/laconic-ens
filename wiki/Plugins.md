@@ -39,24 +39,29 @@ Lays out a fluid loop for a sheet that solves it for equal pressure drops, so yo
 
 - **Shapes**: every straight, elbow, tee and crossover in every orientation, a source (the pump) and a sink (a load: a coil, an exchanger), each facing each way. Pick one and click squares to put it down; click a tile of the same shape to turn it.
 - **Draw**: drag from square to square to lay pipe. The tiles take their shape from the pipes that meet in them: a straight, an elbow, a tee where a pipe branches off, a crossover where one runs straight across another without joining it. Drag from the source or onto a sink to connect it.
-- **Select** a tile to set its length, an extra loss coefficient K (a valve, from its datasheet) and its segment's diameter; a sink also takes a name, an exchanger curve number and a pump speed. **R** turns the selected tile and **Del** removes it. **Erase** removes tiles by clicking or dragging.
-- **Network** settings: the length and diameter units, the length of a square, the default diameter, whether the return pipe matches the supply (it doubles each length, fitting and extra K), and **Fitting losses**: the method the sheet uses (below).
+- **Select** a tile to set its length, an extra loss coefficient K (a valve, from its datasheet) and its segment's pipe: the network's, another size from the table, or a bore of its own. A sink also takes a name, an exchanger curve number and a pump speed. **R** turns the selected tile and **Del** removes it. **Erase** removes tiles by clicking or dragging.
+- **Network** settings: the length unit and the length of a square; the **Pipe size** (nominal, ⅛″ to 24″) and **Schedule** (40 or 80), or a bore of your own; the diameter unit; the **Return pipe** (below); and **Fitting losses**, the method the sheet uses (below).
+
+**Pipe sizes.** A segment's `D_h` is its pipe's inside diameter: Schedule 40 or 80 pipe of the nominal size chosen, from the wall thicknesses of ASME B36.10M. PVC Schedule 40 and 80 pipe (ASTM D1785) has the same outside diameters and walls, so the same bores. The schedule is the network's; the size is the network's unless a segment picks its own.
+
+**Supply and return.** With **Return pipe: Same as supply**, the return runs beside the supply and matches it: you lay out the supply, and the plugin writes the return's lines as copies of it. Choose **Laid out on its own** for a return that differs (another route, other lengths, other sizes, a reverse return). The grid then has two sides, as a circuit board does. **Supply | Return** (or **F**) chooses the side the tools work on, and the other side is drawn faded behind it for reference. The source and the sinks are on both sides, in the same squares; each side connects to them on its own side of the tile (the pump's discharge on the supply, its suction on the return), and taking one away takes it off both. The return starts as a copy of the supply, so you change only where they differ. Its segments are numbered R1, R2, … in the same way as the supply's, and get a table of their own. A sink the return does not reach is an error.
 
 **What it writes.** The water splits only at tees, so the network is a set of **segments**, each the pipe between two junctions. A segment that ends at a sink is that sink's **spur**. Segments are numbered as the sheet's vectors are, with the spurs first in the order of their sinks, then the rest from the source outwards. The drawing shows each segment's number on its pipe.
 
 | Line | What it is |
 |---|---|
-| `A` | the upstream matrix: one row per segment, one column per sink, 1 where the segment carries that sink's water. With the spurs first, its top rows are the identity |
-| `L!` | each segment's length (doubled for the return) |
-| `D_h!` | each segment's diameter |
-| `N_fit!` | each segment's fittings, counted by kind: one row per segment, columns 90° elbows, tees passed straight through (runs), tees' branches. A segment counts the tee it leaves through (doubled for the return) |
-| `K_extra!` | each segment's extra loss coefficients, added to the fittings' as they are (doubled for the return) |
+| `A` | the supply's upstream matrix: one row per segment, one column per sink, 1 where the segment carries that sink's water. With the spurs first, its top rows are the identity |
+| `L!` | each supply segment's length |
+| `D_h!` | each supply segment's inside diameter |
+| `N_fit!` | each supply segment's fittings, counted by kind: one row per segment, columns 90° elbows, tees passed straight through (runs), tees' branches. A segment counts the tee it leaves through |
+| `K_extra!` | each supply segment's extra loss coefficients, added to the fittings' as they are |
+| `A_r`, `L_r!`, `D_r!`, `N_fit_r!`, `K_extra_r!` | the same for the return's segments. `A_r`'s columns are the same sinks in the same order as `A`'s. With the return the same as the supply, these are copies of the supply's lines |
 | `exchangers!`, `speeds!` | each sink's exchanger curve number and pump speed |
 | `fit_method!` | the fitting-loss method chosen: 1 Crane, 2 Hooper 2-K, 3 Darby 3-K |
 
-With these, `A * Q_spur` is the flow in every segment, and `transpose(A) * Δp_segment` the pressure drop along every path from the source to a sink.
+With these, `A * Q_spur` is the flow in every supply segment and `A_r * Q_spur` in every return segment, and each sink's path loses `transpose(A) * Δp_supply + transpose(A_r) * Δp_return` in its pipes, out and back.
 
-**Fitting losses.** The sheet's **Fitting Losses** section holds each method's coefficients as a table, one row per kind of fitting in `N_fit!`'s order, so you can edit them for your fittings (the values given are for standard threaded fittings, r/D = 1). `ΣK(∀`)` gives each segment's K for the flows in the segments:
+**Fitting losses.** The sheet's **Fitting Losses** section holds each method's coefficients as a table, one row per kind of fitting in `N_fit!`'s order, so you can edit them for your fittings (the values given are for standard threaded fittings, r/D = 1). `ΣK(∀`, N, D, K_x)` gives each segment's K for the flows in the segments, for either side's fittings, diameters and extra K:
 
 | Method | K for one fitting | Table |
 |---|---|---|
@@ -66,9 +71,9 @@ With these, `A * Q_spur` is the flow in every segment, and `transpose(A) * Δp_s
 
 Crane's K does not change with the flow, which suits fully turbulent flow; Hooper's and Darby's grow as the Reynolds number falls, which matters in the transitional range small loops often run in.
 
-**What it shows.** A `!pluginvar` value with one entry per segment is drawn on the segments (`∀!`, the flow in each), one with an entry per sink beside the sinks (`Δp_spur`), and a single number in a corner. The tables on the right list them all. **On the drawing** chooses values, numbers only, or nothing.
+**What it shows.** A `!pluginvar` value with one entry per segment is drawn on the segments (`∀!`, the flow in each): on the return's when its name ends in `_r` (`∀_r!`, `Δp_r`), else on the supply's. One with an entry per sink goes beside the sinks (`Δp_spur`), and a single number in a corner. The values of the side in front are drawn. The tables on the right list them all. **On the drawing** chooses values, numbers only, or nothing.
 
-**Check.** The network must be a tree from the one source. An open end, a dead end, a loop or a pipe running back into the source is pointed out on the drawing and listed under **Check**, and the sheet's lines are left as they were until it is fixed. Tiles not connected to the source are left out, with a note.
+**Check.** Each side must be a tree from the one source. An open end, a dead end, a loop or a pipe running back into the source is pointed out on the drawing and listed under **Check**, and the sheet's lines are left as they were until it is fixed. Tiles not connected to the source are left out, with a note.
 
 ## Writing a plugin
 

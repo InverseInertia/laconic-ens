@@ -1,16 +1,32 @@
 /* The pipenet plugin's page: the grid editor around pipenet.js, and the messages to and from LENS
  * (laconic/static/plugins.js). Every change is saved into the plugin's block: the layout as its
- * `#@ state` line, and the network as the A, L!, D_h!, N_fit!, K_extra!, exchangers!, speeds! and
- * fit_method! lines the
- * sheet calculates with. The sheet's `!pluginvar` values come back and are drawn on the pipes. */
+ * `#@ state` line, and the network as the lines the sheet calculates with: A, L!, D_h!, N_fit!,
+ * K_extra! for the supply, A_r, L_r!, D_r!, N_fit_r!, K_extra_r! for the return, exchangers!,
+ * speeds! and fit_method!. The sheet's `!pluginvar` values come back and are drawn on the pipes.
+ *
+ * With the return laid out on its own, the grid has two layers, as a circuit board has two sides:
+ * the supply and the return. The tools work on the layer in front (Supply | Return, or F), and the
+ * other is drawn faded behind it. The source and the sinks are on both. */
 (function () {
   'use strict';
   const P = window.PipeNet;
   const $ = (s) => document.querySelector(s);
   const canvas = $('#canvas');
 
-  let state = P.blank(), analysis = P.analyze(state), inputs = [];
-  let tool = 'draw', selected = null, theme = {};
+  let state = P.blank(), net = P.network(state), inputs = [];
+  let tool = 'draw', selected = null, theme = {}, layer = 's';
+
+  // The layer in front: the return only while it is laid out on its own.
+  const front = () => (state.ret === 'separate' ? layer : 's');
+  const cells = () => (front() === 'r' ? state.rcells : state.cells);
+  const walked = () => (front() === 'r' ? net.r : net.s);
+  const onFront = (fn) => P.onLayer(state, front(), fn);
+  // Take a tile away from the layer in front; a pad (the source, a sink) from both layers.
+  function eraseAt(k) {
+    const t = cells()[k];
+    if (t && t.t !== 'pipe') { P.erase(P.side(state, 's'), k); P.erase(P.side(state, 'r'), k); }
+    else onFront((v) => P.erase(v, k));
+  }
   let past = [], future = [];
   let drag = null, writeTimer = 0, previewTimer = 0, heard = false, zoom = 1;
 
@@ -31,7 +47,7 @@
     clearTimeout(writeTimer);
     writeTimer = setTimeout(() => {
       writeTimer = 0;
-      post({ type: 'lens:write', state, outputs: P.outputs(state, analysis) });
+      post({ type: 'lens:write', state, outputs: P.outputs(state, net) });
     }, 250);
   }
 
@@ -39,7 +55,7 @@
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => {
       if (!Object.keys(state.cells).length) return;
-      post({ type: 'lens:preview', svg: P.draw(state, analysis, { theme: svgTheme(), grid: false, inputs }) });
+      post({ type: 'lens:preview', svg: P.draw(state, net, { theme: svgTheme(), grid: false, inputs, layer: 's' }) });
     }, 400);
   }
 
@@ -72,7 +88,7 @@
     for (const [k, v] of Object.entries(t)) if (v && /^[\w-]+$/.test(k) && !/[;{}<>]/.test(v)) document.documentElement.style.setProperty('--' + k, v);
   }
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue('--' + v).trim();
-  const svgTheme = () => ({ paper: css('paper'), text: css('text'), ink: css('ink'), rule: css('rule'), err: css('err'),
+  const svgTheme = () => ({ paper: css('paper'), text: css('text'), ink: css('ink'), ret: css('symbol'), rule: css('rule'), err: css('err'),
     grid: css('grid'), sans: css('sans'), soft: css('text-soft'), hi: css('global') });
 
   // ---- drawing ------------------------------------------------------------------------------
@@ -80,8 +96,8 @@
   // scrolled by as much, so the tiles stay under the pointer. A new layout from the sheet starts afresh.
   let shownBounds = null;
   function refresh(fresh = false) {
-    analysis = P.analyze(state);
-    if (selected && !state.cells[selected]) selected = null;
+    net = P.network(state);
+    if (selected && !cells()[selected]) selected = null;
     const old = fresh ? null : shownBounds;
     const b = old ? grow(old, P.bounds(state)) : P.bounds(state);
     // at least as large as the view, so growing up or left can always be scrolled back
@@ -89,7 +105,7 @@
     b.c1 = Math.max(b.c1, b.c0 + Math.ceil(main.clientWidth / side) - 1);
     b.r1 = Math.max(b.r1, b.r0 + Math.ceil(main.clientHeight / side) - 1);
     shownBounds = b;
-    const svg = P.draw(state, analysis, { theme: svgTheme(), selected, inputs, bounds: b });
+    const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front() });
     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
     canvas.replaceChildren(...[...doc.childNodes].map((n) => document.importNode(n, true)));
     for (const a of ['viewBox', 'font-family']) canvas.setAttribute(a, doc.getAttribute(a));
@@ -106,7 +122,13 @@
     $('#undo').disabled = !past.length; $('#redo').disabled = !future.length;
     $('#unitL').value = state.units.L; $('#unitD').value = state.units.D;
     setNum($('#cell'), state.cell); setNum($('#dia'), state.D);
-    $('#ret').checked = state.ret;
+    $('#ret').value = state.ret;
+    if (document.activeElement !== $('#size')) sizeOptions($('#size'), []);   // the bores follow the schedule and unit
+    $('#size').value = state.nps || 'custom'; $('#sch').value = state.sch;
+    $('#diaRow').hidden = !!state.nps;
+    $('#sides').hidden = state.ret !== 'separate';
+    for (const btn of document.querySelectorAll('[data-layer]')) btn.setAttribute('aria-pressed', String(btn.dataset.layer === front()));
+    document.body.dataset.layer = front();
     $('#labels').value = state.labels;
     $('#method').value = String(state.method);
     messages(); inspector(); tables();
@@ -130,13 +152,11 @@
     canvas.setPointerCapture(ev.pointerId);
     const k = cellAt(ev);
     drag = { before: JSON.stringify(state), last: k, moved: false };
-    if (tool === 'erase') { P.erase(state, k); refresh(); }
+    if (tool === 'erase') { eraseAt(k); refresh(); }
     else if (tool.startsWith('shape')) {
-      const item = P.PALETTE[+tool.slice(5)], old = state.cells[k];
-      if (old && old.t === item.t && P.shape(old) === P.shape(item)) {
-        old.p = P.rotate(old.p);
-        if (old.t !== 'pipe') { /* a source or sink keeps one side */ }
-      } else P.place(state, k, item);
+      const item = P.PALETTE[+tool.slice(5)], old = cells()[k];
+      if (old && old.t === item.t && P.shape(old) === P.shape(item)) old.p = P.rotate(old.p);
+      else onFront((v) => P.place(v, k, item));
       selected = k;
       refresh();
     }
@@ -147,7 +167,7 @@
     const k = cellAt(ev);
     if (k === drag.last) return;
     drag.moved = true;
-    if (tool === 'erase') { P.erase(state, k); drag.last = k; refresh(); return; }
+    if (tool === 'erase') { eraseAt(k); drag.last = k; refresh(); return; }
     if (tool !== 'draw') return;
     // one square at a time, so a quick stroke still lays every square between
     let [r, c] = P.at(drag.last);
@@ -155,7 +175,8 @@
     while (r !== r2 || c !== c2) {
       const from = P.key(r, c);
       if (c !== c2) c += Math.sign(c2 - c); else r += Math.sign(r2 - r);
-      P.connect(state, from, P.key(r, c));
+      const to = P.key(r, c);
+      onFront((v) => P.connect(v, from, to));
     }
     drag.last = k;
     refresh();
@@ -165,7 +186,7 @@
     if (!drag) return;
     const d = drag;
     drag = null;
-    if (!d.moved && (tool === 'draw' || tool === 'select')) selected = state.cells[d.last] ? d.last : null;
+    if (!d.moved && (tool === 'draw' || tool === 'select')) selected = cells()[d.last] ? d.last : null;
     commit(d.before);
   };
   canvas.addEventListener('pointerup', endDrag);
@@ -178,7 +199,8 @@
     btn.dataset.i = i;
     btn.title = `${item.label}, ${P.bits(item.p).map((d) => P.NAMES[d]).join('-')}`;
     const mini = { ...P.blank(), cells: { '0,0': { t: item.t, p: item.p } } };
-    btn.innerHTML = P.draw(mini, { segments: [], sinks: [], errors: [], warnings: [], order: [] },
+    const none = { segments: [], sinks: [], errors: [], warnings: [], order: [] };
+    btn.innerHTML = P.draw(mini, { same: true, s: none, r: none, sinks: [], errors: [], warnings: [] },
       { grid: false, bounds: { r0: 0, c0: 0, r1: 0, c1: 0 }, theme: { paper: 'transparent', ink: 'currentColor' } });
     btn.onclick = () => { tool = 'shape' + i; refresh(); };
     $('#palette').append(btn);
@@ -197,16 +219,27 @@
   };
   $('#undo').onclick = undo;
   $('#redo').onclick = redo;
-  $('#clear').onclick = () => { edit(() => { state.cells = {}; selected = null; }); refresh(true); };
-  $('#example').onclick = () => { edit(() => { state.cells = P.example(); }); refresh(true); };
+  $('#clear').onclick = () => { edit(() => { state.cells = {}; state.rcells = {}; selected = null; }); refresh(true); };
+  $('#example').onclick = () => {
+    edit(() => { state.cells = P.example(); state.rcells = {}; P.syncPads(state, 's'); if (state.ret === 'separate') P.copySupply(state); });
+    refresh(true);
+  };
+  // Supply | Return: which layer the tools work on; the other is drawn faded behind it.
+  function flip(to) {
+    layer = to || (layer === 's' ? 'r' : 's');
+    selected = null;
+    refresh();
+  }
+  for (const btn of document.querySelectorAll('[data-layer]')) btn.onclick = () => flip(btn.dataset.layer);
 
   document.addEventListener('keydown', (ev) => {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
     const k = ev.key.toLowerCase();
     if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); ev.shiftKey ? redo() : undo(); }
     else if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); redo(); }
-    else if (k === 'r' && selected && state.cells[selected]) edit(() => { const t = state.cells[selected]; t.p = P.rotate(t.p); });
-    else if ((k === 'delete' || k === 'backspace') && selected) edit(() => { P.erase(state, selected); selected = null; });
+    else if (k === 'r' && selected && cells()[selected]) edit(() => { const t = cells()[selected]; t.p = P.rotate(t.p); });
+    else if ((k === 'delete' || k === 'backspace') && selected) edit(() => { eraseAt(selected); selected = null; });
+    else if (k === 'f' && state.ret === 'separate') flip();
     else if (k === 'd') { tool = 'draw'; refresh(); }
     else if (k === 's') { tool = 'select'; refresh(); }
     else if (k === 'e') { tool = 'erase'; refresh(); }
@@ -218,9 +251,25 @@
   $('#unitD').onchange = (e) => edit(() => { state.units.D = e.target.value; });
   $('#cell').onchange = (e) => { const x = positive(e.target.value); if (x) edit(() => { state.cell = x; }); else refresh(); };
   $('#dia').onchange = (e) => { const x = positive(e.target.value); if (x) edit(() => { state.D = x; }); else refresh(); };
-  $('#ret').onchange = (e) => edit(() => { state.ret = e.target.checked; });
+  // The return laid out on its own starts as a copy of the supply, to change where they differ.
+  $('#ret').onchange = (e) => {
+    edit(() => {
+      state.ret = e.target.value;
+      if (state.ret === 'separate' && !Object.values(state.rcells).some((t) => t.t === 'pipe')) P.copySupply(state);
+    });
+    if (state.ret === 'separate') flip('r');
+  };
+  $('#size').onchange = (e) => edit(() => { state.nps = e.target.value === 'custom' ? null : e.target.value; });
+  $('#sch').onchange = (e) => edit(() => { state.sch = e.target.value; });
   $('#method').onchange = (e) => edit(() => { state.method = +e.target.value; });
   $('#labels').onchange = (e) => edit(() => { state.labels = e.target.value; });
+
+  // The pipe sizes, nominal size and the bore in the schedule chosen, for the size lists.
+  const sizeOptions = (select, extra) => {
+    select.replaceChildren(...extra.map(([v, t]) => el('option', { value: v }, t)),
+      ...P.PIPE_SIZES.map(([n]) => el('option', { value: n }, `${n}"  (${P.fmt(P.bore(state, n))} ${state.units.D})`)),
+      el('option', { value: 'custom' }, 'Other: a bore of its own'));
+  };
 
   // ---- the panels on the right -------------------------------------------------------------
   const el = (tag, attrs = {}, ...kids) => {
@@ -236,42 +285,58 @@
   };
 
   function inspector() {
-    const box = $('#inspector'), t = selected && state.cells[selected];
+    const box = $('#inspector'), t = selected && cells()[selected];
     if (!t) { box.replaceChildren(el('p', { class: 'hint' }, 'Click a tile with Select (or click without dragging while drawing).')); return; }
-    const [r, c] = P.at(selected), seg = P.segmentAt(analysis, selected);
-    const sh = P.shape(t), parts = [];
+    const [r, c] = P.at(selected), seg = P.segmentAt(walked(), selected), pad = state.cells[selected];
+    const sh = P.shape(t), parts = [], prefix = front() === 'r' ? 'R' : '';
+    const where = state.ret === 'separate' ? (front() === 'r' ? ' on the return' : ' on the supply') : '';
     parts.push(el('div', { class: 'kv' },
-      el('span', {}, 'Tile'), el('span', {}, `${sh} at row ${r}, column ${c}`),
-      ...(seg && seg.row !== undefined ? [el('span', {}, 'Segment'), el('span', {}, `${seg.row + 1}: ${P.fmt(seg.L)} ${state.units.L} long, ${P.fmt(seg.D)} ${state.units.D}, ${fittings(seg.n)}${seg.K ? `, extra K ${P.fmt(seg.K)}` : ''}`)] : [])));
-    if (t.t !== 'source') {
+      el('span', {}, 'Tile'), el('span', {}, `${sh} at row ${r}, column ${c}${where}`),
+      ...(seg && seg.row !== undefined ? [el('span', {}, 'Segment'), el('span', {}, `${prefix}${seg.row + 1}: ${P.fmt(seg.L)} ${state.units.L} long, ${P.sizeName(state, seg.nps)} (${P.fmt(seg.D)} ${state.units.D}), ${fittings(seg.n)}${seg.K ? `, extra K ${P.fmt(seg.K)}` : ''}`)] : [])));
+    if (t.t === 'pipe' || t.t === 'sink') {
       parts.push(field(`Length (${state.units.L})`, t.L, String(state.cell), (v) => edit(() => { const x = positive(v); if (x) t.L = x; else delete t.L; })));
       parts.push(field('Extra K (a valve, from its datasheet)', t.k, '0', (v) => edit(() => { const x = parseFloat(v); if (isFinite(x) && x > 0) t.k = x; else delete t.k; })));
-      parts.push(field(`Segment diameter (${state.units.D})`, seg ? seg.D : t.d, String(state.D), (v) => edit(() => {
-        const x = positive(v), tiles = seg ? seg.tiles : [selected];
-        for (const k of tiles) { const u = state.cells[k]; if (!u || u.t === 'source') continue; if (x) u.d = x; else delete u.d; }
-      })));
     }
-    if (t.t === 'sink') {
-      parts.push(field('Name', t.name, 'S' + ((analysis.sinks.findIndex((s) => s.key === selected) + 1) || ''), (v) => edit(() => { if (v.trim()) t.name = v.trim().slice(0, 40); else delete t.name; }), 'text'));
-      parts.push(field('Exchanger curve', t.x, '1', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) t.x = x; })));
-      parts.push(field('Pump speed', t.s, '2', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) t.s = x; })));
+    if (seg) {
+      // the segment's pipe: every pipe tile of it on this layer takes the size
+      const tiles = seg.tiles.filter((k) => cells()[k] && cells()[k].t === 'pipe');
+      const first = tiles.length ? cells()[tiles[0]] : {};
+      const pick = el('select', { 'aria-label': 'Segment pipe size' });
+      sizeOptions(pick, [['net', `The network's: ${P.sizeName(state, state.nps)}`]]);
+      pick.value = first.nps || (first.d ? 'custom' : 'net');
+      const setAll = (fn) => edit(() => { for (const k of tiles) { const u = cells()[k]; delete u.nps; delete u.d; fn(u); } });
+      pick.onchange = () => setAll((u) => {
+        if (pick.value === 'custom') u.d = seg.D;
+        else if (pick.value !== 'net') u.nps = pick.value;
+      });
+      parts.push(el('label', { class: 'f' }, 'Segment pipe', pick));
+      if (first.d) parts.push(field(`Segment bore (${state.units.D})`, first.d, String(seg.D), (v) => { const x = positive(v); if (x) setAll((u) => { u.d = x; }); }));
+    }
+    if (t.t === 'sink' && pad) {
+      parts.push(field('Name', pad.name, 'S' + ((net.sinks.findIndex((s) => s.key === selected) + 1) || ''), (v) => edit(() => { if (v.trim()) pad.name = v.trim().slice(0, 40); else delete pad.name; }), 'text'));
+      parts.push(field('Exchanger curve', pad.x, '1', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) pad.x = x; })));
+      parts.push(field('Pump speed', pad.s, '2', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) pad.s = x; })));
     }
     parts.push(el('div', { class: 'row-btns' },
       el('button', { onclick: () => edit(() => { t.p = P.rotate(t.p); }) }, 'Turn (R)'),
-      el('button', { onclick: () => edit(() => { P.erase(state, selected); selected = null; }) }, 'Remove (Del)')));
+      el('button', { onclick: () => edit(() => { eraseAt(selected); selected = null; }) }, 'Remove (Del)')));
     box.replaceChildren(...parts);
   }
 
   function messages() {
-    const list = [...analysis.errors.map((e) => ({ ...e, cls: 'err' })), ...analysis.warnings.map((w) => ({ ...w, cls: 'warn' }))];
+    const list = [...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
     const ul = $('#msgs');
     if (!list.length) {
-      const n = analysis.sinks.length;
-      ul.replaceChildren(el('li', { class: 'warn' }, n ? `One source, ${n} sink${n > 1 ? 's' : ''}, ${analysis.order.length} segments: written to the sheet.` : 'Nothing yet.'));
+      const n = net.sinks.length, segs = net.s.order.length;
+      const said = state.ret === 'separate' ? `${segs} supply and ${net.r.order.length} return segments` : `${segs} segments, the return the same`;
+      ul.replaceChildren(el('li', { class: 'warn' }, n ? `One source, ${n} sink${n > 1 ? 's' : ''}, ${said}: written to the sheet.` : 'Nothing yet.'));
       return;
     }
-    ul.replaceChildren(...list.slice(0, 30).map((m) => el('li', { class: m.cls, onclick: () => { if (m.key) { selected = m.key; tool = 'select'; refresh(); } } },
-      (m.key ? `(${m.key.replace(',', ', ')}) ` : '') + m.msg)));
+    ul.replaceChildren(...list.slice(0, 30).map((m) => el('li', { class: m.cls, onclick: () => {
+      if (!m.key) return;
+      if (state.ret === 'separate') layer = m.layer;
+      selected = m.key; tool = 'select'; refresh();
+    } }, (m.key ? `(${m.key.replace(',', ', ')}) ` : '') + m.msg)));
   }
 
   // The sheet against this plugin's own (pipenet.lens), as LENS compares them after each run: a small
@@ -299,28 +364,38 @@
     return said.length ? said.join(', ') : 'no fittings';
   }
 
+  // One layer's segments as a table: number, length, pipe, fittings, extra K, and the sheet's values.
+  function segmentTable(a, values, prefix, own) {
+    const head = el('tr', {}, el('th', {}, '#'), el('th', {}, `L ${state.units.L}`), el('th', { title: 'pipe size, or the bore of a pipe of its own' }, 'Pipe'),
+      el('th', { title: '90° elbows' }, 'Ell'), el('th', { title: 'tees passed straight through' }, 'Run'),
+      el('th', { title: "tees' branches" }, 'Br'), el('th', { title: 'extra K' }, 'K+'),
+      ...values.map((v) => el('th', {}, v.name + (v.unit ? ` ${v.unit}` : ''))));
+    const rows = a.order.map((id, i) => {
+      const s = a.segments[id];
+      return el('tr', { class: own && selected && s.tiles.includes(selected) ? 'sel' : '', onclick: () => {
+        if (state.ret === 'separate') layer = prefix ? 'r' : 's';
+        selected = s.tiles[0]; refresh();
+      } },
+        el('td', {}, `${prefix}${i + 1}` + (s.sink ? ` → ${net.sinks.find((k) => k.key === s.sink).name}` : '')),
+        el('td', {}, P.fmt(s.L)), el('td', { title: `${P.fmt(s.D)} ${state.units.D}` }, s.nps ? `${s.nps}"` : P.fmt(s.D)),
+        ...s.n.map((x) => el('td', {}, String(x))), el('td', {}, P.fmt(s.K)),
+        ...values.map((v) => el('td', { class: v.stale ? 'stale' : '' }, P.fmt(v.values[i]))));
+    });
+    return el('table', {}, el('thead', {}, head), el('tbody', {}, ...rows));
+  }
+
   function tables() {
-    const vals = P.placed(inputs, analysis), a = analysis;
-    const ok = !a.errors.length && a.sinks.length;
-    const twice = state.ret ? 2 : 1;
-    if (!ok) { $('#segments').replaceChildren(); $('#sinks').replaceChildren(); }
+    const vals = P.placed(inputs, net);
+    const ok = !net.errors.length && net.sinks.length, apart = state.ret === 'separate';
+    $('#retHead').hidden = $('#rsegments').hidden = !apart;
+    $('#segHead').textContent = apart ? 'Supply segments' : 'Segments';
+    if (!ok) { $('#segments').replaceChildren(); $('#rsegments').replaceChildren(); $('#sinks').replaceChildren(); }
     else {
-      const head = el('tr', {}, el('th', {}, '#'), el('th', {}, `L ${state.units.L}`), el('th', {}, `D ${state.units.D}`), el('th', { title: '90° elbows' }, 'Ell'), el('th', { title: 'tees passed straight through' }, 'Run'),
-        el('th', { title: "tees' branches" }, 'Br'), el('th', { title: 'extra K' }, 'K+'),
-        ...vals.segments.map((v) => el('th', {}, v.name + (v.unit ? ` ${v.unit}` : ''))));
-      const rows = a.order.map((id, i) => {
-        const s = a.segments[id];
-        const tr = el('tr', { class: selected && s.tiles.includes(selected) ? 'sel' : '', onclick: () => { selected = s.tiles[0]; refresh(); } },
-          el('td', {}, String(i + 1) + (s.sink ? ` → ${a.sinks.find((k) => k.seg === id).name}` : '')),
-          el('td', {}, P.fmt(s.L * twice)), el('td', {}, P.fmt(s.D)),
-          ...s.n.map((x) => el('td', {}, String(x * twice))), el('td', {}, P.fmt(s.K * twice)),
-          ...vals.segments.map((v) => el('td', { class: v.stale ? 'stale' : '' }, P.fmt(v.values[i]))));
-        return tr;
-      });
-      $('#segments').replaceChildren(el('table', {}, el('thead', {}, head), el('tbody', {}, ...rows)));
+      $('#segments').replaceChildren(segmentTable(net.s, vals.segments, '', front() === 's'));
+      $('#rsegments').replaceChildren(apart ? segmentTable(net.r, vals.rsegments, 'R', front() === 'r') : '');
       const shead = el('tr', {}, el('th', {}, 'Sink'), el('th', {}, 'curve'), el('th', {}, 'speed'),
         ...vals.sinks.map((v) => el('th', {}, v.name + (v.unit ? ` ${v.unit}` : ''))));
-      const srows = a.sinks.map((s, j) => el('tr', { class: selected === s.key ? 'sel' : '', onclick: () => { selected = s.key; refresh(); } },
+      const srows = net.sinks.map((s, j) => el('tr', { class: selected === s.key ? 'sel' : '', onclick: () => { selected = s.key; refresh(); } },
         el('td', {}, `${j + 1} ${s.name}`), el('td', {}, String(s.x)), el('td', {}, String(s.s)),
         ...vals.sinks.map((v) => el('td', { class: v.stale ? 'stale' : '' }, P.fmt(v.values[j])))));
       $('#sinks').replaceChildren(el('table', {}, el('thead', {}, shead), el('tbody', {}, ...srows)));
