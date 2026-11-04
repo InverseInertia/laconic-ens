@@ -257,3 +257,93 @@ def test_the_write_endpoint_answers_edits(client):
     assert r["ok"] and r["edits"] == [{"from": 12, "to": 12, "insert": "\n  A = 2\n  #@ state {\"a\":1}"}]
     r = client.post("/api/pluginwrite", json={"text": text, "line": 2, "outputs": {"A": "2"}}).json()
     assert r == {"ok": False, "error": "Line 2 is not a plugin block"}
+
+
+# ---- installing, removing and automatic downloads --------------------------------------------
+
+@pytest.fixture()
+def remote(cfg, monkeypatch):
+    """A stand-in GitHub serving the folder `web`, with an index of its plugins."""
+    make(cfg / "web")
+    (cfg / "web" / "index.json").write_text(json.dumps({"plugins": [
+        {"name": "demo", "title": "Demo", "version": "1.0", "description": "A demo"}, {"name": "Bad/name"}]}))
+    asked = []
+
+    def fetch(url, timeout=None):
+        asked.append(url)
+        path = cfg / "web" / url.removeprefix("https://example.org/p/")
+        if not path.is_file():
+            raise OSError("HTTP Error 404: Not Found")
+        return path.read_bytes()
+    monkeypatch.setenv("LENS_PLUGIN_SOURCE", "https://example.org/p")
+    monkeypatch.setattr(plugins, "fetcher", fetch)
+    return asked
+
+
+def test_with_automatic_downloads_off_a_sheet_fetches_nothing_but_installing_does(remote):
+    from laconic import settings
+    settings.save_prefs({"autoPlugins": False})
+    assert not plugins.auto()
+    with pytest.raises(plugins.NotInstalled, match="automatic downloads are off"):
+        plugins.fetch("demo")
+    assert remote == []
+    assert plugins.fetch("demo", asked=True)["title"] == "Demo"
+    assert plugins.fetch("demo")["title"] == "Demo"      # kept: a sheet may use it now
+    settings.save_prefs({"autoPlugins": None})
+    assert plugins.auto()
+
+
+def test_the_installed_and_available_plugins_and_removing_one(remote):
+    assert plugins.installed() == []
+    assert plugins.available() == [{"name": "demo", "title": "Demo", "version": "1.0", "description": "A demo"}]
+    plugins.fetch("demo")
+    assert [p["name"] for p in plugins.installed()] == ["demo"]
+    plugins.remove("demo")
+    assert plugins.installed() == []
+    with pytest.raises(plugins.PluginError, match="not installed"):
+        plugins.remove("demo")
+
+
+def test_nothing_is_removed_from_a_folder_source(cfg, monkeypatch):
+    make(cfg / "src")
+    monkeypatch.setenv("LENS_PLUGIN_SOURCE", str(cfg / "src"))
+    assert [p["name"] for p in plugins.installed()] == ["demo"] == [p["name"] for p in plugins.available()]
+    with pytest.raises(plugins.PluginError, match="nothing kept to remove"):
+        plugins.remove("demo")
+    assert (cfg / "src" / "demo").is_dir()
+
+
+def test_the_list_of_plugins_says_so_when_it_cannot_be_had(remote, monkeypatch):
+    def offline(url, timeout=None):
+        raise OSError("offline")
+    monkeypatch.setattr(plugins, "fetcher", offline)
+    with pytest.raises(plugins.PluginError, match="could not be fetched"):
+        plugins.available()
+
+
+def test_the_index_of_this_checkouts_plugins_matches_their_manifests():
+    index = json.loads((plugins.CHECKOUT / "index.json").read_text(encoding="utf-8"))["plugins"]
+    found = sorted(d.name for d in plugins.CHECKOUT.iterdir() if (d / "manifest.json").is_file())
+    assert [p["name"] for p in index] == found
+    for p in index:
+        m = json.loads((plugins.CHECKOUT / p["name"] / "manifest.json").read_text(encoding="utf-8"))
+        assert {k: m[k] for k in ("name", "title", "version", "description")} == p
+
+
+def test_the_settings_endpoints(remote):
+    from fastapi.testclient import TestClient
+    from laconic import settings
+    from laconic.server import app
+    c = TestClient(app)
+    assert c.get("/api/plugins").json() == {"auto": True, "folder": None, "installed": []}
+    assert c.get("/api/pluginindex").json()["plugins"][0]["name"] == "demo"
+    settings.save_prefs({"autoPlugins": False})
+    r = c.get("/api/plugins/demo").json()
+    assert r["ok"] is False and r["notInstalled"] is True
+    assert c.post("/api/plugins/demo/install").json() == {"ok": True, "name": "demo", "title": "Demo", "version": "1.0"}
+    assert c.get("/api/plugins/demo").json()["ok"] is True
+    assert [p["name"] for p in c.get("/api/plugins").json()["installed"]] == ["demo"]
+    assert c.delete("/api/plugins/demo").json() == {"ok": True}
+    assert c.delete("/api/plugins/demo").json()["ok"] is False
+    assert c.post("/api/plugins/nope/install").json()["ok"] is False
+    settings.save_prefs({"autoPlugins": None})

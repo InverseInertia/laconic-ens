@@ -23,8 +23,11 @@ Where plugins come from (`source()`):
   (`fetch(name, fresh=True)`, the page's Reload).
 
 Nothing is fetched until a sheet with a `!plugin` line is opened in the page; evaluating a sheet,
-exporting it or running it from the command line never fetches anything. The network is the
-`fetcher` seam, so the tests run without one."""
+exporting it or running it from the command line never fetches anything. With the `autoPlugins`
+preference off (Settings → Plugins), a sheet does not fetch a plugin either: only installing it
+does (`fetch(name, asked=True)`, from Settings or the block's Install button). Settings lists the
+plugins kept here (`installed`), those the source offers (`available`, from its `index.json`), and
+removes one (`remove`). The network is the `fetcher` seam, so the tests run without one."""
 import json
 import os
 import re
@@ -129,9 +132,21 @@ def _local(name):
     return src / name if isinstance(src, Path) else cache_dir() / name
 
 
-def fetch(name, fresh=False):
+class NotInstalled(PluginError):
+    """A sheet asked for a plugin that is not kept here while automatic downloads are off."""
+
+
+def auto():
+    """Whether a sheet may fetch a plugin it asks for (the `autoPlugins` preference, on by default)."""
+    from . import settings
+    return settings.load()["prefs"].get("autoPlugins") is not False
+
+
+def fetch(name, fresh=False, asked=False):
     """The plugin's manifest (a dict, with `files` and `entry`), fetched first if need be. A plugin
-    in a source folder is read in place, every time. Raises PluginError."""
+    in a source folder is read in place, every time. Without `asked` (the user installing it), a
+    plugin not kept here is fetched only while automatic downloads are on, else NotInstalled.
+    Raises PluginError."""
     if not valid_name(name):
         raise PluginError(f"'{name}' is not a plugin name")
     src = source()
@@ -144,6 +159,9 @@ def fetch(name, fresh=False):
                 return _manifest((here / "manifest.json").read_bytes(), name)
             except PluginError:
                 pass   # a broken copy: fetch it again
+        if not asked and not (here / "manifest.json").is_file() and not auto():
+            raise NotInstalled(f"The plugin '{name}' is not installed, and automatic downloads are off. "
+                               "Install it here or under Settings → Plugins")
         m = _manifest(_read(src, name, "manifest.json"), name)
         here.parent.mkdir(parents=True, exist_ok=True)
         tmp = Path(tempfile.mkdtemp(prefix=f".{name}-", dir=here.parent))
@@ -158,6 +176,59 @@ def fetch(name, fresh=False):
             if tmp.exists():
                 shutil.rmtree(tmp, ignore_errors=True)
         return m
+
+
+def _summary(m, name):
+    return {"name": name, "title": m.get("title", name), "version": str(m.get("version", "")),
+            "description": m.get("description", "")}
+
+
+def installed():
+    """The plugins kept here, by name: [{name, title, version, description}]. For a folder source,
+    the plugins in that folder (they are read in place, so there is nothing else to keep)."""
+    src = source()
+    root = src if isinstance(src, Path) else cache_dir()
+    out = []
+    if root.is_dir():
+        for d in sorted(root.iterdir()):
+            if not valid_name(d.name) or not (d / "manifest.json").is_file():
+                continue
+            try:
+                out.append(_summary(_manifest((d / "manifest.json").read_bytes(), d.name), d.name))
+            except PluginError:
+                continue
+    return out
+
+
+def available():
+    """The plugins the source offers, from its `index.json`: [{name, title, version, description}].
+    Raises PluginError when it cannot be read (offline)."""
+    src = source()
+    if isinstance(src, Path):
+        return installed()
+    try:
+        data = json.loads(fetcher(f"{src}/index.json"))
+    except PluginError:
+        raise
+    except Exception as e:
+        raise PluginError(f"The list of plugins could not be fetched: {e}") from None
+    items = data.get("plugins") if isinstance(data, dict) else None
+    if not isinstance(items, list):
+        raise PluginError("The list of plugins could not be read")
+    return [_summary(p, p["name"]) for p in items if isinstance(p, dict) and valid_name(p.get("name"))]
+
+
+def remove(name):
+    """Forget a plugin kept here; a sheet that asks for it fetches it again (if downloads are on)."""
+    if not valid_name(name):
+        raise PluginError(f"'{name}' is not a plugin name")
+    if isinstance(source(), Path):
+        raise PluginError(f"Plugins are read from the folder {source()}, so there is nothing kept to remove")
+    here = cache_dir() / name
+    if not here.is_dir():
+        raise PluginError(f"The plugin '{name}' is not installed")
+    with _lock:
+        shutil.rmtree(here)
 
 
 def file(name, path):

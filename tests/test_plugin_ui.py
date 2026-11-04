@@ -82,3 +82,40 @@ def test_a_plugin_that_does_not_exist_says_so_and_the_sheet_still_runs(page):
     show(page, "!plugin nosuchplugin\n  x = 2\ny = x + 1\n")
     page.wait_for_function("document.querySelector('.plugin-status.err')?.textContent.includes(\"no plugin 'nosuchplugin'\")")
     assert "3" in page.inner_text(".row[data-line='3'] .body")
+
+
+@pytest.fixture()
+def from_github(tmp_path, monkeypatch):
+    """Plugins fetched from a stand-in GitHub that serves this checkout's plugins/ folder, kept in an
+    empty folder of their own, with automatic downloads off."""
+    from laconic import plugins, settings
+    monkeypatch.setenv("LENS_PLUGIN_SOURCE", "https://example.org/plugins")
+    monkeypatch.setattr(plugins, "cache_dir", lambda: tmp_path / "kept")
+    monkeypatch.setattr(plugins, "fetcher",
+                        lambda url, timeout=None: (plugins.CHECKOUT / url.removeprefix("https://example.org/plugins/")).read_bytes())
+    settings.save_prefs({"autoPlugins": False})
+    yield
+    settings.save_prefs({"autoPlugins": None})
+
+
+def test_with_downloads_off_a_block_offers_install_and_settings_lists_and_removes_it(page, from_github):
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    show(page, SHEET)
+    page.wait_for_function("document.querySelector('.plugin-status.err')?.textContent.includes('automatic downloads are off')")
+    page.click(".plugin-box button:has-text('Install')")
+    page.wait_for_function("document.querySelector('.plugin-status').textContent.startsWith('Pipe network')")
+    page.click("#settingsBtn")
+    assert not page.is_checked("#autoPlugins")
+    page.wait_for_selector("#pluginSettings .plugin-item:has-text('Pipe network') button:has-text('Remove')")
+    page.wait_for_selector("#pluginSettings :text('All the available plugins are installed.')")
+    page.click("#pluginSettings .plugin-item button:has-text('Remove')")
+    page.wait_for_selector("#pluginSettings :text('No plugins installed.')")
+    page.wait_for_selector("#pluginSettings .plugin-item:has-text('Pipe network') button:has-text('Install')")
+    page.check("#autoPlugins")
+    for _ in range(50):   # the preference reaches the server
+        if page.evaluate("fetch('/api/plugins').then((r) => r.json()).then((j) => j.auto)"):
+            break
+        page.wait_for_timeout(100)
+    else:
+        raise AssertionError("turning automatic downloads on did not reach the server")

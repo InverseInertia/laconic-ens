@@ -288,6 +288,12 @@
   .plugin-tools button:disabled { opacity: .45; cursor: default; }
   .plugin-status { font: 400 calc(12.5px * var(--fs)) var(--sans); color: var(--text-soft); }
   .plugin-status.err { color: var(--err); }
+  #pluginSettings h4 { margin: 12px 0 4px; font: 600 13px var(--sans); }
+  .plugin-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+  .plugin-about { flex: 1; font: 400 13.5px/1.4 var(--sans); }
+  .plugin-meta { color: var(--text-soft); font-size: 12.5px; }
+  .plugin-desc { color: var(--text-soft); font-size: 12.5px; }
+  #pluginSettings input { font: 400 13px var(--mono); padding: 2px 6px; color: var(--text); background: transparent; border: 1px solid var(--rule); }
   #solverLogDlg .dlg-body { max-height: 70vh; padding: 0; }
   #solverLogText { margin: 0; padding: 10px 16px; font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 68vh; overflow: auto; }
   .row.meta .body { font: 400 calc(12px * var(--fs))/1.4 var(--sans); color: var(--text-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
@@ -710,6 +716,12 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
       <h3>Updates</h3>
       <p class="note">When LENS starts, it asks GitHub whether a newer release is out, and if there is one shows a small button beside the version that updates LENS. Kept on this machine. Help &rarr; Check for updates asks again at any time, even with this off.</p>
       <label class="set-check"><input type="checkbox" id="checkUpdates" checked> Check for a new release when LENS starts</label>
+    </section>
+    <section class="set-sec" id="pluginSec">
+      <h3>Plugins</h3>
+      <p class="note">A sheet's <code>!plugin</code> block opens a plugin, downloaded from the LENS repository on GitHub the first time a sheet asks for it and kept on this machine. Plugins run in a sandbox that can only write their own block. Turn automatic downloads off to install plugins only from here (or the block's Install button). Kept on this machine.</p>
+      <label class="set-check"><input type="checkbox" id="autoPlugins" checked> Download a plugin when a sheet asks for it</label>
+      <div id="pluginSettings"></div>
     </section>
     <section class="set-sec">
       <h3>Extended characters</h3>
@@ -2026,6 +2038,7 @@ Api.text("/static/logo.svg").then((t) => {
 async function openSettings(section, control) {
   seizure = false;
   syncThemeForm(); buildGreek();
+  Plugins.settings($("#pluginSettings"));
   $("#settingsDlg").showModal();
   const sec = section && $(section);
   if (sec) {
@@ -2073,7 +2086,10 @@ Plugins.init({
   dialog: $("#pluginDlg"),
   frames: $("#pluginFrames"),
   title: $("#pluginTitle"),
+  auto: $("#autoPlugins"),
 });
+$("#autoPlugins").checked = store.get("autoPlugins", true) !== false;
+$("#autoPlugins").onchange = (ev) => store.set("autoPlugins", ev.target.checked);
 $("#pluginReload").onclick = () => { if (Plugins.current) Plugins.reload(Plugins.current); };
 $("#solverLogCopy").onclick = () => copyText($("#solverLogText").textContent, "Copied the log");
 // A run belongs to this page: when it goes away the worker should not keep computing for nobody.

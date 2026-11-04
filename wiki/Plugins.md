@@ -19,7 +19,9 @@ The block's row in the results shows the plugin's picture, with **Open** (the pl
 
 ## Where plugins come from
 
-A plugin is fetched the first time a sheet with its `!plugin` line is opened in the page, and kept in the `plugins` folder beside the settings file. Nothing is fetched when a sheet is calculated, exported or run from the command line. **Reload** fetches it again. Plugins live in the [`plugins/`](https://github.com/InverseInertia/laconic-ens/tree/main/plugins) folder of the LENS repository.
+A plugin is fetched the first time a sheet with its `!plugin` line is opened in the page, and kept in the `plugins` folder beside the settings file. Nothing is fetched when a sheet is calculated, exported or run from the command line. **Reload** fetches it again. Plugins live in the [`plugins/`](https://github.com/InverseInertia/laconic-ens/tree/main/plugins) folder of the LENS repository, which lists them in `index.json`.
+
+**Settings → Plugins** lists the plugins installed on this machine (with **Update** and **Remove**) and the others the repository offers (with **Install**), and installs one by name. Turn off **Download a plugin when a sheet asks for it** and a sheet never downloads anything: a block whose plugin is not installed says so and offers **Install**, which downloads it because you asked.
 
 A plugin runs in a sandbox: it cannot reach LENS, your files, other sites or the rest of the sheet. All it can do is write its own block's lines (checked by LENS before they go in), send the picture its row shows, and read the `!pluginvar` values.
 
@@ -61,7 +63,7 @@ A plugin is a folder named for it (lower-case letters, digits, `-` and `_`) hold
  "entry": "index.html", "files": ["index.html", "pipenet.js", "app.js"]}
 ```
 
-The files may be HTML, JavaScript, CSS, JSON, SVG, PNG or WOFF2, with no folders, and at most 2 MB each. The page is opened in a frame with `sandbox="allow-scripts"`, under a Content-Security-Policy that allows its own scripts and styles and no requests. It talks to LENS with `postMessage`:
+Add it to `plugins/index.json` (its name, title, version and description, as in the manifest; a test holds the two together) so Settings offers it. The files may be HTML, JavaScript, CSS, JSON, SVG, PNG or WOFF2, with no folders, and at most 2 MB each. The page is opened in a frame with `sandbox="allow-scripts"`, under a Content-Security-Policy that allows its own scripts and styles and no requests. It talks to LENS with `postMessage`:
 
 | Message | Meaning |
 |---|---|
