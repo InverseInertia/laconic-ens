@@ -2,7 +2,7 @@
  * (laconic/static/plugins.js). Every change is saved into the plugin's block: the layout as its
  * `#@ state` line, and the network as the lines the sheet calculates with: A, L!, D_h!, N_fit!,
  * K_extra! for the supply, A_r, L_r!, D_r!, N_fit_r!, K_extra_r! for the return, exchangers!,
- * speeds!, fit_method! and the pump's Δp_target. The sheet's `!pluginvar` values come back and are drawn on the pipes.
+ * pumps!, fit_method! and the pump's Δp_target. The sheet's `!pluginvar` values come back and are drawn on the pipes.
  *
  * With the return laid out on its own, the grid has two layers, as a circuit board has two sides:
  * the supply and the return. The tools work on the layer in front (Supply | Return, or F), and the
@@ -271,7 +271,7 @@
   // On the drawing: a checkbox for each set of data the balloons can show, the plugin's own (segment
   // numbers, pipe sizes, lengths, bores, each sink's curves) and each of the sheet's !pluginvar values.
   const BUILT_IN = [['numbers', 'Segment numbers'], ['size', 'Pipe size'], ['L', 'Length'], ['D', 'D_h (bore)'],
-    ['hx', 'Exchanger curve'], ['pump', 'Pump curve']];
+    ['hx', 'Exchanger curve'], ['pump', 'Pump']];
   function showSets() {
     const box = $('#showSets');
     if (box.contains(document.activeElement)) return;
@@ -311,7 +311,7 @@
   };
 
   // A sink's exchanger or pump curve: picked by the names the sheet gives them (`!pluginvar exchangers:
-  // ...`, `!pluginvar speeds: ...`), else by number. A number past the names is kept, and said so.
+  // ...`, `!pluginvar pumps: ...`), else by number. A number past the names is kept, and said so.
   function curvePick(label, names, value, set) {
     if (!names) return field(label + ' (number)', value, '1', (v) => edit(() => { const x = Math.round(parseFloat(v)); if (x >= 1) set(x); }));
     const pick = el('select', { 'aria-label': label });
@@ -354,7 +354,7 @@
       parts.push(field('Name', pad.name, 'S' + ((net.sinks.findIndex((s) => s.key === selected) + 1) || ''), (v) => edit(() => { if (v.trim()) pad.name = v.trim().slice(0, 40); else delete pad.name; }), 'text'));
       const names = P.curveNames(inputs);
       parts.push(curvePick('Exchanger curve', names.exchangers, pad.x, (x) => { pad.x = x; }));
-      parts.push(curvePick('Pump curve', names.speeds, pad.s, (x) => { pad.s = x; }));
+      parts.push(curvePick('Pump', names.pumps, pad.s, (x) => { pad.s = x; }));
     }
     parts.push(el('div', { class: 'row-btns' },
       el('button', { onclick: () => edit(() => { t.p = P.rotate(t.p); }) }, 'Turn (R)'),
@@ -440,7 +440,7 @@
         ...vals.sinks.map((v) => el('th', {}, v.name + (v.unit ? ` ${v.unit}` : ''))));
       const srows = net.sinks.map((s, j) => el('tr', { class: selected === s.key ? 'sel' : '', onclick: () => { selected = s.key; refresh(); } },
         el('td', {}, `${j + 1} ${s.name}`), el('td', { class: 'name' }, P.curveName(names.exchangers, s.x)),
-        el('td', { class: 'name' }, P.curveName(names.speeds, s.s)),
+        el('td', { class: 'name' }, P.curveName(names.pumps, s.s)),
         ...vals.sinks.map((v) => el('td', { class: v.stale ? 'stale' : '' }, P.fmt(v.values[j])))));
       $('#sinks').replaceChildren(el('table', {}, el('thead', {}, shead), el('tbody', {}, ...srows)));
     }

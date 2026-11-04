@@ -30,7 +30,7 @@ def test_the_plugin_writes_its_network_into_its_block_and_shows_the_sheets_value
     text = value(page)
     assert text.startswith("!plugin pipenet\n  A = [1, 0, 0, 0, 0, 0, 0, 0; ")
     for name in ("L! = [", "D_h! = [", "N_fit! = [", "K_extra! = [", "A_r = [", "L_r! = [", "D_r! = [", "N_fit_r! = [",
-                 "K_extra_r! = [", "exchangers! = [", "speeds! = [", "fit_method! = 1"):
+                 "K_extra_r! = [", "exchangers! = [", "pumps! = [", "fit_method! = 1"):
         assert f"\n  {name}" in text
     # the sheet runs on what it wrote, and Q comes back to the frame, one value per segment
     frame.locator("#segments th:has-text('Q gal/min')").wait_for()
