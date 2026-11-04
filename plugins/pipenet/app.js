@@ -46,6 +46,7 @@
   window.addEventListener('message', (ev) => {
     if (ev.source !== window.parent) return;
     const m = ev.data;
+    if (m && m.type === 'lens:theme' && m.theme) { applyTheme(m.theme); refresh(); return; }
     if (!m || m.type !== 'lens:update') return;
     if (m.theme) applyTheme(m.theme);
     inputs = Array.isArray(m.inputs) ? m.inputs : [];
@@ -70,7 +71,7 @@
   }
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue('--' + v).trim();
   const svgTheme = () => ({ paper: css('paper'), text: css('text'), ink: css('ink'), rule: css('rule'), err: css('err'),
-    grid: css('grid'), sans: css('sans'), soft: css('text-soft') });
+    grid: css('grid'), sans: css('sans'), soft: css('text-soft'), hi: css('global') });
 
   // ---- drawing ------------------------------------------------------------------------------
   // The grid only grows while the page is open, and when it grows up or to the left the view is

@@ -5,12 +5,13 @@
    frames live in the plugin dialog for as long as their blocks are in the sheet; the dialog shows
    one of them at a time, and a block's row in the results shows the picture its plugin last sent.
 
-     page -> plugin  {type: "lens:update", state, inputs, outputs, theme}
+     page -> plugin  {type: "lens:theme", theme}  the page's colours and fonts changed (Settings)
+                     {type: "lens:update", state, inputs, outputs, theme}
                      `state` is what the plugin last saved in its block's `#@ state` line, and is
                      left out when the sheet has not been run since the plugin's last write (so a
                      late answer cannot undo what the plugin just did); `inputs` are the values of
                      every `!pluginvar` line, [{name, unit, shape, mag}]; `outputs` the names its
-                     block's lines define
+                     block's lines define; `theme` the page's THEME variables, without their `--`
      plugin -> page  {type: "lens:ready"}      ready for its first update
                      {type: "lens:write", state, outputs: {name: "expression"}}
                                                write these into its block (/api/pluginwrite)
@@ -38,6 +39,10 @@
   // digits, _ and ∞, then any of ` ! @ &. The server checks it again before it writes anything.
   const NAME = /^[\p{L}_∀][\p{L}\p{N}_∞∀]*[`!@&]*$/u;
   const MAX_SVG = 2000000;
+
+  // The page's theme variables a plugin is given (index.html :root, theme.js): colours and fonts.
+  const THEME = ['--paper', '--paper-deep', '--grid', '--text', '--text-soft', '--ink', '--on-ink', '--rule', '--err',
+    '--global', '--symbol', '--hit', '--hl', '--on-hl', '--sans', '--mono'];
 
   function blocks(rows) {
     const seen = new Map();
@@ -101,9 +106,16 @@
 
   function theme() {
     const cs = getComputedStyle(document.body), out = {};
-    for (const v of ['--paper', '--paper-deep', '--grid', '--text', '--text-soft', '--ink', '--on-ink', '--rule', '--err', '--sans', '--mono'])
-      out[v.slice(2)] = cs.getPropertyValue(v).trim();
+    for (const v of THEME) out[v.slice(2)] = cs.getPropertyValue(v).trim();
     return out;
+  }
+
+  // The theme changed (Settings): every plugin gets it at once, in a message of its own, so a plugin
+  // is never handed an older state along with it.
+  function retheme() {
+    const t = theme();
+    for (const e of entries.values())
+      if (e.ready && e.frame && e.frame.contentWindow) e.frame.contentWindow.postMessage({ type: 'lens:theme', theme: t }, '*');
   }
 
   function manifest(name, fresh) {
@@ -354,7 +366,7 @@
     for (const box of document.querySelectorAll(`.plugin-box[data-key="${CSS.escape(e.key)}"]`)) fill(box, e, null);
   }
 
-  const api = { blocks, inputs, check, imageUrl, folderFiles, init, after, build, open, reload, install, installFolder, remove, settings,
+  const api = { THEME, blocks, inputs, check, imageUrl, folderFiles, init, after, build, open, reload, retheme, install, installFolder, remove, settings,
     get current() { return current; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plugins = api;

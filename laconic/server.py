@@ -155,6 +155,10 @@ class _Static(StaticFiles):
         response = FileResponse(full_path, status_code=status_code, stat_result=stat_result)
         response.headers["etag"] = '"%s-%s"' % (version_label(), response.headers["etag"].strip('"'))
         response.headers["cache-control"] = "no-cache"
+        if str(full_path).endswith((".woff2", ".ttf")):
+            # A plugin's sandboxed frame has no origin of its own ("null"), so the fonts it borrows
+            # from LENS (static/fonts/fonts.css) are cross-origin requests. Fonts are public.
+            response.headers["access-control-allow-origin"] = "*"
         del response.headers["last-modified"]
         if self.is_not_modified(response.headers, Headers(scope=scope)):
             return NotModifiedResponse(response.headers)

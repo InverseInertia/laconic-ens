@@ -409,3 +409,11 @@ def test_a_folder_source_takes_no_installs(cfg, monkeypatch):
     monkeypatch.setenv("LENS_PLUGIN_SOURCE", str(cfg / "src"))
     with pytest.raises(plugins.PluginError, match="put the plugin's folder there"):
         plugins.install_folder(make(cfg / "mine", name="other"))
+
+
+def test_the_fonts_may_be_borrowed_by_a_sandboxed_plugin_frame():
+    from fastapi.testclient import TestClient
+    from laconic.server import app
+    c = TestClient(app)
+    assert c.get("/static/fonts/ibm-plex-sans-latin-400-normal.woff2").headers["access-control-allow-origin"] == "*"
+    assert "access-control-allow-origin" not in c.get("/static/rows.js").headers
