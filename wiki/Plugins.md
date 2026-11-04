@@ -65,11 +65,12 @@ A plugin is a folder named for it (lower-case letters, digits, `-` and `_`) hold
  "entry": "index.html", "files": ["index.html", "pipenet.js", "app.js"]}
 ```
 
-Add it to `plugins/index.json` (its name, title, version and description, as in the manifest; a test holds the two together) so Settings offers it. The files may be HTML, JavaScript, CSS, JSON, SVG, PNG or WOFF2, with no folders, and at most 2 MB each. The page is opened in a frame with `sandbox="allow-scripts"`, under a Content-Security-Policy that allows its own scripts and styles and no requests. It talks to LENS with `postMessage`:
+Add it to `plugins/index.json` (its name, title, version and description, as in the manifest; a test holds the two together) so Settings offers it. The files may be HTML, JavaScript, CSS, JSON, SVG, PNG or WOFF2, with no folders, and at most 2 MB each. The page is opened in a frame with `sandbox="allow-scripts"`, under a Content-Security-Policy that allows its own scripts and styles and no requests. To look like LENS, a plugin takes its colours from `theme` (LENS's theme variables without their `--`: `paper`, `paper-deep`, `grid`, `text`, `text-soft`, `ink`, `on-ink`, `rule`, `err`, `global`, `symbol`, `hit`, `hl`, `on-hl`, `sans`, `mono`), and its fonts from `<link rel="stylesheet" href="/static/fonts/fonts.css">`, which LENS serves to plugin frames. The pipenet plugin sets them as CSS variables of the same names, so its styles read like LENS's own. It talks to LENS with `postMessage`:
 
 | Message | Meaning |
 |---|---|
 | plugin → `{type: "lens:ready"}` | send it the first update |
 | LENS → `{type: "lens:update", state, inputs, outputs, theme}` | after each run of the sheet. `state` is the block's state line (null when it has none), left out when the sheet has not run since the plugin's last write. `inputs` are the `!pluginvar` values, `[{name, unit, shape, mag, stale}]` (`mag` in `unit`: a number or nested rows). `outputs` are the names the block's lines define, and `theme` the page's colours and fonts |
+| LENS → `{type: "lens:theme", theme}` | the theme changed in Settings: the same `theme` as in an update, at once |
 | plugin → `{type: "lens:write", state, outputs: {name: "expression"}}` | write its state line, and a line `name = expression` for each output, in place, or added in order. Names are plain variable names; each expression is one line of LENS math |
 | plugin → `{type: "lens:preview", svg}` | the picture its row shows, as SVG text (shown as an image, so scripts in it do not run) |

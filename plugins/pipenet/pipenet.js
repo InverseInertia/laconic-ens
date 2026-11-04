@@ -256,11 +256,11 @@
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  /* The layout as SVG text. opts: {theme: {paper, text, ink, rule, err, grid, sans}, selected: a tile
+  /* The layout as SVG text. opts: {theme: {paper, text, ink, rule, err, grid, sans, soft, hi}, selected: a tile
      key, grid: draw the grid (the editor) or not (the preview), inputs: the !pluginvar values}. */
   function draw(state, a, opts = {}) {
     const th = Object.assign({ paper: '#ffffff', text: '#1d2b3a', ink: '#1f5fa8', rule: '#9fb4c8', err: '#c62828',
-      grid: '#e3eaf1', sans: 'sans-serif', soft: '#5b7086' }, opts.theme || {});
+      grid: '#e3eaf1', sans: 'sans-serif', soft: '#5b7086', hi: '#e08a00' }, opts.theme || {});
     const grid = opts.grid !== false;
     const b = opts.bounds || (grid ? bounds(state) : bounds(state, 1));
     const W_ = (b.c1 - b.c0 + 1) * CELL, H_ = (b.r1 - b.r0 + 1) * CELL;
@@ -282,9 +282,9 @@
       const [r, c] = at(k), cx = x(c) + h, cy = y(r) + h;
       const seg = segOf.get(k);
       let color = loose.has(k) ? th.rule : th.ink;
-      if (selSeg && seg === selSeg) color = th.err === color ? th.ink : '#e08a00';
+      if (selSeg && seg === selSeg) color = th.hi;   // the selected tile's segment, in the theme's accent
       if (bad.has(k)) out.push(`<rect x="${x(c) + 2}" y="${y(r) + 2}" width="${CELL - 4}" height="${CELL - 4}" fill="none" stroke="${esc(th.err)}" stroke-width="2" stroke-dasharray="4 3"/>`);
-      if (opts.selected === k) out.push(`<rect x="${x(c) + 1}" y="${y(r) + 1}" width="${CELL - 2}" height="${CELL - 2}" fill="none" stroke="#e08a00" stroke-width="2"/>`);
+      if (opts.selected === k) out.push(`<rect x="${x(c) + 1}" y="${y(r) + 1}" width="${CELL - 2}" height="${CELL - 2}" fill="none" stroke="${esc(th.hi)}" stroke-width="2"/>`);
       const sh = shape(tile);
       const arm = (d, len = h) => `<line x1="${cx}" y1="${cy}" x2="${cx + DC[d] * len}" y2="${cy + DR[d] * len}" stroke="${esc(color)}" stroke-width="${pw}" stroke-linecap="butt"/>`;
       if (sh === 'cross') {

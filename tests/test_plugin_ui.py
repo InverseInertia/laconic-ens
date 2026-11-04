@@ -143,3 +143,18 @@ def test_a_plugin_not_on_github_is_installed_from_its_folder(page, tmp_path, mon
     assert page.locator("#pluginSettings .plugin-item button:has-text('Update')").count() == 0
     page.click("#settingsDlg .close")
     page.wait_for_function("document.querySelector('.plugin-status').textContent.startsWith('Pipe network')")
+
+
+def test_the_plugin_takes_the_pages_colours_and_fonts_and_follows_a_new_theme(page):
+    show(page, SHEET)
+    opened(page)
+    frame = next(f for f in page.frames if "/plugins/pipenet/" in f.url)
+    paper = lambda: page.evaluate("getComputedStyle(document.body).backgroundColor")
+    frame.wait_for_function(f"getComputedStyle(document.body).backgroundColor === {paper()!r}")
+    frame.wait_for_function("document.fonts.check('13px \"IBM Plex Sans\"')")   # LENS's own fonts, though sandboxed
+    page.click("#pluginDlg .close")
+    page.click("#settingsBtn")
+    page.select_option("#preset", label="White paper")
+    page.click("#settingsDlg .close")
+    frame.wait_for_function(f"getComputedStyle(document.body).backgroundColor === {paper()!r}")
+    page.evaluate("localStorage.clear()")

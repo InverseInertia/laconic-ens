@@ -4,34 +4,47 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pipe network</title>
+<!-- LENS's own fonts, from the server the plugin is served by; the page sends its colours (lens:theme). -->
+<link rel="stylesheet" href="/static/fonts/fonts.css">
 <style>
+  /* LENS blueprint until the page sends its theme: the same variables as LENS's own :root. */
   :root {
-    --paper: #ffffff; --paper-deep: #eef3f8; --grid: #e3eaf1; --text: #1d2b3a; --text-soft: #5b7086;
-    --ink: #1f5fa8; --on-ink: #ffffff; --rule: #9fb4c8; --err: #c62828; --sans: system-ui, sans-serif; --mono: ui-monospace, monospace;
-    --hi: #e08a00;
+    --paper: #00386b; --paper-deep: #0b4274; --grid: #0a4d88; --text: #c2deff; --text-soft: #94b2d0;
+    --ink: #348fff; --on-ink: #00386b; --rule: #1f6fc4; --err: #ff8f00; --global: #7ee0c3; --symbol: #00e5ff;
+    --hit: rgba(194, 222, 255, .08); --hl: #348fff; --on-hl: #00386b;
+    --mono: "OCR-A", "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
+  html { scrollbar-color: var(--rule) var(--paper-deep); }
   body { background: var(--paper); color: var(--text); font: 400 13px/1.4 var(--sans); display: grid;
          grid-template-columns: 200px minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr); }
   @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: auto minmax(300px, 1fr) auto; } }
   aside { padding: 10px; overflow: auto; background: var(--paper-deep); border-right: 1px solid var(--rule); }
   aside.right { border-right: 0; border-left: 1px solid var(--rule); }
-  h3 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: .04em; color: var(--text-soft); margin: 12px 0 6px; }
+  h3 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: .06em; color: var(--text); margin: 14px 0 6px; }
   h3:first-child { margin-top: 0; }
-  button, select, input { font: inherit; color: var(--text); background: var(--paper); border: 1px solid var(--rule); border-radius: 0; }
-  button { cursor: pointer; padding: 3px 8px; }
-  button:hover { border-color: var(--ink); }
-  button.on, button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  /* Buttons, lists and fields as LENS draws them: outlined in ink, filled with it when pressed. */
+  button { font: 500 13px var(--sans); color: var(--text); background: transparent; border: 1px solid var(--ink);
+           border-radius: 0; padding: 3px 8px; cursor: pointer; }
+  button:hover:not(:disabled), button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
   button:disabled { opacity: .45; cursor: default; }
+  select { font: 500 13px var(--sans); color: var(--text); background: var(--paper-deep); border: 1px solid var(--ink); border-radius: 0; padding: 2px 4px; cursor: pointer; }
+  input { font: 400 13px var(--mono); color: var(--text); background: transparent; border: 1px solid var(--rule); border-radius: 0; padding: 2px 4px; }
+  input:focus { border-color: var(--ink); outline: none; }
+  input::placeholder { color: var(--text-soft); opacity: .7; }
+  input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  kbd { font: 400 12px var(--mono); border: 1px solid var(--ink); padding: 0 4px; }
   .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
   .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .palette button { padding: 2px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
   .palette button svg { width: 100%; height: 100%; }
-  .row-btns { display: flex; flex-wrap: wrap; gap: 4px; }
+  .row-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   label.f { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 6px; margin: 4px 0; }
-  label.f input, label.f select { width: 100%; padding: 2px 4px; }
-  label.c { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+  label.f input, label.f select { width: 100%; }
+  label.c { display: flex; align-items: center; gap: 6px; margin: 6px 0; cursor: pointer; }
   .hint { color: var(--text-soft); font-size: 12px; margin: 6px 0; }
   main { overflow: auto; position: relative; }
   #canvas { display: block; touch-action: none; user-select: none; cursor: crosshair; }
@@ -44,8 +57,11 @@
   .msgs li.warn { color: var(--text-soft); }
   #segments, #sinks { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th { color: var(--text-soft); font-weight: 500; }
   th, td { text-align: right; padding: 2px 4px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
-  th:first-child, td:first-child { text-align: left; }
+  td { font-family: var(--mono); }
+  th:first-child, td:first-child { text-align: left; font-family: var(--sans); }
+  tbody tr:hover td { background: var(--hit); }
   tr.sel td { background: var(--grid); }
   tbody tr { cursor: pointer; }
   .stale { opacity: .6; }
