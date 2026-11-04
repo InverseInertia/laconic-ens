@@ -254,3 +254,24 @@ def test_a_target_set_again_in_the_sheet_is_named_and_the_plugins_reaches_the_so
     frame.locator("#dpv").fill("0.5")
     frame.locator("#dpv").press("Enter")
     page.wait_for_function(f"last.some((r) => r.solver && r.solver.hash !== {before!r})")
+
+
+def test_the_drawing_shows_the_sets_ticked_and_sinks_pick_curves_by_name(page):
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    show(page, original)
+    frame = opened(page)
+    frame.locator("#showSets label:has-text('∀!')").wait_for()
+    canvas = frame.locator("#canvas")
+    assert "Δp_paths" in canvas.inner_html() and "D_h 4.03 in" not in canvas.inner_html()
+    frame.locator("#showSets label:has-text('D_h') input").check()
+    frame.locator("#showSets label:has-text('Δp_paths') input").uncheck()
+    page.wait_for_function("document.querySelector('#src').value.includes('\"show\":{\"numbers\":true,\"size\":false,\"L\":false,\"D\":true')")
+    assert "D_h 4.03 in" in canvas.inner_html() and "Δp_paths" not in canvas.inner_html()
+    assert '"hide":["Δp_paths"]' in value(page)
+    # a sink's exchanger is picked by the name the sheet gives it
+    frame.locator("#sinks tbody tr").first.click()
+    pick = frame.locator("#inspector select[aria-label='Exchanger curve']")
+    assert pick.locator("option").all_inner_texts() == ["SWEP_B26W", "SWEP_DB300"]
+    pick.select_option(label="SWEP_DB300")
+    page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[2;/)")
+    assert frame.locator("#sinks tbody tr").first.locator("td").nth(1).inner_text() == "SWEP_DB300"

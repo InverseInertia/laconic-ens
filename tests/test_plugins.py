@@ -482,3 +482,18 @@ def test_a_line_that_defines_a_plugins_name_again_is_warned_and_named_to_the_plu
     assert rs[6].warning and not rs[6].hidden          # shown even under !hide, so it is not missed
     assert rs[3].warning == "" and rs[1].warning == ""   # the block's own line and other lines are fine
     assert rs[8].text == "z = 1379 Pa"                 # 0.2 psi: the last line wins
+
+
+def test_a_pluginvar_line_can_send_a_list_of_names():
+    rs = run("f(x) = x\ng(x) = 2*x\nq = 3\n!pluginvar curves: f, g, q\n!pluginvar curves: f, nope\n!pluginvar curves:")
+    assert rs[3].pluginvar.values == [{"name": "curves", "names": ["f", "g", "q"]}]
+    assert rs[3].text == "Sent to the plugins: curves, the names f, g, q"
+    assert (rs[4].kind, rs[4].error) == ("error", "'nope' is not defined")
+    assert rs[5].kind == "error"
+
+
+def test_the_plugins_sheet_names_its_exchanger_and_pump_curves():
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    sent = [v for r in evaluate(text).results if r.pluginvar for v in r.pluginvar.values if "names" in v]
+    assert sent == [{"name": "exchangers", "names": ["SWEP_B26W", "SWEP_DB300"]},
+                    {"name": "speeds", "names": ["GRUND_43100A", "GRUND_43100B", "GRUND_43100C"]}]

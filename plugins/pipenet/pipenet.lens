@@ -185,3 +185,7 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 # Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
 # in _r) each return segment, and the piping's pressure drop on each spur's path, supply and return
 !pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur
+# What exchangers! and speeds! pick, by name and in order (SWEP and GRUND_43100 above): the plugin offers each
+# sink's exchanger and pump curve by these names
+!pluginvar exchangers: SWEP_B26W, SWEP_DB300
+!pluginvar speeds: GRUND_43100A, GRUND_43100B, GRUND_43100C

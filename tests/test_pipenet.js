@@ -118,6 +118,8 @@ eq(P.analyze(net([row(0, 0, 2), col(2, 0, 2)], '0,0', [])).errors.some((e) => /D
 
 // --- reading a state ----------------------------------------------------------------------------
 eq(P.normalize(null), P.blank(), 'nothing is an empty layout');
+eq(P.normalize({ show: { size: true, numbers: 'yes', hide: ['Q', 3] } }).show,
+  { numbers: true, size: true, L: false, D: false, hx: false, pump: false, hide: ['Q'] }, 'what the drawing shows, cleaned');
 eq(P.normalize({ cells: { '0,0': { t: 'pipe', p: 99 }, 'x': { t: 'pipe', p: 1 }, '1,1': { t: 'pump', p: 1 } }, cell: -3, units: { L: 'parsec' } }),
   { ...P.blank(), cells: { '0,0': { t: 'pipe', p: 3 } } }, 'odd tiles and settings are dropped');
 eq(P.normalize({ ret: true }).ret, 'same', 'a return that matches the supply, the old way of saying so');
@@ -150,8 +152,18 @@ eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'AHU-1' } } }).cells['
   const svg = P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1.234], [2], [3]])] });
   assert.ok(svg.startsWith('<svg') && svg.includes('Q 1.23 u') && svg.endsWith('</svg>'), 'the picture shows the values');
   assert.ok(!P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1], [2], [3]])], grid: false }).includes('<line x1="0"'), 'the preview has no grid');
-  s.labels = 'none';
-  assert.ok(!P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1.234], [2], [3]])] }).includes('1.23'), 'or no values');
+  s.show.hide = ['Q'];
+  assert.ok(!P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1.234], [2], [3]])] }).includes('1.23'), 'or not, when its box is unticked');
+  s.show = { ...s.show, hide: [], size: true, L: true, D: true, hx: true, pump: true, numbers: false };
+  s.cells['0,5'].x = 2;
+  const all = P.draw(s, P.network(s), { inputs: [v('Q', [3, 1], [[1.234], [2], [3]]),
+    { name: 'exchangers', names: ['SWEP_B26W', 'SWEP_DB300'] }, { name: 'speeds', names: ['GRUND_A', 'GRUND_B'] }] });
+  for (const t of ['4" Sch 40', 'L 20 ft', 'D_h 4.03 in', 'hx SWEP_DB300', 'pump GRUND_B', 'hx SWEP_B26W'])
+    assert.ok(all.includes(t.replace('"', '&quot;')), `the drawing can show ${t}`);
+  assert.ok(!/<circle[^>]*r="10"/.test(all), 'and the segment numbers can be left off');
+  eq(P.curveName(null, 2), 'curve 2', 'a curve the sheet does not name goes by its number');
+  eq(P.placed([{ name: 'exchangers', names: ['a'] }], nt).unplaced, [], 'a list of names is not a value to draw');
+  n += 2;
   const lone = P.normalize({ cells: { '0,0': { t: 'sink', p: W, name: '<b>' } } });
   assert.ok(!P.draw(lone, P.network(lone)).includes('<b>'), 'text is escaped');
   n += 4;

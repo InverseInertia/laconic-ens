@@ -17,6 +17,7 @@ The block's row in the results shows the plugin's picture, with **Open** (the pl
 - **Don't define its names again.** A line below the block that defines one of the names the plugin writes replaces the plugin's value for the lines after it, so a change made in the plugin would not reach them. Such a line gets a warning in the results (shown even under `!hide`), and the plugin names it too.
 - **The state line** (`#@ state {...}`) is the plugin's own record, so it opens as you left it. Undo in the editor undoes a plugin's change, and the plugin follows.
 - **`!pluginvar a, b`** sends the values of `a` and `b`, as they are on that line, to every plugin in the sheet. Put it below the calculation. A value that reads an out-of-date solver result is sent marked as such.
+- **`!pluginvar list: f, g`** sends names instead: `f` and `g`, in that order, under the name `list`, each a variable or function defined above. It tells a plugin what the sheet's numbers pick: `!pluginvar exchangers: SWEP_B26W, SWEP_DB300` says exchanger curve 1 is `SWEP_B26W` and 2 is `SWEP_DB300`.
 
 ## Where plugins come from
 
@@ -73,7 +74,11 @@ With these, `A * Q_spur` is the flow in every supply segment and `A_r * Q_spur` 
 
 Crane's K does not change with the flow, which suits fully turbulent flow; Hooper's and Darby's grow as the Reynolds number falls, which matters in the transitional range small loops often run in.
 
-**What it shows.** A `!pluginvar` value with one entry per segment is drawn on the segments (`∀!`, the flow in each): on the return's when its name ends in `_r` (`∀_r!`, `Δp_r`), else on the supply's. One with an entry per sink goes beside the sinks (`Δp_spur`), and a single number in a corner. The values of the side in front are drawn, in balloons: where two would overlap (or cover a segment's number, the pump or a sink) they push each other apart, and one moved from its place keeps a leader line to it. Pipe in use is drawn solid; pipe the source does not reach is drawn hollow, and listed under **Check** as one note. The tables on the right list them all. **On the drawing** chooses values, numbers only, or nothing.
+**What it shows.** A `!pluginvar` value with one entry per segment is drawn on the segments (`∀!`, the flow in each): on the return's when its name ends in `_r` (`∀_r!`, `Δp_r`), else on the supply's. One with an entry per sink goes beside the sinks (`Δp_spur`), and a single number in a corner. The values of the side in front are drawn, in balloons: where two would overlap (or cover a segment's number, the pump or a sink) they push each other apart, and one moved from its place keeps a leader line to it. Pipe in use is drawn solid; pipe the source does not reach is drawn hollow, and listed under **Check** as one note. The tables on the right list them all.
+
+**On the drawing** has a checkbox for each set the balloons can show: segment numbers, each segment's pipe size, length and D_h (its bore), each sink's exchanger curve and pump curve, and each of the sheet's `!pluginvar` values. They are kept in the plugin's state, so the row's picture shows the same.
+
+**Curves by name.** A sink's exchanger curve and pump curve are numbers in the sheet (`exchangers!`, `speeds!`). The plugin's sheet names them, in order, with `!pluginvar exchangers: SWEP_B26W, SWEP_DB300` and `!pluginvar speeds: GRUND_43100A, GRUND_43100B, GRUND_43100C`, and the plugin then offers and shows them by those names. Add a curve to the sheet and its name to the list, and it can be picked. Without the lists, they are picked by number.
 
 **Check.** Each side must be a tree from the one source. An open end, a dead end, a loop or a pipe running back into the source is pointed out on the drawing and listed under **Check**, and the sheet's lines are left as they were until it is fixed. Tiles not connected to the source are left out, with a note.
 
