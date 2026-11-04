@@ -173,15 +173,15 @@ def test_the_plugin_warns_of_its_sheet_changed_and_opens_the_original(page):
     frame.locator("#method").select_option("3")
     page.wait_for_function("document.querySelector('#src').value.includes('  fit_method! = 3\\n')")
     page.click("#pluginDlg .close")
-    edited = value(page).replace("FIT_Hooper = [800, 0.40;", "FIT_Hooper = [700, 0.40;").replace("Δp_target = 0.1 'psi\n", "")
+    edited = value(page).replace("FIT_Hooper = [800, 0.40;", "FIT_Hooper = [700, 0.40;").replace("ε_Crane = 0.046 'mm\n", "")
     show(page, edited)
     page.click(".plugin-box button:has-text('Open')")
     frame.locator("#drift").wait_for(state="visible")
     text = frame.locator("#drift").inner_text()
-    assert "Changed: FIT_Hooper" in text and "Missing: Δp_target" in text
+    assert "Changed: FIT_Hooper" in text and "Missing: ε_Crane" in text
     page.once("dialog", lambda d: d.accept())
     frame.locator("#drift button:has-text('Open the original sheet')").click()
-    page.wait_for_function("document.querySelector('#src').value.includes(\"Δp_target = 0.1 'psi\")")
+    page.wait_for_function("document.querySelector('#src').value.includes(\"ε_Crane = 0.046 'mm\")")
     assert value(page) == original
     page.click(".plugin-box button:has-text('Open')")
     frame.locator("#drift").wait_for(state="hidden")
@@ -222,3 +222,14 @@ def test_a_pipe_size_is_picked_from_the_schedule(page):
     page.wait_for_function("document.querySelector('#src').value.includes(\"D_h! = [3.826;\")")
     frame.locator("#size").select_option("6")
     page.wait_for_function("document.querySelector('#src').value.includes(\"D_h! = [5.761;\")")
+
+
+def test_the_pumps_target_pressure_difference_is_set_in_the_plugin(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 0.1 'psi\\n\")")
+    frame.locator("#dpu").select_option("kPa")
+    frame.locator("#dpv").fill("2.5")
+    frame.locator("#dpv").press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 2.5 'kPa\\n\")")

@@ -36,10 +36,13 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   eq(a.A, [[1]], 'of one segment, the spur');
   eq(P.outputs(s, P.network(s)), { A: '[1]', 'L!': "[30] * 'ft", 'D_h!': "[4.026] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]',
     A_r: '[1]', 'L_r!': "[30] * 'ft", 'D_r!': "[4.026] * 'in", 'N_fit_r!': '[0, 0, 0]', 'K_extra_r!': '[0]',
-    'exchangers!': '[1]', 'speeds!': '[2]', 'fit_method!': '1' },
+    'exchangers!': '[1]', 'speeds!': '[2]', 'fit_method!': '1', Δp_target: "0.1 'psi" },
     "three tiles of 10 ft of 4\" Sch 40; the return the same as the supply, as lines of its own");
   s.method = 3;
   eq(P.outputs(s, P.network(s))['fit_method!'], '3', 'the method chosen goes to the sheet');
+  s.dp = { v: 25, u: 'kPa' };
+  eq(P.outputs(s, P.network(s))['Δp_target'], "25 'kPa", "and the pump's target pressure difference");
+  eq(P.normalize({ dp: { v: -1, u: 'atm' } }).dp, { v: 0.1, u: 'psi' }, 'a target that is not one falls back to 0.1 psi');
 }
 
 // --- a tee: the trunk splits into two spurs ---------------------------------------------------------

@@ -21,6 +21,7 @@
  *        layer connects to them on its own side. A sink's name, curve and speed are kept on the
  *        supply layer's pad only (syncPads keeps the pads of the two layers in the same squares)
  *   method: how the sheet works out fitting losses: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K (METHODS)
+ *   dp: the pressure difference the pump holds, {v, u} (u one of DP_UNITS), written as Δp_target
  *   labels: what the drawing shows beside the pipes: "values" (the sheet's), "numbers" or "none"
  *   nps, sch: the network's pipe, a nominal size (PIPE_SIZES) or null for a diameter D of its own, and
  *        its schedule, "40" or "80"
@@ -74,6 +75,8 @@
   // from the wall thicknesses of ASME B36.10M. PVC Schedule 40 and 80 pipe (ASTM D1785) has the same
   // outside diameters and walls, so the same bores. A segment's D_h is its pipe's inside diameter.
   const SCHEDULES = ['40', '80'];
+  // The units the pump's target pressure difference (Δp_target) may be given in, as LENS spells them.
+  const DP_UNITS = ['psi', 'kPa', 'Pa', 'bar', 'ft_H2O'];
   const PIPE_SIZES = [
     ['1/8', 0.269, 0.215], ['1/4', 0.364, 0.302], ['3/8', 0.493, 0.423], ['1/2', 0.622, 0.546],
     ['3/4', 0.824, 0.742], ['1', 1.049, 0.957], ['1-1/4', 1.380, 1.278], ['1-1/2', 1.610, 1.500],
@@ -109,7 +112,8 @@
   }
 
   function blank() {
-    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, nps: '4', sch: '40', ret: 'same', method: 1, labels: 'values', cells: {}, rcells: {} };
+    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, nps: '4', sch: '40', ret: 'same', method: 1, dp: { v: 0.1, u: 'psi' },
+      labels: 'values', cells: {}, rcells: {} };
   }
 
   // A state as given, with anything missing or odd replaced by the default, and tiles cleaned.
@@ -124,6 +128,8 @@
       cell: num(s.cell, b.cell), D: num(s.D, b.D), ret: s.ret === 'separate' ? 'separate' : 'same',
       nps: s.nps === null ? null : SIZE.has(s.nps) ? s.nps : b.nps, sch: SCHEDULES.includes(s.sch) ? s.sch : b.sch,
       method: [1, 2, 3].includes(s.method) ? s.method : b.method,
+      dp: { v: s.dp && typeof s.dp.v === 'number' && isFinite(s.dp.v) && s.dp.v >= 0 ? s.dp.v : b.dp.v,
+            u: s.dp && DP_UNITS.includes(s.dp.u) ? s.dp.u : b.dp.u },
       labels: ['values', 'numbers', 'none'].includes(s.labels) ? s.labels : b.labels, cells: {}, rcells: {},
     };
     const clean = (cells, into, supply) => {
@@ -315,6 +321,7 @@
       'exchangers!': column(net.sinks.map((s) => s.x)),
       'speeds!': column(net.sinks.map((s) => s.s)),
       'fit_method!': String(state.method),
+      Δp_target: `${num(state.dp.v)} '${state.dp.u}`,
     };
   }
 
@@ -584,7 +591,7 @@
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
     blank, normalize, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
-    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, bore, sizeName };
+    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);

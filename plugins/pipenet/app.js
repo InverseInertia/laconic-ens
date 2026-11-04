@@ -2,7 +2,7 @@
  * (laconic/static/plugins.js). Every change is saved into the plugin's block: the layout as its
  * `#@ state` line, and the network as the lines the sheet calculates with: A, L!, D_h!, N_fit!,
  * K_extra! for the supply, A_r, L_r!, D_r!, N_fit_r!, K_extra_r! for the return, exchangers!,
- * speeds! and fit_method!. The sheet's `!pluginvar` values come back and are drawn on the pipes.
+ * speeds!, fit_method! and the pump's Δp_target. The sheet's `!pluginvar` values come back and are drawn on the pipes.
  *
  * With the return laid out on its own, the grid has two layers, as a circuit board has two sides:
  * the supply and the return. The tools work on the layer in front (Supply | Return, or F), and the
@@ -131,6 +131,7 @@
     document.body.dataset.layer = front();
     $('#labels').value = state.labels;
     $('#method').value = String(state.method);
+    setNum($('#dpv'), state.dp.v); $('#dpu').value = state.dp.u;
     messages(); inspector(); tables();
     schedulePreview();
   }
@@ -262,6 +263,9 @@
   $('#size').onchange = (e) => edit(() => { state.nps = e.target.value === 'custom' ? null : e.target.value; });
   $('#sch').onchange = (e) => edit(() => { state.sch = e.target.value; });
   $('#method').onchange = (e) => edit(() => { state.method = +e.target.value; });
+  $('#dpu').replaceChildren(...P.DP_UNITS.map((u) => Object.assign(document.createElement('option'), { value: u, textContent: u.replace('_', ' ') })));
+  $('#dpv').onchange = (e) => { const x = parseFloat(e.target.value); if (isFinite(x) && x >= 0) edit(() => { state.dp.v = x; }); else refresh(); };
+  $('#dpu').onchange = (e) => edit(() => { state.dp.u = e.target.value; });
   $('#labels').onchange = (e) => edit(() => { state.labels = e.target.value; });
 
   // The pipe sizes, nominal size and the bore in the schedule chosen, for the size lists.

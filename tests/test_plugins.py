@@ -220,7 +220,7 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert not [r for r in ws.results if r.kind == "error"]
     head = next(r for r in ws.results if r.plugin)
     assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "A_r", "L_r!", "D_r!", "N_fit_r!",
-                                   "K_extra_r!", "exchangers!", "speeds!", "fit_method!"]
+                                   "K_extra_r!", "exchangers!", "speeds!", "fit_method!", "Δp_target"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar).pluginvar.values
     assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur"]
