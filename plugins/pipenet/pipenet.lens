@@ -76,6 +76,8 @@ GRUND_43100C = transpose([42.1, 16.6; 4.24, 30.9; 0.6, 31.1; 11.2, 29.9; 8.1, 30
   data: GRUND_43100C
   degree: 4
 
+# Each speed setting of the 43-100 F is treated as a pump of its own: GRUND_43100A (speed 1), GRUND_43100B
+# (speed 2) and GRUND_43100C (speed 3).
 GRUND_43100A(∀`) = idx(G_43100A * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
 GRUND_43100B(∀`) = idx(G_43100B * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
 GRUND_43100C(∀`) = idx(G_43100C * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
@@ -91,7 +93,8 @@ GRUND_43100C(∀`) = idx(G_43100C * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) *
   label 3: "Speed 3"
   label 4: "raw data" 
 
-GRUND_43100(∀`, curve) = idx([GRUND_43100C(∀`), GRUND_43100C(∀`), GRUND_43100C(∀`)], curve)
+# The circulator on each spur, by number, as SWEP picks an exchanger: pumps! says which of these each spur has
+PUMP(∀`, n) = idx([GRUND_43100A(∀`), GRUND_43100B(∀`), GRUND_43100C(∀`)], n)
 
 !show
 ## Pipe Network
@@ -106,7 +109,7 @@ GRUND_43100(∀`, curve) = idx([GRUND_43100C(∀`), GRUND_43100C(∀`), GRUND_43
 # and the return's, the same for its own segments: A_r, L_r!, D_r!, N_fit_r!, K_extra_r!. A_r's columns are
 # the same sinks in the same order. With the return the same as the supply (the plugin's Return pipe), they
 # are copies of the supply's; laid out on its own, the return is drawn on its own side of the grid.
-#   exchangers!  the exchanger curve each spur ends at; speeds! the speed of its circulator
+#   exchangers!  the exchanger curve each spur ends at; pumps! its circulator (PUMP above)
 #   fit_method!  how fittings become loss coefficients: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K
 #   Δp_target    the pressure difference the pump holds (Network → Pump target Δp). The pump runs off pressure sensor
 #                data, so it ramps the flow down when spurs are shut off for maintenance: this sets the loop's total flow
@@ -122,7 +125,7 @@ GRUND_43100(∀`, curve) = idx([GRUND_43100C(∀`), GRUND_43100C(∀`), GRUND_43
   N_fit_r! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 0, 0, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 0, 1]
   K_extra_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
   exchangers! = [1; 1; 1; 1; 1; 1; 1; 1]
-  speeds! = [2; 2; 2; 2; 2; 2; 2; 2]
+  pumps! = [2; 2; 2; 2; 2; 2; 2; 2]
   fit_method! = 1
   Δp_target = 0.1 'psi
   #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"nps":"4","sch":"40","ret":"same","method":1,"dp":{"v":0.1,"u":"psi"},"labels":"values","cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10},"2,19":{"t":"pipe","p":10},"2,20":{"t":"sink","p":8,"x":1,"s":2},"1,2":{"t":"pipe","p":5},"0,2":{"t":"pipe","p":6},"0,3":{"t":"pipe","p":10},"0,4":{"t":"sink","p":8,"x":1,"s":2},"3,5":{"t":"pipe","p":5},"4,5":{"t":"pipe","p":5},"5,5":{"t":"pipe","p":3},"5,6":{"t":"pipe","p":10},"5,7":{"t":"sink","p":8,"x":1,"s":2},"1,8":{"t":"pipe","p":5},"0,8":{"t":"pipe","p":6},"0,9":{"t":"pipe","p":10},"0,10":{"t":"sink","p":8,"x":1,"s":2},"3,11":{"t":"pipe","p":5},"4,11":{"t":"pipe","p":5},"5,11":{"t":"pipe","p":3},"5,12":{"t":"pipe","p":10},"5,13":{"t":"sink","p":8,"x":1,"s":2},"1,14":{"t":"pipe","p":5},"0,14":{"t":"pipe","p":6},"0,15":{"t":"pipe","p":10},"0,16":{"t":"sink","p":8,"x":1,"s":2},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5},"5,17":{"t":"pipe","p":3},"5,18":{"t":"pipe","p":10},"5,19":{"t":"sink","p":8,"x":1,"s":2},"3,18":{"t":"pipe","p":10},"3,19":{"t":"sink","p":8,"x":1,"s":2}},"rcells":{"2,0":{"t":"source","p":0},"2,20":{"t":"sink","p":0},"0,4":{"t":"sink","p":0},"5,7":{"t":"sink","p":0},"0,10":{"t":"sink","p":0},"5,13":{"t":"sink","p":0},"0,16":{"t":"sink","p":0},"5,19":{"t":"sink","p":0},"3,19":{"t":"sink","p":0}}}
@@ -165,11 +168,11 @@ Re_seg(∀`, D) = .Re(D, .V@(D, ∀`))
 # The pump's target pressure difference, Δp_target, comes from the plugin's block above.
 
 # root solver finds where all pressure drops across all paths are equal. The path to spur j runs out along the supply, through its exchanger and back along the return: transpose(A) * Δp_supply and transpose(A_r) * Δp_return add up the segments each path passes through.
-residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_return(∀_des!) + .SWEP(∀_des!, exchangers!) - .GRUND_43100(∀_des!, speeds!) - Δp_target
+residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_return(∀_des!) + .SWEP(∀_des!, exchangers!) - .PUMP(∀_des!, pumps!) - Δp_target
 !root ∀_des!
   equation: residual(∀_des!)
   autorun: on
-  #@ result {"hash":"b0df89c57feb","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0019525713054483408],[0.0019471661103984028],[0.001948027688967917],[0.001963808064337941],[0.001984523949375249],[0.0020168077896385995],[0.002060418462612914],[0.002118975650197129]],"unit":"meter ** 3 / second"}],"nfev":26,"message":"The solution converged.","resid":0.000169}
+  #@ result {"hash":"11f99b0493b4","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0017586397033829367],[0.0017544409244061021],[0.0017551221883242915],[0.0017674623000074224],[0.0017837267373207327],[0.001809138751475584],[0.0018435897118286864],[0.0018900738291947239]],"unit":"meter ** 3 / second"}],"nfev":23,"message":"The solution converged.","resid":0.00022}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min
@@ -180,12 +183,12 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 Δp_r = Δp_return(∀_des!) -> 'psi
 Δp_spur = transpose(A) * Δp_paths + transpose(A_r) * Δp_r -> 'psi
 Δp_hx = .SWEP(∀_des!, exchangers!) -> 'psi
-Δp_circ = .GRUND_43100(∀_des!, speeds!) -> 'psi
+Δp_circ = .PUMP(∀_des!, pumps!) -> 'psi
 Δp_residual = residual(∀_des!)
 # Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
 # in _r) each return segment, and the piping's pressure drop on each spur's path, supply and return
 !pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur
-# What exchangers! and speeds! pick, by name and in order (SWEP and GRUND_43100 above): the plugin offers each
-# sink's exchanger and pump curve by these names
+# What exchangers! and pumps! pick, by name and in order (SWEP and PUMP above): the plugin offers each
+# sink's exchanger and pump by these names
 !pluginvar exchangers: SWEP_B26W, SWEP_DB300
-!pluginvar speeds: GRUND_43100A, GRUND_43100B, GRUND_43100C
+!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C

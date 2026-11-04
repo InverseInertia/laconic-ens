@@ -36,7 +36,7 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   eq(a.A, [[1]], 'of one segment, the spur');
   eq(P.outputs(s, P.network(s)), { A: '[1]', 'L!': "[30] * 'ft", 'D_h!': "[4.026] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]',
     A_r: '[1]', 'L_r!': "[30] * 'ft", 'D_r!': "[4.026] * 'in", 'N_fit_r!': '[0, 0, 0]', 'K_extra_r!': '[0]',
-    'exchangers!': '[1]', 'speeds!': '[2]', 'fit_method!': '1', Δp_target: "0.1 'psi" },
+    'exchangers!': '[1]', 'pumps!': '[1]', 'fit_method!': '1', Δp_target: "0.1 'psi" },
     "three tiles of 10 ft of 4\" Sch 40; the return the same as the supply, as lines of its own");
   s.method = 3;
   eq(P.outputs(s, P.network(s))['fit_method!'], '3', 'the method chosen goes to the sheet');
@@ -112,7 +112,7 @@ eq(P.analyze(net([row(0, 0, 2), col(2, 0, 2)], '0,0', [])).errors.some((e) => /D
   const s = net([row(0, 0, 3)], '0,0', ['0,3'], { units: { L: 'm', D: 'mm' }, cell: 2.5, D: 50 });
   s.cells['0,1'].L = 120; s.cells['0,2'].k = 340; s.cells['0,1'].d = 80; s.cells['0,3'].x = 2; s.cells['0,3'].s = 3;
   const o = P.outputs(s, P.network(s));
-  eq([o['L!'], o['D_h!'], o['K_extra!'], o['exchangers!'], o['speeds!']],
+  eq([o['L!'], o['D_h!'], o['K_extra!'], o['exchangers!'], o['pumps!']],
     ["[125] * 'm", "[80] * 'mm", '[340]', '[2]', '[3]'], 'a tile can set its length, extra K and the diameter; a sink its curve and speed');
 }
 
@@ -124,7 +124,7 @@ eq(P.normalize({ cells: { '0,0': { t: 'pipe', p: 99 }, 'x': { t: 'pipe', p: 1 },
   { ...P.blank(), cells: { '0,0': { t: 'pipe', p: 3 } } }, 'odd tiles and settings are dropped');
 eq(P.normalize({ ret: true }).ret, 'same', 'a return that matches the supply, the old way of saying so');
 eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'A' } } }).rcells, { '0,0': { t: 'sink', p: 0 } }, 'a pad is on both layers');
-eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'AHU-1' } } }).cells['0,0'], { t: 'sink', p: 8, name: 'AHU-1', x: 1, s: 2 },
+eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'AHU-1' } } }).cells['0,0'], { t: 'sink', p: 8, name: 'AHU-1', x: 1, s: 1 },
   'a sink gets its curve and speed');
 
 // --- editing ------------------------------------------------------------------------------------
@@ -155,9 +155,9 @@ eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'AHU-1' } } }).cells['
   s.show.hide = ['Q'];
   assert.ok(!P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1.234], [2], [3]])] }).includes('1.23'), 'or not, when its box is unticked');
   s.show = { ...s.show, hide: [], size: true, L: true, D: true, hx: true, pump: true, numbers: false };
-  s.cells['0,5'].x = 2;
+  s.cells['0,5'].x = 2; s.cells['0,5'].s = 2;
   const all = P.draw(s, P.network(s), { inputs: [v('Q', [3, 1], [[1.234], [2], [3]]),
-    { name: 'exchangers', names: ['SWEP_B26W', 'SWEP_DB300'] }, { name: 'speeds', names: ['GRUND_A', 'GRUND_B'] }] });
+    { name: 'exchangers', names: ['SWEP_B26W', 'SWEP_DB300'] }, { name: 'pumps', names: ['GRUND_A', 'GRUND_B'] }] });
   for (const t of ['4" Sch 40', 'L 20 ft', 'D_h 4.03 in', 'hx SWEP_DB300', 'pump GRUND_B', 'hx SWEP_B26W'])
     assert.ok(all.includes(t.replace('"', '&quot;')), `the drawing can show ${t}`);
   assert.ok(!/<circle[^>]*r="10"/.test(all), 'and the segment numbers can be left off');

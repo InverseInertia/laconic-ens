@@ -220,14 +220,14 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert not [r for r in ws.results if r.kind == "error"]
     head = next(r for r in ws.results if r.plugin)
     assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "A_r", "L_r!", "D_r!", "N_fit_r!",
-                                   "K_extra_r!", "exchangers!", "speeds!", "fit_method!", "Δp_target"]
+                                   "K_extra_r!", "exchangers!", "pumps!", "fit_method!", "Δp_target"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar).pluginvar.values
     assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur"]
     assert sent[0]["unit"] == "gal/min"
 
 
-@pytest.mark.parametrize("method, first", [(1, 0.3267), (2, 0.1311), (3, 0.337)])
+@pytest.mark.parametrize("method, first", [(1, 0.3262), (2, 0.1318), (3, 0.3377)])
 def test_each_fitting_loss_method_gives_the_segments_their_K(method, first):
     """Crane (L/D * f_T for steel), Hooper 2-K and Darby 3-K on the plugin's sheet, from its own tables."""
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
@@ -496,4 +496,4 @@ def test_the_plugins_sheet_names_its_exchanger_and_pump_curves():
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
     sent = [v for r in evaluate(text).results if r.pluginvar for v in r.pluginvar.values if "names" in v]
     assert sent == [{"name": "exchangers", "names": ["SWEP_B26W", "SWEP_DB300"]},
-                    {"name": "speeds", "names": ["GRUND_43100A", "GRUND_43100B", "GRUND_43100C"]}]
+                    {"name": "pumps", "names": ["GRUND_43100A", "GRUND_43100B", "GRUND_43100C"]}]

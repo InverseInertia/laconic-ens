@@ -41,7 +41,7 @@ Lays out a fluid loop for a sheet that solves it for equal pressure drops, so yo
 
 - **Shapes**: every straight, elbow, tee and crossover in every orientation, a source (the pump) and a sink (a load: a coil, an exchanger), each facing each way. Pick one and click squares to put it down; click a tile of the same shape to turn it.
 - **Draw**: drag from square to square to lay pipe. The tiles take their shape from the pipes that meet in them: a straight, an elbow, a tee where a pipe branches off, a crossover where one runs straight across another without joining it. Drag from the source or onto a sink to connect it.
-- **Select** a tile to set its length, an extra loss coefficient K (a valve, from its datasheet) and its segment's pipe: the network's, another size from the table, or a bore of its own. A sink also takes a name, an exchanger curve number and a pump speed. **R** turns the selected tile and **Del** removes it. **Erase** removes tiles by clicking or dragging.
+- **Select** a tile to set its length, an extra loss coefficient K (a valve, from its datasheet) and its segment's pipe: the network's, another size from the table, or a bore of its own. A sink also takes a name, an exchanger curve and a pump. **R** turns the selected tile and **Del** removes it. **Erase** removes tiles by clicking or dragging.
 - **Network** settings: the length unit and the length of a square; the **Pipe size** (nominal, ⅛″ to 24″) and **Schedule** (40 or 80), or a bore of your own; the diameter unit; the **Return pipe** (below); and **Fitting losses**, the method the sheet uses (below).
 
 **Pipe sizes.** A segment's `D_h` is its pipe's inside diameter: Schedule 40 or 80 pipe of the nominal size chosen, from the wall thicknesses of ASME B36.10M. PVC Schedule 40 and 80 pipe (ASTM D1785) has the same outside diameters and walls, so the same bores. The schedule is the network's; the size is the network's unless a segment picks its own.
@@ -58,7 +58,7 @@ Lays out a fluid loop for a sheet that solves it for equal pressure drops, so yo
 | `N_fit!` | each supply segment's fittings, counted by kind: one row per segment, columns 90° elbows, tees passed straight through (runs), tees' branches. A segment counts the tee it leaves through |
 | `K_extra!` | each supply segment's extra loss coefficients, added to the fittings' as they are |
 | `A_r`, `L_r!`, `D_r!`, `N_fit_r!`, `K_extra_r!` | the same for the return's segments. `A_r`'s columns are the same sinks in the same order as `A`'s. With the return the same as the supply, these are copies of the supply's lines |
-| `exchangers!`, `speeds!` | each sink's exchanger curve number and pump speed |
+| `exchangers!`, `pumps!` | each sink's exchanger curve and pump, by number |
 | `fit_method!` | the fitting-loss method chosen: 1 Crane, 2 Hooper 2-K, 3 Darby 3-K |
 | `Δp_target` | the pressure difference the pump's controller holds (Network → Pump target Δp, in psi, kPa, Pa, bar or ft of water), which sets the loop's total flow |
 
@@ -76,9 +76,9 @@ Crane's K does not change with the flow, which suits fully turbulent flow; Hoope
 
 **What it shows.** A `!pluginvar` value with one entry per segment is drawn on the segments (`∀!`, the flow in each): on the return's when its name ends in `_r` (`∀_r!`, `Δp_r`), else on the supply's. One with an entry per sink goes beside the sinks (`Δp_spur`), and a single number in a corner. The values of the side in front are drawn, in balloons: where two would overlap (or cover a segment's number, the pump or a sink) they push each other apart, and one moved from its place keeps a leader line to it. Pipe in use is drawn solid; pipe the source does not reach is drawn hollow, and listed under **Check** as one note. The tables on the right list them all.
 
-**On the drawing** has a checkbox for each set the balloons can show: segment numbers, each segment's pipe size, length and D_h (its bore), each sink's exchanger curve and pump curve, and each of the sheet's `!pluginvar` values. They are kept in the plugin's state, so the row's picture shows the same.
+**On the drawing** has a checkbox for each set the balloons can show: segment numbers, each segment's pipe size, length and D_h (its bore), each sink's exchanger curve and pump, and each of the sheet's `!pluginvar` values. They are kept in the plugin's state, so the row's picture shows the same.
 
-**Curves by name.** A sink's exchanger curve and pump curve are numbers in the sheet (`exchangers!`, `speeds!`). The plugin's sheet names them, in order, with `!pluginvar exchangers: SWEP_B26W, SWEP_DB300` and `!pluginvar speeds: GRUND_43100A, GRUND_43100B, GRUND_43100C`, and the plugin then offers and shows them by those names. Add a curve to the sheet and its name to the list, and it can be picked. Without the lists, they are picked by number.
+**Curves by name.** A sink's exchanger curve and pump are numbers in the sheet (`exchangers!`, `pumps!`), which `SWEP` and `PUMP` turn into curves. The plugin's sheet names them, in order, with `!pluginvar exchangers: SWEP_B26W, SWEP_DB300` and `!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C` (the 43-100 F's three speed settings, each treated as a pump of its own), and the plugin then offers and shows them by those names. Add a curve to the sheet (to `SWEP` or `PUMP` and to the list), and it can be picked. Without the lists, they are picked by number.
 
 **Check.** Each side must be a tree from the one source. An open end, a dead end, a loop or a pipe running back into the source is pointed out on the drawing and listed under **Check**, and the sheet's lines are left as they were until it is fixed. Tiles not connected to the source are left out, with a note.
 
