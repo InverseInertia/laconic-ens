@@ -154,33 +154,84 @@ def fetch(name, fresh=False, asked=False):
         return _manifest(_read(src, name, "manifest.json"), name)
     with _lock:
         here = cache_dir() / name
-        if not fresh and (here / "manifest.json").is_file():
+        kept = None
+        if (here / "manifest.json").is_file():
             try:
-                return _manifest((here / "manifest.json").read_bytes(), name)
+                kept = _manifest((here / "manifest.json").read_bytes(), name)
             except PluginError:
                 pass   # a broken copy: fetch it again
+        # one installed from a folder is never fetched over: there may be no such plugin to fetch
+        if kept is not None and (not fresh or kept.get("origin") == "folder"):
+            return kept
         if not asked and not (here / "manifest.json").is_file() and not auto():
             raise NotInstalled(f"The plugin '{name}' is not installed, and automatic downloads are off. "
                                "Install it here or under Settings → Plugins")
         m = _manifest(_read(src, name, "manifest.json"), name)
-        here.parent.mkdir(parents=True, exist_ok=True)
-        tmp = Path(tempfile.mkdtemp(prefix=f".{name}-", dir=here.parent))
-        try:
-            for f in m["files"]:
-                (tmp / f).write_bytes(_read(src, name, f))
-            (tmp / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
-            if here.exists():
-                shutil.rmtree(here)
-            tmp.rename(here)
-        finally:
-            if tmp.exists():
-                shutil.rmtree(tmp, ignore_errors=True)
-        return m
+        return _keep(name, m, lambda f: _read(src, name, f))
+
+
+def _keep(name, m, read, origin=None):
+    """Keep plugin `name` (manifest `m`, each listed file's bytes from `read`) in the cache, replacing
+    any copy only once every file is in hand. `origin`: "folder" for one installed from a folder."""
+    here = cache_dir() / name
+    here.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix=f".{name}-", dir=here.parent))
+    m = {k: v for k, v in m.items() if k != "origin"}
+    if origin:
+        m["origin"] = origin
+    try:
+        for f in m["files"]:
+            data = read(f)
+            if len(data) > MAX_FILE:
+                raise PluginError(f"{f} is larger than a plugin file may be")
+            (tmp / f).write_bytes(data)
+        (tmp / "manifest.json").write_text(json.dumps(m), encoding="utf-8")
+        if here.exists():
+            shutil.rmtree(here)
+        tmp.rename(here)
+    finally:
+        if tmp.exists():
+            shutil.rmtree(tmp, ignore_errors=True)
+    return m
+
+
+def install_files(files, name=None):
+    """Install a plugin from its files, {file name: bytes} with its `manifest.json` among them (a folder
+    the user picked, or `install_folder`). Its name is the manifest's `name`, else `name` (the
+    folder's). It is kept as any fetched plugin is, marked as installed from a folder, so it is
+    never fetched over. Returns its manifest. Raises PluginError."""
+    if "manifest.json" not in files:
+        raise PluginError("That folder has no manifest.json, so it is not a plugin")
+    try:
+        given = json.loads(files["manifest.json"])
+    except ValueError:
+        raise PluginError("That folder's manifest.json is not JSON") from None
+    name = given.get("name") if isinstance(given, dict) and given.get("name") else name
+    if not valid_name(name):
+        raise PluginError(f"'{name}' is not a plugin name: lower-case letters, digits, - and _, starting with a letter")
+    if isinstance(source(), Path):
+        raise PluginError(f"Plugins are read from the folder {source()}: put the plugin's folder there instead")
+    m = _manifest(files["manifest.json"], name)
+    missing = [f for f in m["files"] if f not in files]
+    if missing:
+        raise PluginError(f"The plugin '{name}' lists {', '.join(missing)}, which the folder does not have")
+    with _lock:
+        return _keep(name, m, lambda f: files[f], origin="folder")
+
+
+def install_folder(path):
+    """Install the plugin in folder `path` (`lens --install-plugin DIR`). Returns its manifest."""
+    path = Path(path)
+    if not (path / "manifest.json").is_file():
+        raise PluginError(f"{path} has no manifest.json, so it is not a plugin folder")
+    files = {f.name: f.read_bytes() for f in path.iterdir() if f.is_file() and _FILE.match(f.name)}
+    files["manifest.json"] = (path / "manifest.json").read_bytes()
+    return install_files(files, name=path.name)
 
 
 def _summary(m, name):
     return {"name": name, "title": m.get("title", name), "version": str(m.get("version", "")),
-            "description": m.get("description", "")}
+            "description": m.get("description", ""), "origin": m.get("origin", "")}
 
 
 def installed():

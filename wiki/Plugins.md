@@ -21,7 +21,9 @@ The block's row in the results shows the plugin's picture, with **Open** (the pl
 
 A plugin is fetched the first time a sheet with its `!plugin` line is opened in the page, and kept in the `plugins` folder beside the settings file. Nothing is fetched when a sheet is calculated, exported or run from the command line. **Reload** fetches it again. Plugins live in the [`plugins/`](https://github.com/InverseInertia/laconic-ens/tree/main/plugins) folder of the LENS repository, which lists them in `index.json`.
 
-**Settings → Plugins** lists the plugins installed on this machine (with **Update** and **Remove**) and the others the repository offers (with **Install**), and installs one by name. Turn off **Download a plugin when a sheet asks for it** and a sheet never downloads anything: a block whose plugin is not installed says so and offers **Install**, which downloads it because you asked.
+**Settings → Plugins** lists the plugins installed on this machine (with **Update** and **Remove**) and the others the repository offers (with **Install**), and installs one by name.
+
+**Install from a folder…** (in the same place) installs a plugin you have on this computer: pick its folder, the one holding its `manifest.json`. Use it for a plugin that is not on GitHub's `main` yet, such as one on a branch you are running or one you are writing. `lens --install-plugin DIR` does the same from the command line. A plugin installed this way is never fetched over: **Reload** and **Update** leave it as it is, and installing it from its folder again replaces it. Turn off **Download a plugin when a sheet asks for it** and a sheet never downloads anything: a block whose plugin is not installed says so and offers **Install**, which downloads it because you asked.
 
 A plugin runs in a sandbox: it cannot reach LENS, your files, other sites or the rest of the sheet. All it can do is write its own block's lines (checked by LENS before they go in), send the picture its row shows, and read the `!pluginvar` values.
 

@@ -119,3 +119,27 @@ def test_with_downloads_off_a_block_offers_install_and_settings_lists_and_remove
         page.wait_for_timeout(100)
     else:
         raise AssertionError("turning automatic downloads on did not reach the server")
+
+
+def test_a_plugin_not_on_github_is_installed_from_its_folder(page, tmp_path, monkeypatch):
+    """A branch's plugin that GitHub's main does not have yet: Install from a folder takes it from disk."""
+    from laconic import plugins
+
+    def nothing(url, timeout=None):
+        raise OSError("HTTP Error 404: Not Found")
+    monkeypatch.setenv("LENS_PLUGIN_SOURCE", "https://example.org/plugins")
+    monkeypatch.setattr(plugins, "cache_dir", lambda: tmp_path / "kept")
+    monkeypatch.setattr(plugins, "fetcher", nothing)
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    show(page, SHEET)
+    page.wait_for_function("document.querySelector('.plugin-status.err')?.textContent.includes(\"no plugin 'pipenet'\")")
+    page.click("#settingsBtn")
+    page.wait_for_selector("#pluginSettings :text('No plugins installed.')")
+    with page.expect_file_chooser() as fc:
+        page.click("#pluginSettings button:has-text('Install from a folder')")
+    fc.value.set_files(str(plugins.CHECKOUT / "pipenet"))
+    page.wait_for_selector("#pluginSettings .plugin-item:has-text('from a folder') button:has-text('Remove')")
+    assert page.locator("#pluginSettings .plugin-item button:has-text('Update')").count() == 0
+    page.click("#settingsDlg .close")
+    page.wait_for_function("document.querySelector('.plugin-status').textContent.startsWith('Pipe network')")
