@@ -5,6 +5,9 @@
 # This is the plugin's own sheet. The plugin warns when a line of it is changed or missing; open the
 # original again from the plugin (Check → Open the original sheet) or from the examples.
 
+# The fluid, pipe, exchanger and pump data down to Pipe Network still run, but their results are hidden
+# (!hide ... !show). Delete the !hide line to see them.
+!hide
 ## Physical properties of loop fluid
 
 T_water = 90'degF
@@ -90,6 +93,7 @@ GRUND_43100C(∀`) = idx(G_43100C * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) *
 
 GRUND_43100(∀`, curve) = idx([GRUND_43100C(∀`), GRUND_43100C(∀`), GRUND_43100C(∀`)], curve)
 
+!show
 ## Pipe Network
 # Open the plugin under this block to lay the loop out on a grid: one source (the pump), a sink for each
 # load, and the supply and return pipes between them. It writes the lines below, one entry per segment
