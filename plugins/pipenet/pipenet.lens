@@ -1,7 +1,9 @@
 ## Pipe network
-# A hydronic loop with eight loads, solved for the flows that give every path from the pump to a load the same
-# pressure drop. The `!plugin pipenet` block below lays the loop out: open it to change the pipes, and the sheet
-# follows. The solver re-runs on its own (autorun) when the network changes.
+# A hydronic loop solved for the flows that give every path from the pump to a load the same pressure drop.
+# The `!plugin pipenet` block below lays the loop out: open it (Open, under its row) to change the pipes,
+# and the sheet follows. The solver re-runs on its own (autorun) when the network changes.
+# This is the plugin's own sheet. The plugin warns when a line of it is changed or missing; open the
+# original again from the plugin (Check → Open the original sheet) or from the examples.
 
 ## Physical properties of loop fluid
 
@@ -14,7 +16,6 @@ Re(D_h, V@) = (ρ * V@ * D_h) / μ
 ## Pipe Properties
 
 ε_PVC = 0.002 'mm
-f_T(d_h) = (log10(ε_PVC / (3.7 * d_h)))^-2 * 0.25
 
 ## Major Losses via Niazkhar formulation for the Darcy Friction Factor.
 # The best closed form approximation for the Moody Chart currently known.
@@ -94,39 +95,70 @@ GRUND_43100(∀`, curve) = idx([GRUND_43100C(∀`), GRUND_43100C(∀`), GRUND_43
 # load, and the pipes between them. It writes the lines below, one entry per segment (the pipe between
 # two junctions: the spurs to the sinks first, then the rest from the source outwards) or per sink:
 #   A            the upstream matrix: one row per segment, one column per sink (spur), 1 where the segment carries that spur's water
-#   L!, D_h!     each segment's length (doubled for the return) and diameter
-#   K_fT!        each segment's fittings as equivalent lengths, so that ΣK = K_fT * f_T
+#   L!, D_h!     each segment's length and diameter
+#   N_fit!       each segment's fittings, one column per kind: 90° elbows, tees passed straight through (runs), tees' branches
+#   K_extra!     each segment's extra loss coefficients (valves and the like, from their datasheets)
 #   exchangers!  the exchanger curve each spur ends at; speeds! the speed of its circulator
+#   fit_method!  how fittings become loss coefficients: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K
+# With the return pipe matching the supply (the plugin's default), lengths, fittings and extra K are doubled.
 !plugin pipenet
   A = [1, 0, 0, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 0, 0; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 0, 0, 0, 1; 1, 1, 1, 1, 1, 1, 1, 1; 1, 1, 1, 1, 1, 1, 1, 0; 1, 1, 1, 1, 1, 1, 0, 0; 1, 1, 1, 1, 1, 0, 0, 0; 1, 1, 1, 1, 0, 0, 0, 0; 1, 1, 1, 0, 0, 0, 0, 0; 0, 1, 1, 0, 0, 0, 0, 0]
   L! = [60; 80; 40; 80; 100; 80; 100; 80; 40; 60; 60; 60; 60; 60; 20] * 'ft
   D_h! = [4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4; 4] * 'in
-  K_fT! = [40; 100; 120; 180; 180; 180; 180; 180; 0; 40; 40; 40; 40; 40; 120]
+  N_fit! = [0, 2, 0; 2, 2, 0; 0, 0, 2; 2, 0, 2; 2, 0, 2; 2, 0, 2; 2, 0, 2; 2, 0, 2; 0, 0, 0; 0, 2, 0; 0, 2, 0; 0, 2, 0; 0, 2, 0; 0, 2, 0; 0, 0, 2]
+  K_extra! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
   exchangers! = [1; 1; 1; 1; 1; 1; 1; 1]
   speeds! = [2; 2; 2; 2; 2; 2; 2; 2]
-  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"ret":true,"labels":"values","cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10},"2,19":{"t":"pipe","p":10},"2,20":{"t":"sink","p":8,"x":1,"s":2},"1,2":{"t":"pipe","p":5},"0,2":{"t":"pipe","p":6},"0,3":{"t":"pipe","p":10},"0,4":{"t":"sink","p":8,"x":1,"s":2},"3,5":{"t":"pipe","p":5},"4,5":{"t":"pipe","p":5},"5,5":{"t":"pipe","p":3},"5,6":{"t":"pipe","p":10},"5,7":{"t":"sink","p":8,"x":1,"s":2},"1,8":{"t":"pipe","p":5},"0,8":{"t":"pipe","p":6},"0,9":{"t":"pipe","p":10},"0,10":{"t":"sink","p":8,"x":1,"s":2},"3,11":{"t":"pipe","p":5},"4,11":{"t":"pipe","p":5},"5,11":{"t":"pipe","p":3},"5,12":{"t":"pipe","p":10},"5,13":{"t":"sink","p":8,"x":1,"s":2},"1,14":{"t":"pipe","p":5},"0,14":{"t":"pipe","p":6},"0,15":{"t":"pipe","p":10},"0,16":{"t":"sink","p":8,"x":1,"s":2},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5},"5,17":{"t":"pipe","p":3},"5,18":{"t":"pipe","p":10},"5,19":{"t":"sink","p":8,"x":1,"s":2},"3,18":{"t":"pipe","p":10},"3,19":{"t":"sink","p":8,"x":1,"s":2}}}
+  fit_method! = 1
+  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"ret":true,"method":1,"labels":"values","cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10},"2,19":{"t":"pipe","p":10},"2,20":{"t":"sink","p":8,"x":1,"s":2},"1,2":{"t":"pipe","p":5},"0,2":{"t":"pipe","p":6},"0,3":{"t":"pipe","p":10},"0,4":{"t":"sink","p":8,"x":1,"s":2},"3,5":{"t":"pipe","p":5},"4,5":{"t":"pipe","p":5},"5,5":{"t":"pipe","p":3},"5,6":{"t":"pipe","p":10},"5,7":{"t":"sink","p":8,"x":1,"s":2},"1,8":{"t":"pipe","p":5},"0,8":{"t":"pipe","p":6},"0,9":{"t":"pipe","p":10},"0,10":{"t":"sink","p":8,"x":1,"s":2},"3,11":{"t":"pipe","p":5},"4,11":{"t":"pipe","p":5},"5,11":{"t":"pipe","p":3},"5,12":{"t":"pipe","p":10},"5,13":{"t":"sink","p":8,"x":1,"s":2},"1,14":{"t":"pipe","p":5},"0,14":{"t":"pipe","p":6},"0,15":{"t":"pipe","p":10},"0,16":{"t":"sink","p":8,"x":1,"s":2},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5},"5,17":{"t":"pipe","p":3},"5,18":{"t":"pipe","p":10},"5,19":{"t":"sink","p":8,"x":1,"s":2},"3,18":{"t":"pipe","p":10},"3,19":{"t":"sink","p":8,"x":1,"s":2}}}
+
+## Fitting Losses
+# Each method's coefficients, one row per kind of fitting in N_fit!'s order: 90° elbow, tee run, tee branch.
+# The values are for standard threaded fittings (r/D = 1); edit them to suit yours. Choose the method in the
+# plugin (Network → Fitting losses), which writes fit_method! above.
+
+# Crane TP-410: K = (L/D) * f_T. Column: L/D. f_T is the fully turbulent friction factor of clean commercial
+# steel, the pipe Crane's L/D values were measured in, whatever the pipe here is made of.
+FIT_Crane = [30; 20; 60]
+ε_Crane = 0.046 'mm
+f_T(d_h) = (log10(ε_Crane / (3.7 * d_h)))^-2 * 0.25
+
+# Hooper 2-K: K = K_1 / Re + K_∞ * (1 + 1 / D), with D in inches. Columns: K_1, K_∞.
+FIT_Hooper = [800, 0.40; 200, 0.10; 500, 0.70]
+hooper_D(d) = 1 + 'in / d
+
+# Darby 3-K: K = K_1 / Re + K_i * (1 + K_d / D^0.3), with D in inches. Columns: K_1, K_i, K_d.
+FIT_Darby = [800, 0.14, 4; 200, 0.091, 4; 500, 0.274, 4]
+darby_D(d) = (d / 'in)^-0.3
+
+# Each segment's ΣK for the flows ∀` in the segments, by the method chosen, plus the extra K.
+w_fit = row(identity(3), fit_method!)
+K_Crane = (N_fit! * FIT_Crane) .* .f_T(D_h!)
+K_Hooper(Re_s) = (N_fit! * col(FIT_Hooper, 1)) ./ Re_s + (N_fit! * col(FIT_Hooper, 2)) .* .hooper_D(D_h!)
+K_Darby(Re_s) = (N_fit! * col(FIT_Darby, 1)) ./ Re_s + (N_fit! * col(FIT_Darby, 2)) + (N_fit! * (col(FIT_Darby, 2) .* col(FIT_Darby, 3))) .* .darby_D(D_h!)
+Re_seg(∀`) = .Re(D_h!, .V@(D_h!, ∀`))
+ΣK(∀`) = idx(w_fit, 1) * K_Crane + idx(w_fit, 2) * K_Hooper(Re_seg(∀`)) + idx(w_fit, 3) * K_Darby(Re_seg(∀`)) + K_extra!
 
 ## Pressure Drop Solver
 # init vector
 ∀_des! = ones(cols(A), 1) * (121 / (cols(A))) * ('gal / 'min)
-# fitting losses from the fittings the plugin counted
-ΣK! = K_fT! .* .f_T(D_h!)
 # Target pressure drop pump parameter. The pump operates off of pressure sensor data so that it will automatically ramp down the flow rate when individual spurs are shut off during maintenance. Functionally tweaks the total flow rate of the pipe tree.
 Δp_target = 0.1 'psi
 
 # root solver finds where all pressure drops across all paths are equal. A * ∀_des! produces a vector of flow rates in all pipe segments, and transpose(A) * .ΔP_DW produces a vector of pressure drops across all paths from source to spur.
-residual(∀_des!) = transpose(A) * .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK!) + .SWEP(∀_des!, exchangers!) - .GRUND_43100(∀_des!, speeds!) - Δp_target
+residual(∀_des!) = transpose(A) * .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK(A * ∀_des!)) + .SWEP(∀_des!, exchangers!) - .GRUND_43100(∀_des!, speeds!) - Δp_target
 !root ∀_des!
   equation: residual(∀_des!)
   autorun: on
-  #@ result {"hash":"b35ca56943b3","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.001959772842570522],[0.0019556844801579282],[0.001956632449426695],[0.0019708052793417025],[0.001990497610173212],[0.0020212048564360176],[0.0020624968605561208],[0.002117952686021923]],"unit":"meter ** 3 / second"}],"nfev":27,"message":"The solution converged.","resid":5.98e-07}
+  #@ result {"hash":"ce66319091be","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0019468051266345405],[0.0019412582937848113],[0.0019421452345696692],[0.0019583595276295557],[0.0019796521788427593],[0.002012829726930822],[0.0020576334232037525],[0.0021177775396448557]],"unit":"meter ** 3 / second"}],"nfev":25,"message":"The solution converged.","resid":0.00019}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min
-Δp_paths = .ΔP_DW(ε_PVC, D_h!, ∀!, L!, ΣK!) -> 'psi
-Δp_spur = transpose(A) * .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK!) -> 'psi
+ΣK_seg = ΣK(∀!)
+Δp_paths = .ΔP_DW(ε_PVC, D_h!, ∀!, L!, ΣK_seg) -> 'psi
+Δp_spur = transpose(A) * Δp_paths -> 'psi
 Δp_hx = .SWEP(∀_des!, exchangers!) -> 'psi
 Δp_circ = .GRUND_43100(∀_des!, speeds!) -> 'psi
 Δp_residual = residual(∀_des!)
-# Back to the drawing: flow and pressure drop in each segment, and the pressure drop to each spur
-!pluginvar ∀!, Δp_paths, Δp_spur
+# Back to the drawing: flow, loss coefficient and pressure drop in each segment, and the pressure drop to each spur
+!pluginvar ∀!, ΣK_seg, Δp_paths, Δp_spur

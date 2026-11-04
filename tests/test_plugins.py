@@ -209,19 +209,55 @@ def test_only_the_listed_files_are_served(cfg, monkeypatch):
 def test_the_pipenet_plugin_in_this_checkout_is_a_valid_plugin(monkeypatch):
     monkeypatch.setenv("LENS_PLUGIN_SOURCE", str(plugins.CHECKOUT))
     m = plugins.fetch("pipenet")
-    assert m["entry"] == "index.html" and set(m["files"]) == {"index.html", "pipenet.js", "app.js"}
+    assert m["entry"] == "index.html" and set(m["files"]) == {"index.html", "pipenet.js", "app.js", "pipenet.lens"}
 
 
-def test_the_pipenet_example_sheet_reads_and_is_solved():
-    from pathlib import Path
-    text = (Path(plugins.__file__).parent / "examples" / "pipenet.lens").read_text(encoding="utf-8")
+def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
+    m = json.loads((plugins.CHECKOUT / "pipenet" / "manifest.json").read_text(encoding="utf-8"))
+    assert m["template"] == "pipenet.lens" and "pipenet.lens" in m["files"]
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
     ws = evaluate(text)
     assert not [r for r in ws.results if r.kind == "error"]
     head = next(r for r in ws.results if r.plugin)
-    assert head.plugin.outputs == ["A", "L!", "D_h!", "K_fT!", "exchangers!", "speeds!"]
+    assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "exchangers!", "speeds!", "fit_method!"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar).pluginvar.values
-    assert [v["name"] for v in sent] == ["∀!", "Δp_paths", "Δp_spur"] and sent[0]["unit"] == "gal/min"
+    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "Δp_spur"] and sent[0]["unit"] == "gal/min"
+
+
+@pytest.mark.parametrize("method, first", [(1, 0.6533), (2, 0.2624), (3, 0.6748)])
+def test_each_fitting_loss_method_gives_the_segments_their_K(method, first):
+    """Crane (L/D * f_T for steel), Hooper 2-K and Darby 3-K on the plugin's sheet, from its own tables."""
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    text = text.replace("  fit_method! = 1\n", f"  fit_method! = {method}\n")
+    ws = evaluate(text)
+    import re
+    k = next(r for r in ws.results if r.text.startswith("ΣK_seg"))
+    assert k.kind == "assign" and float(re.search(r"\[\[([\d.]+)\]", k.text).group(1)) == pytest.approx(first, rel=2e-3)
+
+
+def test_a_sheet_is_compared_with_the_plugins_own():
+    original = "!plugin demo\n  A = 1\nT = 90'degF\nf(x) = 2*x\n!root y\n  equation: y = 2\n  #@ result {}\n!pluginvar y\n# a note\n"
+    assert plugins.differences(original, original) == {"missing": [], "changed": []}
+    same = "!plugin demo\n  A = 99\n  #@ state {}\n# other words\nT   =  90 'degF\nf(x) = 2 * x\n!root y\n  equation: y = 2\n!pluginvar y\nz = 5\n"
+    assert plugins.differences(same, original) == {"missing": [], "changed": []}   # spacing, comments, results, additions
+    edited = "T = 80'degF\n!root y\n  equation: y = 3\n"
+    assert plugins.differences(edited, original) == {"missing": ["f", "!pluginvar y"], "changed": ["T", "!root y"]}
+
+
+def test_a_plugins_sheet_is_offered_with_the_examples_and_checked(cfg, monkeypatch):
+    from fastapi.testclient import TestClient
+    from laconic.server import app
+    monkeypatch.setenv("LENS_PLUGIN_SOURCE", str(plugins.CHECKOUT))
+    c = TestClient(app)
+    assert {"name": "pipenet", "title": "Pipe network", "plugin": "pipenet"} in c.get("/api/examples").json()
+    assert c.get("/api/plugins/pipenet").json()["template"] is True
+    text = c.get("/api/plugins/pipenet/template").text
+    assert text.startswith("## Pipe network\n")
+    assert c.post("/api/plugins/pipenet/check", json={"text": text}).json() == {"ok": True, "missing": [], "changed": []}
+    r = c.post("/api/plugins/pipenet/check", json={"text": text.replace("FIT_Darby = [800,", "FIT_Darby = [900,")}).json()
+    assert r["changed"] == ["FIT_Darby"]
+    assert c.get("/api/plugins/nope/template").status_code == 404
 
 
 # ---- the endpoints -------------------------------------------------------------------------
@@ -237,7 +273,7 @@ def client(cfg, monkeypatch):
 
 def test_the_manifest_endpoint(client):
     assert client.get("/api/plugins/demo").json() == {"ok": True, "name": "demo", "title": "Demo", "version": "1.0",
-                                                     "url": "/plugins/demo/index.html"}
+                                                     "url": "/plugins/demo/index.html", "template": False}
     r = client.get("/api/plugins/nope").json()
     assert r["ok"] is False and "no plugin 'nope'" in r["error"]
 
@@ -295,7 +331,7 @@ def test_with_automatic_downloads_off_a_sheet_fetches_nothing_but_installing_doe
 
 def test_the_installed_and_available_plugins_and_removing_one(remote):
     assert plugins.installed() == []
-    assert plugins.available() == [{"name": "demo", "title": "Demo", "version": "1.0", "description": "A demo", "origin": ""}]
+    assert plugins.available() == [{"name": "demo", "title": "Demo", "version": "1.0", "description": "A demo", "origin": "", "template": False}]
     plugins.fetch("demo")
     assert [p["name"] for p in plugins.installed()] == ["demo"]
     plugins.remove("demo")

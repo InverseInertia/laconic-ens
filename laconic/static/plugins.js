@@ -16,6 +16,10 @@
                      {type: "lens:write", state, outputs: {name: "expression"}}
                                                write these into its block (/api/pluginwrite)
                      {type: "lens:preview", svg}  the picture for its row, shown as an image
+                     {type: "lens:open-template"}  open the sheet the plugin ships, in place of this
+                                               one (the page asks the user first)
+     page -> plugin  {type: "lens:check", missing, changed}  for a plugin that ships a sheet, after
+                     each run: what of that sheet this one lacks or has changed (plugins.differences)
 
    Pure functions, also run under Node (tests/test_plugins.js):
      blocks(rows)   the plugin blocks among the eval rows: [{key, line, name, state, outputs}]; `key`
@@ -30,7 +34,7 @@
    to /api/pluginupload); install(name), installFolder(files) and remove(name) do the work.
      folderFiles(list)  a picked folder's name and its own files, by file name (pure)
 
-   The page is the host: Plugins.init({text, edit, say, dialog, frames, title, auto}) where
+   The page is the host: Plugins.init({text, edit, say, dialog, frames, title, auto, openSheet}) where
    `edit(text, edits)` makes server edits against `text` (false when the sheet has changed since). */
 (function (root) {
   'use strict';
@@ -65,6 +69,7 @@
   function check(msg) {
     if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return null;
     if (msg.type === 'lens:ready') return { type: 'lens:ready' };
+    if (msg.type === 'lens:open-template') return { type: 'lens:open-template' };
     if (msg.type === 'lens:preview') {
       const svg = msg.svg;
       if (typeof svg !== 'string' || svg.length > MAX_SVG || !/^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/.test(svg)) return null;
@@ -173,7 +178,27 @@
       if (startedAt > e.wroteAt) update.state = b.state;   // older rows than its last write: keep its own
       e.last = update;
       send(e);
+      checkSheet(e);
     }
+  }
+
+  // A plugin that ships its own sheet is told after each run which of that sheet's lines this one has
+  // changed or lost (/api/plugins/{name}/check), so it can warn of a line deleted by accident.
+  async function checkSheet(e) {
+    if (!e.manifest || !e.manifest.template || !e.ready) return;
+    const text = host.text(), mine = (e.checking = (e.checking || 0) + 1);
+    let res;
+    try { res = await Api.json(`/api/plugins/${encodeURIComponent(e.name)}/check`, { text }); } catch { return; }
+    if (mine !== e.checking || !res.ok || !e.frame || !e.frame.contentWindow) return;
+    e.frame.contentWindow.postMessage({ type: 'lens:check', missing: res.missing, changed: res.changed }, '*');
+  }
+
+  // Open a plugin's own sheet in place of this one, as an example opens (the page asks first).
+  async function openTemplate(name) {
+    let text;
+    try { text = await Api.text(`/api/plugins/${encodeURIComponent(name)}/template`); }
+    catch (err) { host.say(err.message); return; }
+    host.openSheet(text, name);
   }
 
   async function write(e, msg) {
@@ -195,7 +220,8 @@
     if (!e) return;
     const msg = check(ev.data);
     if (!msg) return;
-    if (msg.type === 'lens:ready') { e.ready = true; send(e); paint(e); }
+    if (msg.type === 'lens:ready') { e.ready = true; send(e); paint(e); checkSheet(e); }
+    else if (msg.type === 'lens:open-template') openTemplate(e.name);
     else if (msg.type === 'lens:preview') { e.preview = imageUrl(msg.svg); paint(e); }
     else if (msg.type === 'lens:write') write(e, msg);
   }
@@ -303,7 +329,8 @@
     if (mine.folder) list.append(el('p', 'note', `Plugins are read from the folder ${mine.folder}, as they are there: nothing is downloaded, kept or removed.`));
     if (!mine.installed.length) list.append(el('p', 'note', 'No plugins installed.'));
     for (const p of mine.installed)
-      list.append(item(p, mine.folder ? [] : [...(p.origin === 'folder' ? [] : [btn('Update', () => install(p.name))]), btn('Remove', () => remove(p.name))]));
+      list.append(item(p, [...(p.template ? [btn('Open its sheet', () => openTemplate(p.name))] : []),
+        ...(mine.folder ? [] : [...(p.origin === 'folder' ? [] : [btn('Update', () => install(p.name))]), btn('Remove', () => remove(p.name))])]));
     const by = el('div', 'set-acts');
     const name = el('input'); name.placeholder = 'plugin name'; name.setAttribute('aria-label', 'Plugin name to install');
     const go = btn('Install', () => install(name.value.trim()));
@@ -366,7 +393,7 @@
     for (const box of document.querySelectorAll(`.plugin-box[data-key="${CSS.escape(e.key)}"]`)) fill(box, e, null);
   }
 
-  const api = { THEME, blocks, inputs, check, imageUrl, folderFiles, init, after, build, open, reload, retheme, install, installFolder, remove, settings,
+  const api = { THEME, blocks, inputs, check, imageUrl, folderFiles, init, after, build, open, reload, retheme, install, installFolder, remove, settings, openTemplate,
     get current() { return current; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plugins = api;

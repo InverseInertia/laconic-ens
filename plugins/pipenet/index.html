@@ -55,6 +55,10 @@
   .msgs li { padding: 3px 0; cursor: pointer; }
   .msgs li.err { color: var(--err); }
   .msgs li.warn { color: var(--text-soft); }
+  #drift { margin: 8px 0 0; padding: 6px 8px; border: 1px solid var(--err); color: var(--text); font-size: 12px; }
+  #drift strong { color: var(--err); font-weight: 600; }
+  #drift code { font: 400 12px var(--mono); }
+  #drift button { margin-top: 6px; }
   #segments, #sinks { overflow-x: auto; }
   table { border-collapse: collapse; width: 100%; font-size: 12px; }
   th { color: var(--text-soft); font-weight: 500; }
@@ -99,6 +103,8 @@
   <label class="f">Diameter unit <select id="unitD"><option>in</option><option>mm</option><option>ft</option><option>m</option></select></label>
   <label class="f">Diameter <input id="dia" type="number" min="0" step="any"></label>
   <label class="c"><input id="ret" type="checkbox"> Return pipe matches the supply (doubles length and fittings)</label>
+  <label class="f">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
+    <option value="1">Crane</option><option value="2">Hooper 2-K</option><option value="3">Darby 3-K</option></select></label>
   <label class="f">On the drawing <select id="labels"><option value="values">Values</option><option value="numbers">Numbers</option><option value="none">Nothing</option></select></label>
 </aside>
 <main>
@@ -112,6 +118,7 @@
   <div id="inspector"><p class="hint">Click a tile with Select (or click without dragging while drawing).</p></div>
   <h3>Check</h3>
   <ul class="msgs" id="msgs"></ul>
+  <div id="drift" hidden></div>
   <h3>Segments</h3>
   <div id="segments"></div>
   <h3>Sinks</h3>

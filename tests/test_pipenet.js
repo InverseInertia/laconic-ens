@@ -34,8 +34,10 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   const a = P.analyze(s);
   eq(a.errors, [], 'a straight run from the source to a sink is a network');
   eq(a.A, [[1]], 'of one segment, the spur');
-  eq(P.outputs(s, a), { A: '[1]', 'L!': "[60] * 'ft", 'D_h!': "[4] * 'in", 'K_fT!': '[0]', 'exchangers!': '[1]', 'speeds!': '[2]' },
-    'three tiles of 10 ft, doubled for the return');
+  eq(P.outputs(s, a), { A: '[1]', 'L!': "[60] * 'ft", 'D_h!': "[4] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]',
+    'exchangers!': '[1]', 'speeds!': '[2]', 'fit_method!': '1' }, 'three tiles of 10 ft, doubled for the return');
+  s.method = 3;
+  eq(P.outputs(s, a)['fit_method!'], '3', 'the method chosen goes to the sheet');
   s.ret = false;
   eq(P.outputs(s, a)['L!'], "[30] * 'ft", 'or not');
 }
@@ -52,7 +54,7 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   eq(a.A, [[1, 0], [0, 1], [1, 1]], 'the upstream matrix: the identity, then the trunk that carries both');
   const o = P.outputs(s, a);
   eq(o['L!'], "[20; 40; 30] * 'ft", 'lengths by tile');
-  eq(o['K_fT!'], '[20; 120; 0]', 'a tee passed straight through is 20, its branch 60, an elbow 30 (two here)');
+  eq(o['N_fit!'], '[0, 1, 0; 2, 0, 1; 0, 0, 0]', 'fittings counted by kind: elbows, tee runs, tee branches (two elbows on the branch)');
 }
 
 // --- a tee entered through its stem: both ways out are branches ------------------------------------------
@@ -60,7 +62,7 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   const s = net([col(1, 0, 2), row(2, 0, 2)], '0,1', ['2,0', '2,2'], { ret: false });
   const a = P.analyze(s);
   eq(a.errors, [], 'a bullhead tee');
-  eq(P.outputs(s, a)['K_fT!'], '[60; 60; 0]', 'both ways out of a bullhead tee are branches');
+  eq(P.outputs(s, a)['N_fit!'], '[0, 0, 1; 0, 0, 1; 0, 0, 0]', 'both ways out of a bullhead tee are branches');
 }
 
 // --- a crossover lets two pipes pass without joining ----------------------------------------------------------
@@ -105,8 +107,8 @@ eq(P.analyze(net([row(0, 0, 2), col(2, 0, 2)], '0,0', [])).errors.some((e) => /D
   const s = net([row(0, 0, 3)], '0,0', ['0,3'], { ret: false, units: { L: 'm', D: 'mm' }, cell: 2.5, D: 50 });
   s.cells['0,1'].L = 120; s.cells['0,2'].k = 340; s.cells['0,1'].d = 80; s.cells['0,3'].x = 2; s.cells['0,3'].s = 3;
   const o = P.outputs(s, P.analyze(s));
-  eq([o['L!'], o['D_h!'], o['K_fT!'], o['exchangers!'], o['speeds!']],
-    ["[125] * 'm", "[80] * 'mm", '[340]', '[2]', '[3]'], 'a tile can set its length, extra fittings and the diameter; a sink its curve and speed');
+  eq([o['L!'], o['D_h!'], o['K_extra!'], o['exchangers!'], o['speeds!']],
+    ["[125] * 'm", "[80] * 'mm", '[340]', '[2]', '[3]'], 'a tile can set its length, extra K and the diameter; a sink its curve and speed');
 }
 
 // --- reading a state ----------------------------------------------------------------------------
@@ -145,4 +147,10 @@ eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'AHU-1' } } }).cells['
 }
 eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1.20e-5', '–', '0'], 'values to three figures');
 
+{
+  const s = P.blank(); s.cells = P.example();
+  const a = P.analyze(s);
+  eq([a.errors, a.sinks.length, a.order.length], [[], 8, 15], 'the example: eight sinks, fifteen segments');
+  eq(P.normalize({ method: 7 }).method, 1, 'an unknown method is Crane');
+}
 console.log(`pipenet: ${n} checks passed`);

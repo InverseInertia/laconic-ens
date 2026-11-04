@@ -31,14 +31,16 @@ A plugin runs in a sandbox: it cannot reach LENS, your files, other sites or the
 
 ## Pipe network (`!plugin pipenet`)
 
-Lays out a fluid loop for a sheet that solves it for equal pressure drops, so you can arrange the pipes without writing the network's matrices by hand. The **Pipe network** example (Open → Examples) is a hydronic loop with eight loads, solved for the flows that give every path the same pressure drop.
+Lays out a fluid loop for a sheet that solves it for equal pressure drops, so you can arrange the pipes without writing the network's matrices by hand.
+
+**Its sheet.** The plugin comes with the sheet it is made for (`pipenet.lens` in the plugin): a hydronic loop with eight loads, solved for the flows that give every path the same pressure drop. Once the plugin is installed, open it from Help → Examples ("Pipe network"), Settings → Plugins (**Open its sheet**), or the plugin's **Open the original sheet**. After each run LENS compares the sheet with it, and the plugin warns under **Check** when a line of it is changed or missing (a coefficient table edited, a definition deleted), naming each. That is fine when you meant it; otherwise open the original and copy the lines back. Lines you add, comments, and the lines the plugin writes are not compared.
 
 **Laying it out.** The grid grows as you build toward its edges.
 
 - **Shapes**: every straight, elbow, tee and crossover in every orientation, a source (the pump) and a sink (a load: a coil, an exchanger), each facing each way. Pick one and click squares to put it down; click a tile of the same shape to turn it.
 - **Draw**: drag from square to square to lay pipe. The tiles take their shape from the pipes that meet in them: a straight, an elbow, a tee where a pipe branches off, a crossover where one runs straight across another without joining it. Drag from the source or onto a sink to connect it.
-- **Select** a tile to set its length, extra fittings (as equivalent L/D, such as a valve) and its segment's diameter; a sink also takes a name, an exchanger curve number and a pump speed. **R** turns the selected tile and **Del** removes it. **Erase** removes tiles by clicking or dragging.
-- **Network** settings: the length and diameter units, the length of a square, the default diameter, and whether the return pipe matches the supply (it doubles each length and each fitting).
+- **Select** a tile to set its length, an extra loss coefficient K (a valve, from its datasheet) and its segment's diameter; a sink also takes a name, an exchanger curve number and a pump speed. **R** turns the selected tile and **Del** removes it. **Erase** removes tiles by clicking or dragging.
+- **Network** settings: the length and diameter units, the length of a square, the default diameter, whether the return pipe matches the supply (it doubles each length, fitting and extra K), and **Fitting losses**: the method the sheet uses (below).
 
 **What it writes.** The water splits only at tees, so the network is a set of **segments**, each the pipe between two junctions. A segment that ends at a sink is that sink's **spur**. Segments are numbered as the sheet's vectors are, with the spurs first in the order of their sinks, then the rest from the source outwards. The drawing shows each segment's number on its pipe.
 
@@ -47,10 +49,22 @@ Lays out a fluid loop for a sheet that solves it for equal pressure drops, so yo
 | `A` | the upstream matrix: one row per segment, one column per sink, 1 where the segment carries that sink's water. With the spurs first, its top rows are the identity |
 | `L!` | each segment's length (doubled for the return) |
 | `D_h!` | each segment's diameter |
-| `K_fT!` | each segment's fittings as equivalent lengths in diameters (Crane TP-410): 30 for each elbow, 20 for a tee passed straight through, 60 for a tee's branch, plus any extra (doubled for the return). `ΣK! = K_fT! .* .f_T(D_h!)` gives the loss coefficients |
+| `N_fit!` | each segment's fittings, counted by kind: one row per segment, columns 90° elbows, tees passed straight through (runs), tees' branches. A segment counts the tee it leaves through (doubled for the return) |
+| `K_extra!` | each segment's extra loss coefficients, added to the fittings' as they are (doubled for the return) |
 | `exchangers!`, `speeds!` | each sink's exchanger curve number and pump speed |
+| `fit_method!` | the fitting-loss method chosen: 1 Crane, 2 Hooper 2-K, 3 Darby 3-K |
 
 With these, `A * Q_spur` is the flow in every segment, and `transpose(A) * Δp_segment` the pressure drop along every path from the source to a sink.
+
+**Fitting losses.** The sheet's **Fitting Losses** section holds each method's coefficients as a table, one row per kind of fitting in `N_fit!`'s order, so you can edit them for your fittings (the values given are for standard threaded fittings, r/D = 1). `ΣK(∀`)` gives each segment's K for the flows in the segments:
+
+| Method | K for one fitting | Table |
+|---|---|---|
+| Crane TP-410 | (L/D)·f_T, with f_T the fully turbulent friction factor of clean commercial steel (ε = 0.046 mm), the pipe Crane's L/D values were measured in | `FIT_Crane`: L/D (30, 20, 60) |
+| Hooper 2-K | K₁/Re + K∞·(1 + 1/D), D in inches | `FIT_Hooper`: K₁, K∞ |
+| Darby 3-K | K₁/Re + Kᵢ·(1 + K_d/D^0.3), D in inches | `FIT_Darby`: K₁, Kᵢ, K_d |
+
+Crane's K does not change with the flow, which suits fully turbulent flow; Hooper's and Darby's grow as the Reynolds number falls, which matters in the transitional range small loops often run in.
 
 **What it shows.** A `!pluginvar` value with one entry per segment is drawn on the segments (`∀!`, the flow in each), one with an entry per sink beside the sinks (`Δp_spur`), and a single number in a corner. The tables on the right list them all. **On the drawing** chooses values, numbers only, or nothing.
 
@@ -61,16 +75,21 @@ With these, `A * Q_spur` is the flow in every segment, and `transpose(A) * Δp_s
 A plugin is a folder named for it (lower-case letters, digits, `-` and `_`) holding `manifest.json` and the files it lists:
 
 ```json
-{"name": "pipenet", "title": "Pipe network", "version": "1.0.0",
- "entry": "index.html", "files": ["index.html", "pipenet.js", "app.js"]}
+{"name": "pipenet", "title": "Pipe network", "version": "1.1.0",
+ "entry": "index.html", "files": ["index.html", "pipenet.js", "app.js", "pipenet.lens"],
+ "template": "pipenet.lens"}
 ```
 
-Add it to `plugins/index.json` (its name, title, version and description, as in the manifest; a test holds the two together) so Settings offers it. The files may be HTML, JavaScript, CSS, JSON, SVG, PNG or WOFF2, with no folders, and at most 2 MB each. The page is opened in a frame with `sandbox="allow-scripts"`, under a Content-Security-Policy that allows its own scripts and styles and no requests. To look like LENS, a plugin takes its colours from `theme` (LENS's theme variables without their `--`: `paper`, `paper-deep`, `grid`, `text`, `text-soft`, `ink`, `on-ink`, `rule`, `err`, `global`, `symbol`, `hit`, `hl`, `on-hl`, `sans`, `mono`), and its fonts from `<link rel="stylesheet" href="/static/fonts/fonts.css">`, which LENS serves to plugin frames. The pipenet plugin sets them as CSS variables of the same names, so its styles read like LENS's own. It talks to LENS with `postMessage`:
+`template`, if given, is a sheet the plugin ships (one of its files, a `.lens`): LENS offers it among the examples and in Settings, opens it when the plugin asks, and after each run tells the plugin which of its lines the sheet has changed or lost (`lens:check`).
+
+Add it to `plugins/index.json` (its name, title, version and description, as in the manifest; a test holds the two together) so Settings offers it. The files may be HTML, JavaScript, CSS, JSON, SVG, PNG, WOFF2 or `.lens`, with no folders, and at most 2 MB each. The page is opened in a frame with `sandbox="allow-scripts"`, under a Content-Security-Policy that allows its own scripts and styles and no requests. To look like LENS, a plugin takes its colours from `theme` (LENS's theme variables without their `--`: `paper`, `paper-deep`, `grid`, `text`, `text-soft`, `ink`, `on-ink`, `rule`, `err`, `global`, `symbol`, `hit`, `hl`, `on-hl`, `sans`, `mono`), and its fonts from `<link rel="stylesheet" href="/static/fonts/fonts.css">`, which LENS serves to plugin frames. The pipenet plugin sets them as CSS variables of the same names, so its styles read like LENS's own. It talks to LENS with `postMessage`:
 
 | Message | Meaning |
 |---|---|
 | plugin → `{type: "lens:ready"}` | send it the first update |
 | LENS → `{type: "lens:update", state, inputs, outputs, theme}` | after each run of the sheet. `state` is the block's state line (null when it has none), left out when the sheet has not run since the plugin's last write. `inputs` are the `!pluginvar` values, `[{name, unit, shape, mag, stale}]` (`mag` in `unit`: a number or nested rows). `outputs` are the names the block's lines define, and `theme` the page's colours and fonts |
 | LENS → `{type: "lens:theme", theme}` | the theme changed in Settings: the same `theme` as in an update, at once |
+| LENS → `{type: "lens:check", missing, changed}` | for a plugin with a `template`, after each run: what of that sheet this one lacks (`missing`) or defines differently (`changed`), each a list of names and `!` lines. Spacing, comments, stored results, lines the sheet adds and the plugin's own block are not compared |
+| plugin → `{type: "lens:open-template"}` | open the plugin's sheet in place of this one (LENS asks the user first) |
 | plugin → `{type: "lens:write", state, outputs: {name: "expression"}}` | write its state line, and a line `name = expression` for each output, in place, or added in order. Names are plain variable names; each expression is one line of LENS math |
 | plugin → `{type: "lens:preview", svg}` | the picture its row shows, as SVG text (shown as an image, so scripts in it do not run) |

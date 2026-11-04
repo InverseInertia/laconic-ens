@@ -2088,6 +2088,12 @@ Plugins.init({
   frames: $("#pluginFrames"),
   title: $("#pluginTitle"),
   auto: $("#autoPlugins"),
+  // a plugin's own sheet opens as an example does
+  openSheet: (text, name) => {
+    if (ed.value.trim() && !confirm(`Replace the current sheet with the ${name} plugin's sheet?`)) return;
+    load(text, name);
+    for (const d of document.querySelectorAll("dialog[open]")) d.close();
+  },
 });
 $("#autoPlugins").checked = store.get("autoPlugins", true) !== false;
 $("#autoPlugins").onchange = (ev) => store.set("autoPlugins", ev.target.checked);
@@ -2111,11 +2117,11 @@ Api.json("/api/examples").then((list) => {
     b.textContent = "Open"; b.setAttribute("aria-label", `Open example ${ex.title}`);
     b.onclick = async () => {
       if (ed.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
-      const text = await Api.text(`/api/examples/${ex.name}`);
+      const text = await Api.text(ex.plugin ? `/api/plugins/${ex.plugin}/template` : `/api/examples/${ex.name}`);
       load(text, ex.name);
       $("#helpDlg").close();
     };
-    li.append(b, `${ex.title} (${ex.name}.lens)`);
+    li.append(b, ex.plugin ? `${ex.title} (the ${ex.plugin} plugin's sheet)` : `${ex.title} (${ex.name}.lens)`);
     $("#exampleList").append(li);
   }
   $("#exampleBox").hidden = !list.length;
