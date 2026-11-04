@@ -29,7 +29,8 @@ def test_the_plugin_writes_its_network_into_its_block_and_shows_the_sheets_value
     page.wait_for_function("document.querySelector('#src').value.includes('#@ state')")
     text = value(page)
     assert text.startswith("!plugin pipenet\n  A = [1, 0, 0, 0, 0, 0, 0, 0; ")
-    for name in ("L! = [", "D_h! = [", "N_fit! = [", "K_extra! = [", "exchangers! = [", "speeds! = [", "fit_method! = 1"):
+    for name in ("L! = [", "D_h! = [", "N_fit! = [", "K_extra! = [", "A_r = [", "L_r! = [", "D_r! = [", "N_fit_r! = [",
+                 "K_extra_r! = [", "exchangers! = [", "speeds! = [", "fit_method! = 1"):
         assert f"\n  {name}" in text
     # the sheet runs on what it wrote, and Q comes back to the frame, one value per segment
     frame.locator("#segments th:has-text('Q gal/min')").wait_for()
@@ -57,7 +58,8 @@ def test_a_network_drawn_with_the_mouse_reaches_the_sheet(page):
         page.mouse.move(*at(2, c), steps=3)
     page.mouse.up()
     page.wait_for_function("document.querySelector('#src').value.includes('  A = [1]\\n')")
-    assert "  L! = [80] * 'ft\n" in value(page)    # four squares of 10 ft, doubled for the return
+    assert "  L! = [40] * 'ft\n" in value(page)    # four squares of 10 ft
+    assert "  L_r! = [40] * 'ft\n" in value(page)  # and the return the same
     frame.locator("#segments th:has-text('Q gal/min')").wait_for()
 
 
@@ -183,3 +185,40 @@ def test_the_plugin_warns_of_its_sheet_changed_and_opens_the_original(page):
     assert value(page) == original
     page.click(".plugin-box button:has-text('Open')")
     frame.locator("#drift").wait_for(state="hidden")
+
+
+def test_the_return_is_laid_out_on_a_side_of_its_own(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes('#@ state')")
+    assert frame.locator("#sides").is_hidden()                  # one layout, the return the same
+    frame.locator("#ret").select_option("separate")
+    frame.locator("#sides").wait_for(state="visible")
+    assert frame.locator("button[data-layer=r]").get_attribute("aria-pressed") == "true"   # the return in front
+    assert frame.locator("#canvas g[opacity='0.3']").count() == 1                       # the supply faded behind
+    # lengthen one return tile: only the return's lengths change
+    before = value(page)
+    supply = next(l for l in before.split("\n") if l.startswith("  L! = "))
+    old_r = next(l for l in before.split("\n") if l.startswith("  L_r! = "))
+    frame.locator("#rsegments tbody tr").nth(9).click()             # R10: the first trunk segment of the return
+    field = frame.locator("#inspector input").first
+    field.fill("80")
+    field.press("Enter")
+    page.wait_for_function(f"!document.querySelector('#src').value.includes({old_r!r})")
+    after = value(page)
+    assert next(l for l in after.split("\n") if l.startswith("  L! = ")) == supply
+    assert next(l for l in after.split("\n") if l.startswith("  L_r! = ")).startswith("  L_r! = [30; 40; 20; 40; 50; 40; 50; 40; 20; 100;")
+    assert '"ret":"separate"' in after
+    frame.locator("#retHead").wait_for(state="visible")             # the return's segments, in a table of their own
+
+
+def test_a_pipe_size_is_picked_from_the_schedule(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes(\"D_h! = [4.026;\")")
+    frame.locator("#sch").select_option("80")
+    page.wait_for_function("document.querySelector('#src').value.includes(\"D_h! = [3.826;\")")
+    frame.locator("#size").select_option("6")
+    page.wait_for_function("document.querySelector('#src').value.includes(\"D_h! = [5.761;\")")

@@ -16,6 +16,7 @@
     --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; }
   html { scrollbar-color: var(--rule) var(--paper-deep); }
   body { background: var(--paper); color: var(--text); font: 400 13px/1.4 var(--sans); display: grid;
@@ -38,6 +39,8 @@
   :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   kbd { font: 400 12px var(--mono); border: 1px solid var(--ink); padding: 0 4px; }
   .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  body[data-layer="r"] #canvas { cursor: cell; }
+  .layers button[data-layer="r"][aria-pressed="true"] { background: var(--symbol); border-color: var(--symbol); color: var(--paper); }
   .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .palette button { padding: 2px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
   .palette button svg { width: 100%; height: 100%; }
@@ -81,6 +84,14 @@
     <button data-tool="select" title="Click a tile to see and change it">Select</button>
     <button data-tool="erase" title="Click or drag to take tiles away">Erase</button>
   </div>
+  <div id="sides" hidden>
+    <h3>Side</h3>
+    <div class="tools layers">
+      <button data-layer="s" title="Lay out the supply (F switches)">Supply</button>
+      <button data-layer="r" title="Lay out the return (F switches)">Return</button>
+    </div>
+    <p class="hint">The other side is drawn faded behind. The source and the sinks are on both.</p>
+  </div>
   <h3>Shapes</h3>
   <div class="palette" id="palette"></div>
   <p class="hint">Pick a shape and click squares to put it down; click a tile of the same shape to turn it. <kbd>R</kbd> turns the selected tile, <kbd>Del</kbd> removes it.</p>
@@ -100,9 +111,12 @@
   <h3>Network</h3>
   <label class="f">Length unit <select id="unitL"><option>ft</option><option>m</option><option>in</option><option>mm</option></select></label>
   <label class="f">Square length <input id="cell" type="number" min="0" step="any"></label>
+  <label class="f">Pipe size <select id="size" title="Nominal pipe size: each segment's D_h is its inside diameter in the schedule below. A segment can take another size (Select a tile)"></select></label>
+  <label class="f">Schedule <select id="sch"><option value="40">Sch 40</option><option value="80">Sch 80</option></select></label>
+  <label class="f" id="diaRow">Bore <input id="dia" type="number" min="0" step="any"></label>
   <label class="f">Diameter unit <select id="unitD"><option>in</option><option>mm</option><option>ft</option><option>m</option></select></label>
-  <label class="f">Diameter <input id="dia" type="number" min="0" step="any"></label>
-  <label class="c"><input id="ret" type="checkbox"> Return pipe matches the supply (doubles length and fittings)</label>
+  <label class="f">Return pipe <select id="ret" title="The same as the supply: the return runs beside the supply and matches it. Laid out on its own: draw it on the Return side">
+    <option value="same">Same as supply</option><option value="separate">Laid out on its own</option></select></label>
   <label class="f">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
     <option value="1">Crane</option><option value="2">Hooper 2-K</option><option value="3">Darby 3-K</option></select></label>
   <label class="f">On the drawing <select id="labels"><option value="values">Values</option><option value="numbers">Numbers</option><option value="none">Nothing</option></select></label>
@@ -119,8 +133,10 @@
   <h3>Check</h3>
   <ul class="msgs" id="msgs"></ul>
   <div id="drift" hidden></div>
-  <h3>Segments</h3>
+  <h3 id="segHead">Segments</h3>
   <div id="segments"></div>
+  <h3 id="retHead" hidden>Return segments</h3>
+  <div id="rsegments" hidden></div>
   <h3>Sinks</h3>
   <div id="sinks"></div>
   <p class="hint" id="about"></p>

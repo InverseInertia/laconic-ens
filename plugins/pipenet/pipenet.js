@@ -12,14 +12,26 @@
  *
  * The state the plugin keeps in its block's `#@ state` line:
  *
- *   {v: 1, units: {L: "ft", D: "in"}, cell: 10, D: 4, ret: true, method: 1, labels: "values", cells: {"r,c": tile}}
+ *   {v: 1, units: {L: "ft", D: "in"}, cell: 10, D: 4, ret: "same", method: 1, labels: "values",
+ *    cells: {"r,c": tile}, rcells: {"r,c": tile}}
+ *   ret: "same", the return pipe runs beside the supply and matches it, so its lines are the supply's;
+ *        or "separate", the return is a layout of its own, `rcells`, drawn on a second layer
+ *   cells: the supply layer, rcells: the return layer. The source and the sinks are pads on both
+ *        layers, as a through-hole is on both sides of a circuit board: the same squares, but each
+ *        layer connects to them on its own side. A sink's name, curve and speed are kept on the
+ *        supply layer's pad only (syncPads keeps the pads of the two layers in the same squares)
  *   method: how the sheet works out fitting losses: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K (METHODS)
  *   labels: what the drawing shows beside the pipes: "values" (the sheet's), "numbers" or "none"
- *   tile: {t: "pipe"|"source"|"sink", p: sides, L?: length of this tile, d?: diameter,
+ *   nps, sch: the network's pipe, a nominal size (PIPE_SIZES) or null for a diameter D of its own, and
+ *        its schedule, "40" or "80"
+ *   tile: {t: "pipe"|"source"|"sink", p: sides, L?: length of this tile, nps?: its pipe size, d?: or diameter,
  *          k?: extra loss coefficient K on this tile (a valve, from its datasheet), name?,
  *          x?: exchanger curve, s?: pump speed}
  *
- * `analyze(state)` walks the tree from the source. The water splits only at tees, so the network is
+ * `analyze(layer)` walks one layer's tree from the source: the supply out from the pump's discharge
+ * to the sinks, the return out from its suction to the sinks (its water flows the other way, but a
+ * tee is still a run on the straight leg and a branch on the other, so the walk is the same).
+ * `network(state)` walks both and lines the return's sinks up with the supply's. The water splits only at tees, so the network is
  * a set of segments, each the pipe from one junction to the next: a segment that ends at a sink is
  * that sink's spur, any other ends at a tee. Segments are numbered as the sheet's vectors are: the
  * spurs first, in the order of their sinks, then the rest from the source outwards. Sinks are
@@ -28,14 +40,17 @@
  *   A      the upstream matrix: one row per segment, one column per sink, 1 where the segment carries
  *          that sink's water. With the spurs first, its top is the identity
  *   L      each segment's length: the sum of its tiles' lengths (a tile is `cell` long unless it says)
- *   D      each segment's diameter (that of its first tile, or the default)
+ *   D      each segment's inside diameter: of the pipe size its first pipe tile names (`nps`, in the
+ *          network's schedule `sch`, from PIPE_SIZES), or a diameter of its own (`d`), else the network's
  *   n      each segment's fittings, counted by kind (FITTINGS): 90° elbows, tees the flow passes
  *          straight through (runs), and tees the flow turns through (branches). A segment owns the
  *          tee it leaves through, so a tee counts once on each segment that leaves it: as a run on the
  *          one straight on, as a branch on the others. The sheet turns the counts into K with the
  *          coefficient table of the method chosen
  *   K      each segment's extra loss coefficients (`k` on its tiles), added to the fittings' as they are
- *   With `ret`, L, n and K are doubled: the return pipe runs beside the supply and matches it.
+ *   Each layer gives its own set: A, L!, D_h!, N_fit!, K_extra! for the supply, A_r, L_r!, D_r!,
+ *   N_fit_r!, K_extra_r! for the return, whose columns are the same sinks in the same order. With
+ *   `ret: "same"` the return's are copies of the supply's.
  *
  * `outputs(state, analysis)` gives the sheet lines; `draw(...)` the picture, as SVG text.
  */
@@ -55,6 +70,28 @@
   const ELBOW = 0, RUN = 1, BRANCH = 2;
   const METHODS = { 1: 'Crane TP-410: K = (L/D)·f_T', 2: 'Hooper 2-K', 3: 'Darby 3-K' };
 
+  // Schedule pipe: nominal size (NPS), and the inside diameter in inches of Schedule 40 and 80 pipe,
+  // from the wall thicknesses of ASME B36.10M. PVC Schedule 40 and 80 pipe (ASTM D1785) has the same
+  // outside diameters and walls, so the same bores. A segment's D_h is its pipe's inside diameter.
+  const SCHEDULES = ['40', '80'];
+  const PIPE_SIZES = [
+    ['1/8', 0.269, 0.215], ['1/4', 0.364, 0.302], ['3/8', 0.493, 0.423], ['1/2', 0.622, 0.546],
+    ['3/4', 0.824, 0.742], ['1', 1.049, 0.957], ['1-1/4', 1.380, 1.278], ['1-1/2', 1.610, 1.500],
+    ['2', 2.067, 1.939], ['2-1/2', 2.469, 2.323], ['3', 3.068, 2.900], ['3-1/2', 3.548, 3.364],
+    ['4', 4.026, 3.826], ['5', 5.047, 4.813], ['6', 6.065, 5.761], ['8', 7.981, 7.625],
+    ['10', 10.020, 9.562], ['12', 11.938, 11.374], ['14', 13.124, 12.500], ['16', 15.000, 14.312],
+    ['18', 16.876, 16.124], ['20', 18.812, 17.938], ['24', 22.624, 21.562],
+  ];
+  const SIZE = new Map(PIPE_SIZES.map(([n, s40, s80]) => [n, { '40': s40, '80': s80 }]));
+  const PER_INCH = { in: 1, mm: 25.4, ft: 1 / 12, m: 0.0254 };
+
+  // A pipe's inside diameter in the state's diameter unit: of its nominal size `nps` in the network's
+  // schedule, or `d` as given (a pipe the table does not have).
+  const bore = (state, nps, d) => (nps && SIZE.has(nps) ? SIZE.get(nps)[state.sch] * PER_INCH[state.units.D] : d);
+  // What a tile says of its pipe, or null: its nominal size, or a diameter of its own.
+  const tileSize = (state, t) => (t.nps ? { nps: t.nps, D: bore(state, t.nps) } : t.d ? { nps: null, D: t.d } : null);
+  const sizeName = (state, nps) => (nps ? `${nps}" Sch ${state.sch}` : 'custom');
+
   const key = (r, c) => `${r},${c}`;
   const at = (k) => k.split(',').map(Number);
   const bits = (p) => DIRS.filter((d) => p & d);
@@ -72,7 +109,7 @@
   }
 
   function blank() {
-    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, ret: true, method: 1, labels: 'values', cells: {} };
+    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, nps: '4', sch: '40', ret: 'same', method: 1, labels: 'values', cells: {}, rcells: {} };
   }
 
   // A state as given, with anything missing or odd replaced by the default, and tiles cleaned.
@@ -84,25 +121,76 @@
       v: 1,
       units: { L: ['ft', 'm', 'in', 'mm'].includes(s.units && s.units.L) ? s.units.L : b.units.L,
                D: ['in', 'mm', 'ft', 'm'].includes(s.units && s.units.D) ? s.units.D : b.units.D },
-      cell: num(s.cell, b.cell), D: num(s.D, b.D), ret: s.ret !== false,
+      cell: num(s.cell, b.cell), D: num(s.D, b.D), ret: s.ret === 'separate' ? 'separate' : 'same',
+      nps: s.nps === null ? null : SIZE.has(s.nps) ? s.nps : b.nps, sch: SCHEDULES.includes(s.sch) ? s.sch : b.sch,
       method: [1, 2, 3].includes(s.method) ? s.method : b.method,
-      labels: ['values', 'numbers', 'none'].includes(s.labels) ? s.labels : b.labels, cells: {},
+      labels: ['values', 'numbers', 'none'].includes(s.labels) ? s.labels : b.labels, cells: {}, rcells: {},
     };
-    for (const [k, t] of Object.entries(s.cells || {})) {
-      if (!/^-?\d+,-?\d+$/.test(k) || !t || !['pipe', 'source', 'sink'].includes(t.t)) continue;
-      const p = (t.p | 0) & 15;
-      const tile = { t: t.t, p };
-      if (num(t.L, 0)) tile.L = t.L;
-      if (num(t.d, 0)) tile.d = t.d;
-      if (typeof t.k === 'number' && isFinite(t.k) && t.k >= 0) tile.k = t.k;
-      if (t.t === 'sink') {
-        if (typeof t.name === 'string') tile.name = t.name.slice(0, 40);
-        tile.x = Math.max(1, Math.round(num(t.x, 1)));
-        tile.s = Math.max(1, Math.round(num(t.s, 2)));
+    const clean = (cells, into, supply) => {
+      for (const [k, t] of Object.entries(cells || {})) {
+        if (!/^-?\d+,-?\d+$/.test(k) || !t || !['pipe', 'source', 'sink'].includes(t.t)) continue;
+        const p = (t.p | 0) & 15;
+        const tile = { t: t.t, p };
+        if (num(t.L, 0)) tile.L = t.L;
+        if (typeof t.nps === 'string' && SIZE.has(t.nps)) tile.nps = t.nps;
+        else if (num(t.d, 0)) tile.d = t.d;
+        if (typeof t.k === 'number' && isFinite(t.k) && t.k >= 0) tile.k = t.k;
+        if (t.t === 'sink' && supply) {
+          if (typeof t.name === 'string') tile.name = t.name.slice(0, 40);
+          tile.x = Math.max(1, Math.round(num(t.x, 1)));
+          tile.s = Math.max(1, Math.round(num(t.s, 2)));
+        }
+        into[k] = tile;
       }
-      out.cells[k] = tile;
-    }
+    };
+    clean(s.cells, out.cells, true);
+    clean(s.rcells, out.rcells, false);
+    syncPads(out, 's');
     return out;
+  }
+
+  // One layer of a state, as the walk and the editing functions take one: the state with `cells`
+  // the layer's tiles ("s" supply, "r" return). Its cells are the state's own, so edits reach it.
+  function side(state, layer) {
+    return layer === 'r' ? { ...state, cells: state.rcells } : state;
+  }
+
+  const isPad = (t) => !!t && t.t !== 'pipe';
+
+  // Make the pads of the other layer stand where `from`'s are: one taken away there goes, one put
+  // down there appears (facing a neighbouring pipe that points at it, else connected nowhere yet),
+  // and one that is there keeps its own side. Pipes are left alone, unless a pad now stands on one.
+  function syncPads(state, from) {
+    const src = from === 'r' ? state.rcells : state.cells, dst = from === 'r' ? state.cells : state.rcells;
+    for (const [k, t] of Object.entries(dst)) if (isPad(t) && (!src[k] || src[k].t !== t.t)) delete dst[k];
+    for (const [k, t] of Object.entries(src)) {
+      if (!isPad(t) || (dst[k] && dst[k].t === t.t)) continue;
+      const d = DIRS.find((x) => { const n = dst[step(k, x)]; return n && n.p & OPP[x]; });
+      dst[k] = { t: t.t, p: d || 0 };
+      if (t.t === 'sink' && dst === state.cells) { dst[k].x = 1; dst[k].s = 2; }
+    }
+  }
+
+  // Both layers walked: {same, s, r, Ar, sinks, errors, warnings}. `s` and `r` are each layer's walk
+  // (the same one when the return matches the supply); `Ar` is the return's upstream matrix with its
+  // columns in the supply's sink order. Errors and warnings carry the layer they are on.
+  function network(state) {
+    const s = analyze(side(state, 's'));
+    const tag = (layer, word) => (m) => ({ ...m, layer, msg: word + m.msg });
+    const net = { same: state.ret !== 'separate', s, r: s, Ar: s.A, sinks: s.sinks,
+      errors: s.errors.map(tag('s', '')), warnings: s.warnings.map(tag('s', '')) };
+    if (net.same) return net;
+    const r = analyze(side(state, 'r'));
+    net.r = r;
+    const src = r.source && state.rcells[r.source];
+    if (src && !src.p) r.errors.splice(0, r.errors.length, { key: r.source, msg: "Draw the return pipe into the source: the pump's suction" });
+    net.errors.push(...r.errors.map(tag('r', 'Return: ')));
+    net.warnings.push(...r.warnings.map(tag('r', 'Return: ')));
+    if (net.errors.length) return net;
+    const col = new Map(r.sinks.map((k, j) => [k.key, j]));
+    for (const sink of s.sinks) if (!col.has(sink.key)) net.errors.push({ key: sink.key, layer: 'r', msg: `Return: ${sink.name} has no return pipe` });
+    if (!net.errors.length) net.Ar = r.A.map((row) => s.sinks.map((k) => row[col.get(k.key)]));
+    return net;
   }
 
   // ---- the walk -------------------------------------------------------------------------
@@ -123,7 +211,7 @@
     const newSeg = (parent, from, out, kind) => {
       const n = [0, 0, 0];
       if (kind !== null) n[kind] = 1;
-      const s = { id: segs.length, parent, from, out, tiles: [], L: 0, n, K: 0, D: null, sink: null, children: [], ends: null };
+      const s = { id: segs.length, parent, from, out, tiles: [], L: 0, n, K: 0, D: null, nps: null, sink: null, children: [], ends: null };
       segs.push(s);
       if (parent !== null) segs[parent].children.push(s.id);
       return s;
@@ -141,10 +229,13 @@
         seg.tiles.push(k);
         seg.L += tileLen(k);
         if (tile.k) seg.K += tile.k;
-        if (seg.D === null && tile.t !== 'source') seg.D = tile.d || null;
-        else if (tile.d && seg.D !== null && tile.d !== seg.D && !seg.mixed) {
+        const size = tile.t === 'pipe' ? tileSize(state, tile) : null;
+        if (!seg.sized && tile.t === 'pipe') {
+          seg.sized = true;   // its first pipe tile says the segment's size, or leaves it the network's
+          if (size) { seg.D = size.D; seg.nps = size.nps; }
+        } else if (size && seg.sized && !seg.mixed && Math.abs(size.D - (seg.D === null ? bore(state, state.nps, state.D) : seg.D)) > 1e-9) {
           seg.mixed = true;
-          warnings.push({ key: k, msg: `Segment ${seg.id + 1} has more than one diameter; the first one is used` });
+          warnings.push({ key: k, msg: "This segment has more than one pipe size; its first tile's is used" });
         }
         if (sh === 'sink') { seg.sink = k; return; }
         if (sh === 'source') { fail(k, 'The pipe runs back into the source'); return; }
@@ -193,7 +284,7 @@
     res.sinks.forEach((sink, j) => {
       for (let id = sink.seg; id !== null; id = segs[id].parent) res.A[row.get(id)][j] = 1;
     });
-    for (const s of segs) if (s.D === null) s.D = state.D;
+    for (const s of segs) if (s.D === null) { s.D = bore(state, state.nps, state.D); s.nps = state.nps; }
     return res;
   }
 
@@ -205,34 +296,44 @@
   }
   const column = (xs) => '[' + xs.map(num).join('; ') + ']';
 
-  // {name: expression} for the block's lines, or {} when the network has an error.
-  function outputs(state, a) {
-    if (a.errors.length || !a.sinks.length) return {};
-    const segs = a.order.map((id) => a.segments[id]), twice = state.ret ? 2 : 1;
+  // {name: expression} for the block's lines (of `network(state)`), or {} when the network has an error.
+  function outputs(state, net) {
+    if (net.errors.length || !net.sinks.length) return {};
+    const lines = (a, A, names) => {
+      const segs = a.order.map((id) => a.segments[id]);
+      return {
+        [names[0]]: '[' + A.map((r) => r.join(', ')).join('; ') + ']',
+        [names[1]]: `${column(segs.map((s) => s.L))} * '${state.units.L}`,
+        [names[2]]: `${column(segs.map((s) => s.D))} * '${state.units.D}`,
+        [names[3]]: '[' + segs.map((s) => s.n.map(num).join(', ')).join('; ') + ']',
+        [names[4]]: column(segs.map((s) => s.K)),
+      };
+    };
     return {
-      A: '[' + a.A.map((r) => r.join(', ')).join('; ') + ']',
-      'L!': `${column(segs.map((s) => s.L * twice))} * '${state.units.L}`,
-      'D_h!': `${column(segs.map((s) => s.D))} * '${state.units.D}`,
-      'N_fit!': '[' + segs.map((s) => s.n.map((x) => num(x * twice)).join(', ')).join('; ') + ']',
-      'K_extra!': column(segs.map((s) => s.K * twice)),
-      'exchangers!': column(a.sinks.map((s) => s.x)),
-      'speeds!': column(a.sinks.map((s) => s.s)),
+      ...lines(net.s, net.s.A, ['A', 'L!', 'D_h!', 'N_fit!', 'K_extra!']),
+      ...lines(net.r, net.Ar, ['A_r', 'L_r!', 'D_r!', 'N_fit_r!', 'K_extra_r!']),
+      'exchangers!': column(net.sinks.map((s) => s.x)),
+      'speeds!': column(net.sinks.map((s) => s.s)),
       'fit_method!': String(state.method),
     };
   }
 
   // ---- values from the sheet --------------------------------------------------------------
-  // Each `!pluginvar` value laid on the drawing: a vector as long as the segments goes on the
-  // segments, one as long as the sinks on the sinks, a single number in the legend.
-  function placed(inputs, a) {
-    const out = { segments: [], sinks: [], legend: [], unplaced: [] };
-    const nSeg = a.order.length, nSink = a.sinks.length;
+  // Each `!pluginvar` value laid on the drawing: one whose name ends in `_r` (∀_r!, Δp_r) and is as
+  // long as the return's segments on the return's segments, any other as long as the supply's on the
+  // supply's; one as long as the sinks on the sinks; a single number in the legend.
+  const RETURN_NAME = /_r[`!@&]*$/;
+  function placed(inputs, net) {
+    const out = { segments: [], rsegments: [], sinks: [], legend: [], unplaced: [] };
+    const nSeg = net.s.order.length, nRet = net.r.order.length, nSink = net.sinks.length;
     for (const v of inputs || []) {
       const flat = flatten(v.mag);
       if (flat === null) { out.unplaced.push(v.name); continue; }
       const item = { name: v.name, unit: v.unit, values: flat, stale: !!v.stale };
+      const ret = RETURN_NAME.test(v.name);
       if (flat.length === 1 && !(v.shape && v.shape.length)) out.legend.push(item);
-      else if (flat.length === nSeg && nSeg) out.segments.push(item);
+      else if (ret && flat.length === nRet && nRet) out.rsegments.push(item);
+      else if (!ret && flat.length === nSeg && nSeg) out.segments.push(item);
       else if (flat.length === nSink && nSink) out.sinks.push(item);
       else if (flat.length === 1) out.legend.push(item);
       else out.unplaced.push(v.name);
@@ -260,7 +361,7 @@
   const CELL = 56;
 
   function bounds(state, pad = 2) {
-    const ks = Object.keys(state.cells).map(at);
+    const ks = Object.keys(state.cells).concat(Object.keys(state.rcells || {})).map(at);
     if (!ks.length) return { r0: 0, c0: 0, r1: 7, c1: 11 };
     let r0 = Math.min(...ks.map((k) => k[0])) - pad, r1 = Math.max(...ks.map((k) => k[0])) + pad;
     let c0 = Math.min(...ks.map((k) => k[1])) - pad, c1 = Math.max(...ks.map((k) => k[1])) + pad;
@@ -271,10 +372,12 @@
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  /* The layout as SVG text. opts: {theme: {paper, text, ink, rule, err, grid, sans, soft, hi}, selected: a tile
-     key, grid: draw the grid (the editor) or not (the preview), inputs: the !pluginvar values}. */
-  function draw(state, a, opts = {}) {
-    const th = Object.assign({ paper: '#ffffff', text: '#1d2b3a', ink: '#1f5fa8', rule: '#9fb4c8', err: '#c62828',
+  /* The layout as SVG text, from the state and its `network`. opts: {theme: {paper, text, ink, ret,
+     rule, err, grid, sans, soft, hi}, layer: the layer in front ("s" or "r"; the other is drawn faded
+     behind it, as the far side of a circuit board is), selected: a tile key on that layer, grid: draw
+     the grid (the editor) or not (the preview), inputs: the !pluginvar values}. */
+  function draw(state, net, opts = {}) {
+    const th = Object.assign({ paper: '#ffffff', text: '#1d2b3a', ink: '#1f5fa8', ret: '#00838f', rule: '#9fb4c8', err: '#c62828',
       grid: '#e3eaf1', sans: 'sans-serif', soft: '#5b7086', hi: '#e08a00' }, opts.theme || {});
     const grid = opts.grid !== false;
     const b = opts.bounds || (grid ? bounds(state) : bounds(state, 1));
@@ -286,47 +389,60 @@
       for (let r = b.r0; r <= b.r1 + 1; r++) out.push(`<line x1="0" y1="${y(r)}" x2="${W_}" y2="${y(r)}" stroke="${esc(th.grid)}" stroke-width="1"/>`);
       for (let c = b.c0; c <= b.c1 + 1; c++) out.push(`<line x1="${x(c)}" y1="0" x2="${x(c)}" y2="${H_}" stroke="${esc(th.grid)}" stroke-width="1"/>`);
     }
-    const bad = new Set(a.errors.map((e) => e.key).filter(Boolean));
-    const loose = new Set(a.warnings.filter((w) => /Not connected/.test(w.msg)).map((w) => w.key));
-    const segOf = new Map();
-    for (const s of a.segments) for (const k of s.tiles) if (!segOf.has(k)) segOf.set(k, s);
-    const selSeg = opts.selected ? segOf.get(opts.selected) : null;
+    const front = !net.same && opts.layer === 'r' ? 'r' : 's';
     const h = CELL / 2, pw = 7;
 
-    for (const [k, tile] of Object.entries(state.cells)) {
-      const [r, c] = at(k), cx = x(c) + h, cy = y(r) + h;
-      const seg = segOf.get(k);
-      let color = loose.has(k) ? th.rule : th.ink;
-      if (selSeg && seg === selSeg) color = th.hi;   // the selected tile's segment, in the theme's accent
-      if (bad.has(k)) out.push(`<rect x="${x(c) + 2}" y="${y(r) + 2}" width="${CELL - 4}" height="${CELL - 4}" fill="none" stroke="${esc(th.err)}" stroke-width="2" stroke-dasharray="4 3"/>`);
-      if (opts.selected === k) out.push(`<rect x="${x(c) + 1}" y="${y(r) + 1}" width="${CELL - 2}" height="${CELL - 2}" fill="none" stroke="${esc(th.hi)}" stroke-width="2"/>`);
-      const sh = shape(tile);
-      const arm = (d, len = h) => `<line x1="${cx}" y1="${cy}" x2="${cx + DC[d] * len}" y2="${cy + DR[d] * len}" stroke="${esc(color)}" stroke-width="${pw}" stroke-linecap="butt"/>`;
-      if (sh === 'cross') {
-        out.push(`<line x1="${cx}" y1="${y(r)}" x2="${cx}" y2="${y(r) + CELL}" stroke="${esc(color)}" stroke-width="${pw}"/>`);
-        const hop = 11;
-        out.push(`<path d="M ${x(c)} ${cy} H ${cx - hop} A ${hop} ${hop} 0 0 1 ${cx + hop} ${cy} H ${x(c) + CELL}" fill="none" stroke="${esc(th.paper)}" stroke-width="${pw + 6}"/>`);
-        out.push(`<path d="M ${x(c)} ${cy} H ${cx - hop} A ${hop} ${hop} 0 0 1 ${cx + hop} ${cy} H ${x(c) + CELL}" fill="none" stroke="${esc(color)}" stroke-width="${pw}"/>`);
-      } else if (sh === 'source') {
-        for (const d of bits(tile.p)) out.push(arm(d));
-        out.push(`<circle cx="${cx}" cy="${cy}" r="${h - 9}" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="3"/>`);
-        const d = bits(tile.p)[0] || E, tr = h - 14;   // the pump's triangle points the way the water goes
-        const px = DC[d], py = DR[d], qx = -py, qy = px;
-        out.push(`<path d="M ${cx + px * tr} ${cy + py * tr} L ${cx - px * tr * 0.6 + qx * tr * 0.8} ${cy - py * tr * 0.6 + qy * tr * 0.8} L ${cx - px * tr * 0.6 - qx * tr * 0.8} ${cy - py * tr * 0.6 - qy * tr * 0.8} Z" fill="${esc(color)}"/>`);
-      } else if (sh === 'sink') {
-        for (const d of bits(tile.p)) out.push(arm(d));
-        const s = h - 10;
-        out.push(`<rect x="${cx - s}" y="${cy - s}" width="${2 * s}" height="${2 * s}" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="3"/>`);
-        out.push(`<path d="M ${cx - s + 4} ${cy + 6} l 5 -12 l 5 12 l 5 -12 l 5 12 l 5 -12" fill="none" stroke="${esc(color)}" stroke-width="2"/>`);
-      } else {
-        for (const d of bits(tile.p)) out.push(arm(d));
-        if (bits(tile.p).length > 1) out.push(`<circle cx="${cx}" cy="${cy}" r="${pw / 2}" fill="${esc(color)}"/>`);
-        if (sh === 'stub') out.push(`<path d="M ${cx - 7} ${cy - 7} l 14 14 m 0 -14 l -14 14" stroke="${esc(th.err)}" stroke-width="3"/>`);
+    // One layer's tiles, in its colour; `selected` only on the layer in front.
+    const tiles = (cells, layer, color0, selected) => {
+      const a = layer === 'r' ? net.r : net.s;
+      const bad = new Set(net.errors.filter((e) => e.layer === layer).map((e) => e.key).filter(Boolean));
+      const loose = new Set(net.warnings.filter((w) => w.layer === layer && /Not connected/.test(w.msg)).map((w) => w.key));
+      const segOf = new Map();
+      for (const s of a.segments) for (const k of s.tiles) if (!segOf.has(k)) segOf.set(k, s);
+      const selSeg = selected ? segOf.get(selected) : null;
+      for (const [k, tile] of Object.entries(cells)) {
+        const [r, c] = at(k), cx = x(c) + h, cy = y(r) + h;
+        const seg = segOf.get(k);
+        let color = loose.has(k) ? th.rule : color0;
+        if (selSeg && seg === selSeg) color = th.hi;   // the selected tile's segment, in the theme's accent
+        if (bad.has(k)) out.push(`<rect x="${x(c) + 2}" y="${y(r) + 2}" width="${CELL - 4}" height="${CELL - 4}" fill="none" stroke="${esc(th.err)}" stroke-width="2" stroke-dasharray="4 3"/>`);
+        if (selected === k) out.push(`<rect x="${x(c) + 1}" y="${y(r) + 1}" width="${CELL - 2}" height="${CELL - 2}" fill="none" stroke="${esc(th.hi)}" stroke-width="2"/>`);
+        const sh = shape(tile);
+        const arm = (d, len = h) => `<line x1="${cx}" y1="${cy}" x2="${cx + DC[d] * len}" y2="${cy + DR[d] * len}" stroke="${esc(color)}" stroke-width="${pw}" stroke-linecap="butt"/>`;
+        if (sh === 'cross') {
+          out.push(`<line x1="${cx}" y1="${y(r)}" x2="${cx}" y2="${y(r) + CELL}" stroke="${esc(color)}" stroke-width="${pw}"/>`);
+          const hop = 11;
+          out.push(`<path d="M ${x(c)} ${cy} H ${cx - hop} A ${hop} ${hop} 0 0 1 ${cx + hop} ${cy} H ${x(c) + CELL}" fill="none" stroke="${esc(th.paper)}" stroke-width="${pw + 6}"/>`);
+          out.push(`<path d="M ${x(c)} ${cy} H ${cx - hop} A ${hop} ${hop} 0 0 1 ${cx + hop} ${cy} H ${x(c) + CELL}" fill="none" stroke="${esc(color)}" stroke-width="${pw}"/>`);
+        } else if (sh === 'source') {
+          for (const d of bits(tile.p)) out.push(arm(d));
+          out.push(`<circle cx="${cx}" cy="${cy}" r="${h - 9}" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="3"/>`);
+          // the pump's triangle points the way the water leaves it: out on the supply, in on the return
+          const side0 = bits(tile.p)[0] || E, d = layer === 'r' ? OPP[side0] : side0, tr = h - 14;
+          const px = DC[d], py = DR[d], qx = -py, qy = px;
+          out.push(`<path d="M ${cx + px * tr} ${cy + py * tr} L ${cx - px * tr * 0.6 + qx * tr * 0.8} ${cy - py * tr * 0.6 + qy * tr * 0.8} L ${cx - px * tr * 0.6 - qx * tr * 0.8} ${cy - py * tr * 0.6 - qy * tr * 0.8} Z" fill="${esc(color)}"/>`);
+        } else if (sh === 'sink') {
+          for (const d of bits(tile.p)) out.push(arm(d));
+          const s = h - 10;
+          out.push(`<rect x="${cx - s}" y="${cy - s}" width="${2 * s}" height="${2 * s}" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="3"/>`);
+          out.push(`<path d="M ${cx - s + 4} ${cy + 6} l 5 -12 l 5 12 l 5 -12 l 5 12 l 5 -12" fill="none" stroke="${esc(color)}" stroke-width="2"/>`);
+        } else {
+          for (const d of bits(tile.p)) out.push(arm(d));
+          if (bits(tile.p).length > 1) out.push(`<circle cx="${cx}" cy="${cy}" r="${pw / 2}" fill="${esc(color)}"/>`);
+          if (sh === 'stub') out.push(`<path d="M ${cx - 7} ${cy - 7} l 14 14 m 0 -14 l -14 14" stroke="${esc(th.err)}" stroke-width="3"/>`);
+        }
       }
+    };
+    if (!net.same) {   // the far side, faded, behind
+      const back = front === 's' ? 'r' : 's';
+      out.push('<g opacity="0.3">');
+      tiles(back === 'r' ? state.rcells : state.cells, back, back === 'r' ? th.ret : th.ink, null);
+      out.push('</g>');
     }
+    tiles(front === 'r' ? state.rcells : state.cells, front, front === 'r' ? th.ret : th.ink, opts.selected);
 
-    // numbers and values: each segment at its middle tile, each sink beside it
-    const vals = placed(opts.inputs, a);
+    // numbers and values: each segment of the layer in front at its middle tile, each sink beside it
+    const vals = placed(opts.inputs, net);
     const label = (lx, ly, lines, anchor = 'start') => {
       const lh = 13, w = Math.max(...lines.map((l) => l.text.length)) * 6.4 + 8, x0 = anchor === 'start' ? lx : lx - w;
       out.push(`<rect x="${x0}" y="${ly - 11}" width="${w}" height="${lines.length * lh + 4}" rx="3" fill="${esc(th.paper)}" fill-opacity="0.88" stroke="${esc(th.rule)}" stroke-width="0.8"/>`);
@@ -334,26 +450,29 @@
     };
     // Each segment's number sits on its middle tile; its values, if shown, beside it, away from the pipe.
     const show = state.labels || 'values';
-    if (!a.errors.length && show !== 'none') {
+    if (!net.errors.length && show !== 'none') {
+      const a = front === 'r' ? net.r : net.s, cells = front === 'r' ? state.rcells : state.cells;
+      const own = front === 'r' && !net.same ? vals.rsegments : vals.segments, prefix = front === 'r' && !net.same ? 'R' : '';
       for (const s of a.segments) {
         if (!s.tiles.length || s.row === undefined) continue;
-        const own = s.tiles.length > 1 ? s.tiles.slice(0, -1) : s.tiles;   // not the tee or sink it ends at
-        const mid = own[Math.floor((own.length - 1) / 2)];
+        const mine = s.tiles.length > 1 ? s.tiles.slice(0, -1) : s.tiles;   // not the tee or sink it ends at
+        const mid = mine[Math.floor((mine.length - 1) / 2)];
         const [r, c] = at(mid), cx = x(c) + h, cy = y(r) + h;
-        const lines = show === 'values' ? vals.segments.map((v) => ({ text: `${v.name} ${fmt(v.values[s.row], v.unit)}`, soft: v.stale })) : [];
+        const lines = show === 'values' ? own.map((v) => ({ text: `${v.name} ${fmt(v.values[s.row], v.unit)}`, soft: v.stale })) : [];
         if (lines.length) {
-          const vertical = !(state.cells[mid].p & (E | W));
+          const vertical = !(cells[mid].p & (E | W));
           if (vertical) label(cx + 14, cy - (lines.length * 13) / 2 + 9, lines);
           else label(cx - 8, cy + 26, lines);
         }
-        out.push(`<circle cx="${cx}" cy="${cy}" r="10" fill="${esc(th.paper)}" stroke="${esc(th.ink)}" stroke-width="2"/>`);
-        out.push(`<text x="${cx}" y="${cy + 4}" font-size="11" font-weight="600" text-anchor="middle" fill="${esc(th.text)}">${s.row + 1}</text>`);
+        const rr = prefix ? 12 : 10;
+        out.push(`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${esc(th.paper)}" stroke="${esc(front === 'r' ? th.ret : th.ink)}" stroke-width="2"/>`);
+        out.push(`<text x="${cx}" y="${cy + 4}" font-size="${prefix ? 10 : 11}" font-weight="600" text-anchor="middle" fill="${esc(th.text)}">${prefix}${s.row + 1}</text>`);
       }
-      a.sinks.forEach((sink, j) => {
+      net.sinks.forEach((sink, j) => {
         const [r, c] = at(sink.key);
         const lines = [{ text: sink.name, bold: true }];
         if (show === 'values') for (const v of vals.sinks) lines.push({ text: `${v.name} ${fmt(v.values[j], v.unit)}`, soft: v.stale });
-        if (state.cells[sink.key].p === E) label(x(c) + 2, y(r) + 14, lines, 'end');   // the pipe comes from the right
+        if (cells[sink.key] && cells[sink.key].p === E) label(x(c) + 2, y(r) + 14, lines, 'end');   // the pipe comes from the right
         else label(x(c) + CELL - 2, y(r) + 14, lines);
       });
     }
@@ -398,13 +517,32 @@
     if (tile.t === 'source') for (const [o, t] of Object.entries(state.cells)) if (t.t === 'source' && o !== k) delete state.cells[o];
     const old = state.cells[k] || {};
     const t = { t: tile.t, p: tile.p };
-    for (const f of ['L', 'd', 'k']) if (old[f] !== undefined) t[f] = old[f];
+    for (const f of ['L', 'd', 'k', 'nps']) if (old[f] !== undefined) t[f] = old[f];
     if (tile.t === 'sink') { t.x = old.x || 1; t.s = old.s || 2; if (old.name) t.name = old.name; }
     if (tile.auto && tile.t !== 'pipe') {
       const d = DIRS.find((x) => { const n = state.cells[step(k, x)]; return n && n.p & OPP[x]; });
       if (d) t.p = d;
     }
     state.cells[k] = t;
+  }
+
+  // Edit one layer of a state with `fn(view)` (connect, erase, place on `side(state, layer)`), then
+  // keep the pads of the other layer in step. Taking a pad away takes it off both layers.
+  function onLayer(state, layer, fn) {
+    const view = side(state, layer);
+    const result = fn(view);
+    syncPads(state, layer === 'r' ? 'r' : 's');
+    return result;
+  }
+
+  // Start the return as a copy of the supply (when the return becomes a layout of its own).
+  function copySupply(state) {
+    state.rcells = {};
+    for (const [k, t] of Object.entries(state.cells)) {
+      const c = { t: t.t, p: t.p };
+      for (const f of ['L', 'd', 'k', 'nps']) if (t.t === 'pipe' && t[f] !== undefined) c[f] = t[f];
+      state.rcells[k] = c;
+    }
   }
 
   // The segment a tile belongs to (the first, for a crossover), or null.
@@ -445,7 +583,8 @@
   ];
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
-    blank, normalize, analyze, outputs, placed, flatten, fmt, bounds, draw, connect, erase, place, segmentAt, PALETTE, example };
+    blank, normalize, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
+    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, bore, sizeName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);
