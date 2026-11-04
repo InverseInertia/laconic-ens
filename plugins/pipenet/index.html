@@ -44,6 +44,11 @@
   .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .palette button { padding: 2px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
   .palette button svg { width: 100%; height: 100%; }
+  .key span[class^="k-"]:not(.k-back-row) { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 3px; }
+  .k-solid { border-top: 5px solid var(--ink); }
+  .k-hollow { height: 5px !important; border: 1.5px solid var(--rule); }
+  .k-dash { border-top: 2px dashed var(--ink); }
+  body:not([data-two]) .k-back-row { display: none; }
   .row-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
   label.f { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 6px; margin: 4px 0; }
   label.f input, label.f select { width: 100%; }
@@ -92,7 +97,7 @@
       <button data-layer="s" title="Lay out the supply (F switches)">Supply</button>
       <button data-layer="r" title="Lay out the return (F switches)">Return</button>
     </div>
-    <p class="hint">The other side is drawn faded behind. The source and the sinks are on both.</p>
+    <p class="hint">The other side is drawn dashed behind. The source and the sinks are on both.</p>
   </div>
   <h3>Shapes</h3>
   <div class="palette" id="palette"></div>
@@ -110,6 +115,7 @@
     <button id="zoomIn" title="Larger">+</button>
     <span class="hint" id="zoomLevel"></span>
   </div>
+  <p class="hint key"><span class="k-solid"></span> pipe in use &nbsp; <span class="k-hollow"></span> not connected<span class="k-back-row"> &nbsp; <span class="k-dash"></span> the other side</span></p>
   <h3>Network</h3>
   <label class="f">Length unit <select id="unitL"><option>ft</option><option>m</option><option>in</option><option>mm</option></select></label>
   <label class="f">Square length <input id="cell" type="number" min="0" step="any"></label>

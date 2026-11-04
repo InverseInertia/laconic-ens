@@ -100,7 +100,8 @@ eq(P.analyze(P.blank()).errors.map((e) => e.msg), ['Place a source (the pump) to
   const s = net([row(0, 0, 2), row(3, 0, 2)], '0,0', ['0,2']);
   const a = P.analyze(s);
   eq(a.errors, [], 'tiles off the network are no error');
-  eq(a.warnings.map((w) => w.key).sort(), ['3,0', '3,1', '3,2'], 'but each is pointed out');
+  eq(a.warnings.map((w) => [w.key, w.keys, w.msg]), [['3,0', ['3,0', '3,1', '3,2'], '3 tiles are not connected to the source, so they are left out']],
+    'but they are pointed out, in one warning');
   s.cells['5,5'] = { t: 'source', p: E };
   eq(P.analyze(s).errors.length, 2, 'two sources are refused');
 }
@@ -196,7 +197,9 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   P.onLayer(s, 'r', (v) => { delete v.cells['0,5']; });
   eq([!!s.cells['0,5'], !!s.rcells['0,5']], [false, false], 'a pad taken away on one layer goes from both');
   const drawn = P.draw(s, P.network(s), { layer: 'r' });
-  assert.ok(drawn.includes('<g opacity="0.3">'), 'the layer behind is drawn faded');
+  const back = drawn.slice(drawn.indexOf('<g class="back"'), drawn.indexOf('</g>'));
+  assert.ok(back.includes('stroke-dasharray="6 4"') && !back.includes('<circle') && !back.includes('<rect'),
+    'the layer behind is a dashed ghost of its pipes, without its pads');
   n++;
 }
 
@@ -225,6 +228,48 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   eq([P.sizeName(s, '2'), P.sizeName(s, null)], ['2" Sch 80', 'custom'], 'sizes by name');
   eq(P.normalize({ nps: '7', sch: '160', cells: { '0,0': { t: 'pipe', p: 3, nps: 'x' } } }).cells['0,0'], { t: 'pipe', p: 3 },
     'an unknown size is dropped');
+}
+
+// --- balloons ------------------------------------------------------------------------------------
+{
+  const box = (x, y, extra = {}) => ({ x, y, px: x, py: y, w: 100, h: 30, ...extra });
+  const items = [box(0, 0), box(10, 5), box(20, 10), box(400, 400)];
+  const overlaps = (bs) => bs.some((a, i) => bs.some((b, j) => i < j && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h));
+  assert.ok(overlaps(items), 'three balloons on top of each other');
+  eq(P.spread(items, [], 1000, 1000), 0, 'are pushed apart');
+  eq(overlaps(items), false, 'until none overlap');
+  eq([items[3].x, items[3].y], [400, 400], 'one in the clear stays where it is');
+  const fixed = box(0, 0, { fixed: true }), moving = box(5, 5);
+  P.spread([fixed, moving], [], 1000, 1000);
+  eq([fixed.x, fixed.y], [0, 0], 'a fixed one (the legend) never moves');
+  const off = box(50, 50);
+  P.spread([off], [{ x: 40, y: 40, w: 30, h: 30 }], 1000, 1000);
+  assert.ok(off.x >= 73 || off.y >= 73 || off.x + off.w <= 37 || off.y + off.h <= 37, 'and one is pushed off a pipe number or pad');
+  n++;
+  const edge = box(990, 990);
+  P.spread([edge], [], 1000, 1000);
+  assert.ok(edge.x + edge.w <= 1000 && edge.y + edge.h <= 1000, 'inside the picture');
+  n++;
+}
+{
+  // the example's trunk is crowded: with values drawn, no two balloons overlap
+  const s = P.blank(); s.cells = P.example(); P.syncPads(s, 's');
+  const nt = P.network(s);
+  const v = (name, k) => ({ name, unit: 'gal/min', shape: [k, 1], mag: Array.from({ length: k }, (_, i) => [100 + i]) });
+  const svg = P.draw(s, nt, { inputs: [v('∀!', 15), v('ΣK_seg', 15), v('Δp_paths', 15), v('Δp_spur', 8)] });
+  const rects = [...svg.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.]+)" height="([\d.]+)" rx="5"/g)].map((m) => m.slice(1).map(Number));
+  eq(rects.length, 15 + 8, 'a balloon for each segment and sink');
+  const hit = rects.some((a, i) => rects.some((b, j) => i < j && a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]));
+  eq(hit, false, 'none of them overlap');
+  assert.ok(svg.includes('r="2.5"'), 'and one moved off its place keeps a leader line to it');
+  n++;
+}
+{
+  // a pipe the source does not reach is hollow: an outline in the rule colour with paper inside
+  const s = net([row(0, 0, 2), row(3, 0, 2)], '0,0', ['0,2']);
+  const svg = P.draw(s, P.network(s), { theme: { rule: '#123456', paper: '#fedcba' } });
+  assert.ok(/stroke="#123456" stroke-width="7"[^>]*\/><line[^>]*stroke="#fedcba" stroke-width="3"/.test(svg), 'a pipe off the network is drawn hollow');
+  n++;
 }
 
 console.log(`pipenet: ${n} checks passed`);
