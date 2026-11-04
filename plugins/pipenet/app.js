@@ -105,7 +105,7 @@
     b.c1 = Math.max(b.c1, b.c0 + Math.ceil(main.clientWidth / side) - 1);
     b.r1 = Math.max(b.r1, b.r0 + Math.ceil(main.clientHeight / side) - 1);
     shownBounds = b;
-    const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front() });
+    const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front(), rounds: drag ? 40 : 600 });
     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
     canvas.replaceChildren(...[...doc.childNodes].map((n) => document.importNode(n, true)));
     for (const a of ['viewBox', 'font-family']) canvas.setAttribute(a, doc.getAttribute(a));
@@ -129,6 +129,7 @@
     $('#sides').hidden = state.ret !== 'separate';
     for (const btn of document.querySelectorAll('[data-layer]')) btn.setAttribute('aria-pressed', String(btn.dataset.layer === front()));
     document.body.dataset.layer = front();
+    if (state.ret === 'separate') document.body.dataset.two = ''; else delete document.body.dataset.two;
     $('#labels').value = state.labels;
     $('#method').value = String(state.method);
     setNum($('#dpv'), state.dp.v); $('#dpu').value = state.dp.u;

@@ -265,12 +265,14 @@
 
   function finish(res, state) {
     const cells = state.cells;
-    for (const k of Object.keys(cells)) {
-      const sh = shape(cells[k]);
-      const lanes = sh === 'cross' ? ['v', 'h'] : ['*'];
-      if (lanes.every((l) => !res.seen.has(k + '|' + l)) && res.source !== null && !res.errors.length)
-        res.warnings.push({ key: k, msg: 'Not connected to the source, so it is left out' });
-    }
+    // The tiles the walk never reached, as one warning (`keys`: every one of them; `key`: the first).
+    const loose = Object.keys(cells).filter((k) => {
+      const lanes = shape(cells[k]) === 'cross' ? ['v', 'h'] : ['*'];
+      return lanes.every((l) => !res.seen.has(k + '|' + l));
+    });
+    if (loose.length && res.source !== null && !res.errors.length)
+      res.warnings.push({ key: loose[0], keys: loose, msg: loose.length === 1 ? 'Not connected to the source, so it is left out'
+        : `${loose.length} tiles are not connected to the source, so they are left out` });
     if (res.errors.length) return res;
     const segs = res.segments;
     // sinks, in the order the walk reached them (depth first, straight on before the branches)
@@ -382,7 +384,8 @@
   /* The layout as SVG text, from the state and its `network`. opts: {theme: {paper, text, ink, ret,
      rule, err, grid, sans, soft, hi}, layer: the layer in front ("s" or "r"; the other is drawn faded
      behind it, as the far side of a circuit board is), selected: a tile key on that layer, grid: draw
-     the grid (the editor) or not (the preview), inputs: the !pluginvar values}. */
+     the grid (the editor) or not (the preview), inputs: the !pluginvar values, rounds: how long `spread`
+     may work at the balloons (less while the mouse drags)}. */
   function draw(state, net, opts = {}) {
     const th = Object.assign({ paper: '#ffffff', text: '#1d2b3a', ink: '#1f5fa8', ret: '#00838f', rule: '#9fb4c8', err: '#c62828',
       grid: '#e3eaf1', sans: 'sans-serif', soft: '#5b7086', hi: '#e08a00' }, opts.theme || {});
@@ -399,23 +402,35 @@
     const front = !net.same && opts.layer === 'r' ? 'r' : 's';
     const h = CELL / 2, pw = 7;
 
-    // One layer's tiles, in its colour; `selected` only on the layer in front.
-    const tiles = (cells, layer, color0, selected) => {
+    // One layer's tiles, in its colour; `selected` only on the layer in front. The layer behind is a
+    // `ghost`: thin dashed centre lines and no pads, so it reads as a reference, not as pipe. A pipe on
+    // the layer in front that the source does not reach is drawn hollow: an outline with no water in it.
+    const tiles = (cells, layer, color0, selected, ghost = false) => {
       const a = layer === 'r' ? net.r : net.s;
       const bad = new Set(net.errors.filter((e) => e.layer === layer).map((e) => e.key).filter(Boolean));
-      const loose = new Set(net.warnings.filter((w) => w.layer === layer && /Not connected/.test(w.msg)).map((w) => w.key));
+      const loose = new Set(net.warnings.filter((w) => w.layer === layer && w.keys).flatMap((w) => w.keys));
       const segOf = new Map();
       for (const s of a.segments) for (const k of s.tiles) if (!segOf.has(k)) segOf.set(k, s);
       const selSeg = selected ? segOf.get(selected) : null;
       for (const [k, tile] of Object.entries(cells)) {
         const [r, c] = at(k), cx = x(c) + h, cy = y(r) + h;
         const seg = segOf.get(k);
-        let color = loose.has(k) ? th.rule : color0;
+        const sh = shape(tile);
+        if (ghost) {
+          if (tile.t !== 'pipe') continue;   // the pads are drawn with the layer in front
+          for (const d of bits(tile.p))
+            out.push(`<line x1="${cx}" y1="${cy}" x2="${cx + DC[d] * h}" y2="${cy + DR[d] * h}" stroke="${esc(color0)}" stroke-width="3" stroke-dasharray="6 4" stroke-linecap="butt"/>`);
+          continue;
+        }
+        const hollow = loose.has(k);
+        let color = hollow ? th.rule : color0;
         if (selSeg && seg === selSeg) color = th.hi;   // the selected tile's segment, in the theme's accent
         if (bad.has(k)) out.push(`<rect x="${x(c) + 2}" y="${y(r) + 2}" width="${CELL - 4}" height="${CELL - 4}" fill="none" stroke="${esc(th.err)}" stroke-width="2" stroke-dasharray="4 3"/>`);
         if (selected === k) out.push(`<rect x="${x(c) + 1}" y="${y(r) + 1}" width="${CELL - 2}" height="${CELL - 2}" fill="none" stroke="${esc(th.hi)}" stroke-width="2"/>`);
-        const sh = shape(tile);
-        const arm = (d, len = h) => `<line x1="${cx}" y1="${cy}" x2="${cx + DC[d] * len}" y2="${cy + DR[d] * len}" stroke="${esc(color)}" stroke-width="${pw}" stroke-linecap="butt"/>`;
+        const arm = (d, len = h) => {
+          const line = (stroke, width) => `<line x1="${cx}" y1="${cy}" x2="${cx + DC[d] * len}" y2="${cy + DR[d] * len}" stroke="${esc(stroke)}" stroke-width="${width}" stroke-linecap="butt"/>`;
+          return hollow && tile.t === 'pipe' ? line(color, pw) + line(th.paper, pw - 4) : line(color, pw);
+        };
         if (sh === 'cross') {
           out.push(`<line x1="${cx}" y1="${y(r)}" x2="${cx}" y2="${y(r) + CELL}" stroke="${esc(color)}" stroke-width="${pw}"/>`);
           const hop = 11;
@@ -435,27 +450,30 @@
           out.push(`<path d="M ${cx - s + 4} ${cy + 6} l 5 -12 l 5 12 l 5 -12 l 5 12 l 5 -12" fill="none" stroke="${esc(color)}" stroke-width="2"/>`);
         } else {
           for (const d of bits(tile.p)) out.push(arm(d));
-          if (bits(tile.p).length > 1) out.push(`<circle cx="${cx}" cy="${cy}" r="${pw / 2}" fill="${esc(color)}"/>`);
+          if (bits(tile.p).length > 1 && !hollow) out.push(`<circle cx="${cx}" cy="${cy}" r="${pw / 2}" fill="${esc(color)}"/>`);
           if (sh === 'stub') out.push(`<path d="M ${cx - 7} ${cy - 7} l 14 14 m 0 -14 l -14 14" stroke="${esc(th.err)}" stroke-width="3"/>`);
         }
       }
     };
-    if (!net.same) {   // the far side, faded, behind
+    if (!net.same) {   // the far side, as a dashed ghost, behind
       const back = front === 's' ? 'r' : 's';
-      out.push('<g opacity="0.3">');
-      tiles(back === 'r' ? state.rcells : state.cells, back, back === 'r' ? th.ret : th.ink, null);
+      out.push('<g class="back" opacity="0.6">');
+      tiles(back === 'r' ? state.rcells : state.cells, back, back === 'r' ? th.ret : th.ink, null, true);
       out.push('</g>');
     }
     tiles(front === 'r' ? state.rcells : state.cells, front, front === 'r' ? th.ret : th.ink, opts.selected);
 
-    // numbers and values: each segment of the layer in front at its middle tile, each sink beside it
+    // numbers and values: each segment of the layer in front at its middle tile, each sink beside it.
+    // The values are balloons: each wants to sit beside its pipe or sink, and where they would overlap
+    // (each other, a segment's number, a pad) `spread` pushes them apart; one pushed away from its
+    // place keeps a leader line to it.
     const vals = placed(opts.inputs, net);
-    const label = (lx, ly, lines, anchor = 'start') => {
-      const lh = 13, w = Math.max(...lines.map((l) => l.text.length)) * 6.4 + 8, x0 = anchor === 'start' ? lx : lx - w;
-      out.push(`<rect x="${x0}" y="${ly - 11}" width="${w}" height="${lines.length * lh + 4}" rx="3" fill="${esc(th.paper)}" fill-opacity="0.88" stroke="${esc(th.rule)}" stroke-width="0.8"/>`);
-      lines.forEach((l, i) => out.push(`<text x="${x0 + 4}" y="${ly + i * lh}" font-size="11" font-weight="${l.bold ? 600 : 400}" fill="${esc(l.soft ? th.soft : th.text)}">${esc(l.text)}</text>`));
+    const LH = 13, balloons = [], obstacles = [];
+    const balloon = (ax, ay, px, py, lines, anchor = 'start') => {
+      const w = Math.max(...lines.map((l) => l.text.length)) * 6.4 + 10, hgt = lines.length * LH + 6;
+      const x0 = anchor === 'start' ? px : px - w;
+      balloons.push({ ax, ay, px: x0, py: py - 12, x: x0, y: py - 12, w, h: hgt, lines });
     };
-    // Each segment's number sits on its middle tile; its values, if shown, beside it, away from the pipe.
     const show = state.labels || 'values';
     if (!net.errors.length && show !== 'none') {
       const a = front === 'r' ? net.r : net.s, cells = front === 'r' ? state.rcells : state.cells;
@@ -468,27 +486,99 @@
         const lines = show === 'values' ? own.map((v) => ({ text: `${v.name} ${fmt(v.values[s.row], v.unit)}`, soft: v.stale })) : [];
         if (lines.length) {
           const vertical = !(cells[mid].p & (E | W));
-          if (vertical) label(cx + 14, cy - (lines.length * 13) / 2 + 9, lines);
-          else label(cx - 8, cy + 26, lines);
+          if (vertical) balloon(cx, cy, cx + 16, cy - (lines.length * LH) / 2 + 9, lines);
+          else balloon(cx, cy, cx - 8, cy + 28, lines);
         }
         const rr = prefix ? 12 : 10;
+        obstacles.push({ x: cx - rr - 2, y: cy - rr - 2, w: 2 * rr + 4, h: 2 * rr + 4 });
         out.push(`<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${esc(th.paper)}" stroke="${esc(front === 'r' ? th.ret : th.ink)}" stroke-width="2"/>`);
         out.push(`<text x="${cx}" y="${cy + 4}" font-size="${prefix ? 10 : 11}" font-weight="600" text-anchor="middle" fill="${esc(th.text)}">${prefix}${s.row + 1}</text>`);
       }
+      for (const [k, t] of Object.entries(cells)) {
+        if (t.t === 'pipe') continue;
+        const [r, c] = at(k);
+        obstacles.push({ x: x(c) + 8, y: y(r) + 8, w: CELL - 16, h: CELL - 16 });
+      }
       net.sinks.forEach((sink, j) => {
-        const [r, c] = at(sink.key);
+        const [r, c] = at(sink.key), cy = y(r) + h;
         const lines = [{ text: sink.name, bold: true }];
         if (show === 'values') for (const v of vals.sinks) lines.push({ text: `${v.name} ${fmt(v.values[j], v.unit)}`, soft: v.stale });
-        if (cells[sink.key] && cells[sink.key].p === E) label(x(c) + 2, y(r) + 14, lines, 'end');   // the pipe comes from the right
-        else label(x(c) + CELL - 2, y(r) + 14, lines);
+        if (cells[sink.key] && cells[sink.key].p === E) balloon(x(c) + 8, cy, x(c) + 2, y(r) + 14, lines, 'end');   // the pipe comes from the right
+        else balloon(x(c) + CELL - 8, cy, x(c) + CELL - 2, y(r) + 14, lines);
       });
     }
     if (vals.legend.length) {
       const lines = vals.legend.map((v) => ({ text: `${v.name} = ${fmt(v.values[0], v.unit)}`, soft: v.stale }));
-      label(8, 18, lines);
+      const w = Math.max(...lines.map((l) => l.text.length)) * 6.4 + 10;
+      obstacles.push({ x: 6, y: 4, w: w + 4, h: lines.length * LH + 10 });
+      balloons.push({ ax: null, px: 8, py: 6, x: 8, y: 6, w, h: lines.length * LH + 6, lines, fixed: true });
+    }
+    spread(balloons, obstacles, W_, H_, opts.rounds || 600);
+    for (const bl of balloons) {   // leader lines first, under every balloon
+      if (bl.ax === null || bl.ax === undefined) continue;
+      const nx = Math.max(bl.x, Math.min(bl.ax, bl.x + bl.w)), ny = Math.max(bl.y, Math.min(bl.ay, bl.y + bl.h));
+      if (Math.hypot(bl.x - bl.px, bl.y - bl.py) < 4) continue;
+      out.push(`<line x1="${bl.ax}" y1="${bl.ay}" x2="${nx}" y2="${ny}" stroke="${esc(th.soft)}" stroke-width="1"/>`);
+      out.push(`<circle cx="${bl.ax}" cy="${bl.ay}" r="2.5" fill="${esc(th.soft)}"/>`);
+    }
+    for (const bl of balloons) {
+      out.push(`<rect x="${bl.x}" y="${bl.y}" width="${bl.w}" height="${bl.h}" rx="5" fill="${esc(th.paper)}" fill-opacity="0.94" stroke="${esc(th.rule)}" stroke-width="0.8"/>`);
+      bl.lines.forEach((l, i) => out.push(`<text x="${bl.x + 5}" y="${bl.y + 13 + i * LH}" font-size="11" font-weight="${l.bold ? 600 : 400}" fill="${esc(l.soft ? th.soft : th.text)}">${esc(l.text)}</text>`));
     }
     out.push('</svg>');
     return out.join('');
+  }
+
+  /* Push overlapping balloons apart, in place. Each is {x, y, w, h} where it is, {px, py} where it
+     would be, and `fixed` if it may not move. Overlapping balloons are pushed apart along the way they
+     overlap least, half each; a balloon over an obstacle (a box: a segment's number, a pad) is pushed off
+     it; a weak spring pulls each back to where it would be; and all stay inside the picture. Stops when
+     nothing overlaps, or after `rounds`. Returns how many pairs still overlap. */
+  function spread(items, obstacles = [], W = Infinity, H = Infinity, rounds = 600) {
+    const GAP = 3;
+    const all = items.concat(obstacles.map((o) => ({ ...o, fixed: true, obstacle: true })));
+    const over = (a, b) => [Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + GAP, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + GAP];
+    const clamp = (a) => {
+      a.x = Math.max(2, Math.min(W - a.w - 2, a.x));
+      a.y = Math.max(2, Math.min(H - a.h - 2, a.y));
+    };
+    const hits = () => {   // what still overlaps, counted afresh (obstacles may overlap each other)
+      let n = 0;
+      for (let i = 0; i < all.length; i++)
+        for (let j = i + 1; j < all.length; j++) {
+          if (all[i].fixed && all[j].fixed) continue;
+          const [ox, oy] = over(all[i], all[j]);
+          if (ox > GAP && oy > GAP) n++;
+        }
+      return n;
+    };
+    for (const a of items) if (!a.fixed) clamp(a);   // inside the picture, whatever else
+    let left = hits();
+    for (let round = 0; round < rounds && left; round++) {
+      for (const a of items) {   // back towards its place, a little, before the pushing
+        if (a.fixed) continue;
+        a.x += (a.px - a.x) * 0.02;
+        a.y += (a.py - a.y) * 0.02;
+      }
+      // A pair is moved apart along the way it overlaps least; past a third of the rounds, a pair that
+      // still overlaps tries the other way too, so two balloons caught between others get out.
+      const both = round > rounds / 3 && round % 2;
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          const a = all[i], b = all[j];
+          if (a.fixed && b.fixed) continue;
+          const [ox, oy] = over(a, b);
+          if (ox <= 0 || oy <= 0) continue;
+          const sa = a.fixed ? 0 : b.fixed ? 1 : 0.55, sb = b.fixed ? 0 : a.fixed ? 1 : 0.55;
+          const alongX = both ? ox >= oy : ox < oy;
+          const d = alongX ? (a.x + a.w / 2 < b.x + b.w / 2 ? -1 : 1) * ox : (a.y + a.h / 2 < b.y + b.h / 2 ? -1 : 1) * oy;
+          if (alongX) { a.x += d * sa; b.x -= d * sb; } else { a.y += d * sa; b.y -= d * sb; }
+        }
+      }
+      for (const a of items) if (!a.fixed) clamp(a);
+      left = hits();
+    }
+    return left;
   }
 
   // ---- editing --------------------------------------------------------------------------
@@ -591,7 +681,7 @@
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
     blank, normalize, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
-    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName };
+    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, spread };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);

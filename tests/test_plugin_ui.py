@@ -196,7 +196,7 @@ def test_the_return_is_laid_out_on_a_side_of_its_own(page):
     frame.locator("#ret").select_option("separate")
     frame.locator("#sides").wait_for(state="visible")
     assert frame.locator("button[data-layer=r]").get_attribute("aria-pressed") == "true"   # the return in front
-    assert frame.locator("#canvas g[opacity='0.3']").count() == 1                       # the supply faded behind
+    assert frame.locator("#canvas g.back").count() == 1                                 # the supply behind, as a ghost
     # lengthen one return tile: only the return's lengths change
     before = value(page)
     supply = next(l for l in before.split("\n") if l.startswith("  L! = "))
