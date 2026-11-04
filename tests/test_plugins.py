@@ -471,3 +471,14 @@ def test_the_plugins_sheet_solves_a_return_laid_out_on_its_own():
     flat = lambda v: [x[0] for x in v["mag"]]
     assert flat(sent["∀!"]) == pytest.approx(flat(sent["∀_r!"]))    # the same pipes, so the same flows
     assert flat(sent["Δp_r"])[9] > 2 * flat(sent["Δp_paths"])[9]     # but the longer return loses more
+
+
+def test_a_line_that_defines_a_plugins_name_again_is_warned_and_named_to_the_plugin():
+    """A sheet older than the plugin writing Δp_target kept its own Δp_target line below the block, which
+    replaced the plugin's value: a change made in the plugin never reached the solver."""
+    rs = run("!plugin pipenet\n  Δp_target = 0.5 'psi\n  #@ state {}\ny = 2\nΔp_target = 0.1 'psi\n!hide\nΔp_target = 0.2 'psi\n!show\nz = Δp_target")
+    assert rs[0].plugin.overridden == [{"name": "Δp_target", "line": 5}, {"name": "Δp_target", "line": 7}]
+    assert "written by the pipenet plugin (line 1)" in rs[4].warning and "Delete this line" in rs[4].warning
+    assert rs[6].warning and not rs[6].hidden          # shown even under !hide, so it is not missed
+    assert rs[3].warning == "" and rs[1].warning == ""   # the block's own line and other lines are fine
+    assert rs[8].text == "z = 1379 Pa"                 # 0.2 psi: the last line wins

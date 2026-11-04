@@ -13,7 +13,7 @@
   const $ = (s) => document.querySelector(s);
   const canvas = $('#canvas');
 
-  let state = P.blank(), net = P.network(state), inputs = [];
+  let state = P.blank(), net = P.network(state), inputs = [], overridden = [];
   let tool = 'draw', selected = null, theme = {}, layer = 's';
 
   // The layer in front: the return only while it is laid out on its own.
@@ -68,6 +68,7 @@
     if (!m || m.type !== 'lens:update') return;
     if (m.theme) applyTheme(m.theme);
     inputs = Array.isArray(m.inputs) ? m.inputs : [];
+    overridden = Array.isArray(m.overridden) ? m.overridden : [];
     // The state the sheet holds, unless this page has a change of its own on the way or in hand.
     if ('state' in m && !writeTimer && !drag) {
       const next = P.normalize(m.state);
@@ -329,7 +330,10 @@
   }
 
   function messages() {
-    const list = [...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
+    // A line of the sheet that defines one of the plugin's names again replaces what the plugin writes.
+    const replaced = overridden.map((o) => ({ cls: 'err',
+      msg: `${o.name} is set again on line ${o.line} of the sheet, which replaces the plugin's value: a change here does not reach the calculation. Delete that line.` }));
+    const list = [...replaced, ...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
     const ul = $('#msgs');
     if (!list.length) {
       const n = net.sinks.length, segs = net.s.order.length;

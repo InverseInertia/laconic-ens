@@ -14,6 +14,7 @@ Q = A * Q_spur                                 the sheet calculates with them
 The block's row in the results shows the plugin's picture, with **Open** (the plugin in a large window) and **Reload** (fetch the plugin again). Close the window to get back to the sheet; the plugin keeps running, and its picture follows the sheet.
 
 - **What the plugin writes is the sheet's.** Its `name = value` lines run like any assignment. They show in the results, export as math, and work in `lens --solve` and on a machine that has never fetched the plugin. You can read them, but the plugin rewrites them on its next change, so change the layout in the plugin.
+- **Don't define its names again.** A line below the block that defines one of the names the plugin writes replaces the plugin's value for the lines after it, so a change made in the plugin would not reach them. Such a line gets a warning in the results (shown even under `!hide`), and the plugin names it too.
 - **The state line** (`#@ state {...}`) is the plugin's own record, so it opens as you left it. Undo in the editor undoes a plugin's change, and the plugin follows.
 - **`!pluginvar a, b`** sends the values of `a` and `b`, as they are on that line, to every plugin in the sheet. Put it below the calculation. A value that reads an out-of-date solver result is sent marked as such.
 
@@ -93,7 +94,7 @@ Add it to `plugins/index.json` (its name, title, version and description, as in 
 | Message | Meaning |
 |---|---|
 | plugin → `{type: "lens:ready"}` | send it the first update |
-| LENS → `{type: "lens:update", state, inputs, outputs, theme}` | after each run of the sheet. `state` is the block's state line (null when it has none), left out when the sheet has not run since the plugin's last write. `inputs` are the `!pluginvar` values, `[{name, unit, shape, mag, stale}]` (`mag` in `unit`: a number or nested rows). `outputs` are the names the block's lines define, and `theme` the page's colours and fonts |
+| LENS → `{type: "lens:update", state, inputs, outputs, theme}` | after each run of the sheet. `state` is the block's state line (null when it has none), left out when the sheet has not run since the plugin's last write. `inputs` are the `!pluginvar` values, `[{name, unit, shape, mag, stale}]` (`mag` in `unit`: a number or nested rows). `outputs` are the names the block's lines define, `overridden` (`[{name, line}]`) the lines outside the block that define one of them again, and `theme` the page's colours and fonts |
 | LENS → `{type: "lens:theme", theme}` | the theme changed in Settings: the same `theme` as in an update, at once |
 | LENS → `{type: "lens:check", missing, changed}` | for a plugin with a `template`, after each run: what of that sheet this one lacks (`missing`) or defines differently (`changed`), each a list of names and `!` lines. Spacing, comments, stored results, lines the sheet adds and the plugin's own block are not compared |
 | plugin → `{type: "lens:open-template"}` | open the plugin's sheet in place of this one (LENS asks the user first) |

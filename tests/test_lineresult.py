@@ -150,7 +150,7 @@ def test_a_plugin_row_carries_its_name_state_and_outputs_and_a_pluginvar_row_its
     out = rows('!plugin pipenet\n  A = [1, 0; 1, 1]\n  #@ state {"v":1}\nQ = A * [1; 2] * \'L/\'s\n!pluginvar Q\n')
     r = out[0]
     assert set(r) == set(COMMON) | {"plugin"} and (r["kind"], r["end"]) == ("plugin", 3)
-    assert r["plugin"] == {"name": "pipenet", "state": {"v": 1}, "outputs": ["A"]}
+    assert r["plugin"] == {"name": "pipenet", "state": {"v": 1}, "outputs": ["A"], "overridden": []}
     assert out[1]["kind"] == "assign" and out[2]["kind"] == "pluginline"
     v = out[4]
     assert set(v) == set(COMMON) | {"pluginvar"} and v["kind"] == "pluginvar"

@@ -233,3 +233,24 @@ def test_the_pumps_target_pressure_difference_is_set_in_the_plugin(page):
     frame.locator("#dpv").fill("2.5")
     frame.locator("#dpv").press("Enter")
     page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 2.5 'kPa\\n\")")
+
+
+def test_a_target_set_again_in_the_sheet_is_named_and_the_plugins_reaches_the_solver(page):
+    """A sheet from before the plugin wrote Δp_target kept its own line below the block, which replaced
+    the plugin's value, so the solver never saw a change. The plugin now names that line; without it,
+    a change in the plugin makes the solver's inputs, and so its hash, change."""
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    old = original.replace("# The pump's target pressure difference, Δp_target, comes from the plugin's block above.\n",
+                           "Δp_target = 0.1 'psi\n")
+    show(page, old)
+    frame = opened(page)
+    frame.locator("#msgs li.err:has-text('Δp_target is set again on line')").wait_for()
+    page.click("#pluginDlg .close")
+    show(page, original)
+    page.click(".plugin-box button:has-text('Open')")
+    frame.locator("#segments tbody tr").first.wait_for()
+    page.wait_for_function("last.some((r) => r.solver)")
+    before = page.evaluate("last.find((r) => r.solver).solver.hash")
+    frame.locator("#dpv").fill("0.5")
+    frame.locator("#dpv").press("Enter")
+    page.wait_for_function(f"last.some((r) => r.solver && r.solver.hash !== {before!r})")

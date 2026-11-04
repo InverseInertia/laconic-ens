@@ -12,7 +12,7 @@ const pvar = (line, values, stale = false) => ({ n: line, kind: 'pluginvar', sta
 // --- blocks -----------------------------------------------------------------------------------
 eq(P.blocks([plugin(2, 'pipenet', { v: 1 }, ['A']), { n: 3, kind: 'assign' }, plugin(9, 'pipenet'), plugin(12, 'other')]).map((b) => [b.key, b.line]),
   [['pipenet#0', 2], ['pipenet#1', 9], ['other#0', 12]], 'each block is keyed by its name and how many of that name come before');
-eq(P.blocks([plugin(2, 'pipenet', { v: 1 }, ['A'])])[0], { key: 'pipenet#0', line: 2, name: 'pipenet', state: { v: 1 }, outputs: ['A'] },
+eq(P.blocks([plugin(2, 'pipenet', { v: 1 }, ['A'])])[0], { key: 'pipenet#0', line: 2, name: 'pipenet', state: { v: 1 }, outputs: ['A'], overridden: [] },
   'with its state and the names it defines');
 eq(P.blocks([{ n: 1, kind: 'error', plugin: null }]), [], 'a block that failed is no plugin');
 
