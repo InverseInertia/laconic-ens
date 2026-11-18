@@ -168,6 +168,7 @@ function accepting(src, i = 0, opts) {
 eq(accepting("w = 12'k|", 1), "w = 12'kN|", 'a unit');
 eq(accepting('x = so|'), 'x = solve(|)', 'a function gets brackets with the caret inside');
 eq(accepting('x = so|(a, b)'), 'x = solve|(a, b)', 'unless it already has them');
+eq(accepting('!rpn\nx = A b so|'), '!rpn\nx = A b solve|', 'or the line is reverse Polish, where the name comes after its values');
 eq(accepting('x = so|lv(a)'), 'x = solve|(a)', 'the rest of the word is replaced');
 eq(accepting(below(9, 'x = del|')), below(9, 'x = delta_max|'), 'a variable');
 eq(accepting(below(9, 'x = ~g|'), 0, { force: true }), below(9, 'x = ~grav|'), 'a global is inserted with its ~');

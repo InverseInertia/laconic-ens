@@ -101,12 +101,38 @@ In the results, every `!` line is marked the same way, so you can see what was c
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |
 | `!freq hz\|rad\|si` | Hz is cycles per second, so `->` between Hz and rad/s puts in the 2π, and 1/s results show in Hz / rad/s; `si` (default) keeps 1 Hz = 1 rad/s, see [Units](Units#frequencies-hz-and-rads) |
+| `!rpn` / `!rpn off` | type the expressions below in reverse Polish (`F = m a *`) / in infix again (default), see [Reverse Polish input](#reverse-polish-input) |
 | `!complex rect\|polar\|real` | show complex results as `3 + 4i` (default) or `5∠53.13°`, or make any complex result an error, see [Complex Numbers](Complex-Numbers) |
 | `!plot ...` | draw a graph, see [Plots](Plots) |
 | `!plotspec key: value` | default plot option for the plots below, see [Plots](Plots) |
 | `!root`, `!minimize`, `!maximize` | solve equations or optimize, see [Solving and Optimizing](Solving-and-Optimizing) |
 
 Using a name that `!clear` removed says so: `'m' was removed by !clear`. See [Output and Export](Output-and-Export) for what the display commands do.
+
+## Reverse Polish input
+
+`!rpn` on a line of its own makes the lines below it reverse Polish (RPN): values first, then what is done to them, every value and operator separated by spaces. `!rpn off` (or the end of the sheet) returns to infix; `!rpn on` is the same as `!rpn`. `!clear` leaves the mode alone. The results pane and every export show the lines in ordinary infix, so the input is quick and the output still reads as math.
+
+```
+m = 2'kg   a = 3'm/'s^2
+!rpn
+F = m a *                      F = m · a = 6 N
+3'm 4'm +                      7 m
+hyp(x, y) = x 2 ^ y 2 ^ + sqrt hyp(x, y) = √(x² + y²)
+c = 3 4 hyp                    c = hyp(3, 4) = 5
+v = 9.81'm/'s^2 'ft/'s^2 ->    convert: v -> 'ft/'s^2
+A B hstack/2                   hstack(A, B)
+x neg                          -x
+!rpn off
+```
+
+- **What is RPN**: an assignment keeps its name on the left (`F = m a *`); its right side is RPN. A bare expression is RPN throughout. A function definition keeps its head, `f(x) = x 2 ^ 1 +`, and takes its body in RPN. Unit definitions, `$` symbol declarations, comments, headings, commands and every line a block owns (plot options, solver equations, a `!loop`'s lines) are read as usual.
+- **Values**: a number written as anywhere in the sheet, units and all (`3'm`, `2.5e3'Pa`, `9.81'm/'s^2`, `-4`, `4i`, `∞`); a unit on its own (`'km`, for `->`); a quoted string (`"Water"`); a matrix, written as usual (`[1, 2; 3, 4]`, one value, its entries read as infix); or a name.
+- **Operators** take two values: `+ - * / ^`, `.*` and `./` (elementwise), `∠` (polar: `5'V 30'deg ∠`) and `->` (convert the value below into the units on top: `x 'km ->`). `neg` is unary minus, so in RPN `neg` cannot be a variable's name.
+- **Functions**: a user function, or a built-in that always takes the same number of arguments, is called by its name alone and takes that many values (`x sqrt`, `A i idx`, `3 4 hyp`). Any function can be given its number of values after a slash: `A B hstack/2`, `"Tcrit" "Water" props/2`, `n zeros/1`; that is the only way to call one that takes a varying number (`hstack`, `vstack`, `zeros`, `ones`, `props`, `haprops`). A period in front calls it on each element: `A B .f/2`.
+- **Names**: a variable the line can see always means the variable, as does a function definition's parameter, so after `f = 10`, `f 1 +` is 11; `f/1` still calls the function `f`.
+- **Errors** are the line's own: ``RPN: `+` needs two values, the stack has one`` when the stack runs short, `RPN: 2 values are left on the stack; an expression must leave exactly one` when it does not end with one value, and a note when a token is not RPN (`m*a`, `sqrt(2)`).
+- Rename (F2) renames names on RPN lines too. On an RPN line the editor's math keys are off, since they write infix; see [Editor Shortcuts](Editor-Shortcuts#math-keys).
 
 ## Renaming
 

@@ -57,6 +57,10 @@ CASES = {
              "Hz is cycles per second, 1 Hz = 2π rad/s; a 1/s result is shown in rad/s",
              lambda rs: rs[1].text == "w = 2 rad/s" and shown(rs[2]) == "0.3183 Hz"
              and rs[3].text == "Hz and rad/s are both 1/s again, 1 Hz = 1 rad/s" and shown(rs[4]) == "50 rad/s"),
+    "rpn": ("m = 2\na = 3\n!rpn\nF = m a *\n!clear\nm = 4\nm 1 +\n!rpn off\nm*2", 3,
+            "Expressions below are reverse Polish, F = m a *, until !rpn off",
+            lambda rs: rs[3].text == "F = 6" and shown(rs[6]) == "5"     # !clear leaves the mode alone
+            and rs[7].text == "Expressions are infix again" and shown(rs[8]) == "8"),
     "plotspec": ("!plotspec grid: off\n!plotspec reset", 1, "Plots below: grid off",
                  lambda rs: rs[1].text == "Plot options are back to the defaults"),
     # Statements: their lines are run by plotspec.py, solver.py and loop.py, never by the dispatcher.

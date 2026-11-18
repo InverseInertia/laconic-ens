@@ -13,6 +13,7 @@ applies only to a call with that many arguments; any other call, and a built-in 
 prints as `\\mathrm{name}(...)`.
 
 `FUNCTIONS` is filled as evaluator.py is read, so read it after importing the evaluator."""
+import inspect
 from dataclasses import dataclass
 
 
@@ -24,6 +25,15 @@ class Builtin:
     tex: str = None         # its LaTeX form, when it has a special one
     binds: str = "atom"     # how tightly that form binds
     args: int = None        # the number of arguments the form is for, when it is for only one
+
+    @property
+    def arity(self):
+        """How many arguments it always takes, or None when that varies (`hstack`, `zeros`, `props`).
+        Reverse Polish input calls a built-in of fixed arity by its name alone."""
+        params = list(inspect.signature(self.impl).parameters.values())[1:]   # after self
+        if any(p.kind is p.VAR_POSITIONAL or p.default is not p.empty for p in params):
+            return None
+        return len(params)
 
 
 FUNCTIONS = {}   # name -> Builtin, in the order they are declared

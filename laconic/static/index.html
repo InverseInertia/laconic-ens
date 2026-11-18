@@ -1828,7 +1828,9 @@ function acRetry() {
 function acOpenByHand() {
   if (ed.selectionStart === ed.selectionEnd) { acUpdate(true); if (!ac) say("Nothing to suggest here"); return; }
   if (onCommentLine()) return;
-  const range = Editing.snap(ed.value, ed.selectionStart, ed.selectionEnd);
+  // Reverse Polish puts the function after the highlight, whatever it holds (Editing.wrapWithCall).
+  const range = Editing.isRpnAt(ed.value, ed.selectionStart) ? [ed.selectionStart, ed.selectionEnd]
+    : Editing.snap(ed.value, ed.selectionStart, ed.selectionEnd);
   if (!range) { say("Highlight something on one line to wrap it"); return; }
   ed.setSelectionRange(range[0], range[1]);
   acShow(Autocomplete.wrapping(ed.value, range, "", 0, acEnv()));

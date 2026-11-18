@@ -6,6 +6,8 @@ The editor is a plain text box with extra keys that edit the source. **Settings 
 
 These are off on comment lines (but on in a comment's inline math between backticks, see [Worksheet Syntax](Worksheet-Syntax#comments-headings-meta-lines)), on the text lines under a plot (title, labels, a note's text but not its `at (x, y)`) and on a solver's `method:` line. The **Math keys** checkbox switches them all off.
 
+On a line typed in reverse Polish (below `!rpn`, see [Worksheet Syntax](Worksheet-Syntax#reverse-polish-input)) they are off too, since they write infix: every operator, bracket and space goes in as typed and Backspace deletes one character. What still works there is the subscript period after a name (`M.max` gives `M_max`), `Ctrl+G`, `Ctrl+<` for `∠`, `Ctrl+M` for a matrix's brackets and the `~` added to a global.
+
 | Key | Effect |
 |---|---|
 | `/` | Fraction. Left term is the numerator, a term on the right (if any) the denominator, otherwise `a / ()` with the caret inside. After `A.` it gives `A ./ ` |
@@ -77,7 +79,7 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 | the unknowns in `!root x, y` | variables defined above |
 | `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`); inside `haprops(`, the humid air keys |
 
-`Tab` accepts, `Up`/`Down` choose, `Esc` closes. The list shows eight at first; `Down` past the last loads the next eight, until every match is listed. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines (outside their inline math) get no suggestions, nor do option values that are text or a number (a title, `samples:`, `degree:`). Every block's options come from one table the server builds from the lists it reads the blocks with (`vocab.py` `blocks()`), so a new option is offered as soon as it exists.
+`Tab` accepts, `Up`/`Down` choose, `Esc` closes. The list shows eight at first; `Down` past the last loads the next eight, until every match is listed. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(` or the line is reverse Polish (below `!rpn`), where the name alone goes in; `Ctrl+Space` over a highlight there puts the function's name after it. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions, nor do option values that are text or a number (a title, `samples:`, `degree:`). Every block's options come from one table the server builds from the lists it reads the blocks with (`vocab.py` `blocks()`), so a new option is offered as soon as it exists.
 
 ## Extended characters
 

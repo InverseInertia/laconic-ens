@@ -36,4 +36,10 @@ for (const { text, caret, prose } of V.text_at) eq(E.isTextAt(text, caret), pros
 
 for (const { text, caret, name } of V.names_at) eq(E.nameAt(text, caret, caret), name, `${text} @${caret}`);
 
+for (const { text, line, rpn } of V.rpn_at) {
+  let ls = 0;
+  for (let i = 1; i < line; i++) ls = text.indexOf('\n', ls) + 1;
+  eq(E.isRpnAt(text, ls), rpn, `${text} @${line}`);
+}
+
 console.log(`sheettext: ${n} checks passed`);

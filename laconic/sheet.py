@@ -10,6 +10,7 @@ import pint
 from . import catalogue
 from .blockedit import newline
 from .evaluator import EvalError, Evaluator, is_symbolic
+from .functions import FUNCTIONS
 from .latex import Fmt, Printer, name_latex
 from .lineresult import LineResult, LoopPayload, PlotPayload, RegressionPayload, SolverPayload
 from .nodes import Assign, Call, Convert, ExprStmt, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
@@ -20,7 +21,7 @@ from .plotspec import Builder
 from .sheettext import inline_spans, scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import adnauseum, commands, loop, regression, solver, symsolve
+from . import adnauseum, commands, loop, regression, rpn, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -484,10 +485,25 @@ def solver_blocks(text, global_units=None):
     return [r for r in ws.results if r.solver]
 
 
+def _arity(ev):
+    """For reverse Polish input (rpn.py): how many values a bare name takes as a call on the current
+    line, or None when it is a variable. A variable the line can see wins, then a user function,
+    then a built-in that always takes the same number of arguments."""
+    def arity(name):
+        if ev.is_var(name):
+            return None
+        fkey = ev.fkey(name)
+        if fkey in ev.funcs:
+            return len(ev.funcs[fkey][0])
+        fn = FUNCTIONS.get(name)
+        return fn.arity if fn else None
+    return arity
+
+
 def _run_line(i, raw, s, ev, fmt, used):
     stmt = None
     try:
-        stmt = parse_line(s)
+        stmt = rpn.parse_line(s, _arity(ev)) if ev.mode.rpn else parse_line(s)
         used |= refs(stmt).units
         if isinstance(stmt, FuncDef):
             printer = Printer(ev, fmt, local=stmt.params)

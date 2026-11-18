@@ -288,7 +288,8 @@
   }
 
   // The edit that completes `ctx` with `cand`. A function gets brackets with the
-  // caret inside, unless the word is already followed by one.
+  // caret inside, unless the word is already followed by one, or the line is reverse Polish
+  // (below `!rpn`), where a function's name comes after its values.
   function accept(t, ctx, cand) {
     if (ctx.kind === 'prop') {   // the whole string's text, closed, caret after the quote
       const insert = cand.insert + (ctx.closed ? '' : '"');
@@ -301,7 +302,7 @@
     }
     const le = lineEndOf(t, ctx.end);
     const hasParen = t[ctx.end] === '(' && ctx.end < le;
-    if (cand.call && !hasParen) {
+    if (cand.call && !hasParen && !Editing.isRpnAt(t, ctx.start)) {
       return { from: ctx.start, to: ctx.end, insert: cand.insert + '()', caret: ctx.start + cand.insert.length + 1 };
     }
     return { from: ctx.start, to: ctx.end, insert: cand.insert, caret: ctx.start + cand.insert.length };

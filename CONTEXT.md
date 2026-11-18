@@ -149,13 +149,15 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Command registry** (`laconic/commands.py`, `COMMANDS`): the one place a command is declared, with its name, argument rule, summary, help row and effect. The dispatcher, the "Unknown command" message, the editor's command suggestions and the page's help rows are generated from it.
 
-**Argument rule**: what may follow a command's name: nothing (`!clear`), a whole number in a range (`!sigfigs n`), the rest of the line (`!plotspec`), or a statement that starts a block.
+**Argument rule**: what may follow a command's name: nothing (`!clear`), a whole number in a range (`!sigfigs n`), one word from a list, which may be optional (`!complex polar`; `!rpn` or `!rpn off`), the rest of the line (`!plotspec`), or a statement that starts a block.
 
 **Function registry** (`laconic/functions.py`, `FUNCTIONS`): the one place a built-in function is declared, by `@builtin` on its `Evaluator.fn_*` method: its signature, LaTeX form and other names. Evaluation, suggestions, Rename and the LaTeX printer read it.
 
 **Statement**: a command that begins a plot or solver block (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`). It is listed in the registry for suggestions and help, but its lines are run by `plotspec.py`, `solver.py` and `regression.py`.
 
-**Sheet mode** (`SheetMode`): the state commands change as a sheet runs top to bottom: angle unit, assume (reduce to SI), short (final result only), adnauseum (every intermediate result and unit cancellation), display precision (significant figures, decimal places, trailing zeros), hidden (`!hide`), plot defaults, and the names removed by `!clear` / `!clearf`. Each run starts with a fresh one; only commands write it, and the evaluator, `Fmt` and the plot builder read it.
+**Sheet mode** (`SheetMode`): the state commands change as a sheet runs top to bottom: angle unit, assume (reduce to SI), short (final result only), adnauseum (every intermediate result and unit cancellation), display precision (significant figures, decimal places, trailing zeros), hidden (`!hide`), reverse Polish input (`!rpn`), plot defaults, and the names removed by `!clear` / `!clearf`. Each run starts with a fresh one; only commands write it, and the evaluator, `Fmt`, the plot builder and the sheet's line reader read it.
+
+**Reverse Polish line** (`rpn.py`): a calculation below `!rpn` and above `!rpn off` that no block owns: an expression, an assignment's right side or a function's body, typed values first and operator last (`F = m a *`). It is translated into the same AST the infix parser builds, so everything after the parser treats it as any line, and it is shown in infix. sheettext's `Line.rpn` marks these lines from the text (blank ones too), and the editor turns most math keys off on them (`Editing.isRpnAt`), held together by `tests/sheettext_vectors.json`.
 
 ## Complex numbers
 
