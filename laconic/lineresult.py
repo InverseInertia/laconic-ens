@@ -65,6 +65,8 @@ class SolverPayload:
     method: str
     timeout: float
     values: list            # {name, lhs, rhs, latex} for each unknown, then the optimum
+    problem: list = None    # what it solves, as LaTeX rows aligned at `&`: the equations, or the
+                            # objective with its constraints and bounds (solver.problem_rows)
     summary: str = ""
     note: str = ""          # why a stored result could not be read
     record: dict = None     # the stored result, when there is one that reads

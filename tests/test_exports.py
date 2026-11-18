@@ -41,8 +41,23 @@ def test_a_calculation_is_its_stages_one_per_row():
 def test_solver_values_and_their_notes():
     els = elements(evaluate("x = 1\n!root x\n  equation: x^2 = 4\ny = x * 2").results)
     solver, y = els[1], els[2]
-    assert isinstance(solver, Math) and solver.out_of_date and solver.rows == ["x &= 1"] and solver.flat == ["x = 1"]
+    assert isinstance(solver, Math) and solver.out_of_date
+    assert solver.rows == ["x^{2} &= 4", "x &= 1"] and solver.flat == ["x^{2} = 4", "x = 1"]
     assert y.note == "Reads an out-of-date solver result." and not y.out_of_date
+
+
+def test_a_solver_block_shows_what_it_solves_above_its_values():
+    """#182: the equations, or the objective with its constraints and bounds, then the values."""
+    text = ("d = 1\n!minimize d\n  objective: (d - 2)^2\n  constraint: d >= 0.5\n  bounds d: 0 .. 3\n"
+            "  method: SLSQP\n  #@ result {\"hash\": \"0\"}")
+    m = elements(evaluate(text).results)[1]
+    assert m.rows[:3] == ["\\text{minimize}\\quad & \\left(d - 2\\right)^{2}", "d &\\ge 0.5", "0 \\le d &\\le 3"]
+    assert m.rows[3].startswith("d &= ")
+    assert m.inline.startswith("\\text{minimize}\\quad  \\left(d - 2\\right)^{2},\\; d \\ge 0.5")
+    assert "\\Rightarrow" in m.inline
+    root = elements(evaluate("x = 1\ny = 1\n!root x, y\n  equation: x + y = 3\n  equation: x - y").results)[2]
+    assert root.rows[:2] == ["x + y &= 3", "x - y &= 0"]
+    assert "x + 1 &= 3" in export("x = 1\n!root x\n  equation: x + 1 = 3", "md")
 
 
 def test_each_format_gets_its_flavour():

@@ -86,9 +86,12 @@ def element(r, commands=False):
         return Source(r.n, r.source.strip()) if commands else None
     if r.plot:
         return Figure(r.n, r.plot)
-    if r.solver:
-        vals = r.solver.values
-        return Math(r.n, [aligned(v["lhs"], [v["rhs"]])[0] for v in vals], r",\; ".join(v["latex"] for v in vals),
+    if r.solver:   # what it solves (#182), then its values
+        vals, problem = r.solver.values, r.solver.problem or []
+        inline = r",\; ".join(v["latex"] for v in vals)
+        if problem:
+            inline = r",\; ".join(p.replace("&", "", 1) for p in problem) + r"\quad\Rightarrow\quad " + inline
+        return Math(r.n, problem + [aligned(v["lhs"], [v["rhs"]])[0] for v in vals], inline,
                     out_of_date=not r.solver.current)
     if r.regression:
         fit = r.regression

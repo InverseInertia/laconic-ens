@@ -280,8 +280,10 @@ def _run_solver(i, raw, handle, ev, fmt, used):
         word = "minimum" if block.kind == "minimize" else "maximum"
         values.append(_value(word, rf"\text{{{word}}}", fmt.quantity(obj)))
         plain.append(f"{word} = {fmt.plain(obj)}")
+    printer = Printer(ev, fmt)
+    problem = solver.problem_rows(block, printer.tex, lambda name: fmt.var(ev.vkey(name)))
     info = SolverPayload(block.kind, block.unknowns, h, status, taint, block.autorun, prob.method,
-                         block.timeout, values, summary=solver.describe_record(stored) if qs is not None else "",
+                         block.timeout, values, problem=problem, summary=solver.describe_record(stored) if qs is not None else "",
                          note=block.stored_note, record=stored if qs is not None else None)
     return LineResult(i, raw, "solver", text="; ".join(plain), block=handle, payload=info,
                       stale=status != "valid" or taint), owned

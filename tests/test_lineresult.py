@@ -20,7 +20,7 @@ COMMON = {"n": int, "end": int, "kind": str, "source": str, "text": str, "latex"
           "error": str, "warning": str, "stale": bool, "hidden": bool, "symbols": dict}
 PLOT_KEYS = {"svg", "spec", "moved"}
 SOLVER_KEYS = {"kind", "unknowns", "hash", "status", "tainted", "autorun", "method", "timeout",
-               "values", "summary", "note", "record"}
+               "values", "problem", "summary", "note", "record"}
 
 
 @pytest.fixture(autouse=True)

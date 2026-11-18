@@ -250,6 +250,37 @@ def parse_block(block):
     return b
 
 
+REL_TEX = {"=": "=", "<=": r"\le", ">=": r"\ge"}
+
+
+def problem_rows(b, tex, name):
+    """What the block `b` solves, as LaTeX rows for the results and the documents (#182), aligned
+    at their `&` like the values under them: each equation, or the objective with its constraints
+    and bounds. `tex` typesets an expression node as written; `name` an unknown."""
+    def rel(r):
+        lhs, op, rhs = split_relation(r.src)
+        if op is None:   # a bare expression is zero
+            return f"{tex(_expr(lhs, 'equation'))} &= 0"
+        return f"{tex(_expr(lhs, 'equation'))} &{REL_TEX[op]} {tex(_expr(rhs, 'equation'))}"
+
+    if b.kind == "root":
+        return [rel(r) for r in b.equations]
+    rows = [rf"\text{{{b.kind}}}\quad & {tex(b.objective[1])}"]
+    rows += [rel(r) for r in b.constraints]
+    for _, target, lo, hi in b.bounds:
+        target = target or (b.unknowns[0] if len(b.unknowns) == 1 else None)
+        if target is None:
+            continue   # the run says what is wrong with it
+        x = name(target)
+        if lo is not None and hi is not None:
+            rows.append(rf"{tex(lo)} \le {x} &\le {tex(hi)}")
+        elif lo is not None:
+            rows.append(rf"{x} &\ge {tex(lo)}")
+        else:
+            rows.append(rf"{x} &\le {tex(hi)}")
+    return rows
+
+
 def _apply_option(b, n, key, target, value, seen):
     if key in ("objective", "method", "tol", "maxiter", "timeout", "autorun") and key in seen:
         raise SolverError(f"{key} is given twice")
