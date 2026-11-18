@@ -1612,8 +1612,12 @@ function apply(r) {
   else if (r.insert !== undefined) {
     applying = true;
     ed.setSelectionRange(r.from, r.to);
-    // execCommand edits whatever has the focus, so it is used only while the editor has it.
-    let ok = document.activeElement === src
+    // execCommand edits whatever has the focus, so it is used only while the editor has it, and
+    // only while the textarea shows the sheet text: with lines folded or matrix rows broken, the
+    // edit's range can reach into a placeholder, which reads as opening it and drops the edit, so
+    // a solver's result under a folded block was never written (#180). The page's own undo is in
+    // use then anyway.
+    let ok = lay.identity && document.activeElement === src
       && (r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert));
     if (!ok) { ed.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
     ed.setSelectionRange(...(r.sel || [r.caret, r.caret]));

@@ -161,3 +161,18 @@ def test_props_suggests_keys_and_fluids_once_coolprop_has_loaded(page):
     assert value(page) == 'rho = props("D", "T", 20\'degC, "P", 1\'atm, "Water"'
     page.keyboard.type(", \"1-")
     assert value(page).endswith('"1-')          # math keys leave a hyphen in quotes alone
+
+
+def test_run_writes_the_result_into_a_folded_block_and_keeps_the_folds(page):
+    """#180: the result went through the textarea's view, into the fold's placeholder, which opened
+    the fold and dropped the result; the rows then no longer matched the editor's lines."""
+    show(page, "## A\na = 1\n" + ROOT + "## C\nq = 3\n")
+    page.hover("#srcGutter")
+    for n in (9, 5):                               # ## C, then the !root block above it
+        page.click(f"#srcGutter > div[data-n='{n}'] .fold")
+    run_and_wait(page)
+    assert "  #@ result {" in page.evaluate("ed.value")
+    assert value(page) == "## A\na = 1\nx = 1'm\ny = 1'm\n!root x, y  ⋯ 3 lines\nz = x * 2\n## C  ⋯ 1 line\n"
+    assert page.evaluate("[...folds].sort((a, b) => a - b)") == [5, 10]
+    page.click("#out .row[data-line='9']")         # z = x * 2, one line lower now
+    assert page.evaluate("caretLine()") == 9
