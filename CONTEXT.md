@@ -14,7 +14,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : What a line is: `blank`, `heading` (`##`), `meta` (`#@`), `comment` (`#`), `command` (`!clear`), `unitdef`, `funcdef`, `assign`, `symdef` (`$a, $b`), `expr`, a block header (`plot`, `solver`, `loop`) or a line a block owns (`plotopt`, `solveropt`, `loopline`). A unit definition stays `unitdef` wherever it is, because units are defined before the sheet runs.
 
 **Block**
-: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!loop`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression` or `!symsolve` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py` or `symbolic.py`. A `!loop` owns every indented, non-blank line under it, as a solver does; a `!loop` among them, with the lines indented further under it, is a loop inside it, which `loop.py` reads out of the indentation.
+: A header line (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!slider`, `!loop`) and the indented lines it **owns**. A plot owns the `key: value` option lines under it; a solver block owns every indented, non-blank line under it, including comments and its stored result. A `!regression`, `!symsolve` or `!slider` block is read as a solver block (its lines are owned and parsed the same way) but is run by `regression.py`, `symbolic.py` or `sheet.py` with `slider.py`. A `!loop` owns every indented, non-blank line under it, as a solver does; a `!loop` among them, with the lines indented further under it, is a loop inside it, which `loop.py` reads out of the indentation.
 
 **Owner**
 : The block a line belongs to (a header owns itself), or none.
@@ -51,6 +51,8 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Late binding**
 : When a symbolic value is used, each symbol in it takes the value of the variable of its name where it is used (a later `x = 2`, a plot over x, a parameter x). With every symbol bound, the expression is a number, worked out with Pint, units and all.
 
+**Slider**: a `!slider x = 2'm` block with a `range:` line (and optional `step:` and `scale:` lines). Its header is an assignment, run as `x = 2'm` would be, so x holds the typed value below; the options only say where the slider in its row stands (`SliderPayload`). The value is a typed number, which a drag of the slider rewrites in the header through the block editor (`/api/slideredit`); a value outside the range is kept, with a warning.
+
 **Symbolic solve**: a `!symsolve x, y` block with `equation:` lines, solved by sympy each run (nothing stored). With one solution, or the one `pick: n` names, the unknowns hold it below the block.
 
 ## Line results (`lineresult.py`)
@@ -71,7 +73,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : On a block header's result, the sheettext **Block** it starts, whether the block drew or failed. `sheet.block_at(text, line)` finds a block by its header, and `sheet.solver_blocks(text)` finds every solver block. Both read the text to find the blocks and run the sheet only as far as they need (`evaluate(..., until=)`).
 
 **Payload**
-: The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) `r.solver` (`SolverPayload`: status, hash, values, stored record) or `r.regression` (`RegressionPayload`: degree, points, R², the polynomial, values). On every other line each is None, a failed block header included.
+: The kind-specific part of a result, behind `r.plot` (`PlotPayload`: the spec, the picture, whether the mouse has `moved` the view) `r.solver` (`SolverPayload`: status, hash, values, stored record) `r.regression` (`RegressionPayload`: degree, points, R², the polynomial, values) or `r.slider` (`SliderPayload`: the range, step, scale and where the slider stands, all in the value's units). On every other line each is None, a failed block header included.
 
 **Regression block**
 : `!regression a, b, c` with a `data:` line: a least-squares polynomial through points, the columns of a 2-row matrix (x row, y row) or two vectors. The header names the coefficients, lowest power first, or one name holds them all as a vector (with `degree:`). A `model:` line (`f(x, z) = a + b*x*z`) fits that function instead: its parameters are the data's variables (a vector or matrix row each, then y), the header names its coefficients, and their units are worked out from it. `xunit:` and `yunit:` give data without units (a pasted matrix) its units, and `function: f(t)` makes a polynomial fit a function. It is fitted every time the sheet runs, so it has no stored result and no Run; it defines its names (and the `r2:` name, and a model's or `function:`'s function) like an assignment.
@@ -129,7 +131,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 : Replace `text[from:to]` with `insert`. The server answers every change to the sheet text with a short list of edits against the text it was sent, never a whole new text. On the wire, offsets count UTF-16 code units, as the page's strings do.
 
 **Block editor** (`BlockEditor`)
-: The one writer of the lines a block owns. It sets, removes or replaces an option line, stores a result (always last), and appends other block-owned lines, keeping the block's **indent** and the file's **line ending**, and returns at most one minimal edit.
+: The one writer of the lines a block owns. It sets, removes or replaces an option line, stores a result (always last), appends other block-owned lines and rewrites the header (a slider's value), keeping the block's **indent** and the file's **line ending**, and returns at most one minimal edit.
 
 **Block indent**
 : The indent of a block's first owned line, or two spaces for a block with none. New lines take it; a rewritten line keeps its own.
@@ -150,7 +152,7 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 
 **Function registry** (`laconic/functions.py`, `FUNCTIONS`): the one place a built-in function is declared, by `@builtin` on its `Evaluator.fn_*` method: its signature, LaTeX form and other names. Evaluation, suggestions, Rename and the LaTeX printer read it.
 
-**Statement**: a command that begins a plot or solver block (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`). It is listed in the registry for suggestions and help, but its lines are run by `plotspec.py`, `solver.py` and `regression.py`.
+**Statement**: a command that begins a plot or solver block (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!slider`). It is listed in the registry for suggestions and help, but its lines are run by `plotspec.py`, `solver.py` and `regression.py`.
 
 **Sheet mode** (`SheetMode`): the state commands change as a sheet runs top to bottom: angle unit, assume (reduce to SI), short (final result only), adnauseum (every intermediate result and unit cancellation), display precision (significant figures, decimal places, trailing zeros), hidden (`!hide`), plot defaults, and the names removed by `!clear` / `!clearf`. Each run starts with a fresh one; only commands write it, and the evaluator, `Fmt` and the plot builder read it.
 

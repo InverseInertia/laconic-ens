@@ -27,6 +27,8 @@ Object.assign(vocab.blocks, {
   minimize: optimize, maximize: optimize,
   regression: { keys: [['data', 'points'], ['degree', 'n'], ['model', 'f'], ['r2', 'R²']], choices: {}, math: ['data', 'model', 'r2'], args: {} },
   symsolve: { keys: [['equation', 'lhs = rhs'], ['pick', 'n']], choices: {}, math: ['equation'], args: {} },
+  slider: { keys: [['range', 'low .. high'], ['step', 'snap'], ['scale', 'linear, log or pow n']],
+            choices: { scale: [['linear', 'even'], ['log', 'factor'], ['pow', 'pow n']] }, math: ['range', 'step'], args: {} },
   plot: { keys: [['title', 'title'], ['xlim', 'x range'], ['points', 'points'], ['color', 'a color'], ['grid', 'on or off'], ['xunit', 'x unit'], ['note', 'a dot'], ['samples', 'n']],
           choices: { grid: [['on', ''], ['off', '']], color: [['red', '#d55e00'], ['blue', '#0072b2']], legend: [['auto', ''], ['top right', '']] },
           math: ['xlim', 'points', 'note', 'xunit'], args: { color: 'series' } },
@@ -212,6 +214,13 @@ eq(at('!regression a, b\n  data: Lm|').ctx.kind, 'name', 'its data is an express
 eq(at('!regression a\n  degree: 2|', { force: true }).ctx, null, 'its degree is a number');
 eq(pick('!symsolve x\n  eq|'), ['equation'], 'a symbolic solve offers its keys');
 eq(at('!symsolve x\n  pick: 1|', { force: true }).ctx, null, 'its pick is a number');
+eq(A.blockAt("!slider x = 2'm\n  range: 0 .. 1", 16), { kind: 'slider', unknowns: ['x'] }, 'a slider is a block that sets one name');
+eq(pick("!slider x = 2'm\n  |", { force: true }), ['range', 'step', 'scale'], 'a slider offers its keys');
+eq(pick("!slider x = 2'm\n  range: 0 .. 1\n  scale: l|"), ['linear', 'log'], 'and the scales');
+eq(at("!slider x = 2'm\n  range: 0 .. Lm|").ctx.kind, 'name', 'its range is an expression');
+eq(at("!slider x = 2'm\n  step: 0.1'm|").ctx.kind, 'unit', 'with units, as its step is');
+eq(at("!slider x = Lm|").ctx.kind, 'name', 'its header is an assignment, so its value is math');
+eq(at("!slider x = 2'm|").ctx.kind, 'unit', 'units included');
 eq(A.candidates(at(PLOT + '  g|').ctx, { ...vocab, blocks: undefined }, PLOT + '  g'), [], 'nothing before the table has arrived');
 eq(at(PLOT + '  xlim: 0 .. Lm|', { vocab: { ...vocab, blocks: undefined } }).ctx, null, 'not even names in a value');
 

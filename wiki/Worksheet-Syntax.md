@@ -16,6 +16,7 @@ z = 3 + 4i   v = 10'V∠30'deg   complex numbers (see Complex Numbers)
 σ_max = 3   T_∞ = 300'K        Greek letters and subscripts in names
 'smoot = 1.7018'm              define a unit (see Units)
 ~g = 9.81'm / 's^2             global variable (see below)
+!slider L = 2'm                a variable set with a slider (see Sliders below)
 $a, $x   q = a*x^2            symbols, and an expression over them (see Symbolic Math)
 x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 u& = 3                         bar over a variable
@@ -104,8 +105,29 @@ In the results, every `!` line is marked the same way, so you can see what was c
 | `!plot ...` | draw a graph, see [Plots](Plots) |
 | `!plotspec key: value` | default plot option for the plots below, see [Plots](Plots) |
 | `!root`, `!minimize`, `!maximize` | solve equations or optimize, see [Solving and Optimizing](Solving-and-Optimizing) |
+| `!slider x = 2'm` | a variable set with a slider in the results, see [Sliders](#sliders) |
 
 Using a name that `!clear` removed says so: `'m' was removed by !clear`. See [Output and Export](Output-and-Export) for what the display commands do.
+
+## Sliders
+
+`!slider` defines a variable, as an assignment does, and puts a slider for it in the results. Drag it and the number in the `!slider` line changes, and every line below follows as you drag.
+
+```
+!slider L = 2'm                the value: a number, with its units if it has any
+  range: 0'm .. 10'm           required: the slider's ends, in units that agree with the value's
+  step: 0.5'm                  optional: snap to whole steps from the low end
+  scale: linear                optional: linear (the default), log, or pow n
+A = 3*L                        L is 2 m here, as after L = 2'm
+```
+
+- **range** is `low .. high`. Each end may be an expression (`0'm .. 2*w`), and a bare `0` is zero in any unit. The slider works in the units the value is typed in, so `!slider d = 250'mm` with `range: 0 .. 1'm` runs from 0 mm to 1000 mm.
+- **step** snaps the value to the low end plus a whole number of steps. Without a step the slider is continuous, and a drag writes as many digits as the slider can tell apart at that point.
+- **scale** decides how the slider's travel maps onto the range. `log` gives each stretch of the slider the same factor (the range must be above zero), for a frequency or a size spanning decades. `pow n` maps the position *p* (0 to 1) to low + (high − low)·*p*ⁿ, so `pow 2` or `pow 3` gives finer control near the low end.
+- The sheet text is the only record: a drag rewrites the number in the `!slider` line, keeping its units and everything else on the line as you typed it, and one Ctrl+Z undoes the whole drag. Arrow keys move a focused slider one step (or one notch) at a time.
+- A value typed outside the range is kept as typed. The slider stands at the nearer end, and the row warns that the value is out of range.
+- A bad option is an error on its own line, and then the slider's line is an error too and defines nothing.
+- Rename (F2) renames the variable in the `!slider` line and in its `range:` and `step:` lines. The exports print only the assignment, `L = 2 m`: the slider is for the page.
 
 ## Renaming
 

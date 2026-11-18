@@ -21,7 +21,7 @@
  *   pick(text, list)                 the edit for the chosen item, or null
  *
  * Besides names, units and commands it completes, on the indented lines of every block (`!plot`,
- * `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`), from one table, vocab.blocks
+ * `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!slider`), from one table, vocab.blocks
  * (laconic/vocab.py blocks(), built from the tables the server parses the blocks with): the option
  * keys, a solver's unknown after `bounds `, the values of a key with a few choices (`method:`,
  * `grid:`, `color:`), and names and units in the keys whose values are expressions. From
@@ -131,8 +131,8 @@
     const before = t.slice(ls, s), after = t.slice(e, le);
 
     const head = Editing.headerOf(line);
-    // A plot or loop statement holds expressions, unlike other commands.
-    const isMath = !!head && (head.kind === 'plot' || head.kind === 'loop');
+    // A plot, loop or slider statement holds expressions, unlike other commands.
+    const isMath = !!head && (head.kind === 'plot' || head.kind === 'loop' || head.kind === 'slider');
     // A solver header names its unknowns: variables defined above.
     if (head && !isMath && !/^\s*!$/.test(before)) {
       // A regression's header names new variables, the coefficients it defines: nothing to offer.

@@ -423,6 +423,11 @@ function editorOn(text, caret, elsewhere = false) {
   busy.log.length = 0;
   E.applyEdits(busy, 'L = 1\nA = L', [{ from: 0, to: 1, insert: 'w' }], true);
   deq(busy.log, [['apply', 0, 1, 'w']], 'an edit the user asked for takes the focus wherever it is');
+  const grouped = [];
+  const slid = { ...editorOn('x = 1', 0, true), place: (r) => grouped.push(r.group) };
+  E.applyEdits(slid, 'x = 1', [{ from: 4, to: 5, insert: '2' }], false, 3);
+  E.applyEdits(slid, 'x = 1', [{ from: 4, to: 5, insert: '2' }]);
+  deq(grouped, [3, undefined], 'a group (a slider\'s drag) goes with the edit, so it undoes as one step');
 }
 
 // nameAt with text highlighted (the caret cases are in sheettext_vectors.json, checked against the server's lexer).

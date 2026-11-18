@@ -25,8 +25,12 @@ def test_definitions(case):
 @pytest.mark.parametrize("case", VECTORS["blocks"], ids=lambda c: f"{c['text']}@{c['line']}")
 def test_block_of_a_line(case):
     b = scan(case["text"]).owner(case["line"])
-    got = b and {"kind": b.command,
-                 "unknowns": [u.strip() for u in b.args.split(",") if u.strip()] if b.kind == "solver" else []}
+    if b and b.command == "slider":    # the one name it defines, as the header's definition
+        d = b.lines[0].definition
+        names = [d.name] if d else []
+    else:
+        names = [u.strip() for u in b.args.split(",") if u.strip()] if b and b.kind == "solver" else []
+    got = b and {"kind": b.command, "unknowns": names}
     assert got == case["block"]
 
 
@@ -45,7 +49,9 @@ LINES = [
       ("blank", None), ("assign", None)]),                # a solver owns every indented line until a blank
     ("$a, ~$g\ny = a*g\n$x = 1\n!symsolve a\n  equation: a = 2",
      [("symdef", None), ("assign", None), ("symdef", None), ("solver", 4), ("solveropt", 4)]),
-    ("!root x\n  !root y\n  'u = 2'm",                     # owned lines are never headers; a unit definition stays one
+    ("!slider x = 2'm\n  range: 0'm .. 10'm\n  scale: log\ny = x",   # a slider reads as a solver block
+     [("solver", 1), ("solveropt", 1), ("solveropt", 1), ("assign", None)]),
+    ("!root x\n  !root y\n  'u = 2'm",                    # owned lines are never headers; a unit definition stays one
      [("solver", 1), ("solveropt", 1), ("unitdef", 1)]),
     ("!plot x, x = 0 .. 1\n!minimize d\n  objective: d",
      [("plot", 1), ("solver", 2), ("solveropt", 2)]),
@@ -90,7 +96,18 @@ SPANS = [
     ("!root x\n  bounds x: 0 .. L", ["x", "0 .. L"]),
     ("!root x\n  method: hybr", []),
     ('!root x\n  #@ result {"hash": "x"}', []),
+    ("!slider x = L", [" x = L"]),
+    ("!slider x = 2\n  range: 0 .. L", ["0 .. L"]),
+    ("!slider x = 2\n  step: L/10", ["L/10"]),
+    ("!slider x = 2\n  scale: pow 2", []),
 ]
+
+
+def test_a_slider_header_defines_its_name():
+    sheet = scan("!slider ~x = 2'm\n  range: 0 .. 1'm\n!slider\n!slider 2'm")
+    d = sheet.line(1).definition
+    assert (d.kind, d.name, d.body) == ("assign", "~x", "2'm") and sheet.block(1).command == "slider"
+    assert sheet.line(3).definition is None and sheet.line(4).definition is None
 
 
 @pytest.mark.parametrize("text,expected", SPANS)

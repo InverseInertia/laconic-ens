@@ -13,8 +13,8 @@ Every result answers one small interface, whatever its kind:
     r.symbols                        its part of the symbol table (see symbols.py)
 
 What only one kind has is its payload, behind `r.plot` (PlotPayload), `r.solver`
-(SolverPayload), `r.regression` (RegressionPayload) or `r.loop` (LoopPayload); each is None on
-every other line, a block header that failed included.
+(SolverPayload), `r.regression` (RegressionPayload), `r.loop` (LoopPayload) or `r.slider`
+(SliderPayload); each is None on every other line, a block header that failed included.
 
 `r.to_json()` is the row `/api/eval` sends. Its shape is pinned by tests/test_lineresult.py,
 so a change to it is a deliberate one; static/rows.js is the page's reader of it."""
@@ -105,6 +105,33 @@ class LoopPayload:
 
 
 @dataclass
+class SliderPayload:
+    """A `!slider` block that read (see sheet._run_slider): the variable it sets and where the slider
+    stands. Every number is in the units of the value as typed (`unit`, as the sheet prints it); the
+    page draws a range input of `ticks` positions and asks /api/slideredit for the text at a new one."""
+    name: str               # the variable's key
+    value: float
+    low: float
+    high: float
+    step: float             # None for a continuous slider
+    scale: str              # linear, log or pow
+    power: float            # pow's exponent (1 otherwise)
+    ticks: int
+    position: float         # from 0 (low) to 1 (high); a value outside the range stands at the nearer end
+    unit: str
+    labels: list            # the two ends as the sheet prints them: ["0 m", "10 m"]
+
+    @property
+    def inside(self):
+        return self.low <= self.value <= self.high
+
+    def to_json(self):
+        return {"name": self.name, "value": self.value, "low": self.low, "high": self.high, "step": self.step,
+                "scale": self.scale, "power": self.power, "ticks": self.ticks, "position": self.position,
+                "unit": self.unit, "labels": self.labels}
+
+
+@dataclass
 class LineResult:
     n: int
     source: str
@@ -117,7 +144,7 @@ class LineResult:
     stale: bool = False     # reads a value from a solver whose result is out of date
     hidden: bool = False    # below !hide: it ran, but the results pane and the exports leave it out
     block: object = None    # a block header: the sheettext Block it starts, drawn or failed
-    payload: object = None  # PlotPayload, SolverPayload, RegressionPayload or LoopPayload
+    payload: object = None  # PlotPayload, SolverPayload, RegressionPayload, LoopPayload or SliderPayload
     symbols: dict = None    # this line's part of the symbol table
     pending: bool = False   # a plot not drawn in this run (sheet.evaluate's `plots`); /api/plot draws it
 
@@ -150,6 +177,10 @@ class LineResult:
         return self.payload if isinstance(self.payload, LoopPayload) else None
 
     @property
+    def slider(self):
+        return self.payload if isinstance(self.payload, SliderPayload) else None
+
+    @property
     def latex(self):
         parts = [p for p in ([self.lhs] if self.lhs else []) + self.stages if p]
         return " = ".join(parts)
@@ -175,4 +206,6 @@ class LineResult:
             row["solver"] = self.solver.to_json()
         if self.regression:
             row["regression"] = self.regression.to_json()
+        if self.slider:
+            row["slider"] = self.slider.to_json()
         return row

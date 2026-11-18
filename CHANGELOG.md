@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Sliders**: `!slider L = 2'm` with an indented `range: 0'm .. 10'm` defines `L` as an assignment does and puts a slider for it in the results, with the range's ends at either side. Dragging it rewrites the number in the `!slider` line, keeping its units, and the lines below update as you drag; one Ctrl+Z undoes the whole drag. Optional `step: 0.5'm` snaps the value to whole steps, and `scale: log` or `scale: pow 2` changes how the slider's travel maps onto the range. A value typed outside the range is kept, with a warning. Exports show just `L = 2 m`. (#178)
+
 ### Fixes
 - Clicking a line in the results no longer scrolls it toward the top of the results, and no longer scrolls the editor to put that line at the top: both stay where they are when the line is already showing, and an editor line out of sight is brought to the middle. (#173)
 - Running a solver whose block is folded in the editor now writes its result into the sheet and leaves the block folded. Before, the run opened the fold and the result was not written, so the block stayed "Not run yet" and the editor no longer matched the results. Other edits LENS makes to the sheet while lines are folded or a matrix is shown one row per line go in the same way. (#180)

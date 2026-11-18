@@ -59,7 +59,10 @@
     {"text": "!root\n  equation: x = 1", "line": 2, "block": {"kind": "root", "unknowns": []}},
     {"text": "!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    x = i*j", "line": 3, "block": {"kind": "loop", "unknowns": []}},
     {"text": "!loop i = 1 .. 3\n  S = S + i", "line": 2, "block": {"kind": "loop", "unknowns": []}},
-    {"text": "!loop i = 1 .. 3\n  S = S + i\nT = S", "line": 3, "block": null}
+    {"text": "!loop i = 1 .. 3\n  S = S + i\nT = S", "line": 3, "block": null},
+    {"text": "!slider x = 2'm\n  range: 0'm .. 10'm\n  scale: log", "line": 3, "block": {"kind": "slider", "unknowns": ["x"]}},
+    {"text": "!slider ~v_0 = 2\n  step: 0.5", "line": 2, "block": {"kind": "slider", "unknowns": ["~v_0"]}},
+    {"text": "!slider x = 2\n  range: 0 .. 3\ny = x", "line": 3, "block": null}
   ],
   "names_at": [
     {"text": "σ_max = 3", "caret": 2, "name": "σ_max"},
@@ -94,6 +97,8 @@
     {"text": "!minimize d\n  bounds d: 0 .. 1", "caret": 26, "prose": false},
     {"text": "!root x\n  equation: x^2 = 2", "caret": 24, "prose": false},
     {"text": "!plot f(x), x = 0 .. 1\n  points: t, s", "caret": 35, "prose": false},
-    {"text": "!regression a\n  model: f(x) = a*x", "caret": 30, "prose": false}
+    {"text": "!regression a\n  model: f(x) = a*x", "caret": 30, "prose": false},
+    {"text": "!slider x = 2'm", "caret": 13, "prose": false},
+    {"text": "!slider x = 2\n  range: 0 .. L", "caret": 28, "prose": false}
   ]
 }
