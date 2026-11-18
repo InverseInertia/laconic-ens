@@ -124,6 +124,23 @@
     return null;
   }
 
+  // Whether the line at `p` is read in reverse Polish: below a `!rpn` (or `!rpn on`) command and
+  // above the next `!rpn off`, a calculation that no block owns, or a blank line that would be one.
+  // As laconic/sheettext.py's Line.rpn (tests/sheettext_vectors.json). Most math keys are off there.
+  const RPN_CMD = /^\s*!rpn(?:\s+(on|off))?\s*$/;
+  function isRpnAt(t, p) {
+    const ls = lineStartOf(t, p);
+    if (t.lastIndexOf('!rpn', ls) < 0) return false;
+    const s = t.slice(ls, lineEndOf(t, p)).trim();
+    if (/^[#!]|^~?\$/.test(s) || (s.startsWith("'") && s.includes('=')) || blockAt(t, ls)) return false;
+    let on = false;
+    for (let a = 0; a < ls; a = lineEndOf(t, a) + 1) {
+      const m = RPN_CMD.exec(t.slice(a, lineEndOf(t, a)));
+      if (m && !blockAt(t, a)) on = m[1] !== 'off';
+    }
+    return on;
+  }
+
   // Enter keeps a block going: after a block header, the new line takes the block's indent (that of
   // the line under the header, or two spaces more than the header's); on an owned line, that line's indent. On a line that
   // is only its indent, Enter takes the indent away instead, leaving the block. Null elsewhere.
@@ -535,8 +552,13 @@
     return single && (!sel.includes("'") || sel[0] === "'") ? sel : '(' + sel + ')';
   }
 
-  // name(selection): wraps whole terms in a call and leaves the caret after it.
+  // name(selection): wraps whole terms in a call and leaves the caret after it. On a reverse
+  // Polish line the name goes after the selection instead: `a b` becomes `a b hypot`.
   function wrapWithCall(t, s, e, name) {
+    if (isRpnAt(t, s)) {
+      const sel = t.slice(s, e).trimEnd(), ins = sel + ' ' + name;
+      return sel.includes('\n') ? null : edit(s, s + sel.length, ins, s + ins.length);
+    }
     const n = snap(t, s, e);
     if (!n) return null;
     const ins = name + '(' + t.slice(n[0], n[1]) + ')';
@@ -709,6 +731,8 @@
     if (((t.slice(ls, s).match(/"/g) || []).length % 2) === 1) return null;
     const g = e === s && !isTok(ch) && !MARKS.includes(ch) ? globalStart(t, s, ctx) : -1;
     if (g >= 0) return withTilde(t, s, g, ch, (t2, s2) => charAction(ch, t2, s2, s2, plainCtx(ctx)));
+    // Reverse Polish has no brackets or spaced operators to add: only a name's subscript period.
+    if (isRpnAt(t, s)) return ch === '.' ? subscript(t, s, e, ls) : null;
     if (e > s && WRAPPERS.has(ch)) {
       const n = snap(t, s, e); // act on whole terms, however the text was highlighted
       if (!n) {
@@ -798,11 +822,14 @@
     if (ctx && ctx.enabled === false) return plain && key === 'Enter' ? newline(t, s, e) : null;
     const ls = lineStartOf(t, s), le = lineEndOf(t, e);
     const comment = isTextAt(t, s);
+    // On a reverse Polish line only Ctrl+G, Ctrl+<, Ctrl+M and the ~ of a global work: the rest
+    // write infix (calls, fractions, spaced operators) or take it apart.
+    const rpn = !comment && isRpnAt(t, s);
     const k = key.length === 1 ? key.toLowerCase() : key;
 
     // Ctrl+[ takes the term as an array and opens one index: idx(A, i), shown A_i.
     // Ctrl+Shift+[ opens row and column: elem(A, i, j), shown A_i,j.
-    if (mods.ctrl && !mods.alt && !mods.meta && !comment && (key === '[' || key === '{')) {
+    if (mods.ctrl && !mods.alt && !mods.meta && !comment && !rpn && (key === '[' || key === '{')) {
       return mods.shift || key === '{' ? indexCall(t, s, e, ls, 'elem') : indexCall(t, s, e, ls, 'idx');
     }
     // Ctrl+< (Ctrl+Shift+, on a US keyboard) types the polar angle sign: 5'V∠30'deg.
@@ -817,6 +844,7 @@
         const n = snap(t, s, e);
         return n ? edit(n[0], n[1], '[' + t.slice(n[0], n[1]) + ']', n[1] + 2) : null;
       }
+      if (rpn) return null;
       if (k === 't') return transpose(t, s, e, ls);
       if (key === '/') {
         return t[s - 1] === '_' && isIdent(t[s - 2]) && e === s ? spaced(t, s - 1, e, './', ls) : spaced(t, s, e, '/', ls);
@@ -824,7 +852,7 @@
       if (key === '\\') return edit(s, e, '\\', s + 1);
     }
     // Ctrl+T is reserved by most browsers, so Alt+T does the same thing.
-    if (mods.alt && !mods.ctrl && !mods.shift && !mods.meta && k === 't' && !comment) {
+    if (mods.alt && !mods.ctrl && !mods.shift && !mods.meta && k === 't' && !comment && !rpn) {
       return transpose(t, s, e, ls);
     }
     // Alt+Up grows the selection by one term-aware step (Alt+Down, in the page, undoes a step).
@@ -840,7 +868,7 @@
       return newline(t, le, le) || edit(le, le, '\n', le + 1);
     }
     if (plain && key === 'Enter') return newline(t, s, e);
-    if (plain && !comment) {
+    if (plain && !comment && !rpn) {
       if (key === 'ArrowRight' && e === s) return exitSlot(t, s, ls);
       if (key === 'Backspace') return backspace(t, s, e, ls, le);
     }
@@ -851,7 +879,7 @@
     DEFAULT_GREEK, charAction, keyAction, nameKeyAction, indentLines, newline, headerOf, blockAt, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
-    isTextAt, isProse,
+    isTextAt, isProse, isRpnAt,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Editing = api;

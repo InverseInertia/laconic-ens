@@ -37,6 +37,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `test_laconic.py`, `test_units.py` | evaluation, LaTeX, custom units |
 | `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py`, `test_blockedit.py`, `test_commands.py`, `test_symbols.py`, `test_markdown.py`, `test_pdfdoc.py`, `test_fileassoc.py`, `test_instance.py`, `test_exports.py`, `test_functions.py` | one module each |
 | `test_complex.py` | complex numbers |
+| `test_rpn.py` | reverse Polish input (`!rpn`): the translation into the infix AST, units, functions, stack errors, infix typesetting and exports, Rename, and which lines the mode covers |
 | `test_release_notes.py`, `test_stamp_changelog.py` | the release scripts in `packaging/` that read and stamp `CHANGELOG.md` |
 | `test_sheettext.py`, `sheettext_vectors.json` | line kinds, blocks, spans and tokens; the vectors are shared with `test_sheettext.js` |
 | `test_lineresult.py` | the line result interface, the block lookups, and the contract on the `/api/eval` row shape (it also runs `rows.js` over real rows) |

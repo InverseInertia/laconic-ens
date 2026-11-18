@@ -153,3 +153,10 @@ def test_prose_is_outside_every_expression_span(case):
     line = scan(text).line(text.count("\n", 0, caret) + 1)
     col = caret - (text.rfind("\n", 0, caret) + 1)
     assert (not any(a <= col <= b for a, b in line.spans)) == case["prose"]
+
+
+@pytest.mark.parametrize("case", VECTORS["rpn_at"], ids=lambda c: f"{c['text']}@{c['line']}")
+def test_lines_below_rpn_are_reverse_polish(case):
+    """Which lines `!rpn` reads in reverse Polish; the editor turns most math keys off on the same
+    lines (Editing.isRpnAt)."""
+    assert scan(case["text"]).line(case["line"]).rpn == case["rpn"]

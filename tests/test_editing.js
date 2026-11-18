@@ -474,6 +474,20 @@ eq(sim('!loop i = 1 .. 3\n  !loop j = 1 .. 2|\n  S = S + i', ['Enter']), '!loop 
 eq(sim('  x = 1|', ['Enter']), '  x = 1\n|', 'an indented line outside any block');
 eq(sim('!plot f(x), x = 0 .. 1\n |  title: A', ['Enter']), '!plot f(x), x = 0 .. 1\n \n|  title: A', 'a caret inside the indent');
 eq(sim('!root x\n  equation: x = 1\n  |\n  bounds x: 0 .. 1', ['Enter']), '!root x\n  equation: x = 1\n|\n  bounds x: 0 .. 1', 'a bare indent between owned lines');
+// Below !rpn the math keys leave the line alone (laconic/rpn.py reads it): no spaced operators, brackets
+// or fractions, and Backspace deletes one character. A name's subscript, Ctrl+M, ∠ and a global's ~ still work.
+eq(sim('!rpn\nF = m a|', ' *'), '!rpn\nF = m a *|', 'an operator goes in as typed');
+eq(sim('!rpn\n|', "3'm 4'm + 2 / 3 ^ 1 -"), "!rpn\n3'm 4'm + 2 / 3 ^ 1 -|", 'a whole line as typed');
+eq(sim('!rpn\nx 2 ^ |', ['Backspace']), '!rpn\nx 2 ^|', 'Backspace deletes one character');
+eq(sim('!rpn\nM|', '.max 2 *'), '!rpn\nM_max 2 *|', 'a period after a name is still its subscript');
+eq(sim('!rpn\nA B .*|', ''), '!rpn\nA B .*|', 'a period after a space is the elementwise operator');
+eq(sim('!rpn\nx |', [ctrl('m')]), '!rpn\nx [|]', 'Ctrl+M opens a matrix');
+eq(E.keyAction('t', { ctrl: true }, '!rpn\nA', 6, 6, {}), null, 'Ctrl+T writes no transpose');
+eq(sim('~g = 5\n!rpn\nx = g|', ' 2 *', G), '~g = 5\n!rpn\nx = ~g 2 *|', 'a global still gets its ~');
+eq(sim('!rpn\n!rpn off\nx = a|', '*b'), '!rpn\n!rpn off\nx = a * b|', '!rpn off turns the math keys back on');
+eq(sim('!rpn\n# a|', '*b'), '!rpn\n# a*b|', 'a comment is prose as always');
+eq(JSON.stringify(E.wrapWithCall('!rpn\na b + c', 5, 10, 'sqrt')), JSON.stringify({ from: 5, to: 10, insert: 'a b + sqrt', caret: 15 }), 'Ctrl+Space puts the function after the highlight');
+
 eq(E.newline('x = 1', 5, 5), null, 'newline: nothing to do outside a block');
 eq(E.headerOf('!plotspec grid: off'), null, '!plotspec starts no block');
 eq(E.headerOf('!rooted'), null, 'nor a longer word');

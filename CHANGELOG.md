@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Reverse Polish input**: below a `!rpn` line, expressions are typed in reverse Polish, values first and then the operator or function, separated by spaces: `F = m a *`, `3'm 4'm +`, `f(x) = x 2 ^ 1 +`, `r = x 2 ^ y 2 ^ + sqrt`. Numbers keep their units, `neg` is unary minus, and a function that takes a varying number of values is given that number after a slash (`A B hstack/2`). The results and exports show the lines in ordinary infix. A stack that runs short, or has more than one value left, is an error on that line. `!rpn off` returns to infix. The editor's math keys stay out of the way on these lines, and a function suggestion goes in without brackets. (#179)
+
 ### Fixes
 - Clicking a line in the results no longer scrolls it toward the top of the results, and no longer scrolls the editor to put that line at the top: both stay where they are when the line is already showing, and an editor line out of sight is brought to the middle. (#173)
 - Running a solver whose block is folded in the editor now writes its result into the sheet and leaves the block folded. Before, the run opened the fold and the result was not written, so the block stayed "Not run yet" and the editor no longer matched the results. Other edits LENS makes to the sheet while lines are folded or a matrix is shown one row per line go in the same way. (#180)

@@ -1152,3 +1152,16 @@ def test_with_wrapping_a_matrix_shows_one_row_per_line_but_a_vector_does_not(pag
         page.focus("#src")
         page.keyboard.press("Alt+z")
     assert value(page) == "A = [1, 2; 30, 5, 4]\nv = [1; 2; 3]"
+
+
+def test_reverse_polish_lines_are_typed_as_is_and_shown_in_infix(page):
+    """Below !rpn the math keys add no spaces, brackets or fractions, a function suggestion takes no
+    brackets, and the result is typeset as ordinary infix."""
+    reset(page, "m = 2'kg\na = 3'm/'s^2\n!rpn\n")
+    page.keyboard.type("F = m a *\nx = m 2 ^ 3 / 1'kg^2 -\n9 sqr")
+    page.wait_for_selector("#ac:not([hidden])")
+    page.keyboard.press("Tab")
+    assert value(page) == "m = 2'kg\na = 3'm/'s^2\n!rpn\nF = m a *\nx = m 2 ^ 3 / 1'kg^2 -\n9 sqrt"
+    page.wait_for_selector("#out .row[data-line='6'] .katex .sqrt")              # sqrt(9), typeset
+    assert "F=m⋅a" in page.inner_text("#out .row[data-line='4']").replace("\n", "").replace(" ", "")
+    assert page.locator("#out .row[data-line='5'] .katex .mfrac").count() >= 1      # m^2/3 - 1'kg^2

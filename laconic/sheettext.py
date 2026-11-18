@@ -45,6 +45,9 @@ _SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve)(?:[ \t]
 _PLOT_OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
+# `!rpn` (or `!rpn on`) and `!rpn off`, as commands.py accepts them: the lines between are read in
+# reverse Polish (rpn.py). The editor turns its math keys off on them (static/editing.js isRpnAt).
+_RPN_RE = re.compile(r"^!rpn(?:\s+(on|off))?$")
 
 # Option values that are expressions. Everything else under a block (titles, colours, methods)
 # is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
@@ -142,6 +145,8 @@ class Line:
     result: str = None      # under a solver: the JSON of a stored `#@ result` line
     comment: bool = False   # a `#` line (comment, heading or meta), also when a block owns it
     definition: Definition = None
+    rpn: bool = False       # below `!rpn`: a line whose expression is reverse Polish (or a blank one,
+                            # which would be); never a block's line, a unit definition or a symbol declaration
 
     @property
     def indent(self):
@@ -263,7 +268,7 @@ def _solver_spans(o):
 
 def scan(text):
     """Read `text` into a Sheet: one Line per line, and the blocks."""
-    lines, blocks, cur = [], {}, None
+    lines, blocks, cur, rpn = [], {}, None, False
     for n, (t, eol) in enumerate(_split(text), 1):
         s = t.strip()
         line = Line(n, t, eol, _kind(s))
@@ -303,5 +308,8 @@ def scan(text):
             cur.lines.append(line)
         if line.kind in ("unitdef", "funcdef", "assign", "symdef", "expr"):
             line.definition = definition(s)
+        if line.kind == "command" and (m := _RPN_RE.match(s)):
+            rpn = m.group(1) != "off"
+        line.rpn = rpn and line.kind in ("blank", "funcdef", "assign", "expr")
         lines.append(line)
     return Sheet(lines, blocks)
