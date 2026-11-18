@@ -65,12 +65,23 @@
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
   // Where the text is prose, not math: outside laconic/sheettext.py's expression spans, as
-  // tests/sheettext_vectors.json holds them together. Comment lines; under a plot, a title or label
-  // and a note's text (its `at (x, y)` is math); under a solver, the method.
+  // tests/sheettext_vectors.json holds them together. Comment lines, outside their inline math
+  // between backticks; under a plot, a title or label and a note's text (its `at (x, y)` is math);
+  // under a solver, the method.
   const TEXT_OPTION = /^[ \t]+(title|xlabel|ylabel|label|note|method)(?:[ \t]+[^\s:]+)?[ \t]*:/;
+  // A comment's or heading's inline math: [start, end] of what is between each pair of backticks,
+  // as sheettext.inline_spans has them (an odd backtick, or a pair holding only spaces, is text).
+  function inlineSpans(line) {
+    const ticks = [...line.matchAll(/`/g)].map((m) => m.index), out = [];
+    for (let k = 0; k + 1 < ticks.length; k += 2) {
+      if (line.slice(ticks[k] + 1, ticks[k + 1]).trim()) out.push([ticks[k] + 1, ticks[k + 1]]);
+    }
+    return out;
+  }
   function isTextAt(t, p) {
-    const ls = lineStartOf(t, p), line = t.slice(ls, lineEndOf(t, p));
-    if (line.trimStart().startsWith('#')) return true;
+    const ls = lineStartOf(t, p), line = t.slice(ls, lineEndOf(t, p)), head = line.trimStart();
+    if (head.startsWith('#@')) return true;
+    if (head.startsWith('#')) return !inlineSpans(line).some(([a, b]) => a <= p - ls && p - ls <= b);
     const m = TEXT_OPTION.exec(line);
     if (!m) return false;
     if (m[1] !== 'note') return true;
@@ -80,11 +91,12 @@
   }
   // The browser may spellcheck the selection's lines when every one is prose: a comment or heading
   // (not a `#@` line LENS writes), or a plot's title, label or note. A solver's `method:` is a
-  // name, not prose. The editor is one textarea, so its spellcheck follows the caret's lines.
+  // name, not prose, nor is a comment's inline math while the caret is in it. The editor is one textarea, so its spellcheck follows the caret's lines.
   function isProse(t, s, e) {
     for (let ls = lineStartOf(t, s); ; ls = lineEndOf(t, ls) + 1) {
       const line = t.slice(ls, lineEndOf(t, ls)), m = TEXT_OPTION.exec(line), head = line.trimStart();
       if (!(head.startsWith('#') ? !head.startsWith('#@') : m && m[1] !== 'method')) return false;
+      if (head.startsWith('#') && ls === lineStartOf(t, s) && !isTextAt(t, s)) return false;   // in a comment's inline math
       if (lineEndOf(t, ls) >= (e === undefined ? s : e)) return true;
     }
   }

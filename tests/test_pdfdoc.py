@@ -174,6 +174,24 @@ def test_layout_in_chromium(tmp_path):
     assert out.startswith(b"%PDF") and len(re.findall(rb"/Type\s*/Page[^s]", out)) > 1
 
 
+def test_inline_math_is_typeset_in_chromium(tmp_path):
+    """A comment's and a heading's inline math is typeset in the line of text, not as a display (#174)."""
+    playwright = pytest.importorskip("playwright.sync_api")
+    path = tmp_path / "s.html"
+    path.write_text(doc("## Weight `W = m*g`\n# with `F = m*g/2` and `!plot`"), encoding="utf-8")
+    with playwright.sync_playwright() as p:
+        try:
+            browser = p.chromium.launch(executable_path=os.environ.get("CHROMIUM_PATH") or None)
+        except Exception as e:
+            pytest.skip(f"no Chromium: {e}")
+        pg = browser.new_page()
+        pg.goto(path.as_uri())
+        pg.wait_for_function("document.querySelectorAll('.imath .katex').length == 2")
+        assert pg.locator("h2 .imath .katex").count() == 1 and pg.locator("p .imath .katex .mfrac").count() == 1
+        assert pg.locator(".katex-display").count() == 0 and pg.inner_text("p code") == "!plot"
+        browser.close()
+
+
 @pytest.mark.skipif(not os.environ.get("LENS_CHROMIUM"), reason="set LENS_CHROMIUM to run the headless print")
 def test_headless_print(tmp_path):
     from laconic.__main__ import main

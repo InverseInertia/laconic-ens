@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Inline math in comments**: in a comment or heading, text between backticks is typeset as math in the line, as a calculation is shown before it is worked out: `` # the force `F = m*a` `` shows F = m·a. Backticked text that is not an expression shows in the code font instead, and a single backtick stays as typed. The LaTeX, Markdown and PDF exports keep it (as `$...$` in LaTeX and Markdown), Math keys work between the backticks, and Rename renames names there too. (#174)
+
 ### Fixes
 - Clicking a line in the results no longer scrolls it toward the top of the results, and no longer scrolls the editor to put that line at the top: both stay where they are when the line is already showing, and an editor line out of sight is brought to the middle. (#173)
 - Running a solver whose block is folded in the editor now writes its result into the sheet and leaves the block folded. Before, the run opened the fold and the result was not written, so the block stayed "Not run yet" and the editor no longer matched the results. Other edits LENS makes to the sheet while lines are folded or a matrix is shown one row per line go in the same way. (#180)

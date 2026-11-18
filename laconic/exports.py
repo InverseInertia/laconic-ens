@@ -22,11 +22,24 @@ STALE = "Reads an out-of-date solver result."
 @dataclass
 class Heading:
     text: str
+    parts: list = None      # the text as (kind, value) parts, as a paragraph's lines are
+
+    def __post_init__(self):
+        if self.parts is None:
+            self.parts = [("text", self.text)]
 
 
 @dataclass
 class Paragraph:
-    lines: list             # comment lines, one per worksheet line, run on as one paragraph
+    """Comment lines, one per worksheet line, run on as one paragraph. Each line is a list of
+    (kind, value) parts: "text" as typed, "math" (inline math, LaTeX in the run's flavour) or
+    "code" (backticked text that is not math). A writer renders each part (`inline`)."""
+    lines: list
+
+
+def inline(parts, text, math, code):
+    """One line of parts rendered with a function for each kind of part, joined."""
+    return "".join({"text": text, "math": math, "code": code}[k](v) for k, v in parts)
 
 
 @dataclass
@@ -77,9 +90,9 @@ def element(r, commands=False):
     if r.hidden:
         return None
     if r.kind == "heading":
-        return Heading(r.text)
+        return Heading(r.text, r.parts)
     if r.kind == "comment":
-        return Paragraph([r.text])
+        return Paragraph([r.parts or [("text", r.text)]])
     if r.kind == "error":
         return Error(r.n, r.error)
     if r.kind in ("command", "symdef"):   # a symbol declaration is kept as typed, like a command

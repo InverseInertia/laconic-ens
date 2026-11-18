@@ -26,6 +26,13 @@ def test_units_comments_commands_and_numbers_are_left_alone():
     assert n == 2
 
 
+def test_inline_math_in_comments_is_renamed_with_the_rest():
+    text = "m = 2'kg\n# with `F = m*a`, m stays\n## Mass `m`\n"
+    out, n = renamed(text, "m", "mass")
+    assert out == "mass = 2'kg\n# with `F = mass*a`, m stays\n## Mass `mass`\n"
+    assert n == 3
+
+
 def test_function_names_parameters_and_decorated_names():
     out, _ = renamed("x` = 2\nx = 1\ng(x) = x + 1\n", "x", "y")
     assert out == "x` = 2\ny = 1\ng(y) = y + 1\n"

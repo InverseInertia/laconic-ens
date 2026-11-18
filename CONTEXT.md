@@ -34,6 +34,9 @@ Short definitions of the terms the code and its reviews use. Code lives in `laco
 **Definition**
 : What a code line defines: a variable (`x = ...`), a function (`f(x) = ...`, whose **parameters** are local to the line), a unit (`'u = ...`) or symbolic variables (`$a, $b`).
 
+**Inline math**
+: Text between a pair of backticks on a comment or heading line (`` # force `F = m*a` ``). It is an expression span, so Rename and the editor's math keys reach it; the sheet typesets it as written (`sheet._inline`), or shows it as code when it does not parse, and every export renders it inline. Backticks pair from the left; an odd one, or a pair with only spaces between, is text.
+
 **Global**
 : A name defined with a leading `~`. It survives `!clear`, and the editor marks each use of it.
 

@@ -9,6 +9,8 @@ Every result answers one small interface, whatever its kind:
     r.warning, r.stale
     r.latex_rows                     `latex` broken one stage per row, for a narrow layout
     r.hidden                         below `!hide`: the line ran, but no row or export shows it
+    r.parts                          a comment or heading with inline math (`F = m*a`): its text
+                                     as ("text" | "math" | "code", value) pairs, else None
     r.block                          its block handle: the sheettext Block a header starts, else None
     r.symbols                        its part of the symbol table (see symbols.py)
 
@@ -120,6 +122,7 @@ class LineResult:
     payload: object = None  # PlotPayload, SolverPayload, RegressionPayload or LoopPayload
     symbols: dict = None    # this line's part of the symbol table
     pending: bool = False   # a plot not drawn in this run (sheet.evaluate's `plots`); /api/plot draws it
+    parts: list = None      # a comment or heading with inline math: its text as [(kind, value)] (sheet._inline)
 
     @property
     def end(self):
@@ -171,6 +174,8 @@ class LineResult:
             row["plot"] = self.plot.to_json()
         if self.pending:
             row["pending"] = True
+        if self.parts:
+            row["parts"] = [list(p) for p in self.parts]
         if self.solver:
             row["solver"] = self.solver.to_json()
         if self.regression:

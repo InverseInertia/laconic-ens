@@ -1,11 +1,11 @@
 """Line results -> a Markdown note in the style Obsidian reads: headings as `#`, comments as
-plain text, each calculation as a `$$ ... $$` block and each plot as an embedded SVG image.
+plain text (inline math as `$...$`), each calculation as a `$$ ... $$` block and each plot as an embedded SVG image.
 
 The math is the live preview's flavour (`\\mathrm{kN}`, not siunitx), which MathJax renders
 as it is; commands such as `!clear` and the option lines of a block are left out."""
 import base64
 
-from .exports import OUT_OF_DATE, Error, Figure, Heading, Paragraph, elements
+from .exports import OUT_OF_DATE, Error, Figure, Heading, Paragraph, elements, inline
 
 _TAG = "\\htmlData{"
 
@@ -44,12 +44,18 @@ def _callout(kind, title, body=""):
     return f"> [!{kind}] {title}" + "".join(f"\n> {l}" for l in body.splitlines())
 
 
+def _line(parts):
+    """A comment's text as typed (a backtick left over escaped, so it shows), with its inline math
+    as `$...$` and backticked text that is not math as code."""
+    return inline(parts, lambda text: text.replace("`", "\\`"), lambda tex:f"${plain_math(tex).strip()}$", lambda code: f"`{code}`")
+
+
 def block(e):
     """The Markdown for one export element (see exports.py)."""
     if isinstance(e, Heading):
-        return "## " + e.text
+        return "## " + _line(e.parts)
     if isinstance(e, Paragraph):
-        return "\n".join(e.lines)       # a comment that runs over several lines stays one paragraph
+        return "\n".join(_line(line) for line in e.lines)   # a comment over several lines stays one paragraph
     if isinstance(e, Error):
         return _callout("error", f"Line {e.n}", e.message)
     if isinstance(e, Figure):

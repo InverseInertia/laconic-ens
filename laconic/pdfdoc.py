@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 from . import browser
-from .exports import OUT_OF_DATE, Error, Figure, Heading, Paragraph, elements
+from .exports import OUT_OF_DATE, Error, Figure, Heading, Paragraph, elements, inline
 from .markdown import plain_math
 
 STATIC = Path(__file__).parent / "static"
@@ -50,16 +50,19 @@ p { margin: 1.5mm 0; }
 .callout.error { border-color: #b3261e; background: #fbeaea; }
 .callout.warning { border-color: #b8860b; background: #fdf5e0; }
 .callout b { display: block; }
+code { font: 9.5pt "IBM Plex Mono", monospace; }
 .plot { text-align: center; }
 .plot svg { max-width: 100%%; height: auto; }
 """
 
-# Render every formula, then fit any that is wider than the column, by the same rule as the
+# Render the inline math in comments and headings and every formula, then fit any that is wider than the column, by the same rule as the
 # results pane (static/mathfit.js): a little too wide is shrunk; much too wide is set again as one
 # wrapped row per stage, and shrunk only if a piece still does not fit. zoom (unlike transform)
 # changes the layout box, so the page breaks are worked out from the fitted size. Once the fonts
 # are in, every formula is measured and fitted again.
 _SCRIPT = """
+for (const el of document.querySelectorAll(".imath"))
+  katex.render(el.dataset.tex, el, {throwOnError: false, output: "html"});
 for (const el of document.querySelectorAll(".math"))
   MathFit.set(el, el.dataset.tex, JSON.parse(el.dataset.rows), {katex: {throwOnError: false, output: "html"}});
 MathFit.fitAll(document);
@@ -86,12 +89,19 @@ def _callout(kind, title, body=""):
     return f'<div class="block callout {kind}"><b>{_esc(title)}</b>{_esc(body)}</div>'
 
 
+def _line(parts):
+    """A comment's text, with its inline math typeset by the page's script and backticked text
+    that is not math as code."""
+    return inline(parts, _esc, lambda tex: f'<span class="imath" data-tex="{_esc(plain_math(tex))}"></span>',
+                  lambda code: f"<code>{_esc(code)}</code>")
+
+
 def block(e):
     """The HTML for one export element (see exports.py)."""
     if isinstance(e, Heading):
-        return f"<h2>{_esc(e.text)}</h2>"
+        return f"<h2>{_line(e.parts)}</h2>"
     if isinstance(e, Paragraph):   # a comment over several lines stays one paragraph
-        return "<p>" + "<br>".join(_esc(line) for line in e.lines) + "</p>"
+        return "<p>" + "<br>".join(_line(line) for line in e.lines) + "</p>"
     if isinstance(e, Error):
         return _callout("error", f"Line {e.n}", e.message)
     if isinstance(e, Figure):

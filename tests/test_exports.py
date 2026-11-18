@@ -16,7 +16,8 @@ def test_one_element_per_line_shown():
 
 def test_comment_lines_run_on_unless_something_shown_comes_between():
     text = "# a\n\n# b\n!clear\n# c\nx = 1\n# d"
-    assert [e.lines for e in elements(evaluate(text).results) if isinstance(e, Paragraph)] == [["a", "b", "c"], ["d"]]
+    paras = [e.lines for e in elements(evaluate(text).results) if isinstance(e, Paragraph)]
+    assert paras == [[[("text", "a")], [("text", "b")], [("text", "c")]], [[("text", "d")]]]
     kept = elements(evaluate(text).results, commands=True)    # the .tex file keeps the command
     assert kinds(kept) == ["Paragraph", "Source", "Paragraph", "Math", "Paragraph"] and kept[1] == Source(4, "!clear")
 
@@ -24,7 +25,7 @@ def test_comment_lines_run_on_unless_something_shown_comes_between():
 def test_lines_hidden_by_hide_are_left_out_as_on_the_page():
     text = "# a\n!hide\n# b\nx = 2\n!plot x*t, t = 0 .. 1\nnope +\n!show\ny = x + 1"
     els = elements(evaluate(text).results)
-    assert kinds(els) == ["Paragraph", "Error", "Math"] and els[0].lines == ["a"] and els[1].n == 6
+    assert kinds(els) == ["Paragraph", "Error", "Math"] and els[0].lines == [[("text", "a")]] and els[1].n == 6
     kept = elements(evaluate(text).results, commands=True)    # !hide and !show are commands like any other
     assert [e.text for e in kept if isinstance(e, Source)] == ["!hide", "!show"]
     md = export(text, "md")
@@ -59,3 +60,35 @@ def test_runs_are_shared_by_flavour():
     assert runs == {False: live}
     export("x = 1", "tex", runs=runs)
     assert set(runs) == {False, True}
+
+
+INLINE = "~g = 9.81'm/'s^2\nm = 2'kg\n## Weight `W = m*g`\n# so `F = m*g/2 + 5'kN`, `!plot` is code and one ` stays\n"
+
+
+def test_inline_math_in_a_comment_is_typeset_as_written_and_not_worked_out():
+    els = elements(evaluate(INLINE).results)
+    heading, para = els[2], els[3]
+    assert heading == Heading("Weight `W = m*g`", [("text", "Weight "), ("math", r"W = m \cdot \htmlData{global=g}{g}")])
+    assert para.lines == [[("text", "so "), ("math", r"F = \frac{m \cdot \htmlData{global=g}{g}}{2} + 5\,\mathrm{kN}"),
+                           ("text", ", "), ("code", "!plot"), ("text", " is code and one ` stays")]]
+
+
+def test_inline_math_reads_names_but_defines_nothing_and_warns_of_nothing():
+    rs = evaluate("# `x = 3`, `f(t) = t^2`, `sqrt(nosuch)` and `'kN`\ny = x").results
+    assert [k for k, _ in rs[0].parts] == ["math", "text", "math", "text", "math", "text", "math"]
+    assert rs[0].parts[2] == ("math", r"f\left(t\right) = t^{2}") and rs[0].parts[4] == ("math", r"\sqrt{\mathrm{nosuch}}")
+    assert not rs[0].warning and rs[1].kind == "error"    # the comment's x = 3 defined nothing
+    assert evaluate("# plain `` and one ` here").results[0].parts is None   # no inline math: plain text
+
+
+def test_inline_math_in_each_format():
+    tex = export(INLINE, "tex")
+    assert r"\subsection*{Weight $W = m \cdot g$}" in tex
+    assert (r"so $F = \frac{m \cdot g}{2} + \qty{5}{\kilo\newton}$, \texttt{!plot} is code and one "
+            r"\textasciigrave{} stays\par") in tex
+    md = export(INLINE, "md")
+    assert "## Weight $W = m \\cdot g$" in md
+    assert "so $F = \\frac{m \\cdot g}{2} + 5\\,\\mathrm{kN}$, `!plot` is code and one \\` stays" in md
+    html = export(INLINE, "html")
+    assert '<h2>Weight <span class="imath" data-tex="W = m \\cdot g"></span></h2>' in html
+    assert '<code>!plot</code> is code and one ` stays</p>' in html and 'querySelectorAll(".imath")' in html
