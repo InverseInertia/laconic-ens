@@ -68,7 +68,7 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 
 | After | Offers |
 |---|---|
-| `'` | units: your own and the machine's first, then common units (`kN`, `mm`, `GPa`) and everything Pint knows, matched by symbol or full name (`newt` finds `N`) |
+| `'` | units: exactly what you typed first, so the list confirms it is a unit (`'kB` shows *kilobyte*, any prefix on any unit included, and a spelling that is not a unit says so), then your own and the machine's, then common units (`kN`, `mm`, `GPa`) and everything Pint knows, matched by symbol or full name (`newt` finds `N`) |
 | `!` | commands |
 | two letters of a name | variables defined above (with their current value), your functions, built-in functions, `pi` and `e` |
 | an indented line under any block: `!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve` | the block's options (`title`, `xlim`, `color`, ... under a plot; `equation`, `objective`, `bounds x`, `method`, ... under a solver; `data`, `degree`, `model`, `r2` under a regression; `equation`, `pick` under a symbolic solve), each with what it is for, inserted with their colon |
@@ -77,7 +77,7 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 | the unknowns in `!root x, y` | variables defined above |
 | `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`); inside `haprops(`, the humid air keys |
 
-`Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions, nor do option values that are text or a number (a title, `samples:`, `degree:`). Every block's options come from one table the server builds from the lists it reads the blocks with (`vocab.py` `blocks()`), so a new option is offered as soon as it exists.
+`Tab` accepts, `Up`/`Down` choose, `Esc` closes. The list shows eight at first; `Down` past the last loads the next eight, until every match is listed. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions, nor do option values that are text or a number (a title, `samples:`, `degree:`). Every block's options come from one table the server builds from the lists it reads the blocks with (`vocab.py` `blocks()`), so a new option is offered as soon as it exists.
 
 ## Extended characters
 

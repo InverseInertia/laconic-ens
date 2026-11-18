@@ -140,6 +140,14 @@ def test_saving_one_setting_keeps_the_other():
     assert cfg["greek"] == {"b": "ḃ"} and cfg["units"][0]["name"] == "smoot"
 
 
+def test_a_unit_spelling_the_vocabulary_does_not_list_is_checked_on_its_own():
+    """#183: a prefix on any unit reads, and the editor shows what it is."""
+    assert server.unit("kB") == {"name": "kB", "known": True, "detail": "kilobyte"}
+    assert server.unit("MiB")["detail"] == "mebibyte"
+    assert server.unit("kQ") == {"name": "kQ", "known": False, "detail": ""}
+    assert not server.unit("")["known"]
+
+
 def test_vocabulary_has_solver_options_and_methods():
     v = server.vocab()["blocks"]
     assert [k for k, _ in v["root"]["keys"]][:2] == ["equation", "bounds"]

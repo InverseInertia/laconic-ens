@@ -10,6 +10,7 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 ## Unreleased
 
 ### Changes
+- **Unit suggestions confirm what you typed**: after `'`, the unit you typed exactly is now first in the suggestions, with what it is, even a prefixed one the list did not offer before (`'kB` shows *kilobyte*, `'MiB` *mebibyte*), and a spelling that is not a unit says so. `Down` past the last suggestion loads more, so a rarer unit can be found without typing more of it. (#183)
 - **Solver blocks show what they solve**: under a `!root` block the results and the exported documents now show its equations, and under `!minimize` or `!maximize` the objective with its constraints and bounds, above the values found, so a printed sheet says what the answer is the answer to. (#182)
 
 ### Fixes

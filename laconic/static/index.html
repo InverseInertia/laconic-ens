@@ -286,6 +286,7 @@
   .ac-item .lbl { font-weight: 500; }
   .ac-item .det { margin-left: auto; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--sans); color: var(--text-soft); }
   .ac-item[aria-selected="true"] .kind, .ac-item[aria-selected="true"] .det { color: var(--on-hl); opacity: .85; }
+  .ac-item.unknown .det { color: var(--err); font-style: italic; }
   .ac-hint { padding: 3px 8px; border-top: 1px solid var(--grid); font: 400 11.5px var(--sans); color: var(--text-soft); }
 
   .u-row { display: grid; grid-template-columns: 11ch auto 1fr auto; align-items: center; gap: 4px 8px; margin-bottom: 8px; }
@@ -1713,11 +1714,22 @@ src.addEventListener("dblclick", () => {
 const acEl = $("#ac"), suggest = $("#suggest");
 suggest.checked = store.get("suggest", true);
 suggest.onchange = () => { store.set("suggest", suggest.checked); if (!suggest.checked) acClose(); src.focus(); };
-let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands: []};
+let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands: [], checked: {}};
 let ac = null, acSkip = false;
 
 async function loadVocab() {
-  try { vocab = {...await Api.json("/api/vocab"), props: vocab.props}; } catch {}
+  try { vocab = {...await Api.json("/api/vocab"), props: vocab.props, checked: vocab.checked}; } catch {}
+}
+// A unit spelling the vocabulary does not list (`kB`: kilo + byte) is asked about once, so the list
+// can show it first, or say it is not a unit (#183).
+const unitChecks = new Map();
+function checkUnit(name) {
+  if (!unitChecks.has(name)) {
+    unitChecks.set(name, Api.json(`/api/unit?name=${encodeURIComponent(name)}`, undefined, "GET")
+      .then((r) => { vocab.checked[name] = {known: !!r.known, detail: r.detail || ""}; })
+      .catch(() => { unitChecks.delete(name); }));
+  }
+  return unitChecks.get(name);
 }
 // props() keys and fluids need CoolProp on the server, which takes seconds to import, so they are
 // fetched the first time a props string is typed; the list opens when they arrive.
@@ -1748,7 +1760,7 @@ function acClose() {
 function acPaint() {
   const items = ac.items.map((c, i) => {
     const el = document.createElement("div");
-    el.className = "ac-item"; el.id = "ac-" + i; el.role = "option"; el.ariaSelected = i === ac.index;
+    el.className = "ac-item" + (c.unknown ? " unknown" : ""); el.id = "ac-" + i; el.role = "option"; el.ariaSelected = i === ac.index;
     const kind = Object.assign(document.createElement("span"), {className: "kind", textContent: c.custom ? "custom" : c.kind});
     const lbl = Object.assign(document.createElement("span"), {className: "lbl", textContent: c.label});
     const det = Object.assign(document.createElement("span"), {className: "det", textContent: c.detail || ""});
@@ -1787,6 +1799,9 @@ function acUpdate(force = false) {
   }
   acShow(next);
   acWaiting = next.stale && {force};
+  if (next.check) checkUnit(next.check).then(() => {
+    if (vocab.checked[next.check] && ed.value === text && document.activeElement === src) acUpdate(force);
+  });
 }
 // Names come from the symbol table of the last evaluation. When that was of older text, the
 // suggestions are worked out again once the evaluation of this text arrives.

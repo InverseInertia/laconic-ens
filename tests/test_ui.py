@@ -24,6 +24,26 @@ def test_unit_suggestions_and_tab_accept(page):
     assert value(page).startswith("x = 5'k")
 
 
+def test_the_unit_typed_is_confirmed_first_and_the_arrows_load_more(page):
+    """#183: `'kB` is not in the list the page has, so it asks the server, then shows it first."""
+    reset(page, "w = 12")
+    page.keyboard.type("'kB")
+    page.wait_for_function("document.querySelector('#ac .ac-item .lbl')?.textContent === 'kB'")
+    assert "kilobyte" in page.inner_text("#ac .ac-item")
+    reset(page, "w = 12")
+    page.keyboard.type("'kQ")
+    page.wait_for_selector("#ac .ac-item.unknown")
+    assert "not a unit" in page.inner_text("#ac .ac-item.unknown")
+    reset(page, "w = 12")
+    page.keyboard.type("'m")
+    page.wait_for_selector("#ac:not([hidden])")
+    assert page.locator("#ac .ac-item").count() == 8
+    for _ in range(8):
+        page.keyboard.press("ArrowDown")
+    assert page.locator("#ac .ac-item").count() == 16
+    assert page.get_attribute("#ac .ac-item:nth-child(9)", "aria-selected") == "true"
+
+
 def test_enter_ends_the_line_unless_you_chose(page):
     reset(page, "delta_max = 3\nx = ")
     page.keyboard.type("delt")

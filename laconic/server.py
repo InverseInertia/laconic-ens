@@ -32,7 +32,7 @@ from .rename import RenameError, RenameWarning, rename
 from .solver import SolverError, set_option
 from .solverjobs import Busy, jobs
 from . import solvesession
-from .vocab import props_vocabulary, vocabulary
+from .vocab import props_vocabulary, unit_check, vocabulary
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
@@ -466,6 +466,12 @@ def get_example(name: str):
 @app.get("/api/vocab")
 def vocab():
     return vocabulary(settings.global_units())
+
+
+@app.get("/api/unit")
+def unit(name: str):
+    """Whether one spelling typed after a quote is a unit, for the suggestions (#183)."""
+    return unit_check(name)
 
 
 @app.get("/api/vocab/props")
