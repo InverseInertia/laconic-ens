@@ -137,7 +137,7 @@ class Line:
     eol: str            # "\n", "\r\n", or "" on a last line with none
     kind: str           # blank heading meta comment command unitdef funcdef assign symdef expr plot plotopt solver solveropt loop loopline
     block: int = None   # header line of the plot or solver block that owns this line (the header owns itself)
-    spans: tuple = ()   # (start, end) of each part that holds expressions
+    spans: tuple = ()   # (start, end) of each part that holds expressions (on a comment, its inline math)
     option: Option = None   # under a block: the parsed option line
     result: str = None      # under a solver: the JSON of a stored `#@ result` line
     comment: bool = False   # a `#` line (comment, heading or meta), also when a block owns it
@@ -241,6 +241,14 @@ def _kind(s):
     return d.kind if d else "expr"
 
 
+def inline_spans(text):
+    """(start, end) of what is between each pair of backticks on a comment or heading line: the
+    **inline math** (`F = m*a`) the sheet typesets in the comment. Backticks pair up left to right;
+    an odd one left over, and a pair with nothing but spaces in it, stay as typed."""
+    ticks = [i for i, c in enumerate(text) if c == "`"]
+    return tuple((a + 1, b) for a, b in zip(ticks[::2], ticks[1::2]) if text[a + 1:b].strip())
+
+
 def _header_spans(text):
     m = re.match(r"[ \t]*!\w+", text)
     return ((m.end(), len(text)),)
@@ -301,6 +309,8 @@ def scan(text):
                 line.kind = "loopline" if cur.kind == "loop" else cur.kind + "opt"
             line.block = cur.lines[0].n if cur.lines else n
             cur.lines.append(line)
+        if line.comment and not s.startswith("#@"):
+            line.spans = inline_spans(t)
         if line.kind in ("unitdef", "funcdef", "assign", "symdef", "expr"):
             line.definition = definition(s)
         lines.append(line)

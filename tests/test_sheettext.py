@@ -78,6 +78,11 @@ def _spans(line):
 SPANS = [
     ("x = a + 1", ["x = a + 1"]),
     ("# a comment", []),
+    ("# force `F = m*a` on `m`", ["F = m*a", "m"]),     # a comment's inline math
+    ("## Area `A = w*h`", ["A = w*h"]),
+    ("# a blank ` ` pair and one ` left", []),
+    ("#@ meta `x`", []),
+    ("!root x\n  # under a block `x`", ["x"]),
     ("!clear", []),
     ("!plot f(x), x = 0 .. L", [" f(x), x = 0 .. L"]),
     ("!plot f(x), x = 0 .. 1\n  xlim: 0 .. L", ["0 .. L"]),

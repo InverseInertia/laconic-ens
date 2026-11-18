@@ -625,6 +625,31 @@ def test_symbols_are_marked_and_their_results_typeset(page):
     assert value(page).endswith("\n$g\n")
 
 
+def test_inline_math_in_comments_is_typeset_in_the_row(page):
+    """Backticks in a comment or heading typeset what is between them as math (#174); text that is
+    not math shows as code, and a backtick left over as itself."""
+    reset(page, "~g = 9.81'm/'s^2\n## Weight `W = m*g`\n# with `F = m*g/2`, `!plot` and one ` left")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector("#out .row[data-line='3'] .imath .katex")
+    assert page.locator("#out .row[data-line='2'] .imath .katex").count() == 1
+    note = "#out .row[data-line='3']"
+    assert page.locator(f"{note} .imath .katex").count() == 1
+    assert page.locator(f"{note} .imath .katex .mfrac").count() == 1        # m*g/2, not worked out
+    assert page.locator(f"{note} .imath [data-global='g']").count() == 1    # the global is marked
+    assert page.inner_text(f"{note} .icode") == "!plot"
+    text = page.inner_text(f"{note} .body")
+    assert text.startswith("with ") and text.endswith(", !plot and one ` left") and "`" not in text[:-6]
+    assert page.locator(f"{note} .katex-display").count() == 0             # inline, in the line of text
+    # Math keys work between the backticks, and not outside them.
+    reset(page, "# force `F = m*a`")
+    select(page, 16, 16)
+    page.keyboard.type("/")
+    assert value(page) == "# force `F = m*a / ()`"
+    reset(page, "# force `F = m*a` and a")
+    page.keyboard.type("/")
+    assert value(page) == "# force `F = m*a` and a/"
+
+
 def test_each_kind_of_line_shows_its_row(page):
     """What the results pane shows for each kind of line (static/rows.js, drawn by index.html)."""
     text = "## Loads\n!sigfigs 3\nx = 2'm\nnope +\n!plot x, x = 0 .. 1\n  grid: off\n  bad: 1\ny = 1\n!root y\n  equation: y^2 = 2"

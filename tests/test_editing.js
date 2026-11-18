@@ -277,6 +277,11 @@ eq(sim('# see a|', '/'), '# see a/|', 'slash is literal in comments');
 eq(sim('# a|', '.'), '# a.|', 'period is literal in comments');
 eq(sim('# a|', ['\\']), '# a\\|', 'backslash is literal in comments');
 eq(sim('# a|', [ctrl('g')]), '# α|', 'Greek still works in comments');
+eq(sim('# force `F = m*a|`', '/'), '# force `F = m*a / (|)`', 'math keys work in inline math between backticks');
+eq(sim('# force `F = m*a` and a|', '/'), '# force `F = m*a` and a/|', 'but not after it');
+eq(sim('# one ` and a|', '/'), '# one ` and a/|', 'an odd backtick opens no math');
+eq(E.isProse('# force `F = m*a` here', 4), true, 'a comment is spellchecked');
+eq(E.isProse('# force `F = m*a` here', 12), false, 'but not while the caret is in its inline math');
 eq(sim('x = a|', '/', { enabled: false }), 'x = a/|', 'switch turns everything off');
 eq(sim('x = a|', [ctrl('g')], { enabled: false }), 'x = a|', 'switch turns Greek off too');
 

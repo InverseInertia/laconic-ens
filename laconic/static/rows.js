@@ -15,6 +15,9 @@
  *                  on every other row, a failed one included (its error shows the line as typed)
  *     body         {type: "none"}                   nothing under the head (a command)
  *                  {type: "text", text}             plain text
+ *                  {type: "inline", parts}          a comment or heading with inline math: its
+ *                                                   [kind, value] parts, "text", "math" (typeset
+ *                                                   inline) or "code" (backticked, not math)
  *                  {type: "tex", tex, rows, matrix} typeset math, and the same one stage per row
  *                                                   for a pane too narrow for it (mathfit.js). A
  *                                                   matrix too large to read is collapsed to its
@@ -47,6 +50,8 @@
   'use strict';
 
   const text = (r) => ({ type: 'text', text: r.text });
+  // A comment or heading with inline math (`F = m*a`) is drawn part by part.
+  const prose = (r) => (r.parts ? { type: 'inline', parts: r.parts } : text(r));
   const MV = root.MatrixView || (typeof require === 'function' ? require('./matrixview.js') : null);
 
   function calc(r, opts) {
@@ -63,8 +68,8 @@
   // line kind -> its body, or null when the line has no row of its own. Other kinds are calculations.
   const BODY = {
     blank: null,   // blank lines keep the sheet text readable; the results are readable already (#143)
-    heading: text,
-    comment: text,
+    heading: prose,
+    comment: prose,
     meta: text,
     command: () => ({ type: 'none' }),
     symdef: text,

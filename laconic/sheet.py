@@ -12,12 +12,12 @@ from .blockedit import newline
 from .evaluator import EvalError, Evaluator, is_symbolic
 from .latex import Fmt, Printer, name_latex
 from .lineresult import LineResult, LoopPayload, PlotPayload, RegressionPayload, SolverPayload
-from .nodes import Assign, Call, Convert, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
+from .nodes import Assign, Call, Convert, ExprStmt, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
 from .plotspec import Builder
-from .sheettext import scan
+from .sheettext import inline_spans, scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
 from . import adnauseum, commands, loop, regression, solver, symsolve
@@ -122,10 +122,11 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
             results.append(r)
         elif l.kind == "blank":
             results.append(LineResult(i, raw, "blank"))
-        elif l.kind in ("heading", "meta"):
+        elif l.kind == "meta":
             results.append(LineResult(i, raw, l.kind, text=s[2:].strip()))
-        elif l.kind == "comment":
-            results.append(LineResult(i, raw, "comment", text=s[1:].strip()))
+        elif l.kind in ("heading", "comment"):
+            text = s[2:].strip() if l.kind == "heading" else s[1:].strip()
+            results.append(LineResult(i, raw, l.kind, text=text, parts=_inline(text, ev, fmt)))
         elif l.kind == "command":
             results.append(_run_command(i, raw, s, ev))
         elif l.kind == "symdef":
@@ -178,6 +179,49 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
                           stages=[fmt.quantity(shown)], text=f"1 {name} = {fmt.plain(shown)}")
     except Exception as e:
         return LineResult(i, raw, "error", error=describe(e))
+
+
+def _inline(text, ev, fmt):
+    """A comment's or heading's text as parts, [(kind, value)]: "text" as typed, "math" for the
+    inline math between a pair of backticks (sheettext.inline_spans), typeset as the first stage
+    of a line is, or "code" for backticked text that does not read as math, kept as typed. None
+    when the text has no inline math."""
+    spans = inline_spans(text)
+    if not spans:
+        return None
+    parts, at = [], 0
+    for a, b in spans:
+        if a - 1 > at:
+            parts.append(("text", text[at:a - 1]))
+        tex = _inline_math(text[a:b].strip(), ev, fmt)
+        parts.append(("math", tex) if tex else ("code", text[a:b]))
+        at = b + 1
+    if at < len(text):
+        parts.append(("text", text[at:]))
+    return parts
+
+
+def _inline_math(src, ev, fmt):
+    """`src` typeset as written (names, units, functions; nothing is worked out), or None when it
+    is not an expression, an assignment or a function definition. It defines nothing, and the
+    comment shows no warning from it."""
+    mark = len(ev.notes)
+    try:
+        stmt = parse_line(src)
+        if isinstance(stmt, ExprStmt):
+            return Printer(ev, fmt).tex(stmt.expr)
+        if isinstance(stmt, Assign):
+            return f"{Printer(ev, fmt).tex(Name(stmt.name))} = {Printer(ev, fmt).tex(stmt.expr)}"
+        if isinstance(stmt, FuncDef):
+            key = ev.fkey(stmt.name)
+            name = fmt.var(key, function=True) if key in ev.funcs else name_latex(stmt.name)
+            head = f"{name}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
+            return f"{head} = {Printer(ev, fmt, local=stmt.params).tex(stmt.body)}"
+        return None
+    except Exception:   # not math: the comment shows it as code
+        return None
+    finally:
+        del ev.notes[mark:]
 
 
 def _run_command(i, raw, s, ev):

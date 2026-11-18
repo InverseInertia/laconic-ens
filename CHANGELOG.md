@@ -9,6 +9,9 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+### New
+- **Inline math in comments**: in a comment or heading, text between backticks is typeset as math in the line, as a calculation is shown before it is worked out: `` # the force `F = m*a` `` shows F = m·a. Backticked text that is not an expression shows in the code font instead, and a single backtick stays as typed. The LaTeX, Markdown and PDF exports keep it (as `$...$` in LaTeX and Markdown), Math keys work between the backticks, and Rename renames names there too. (#174)
+
 ### Changes
 - **Unit suggestions confirm what you typed**: after `'`, the unit you typed exactly is now first in the suggestions, with what it is, even a prefixed one the list did not offer before (`'kB` shows *kilobyte*, `'MiB` *mebibyte*), and a spelling that is not a unit says so. `Down` past the last suggestion loads more, so a rarer unit can be found without typing more of it. (#183)
 - **Solver blocks show what they solve**: under a `!root` block the results and the exported documents now show its equations, and under `!minimize` or `!maximize` the objective with its constraints and bounds, above the values found, so a printed sheet says what the answer is the answer to. (#182)

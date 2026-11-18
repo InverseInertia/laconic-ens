@@ -10,7 +10,7 @@ import numpy as np
 
 from . import catalogue
 from .commands import SheetMode
-from .exports import Error, Figure, Heading, Paragraph, Source, element, elements
+from .exports import Error, Figure, Heading, Paragraph, Source, element, elements, inline
 from .evaluator import _TINY, CONSTANTS, EvalError, is_symbolic
 from .functions import FUNCTIONS
 from .nodes import (BinOp, Call, Convert, Implicit, Matrix, Name, Neg, Num, Polar,
@@ -513,12 +513,24 @@ def snippet(r, wrap="inline"):
     return None if e is None else _tex(e, wrap)
 
 
+def _text(s):
+    """Text for the page, with a backtick kept as one (LaTeX would make it an opening quote).
+    Not in `escape`, which also writes the text inside KaTeX's math, where there is no such macro."""
+    return escape(s).replace("`", r"\textasciigrave{}")
+
+
+def _line(parts):
+    """A comment's text, with its inline math as `$...$` and backticked text that is not math in
+    typewriter type."""
+    return inline(parts, _text, lambda tex: f"${tex}$", lambda code: rf"\texttt{{{_text(code)}}}")
+
+
 def _tex(e, wrap):
     """The LaTeX for one export element (see exports.py)."""
     if isinstance(e, Heading):
-        return rf"\subsection*{{{escape(e.text)}}}"
+        return rf"\subsection*{{{_line(e.parts)}}}"
     if isinstance(e, Paragraph):
-        return "\n".join(escape(line) + r"\par" for line in e.lines)
+        return "\n".join(_line(line) + r"\par" for line in e.lines)
     if isinstance(e, Error):
         return f"% line {e.n}: {e.message}"
     if isinstance(e, Source):

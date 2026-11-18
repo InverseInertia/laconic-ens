@@ -20,6 +20,10 @@ eq(body(row('heading', { text: 'Loads' })), { type: 'text', text: 'Loads' }, 'a 
 eq(body(row('symdef', { text: 'symbols a, b' })), { type: 'text', text: 'symbols a, b' }, 'a symbol declaration names its symbols');
 eq(body(row('symsolve', { latex: 'x = 1' })).type, 'tex', 'a symbolic solve is typeset');
 eq(body(row('comment', { text: 'n' })), { type: 'text', text: 'n' }, 'so does a comment');
+const parts = [['text', 'force '], ['math', 'F = m \\cdot a'], ['text', ', '], ['code', '!x']];
+eq(body(row('comment', { text: 'force `F = m*a`, `!x`', parts })), { type: 'inline', parts },
+  'a comment with inline math is drawn part by part');
+eq(body(row('heading', { text: 'Area `A`', parts: [['text', 'Area '], ['math', 'A']] })).type, 'inline', 'so is a heading');
 eq(body(row('command', { source: '!sigfigs 3  ', text: 'sigfigs 3' })), { type: 'none' },
   'a command is all head: it shows itself and what it did');
 eq(body(row('error', { source: '  x = +', error: 'Bad' })), { type: 'error', source: 'x = +', message: 'Bad' },

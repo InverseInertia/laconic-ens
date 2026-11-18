@@ -176,6 +176,9 @@
   .row .body { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
   .row.heading .body { font: 600 calc(17px * var(--fs))/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
   .row.comment .body { font: 400 calc(14px * var(--fs))/var(--row) var(--sans); color: var(--text-soft); }
+  /* Inline math in a comment or heading (`F = m*a`), and backticked text that is not math. */
+  .row .imath .katex { font-size: 1.08em; color: var(--text); }
+  .row .icode { font: 400 .92em var(--mono); }
   .row.error .body { font: 400 calc(13px * var(--fs))/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
   .row.error .src { color: var(--text-soft); display: block; }
   /* Math is fitted to this box (mathfit.js); the margin is room to spare, so a pane narrowed a little
@@ -446,7 +449,7 @@
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <div class="dlg-head"><h2 id="keysTitle">Math keys</h2><button class="close">Close</button></div>
   <div class="dlg-body">
-    <p class="note">These keys edit the source text. The result column shows the typeset math. They are inactive on comment lines (starting with <code>#</code>) and can be switched off with the Math keys box.</p>
+    <p class="note">These keys edit the source text. The result column shows the typeset math. They are inactive on comment lines (starting with <code>#</code>), except in inline math between backticks, and can be switched off with the Math keys box.</p>
     <table class="keys" id="keysTable"></table>
     <template id="commandHelp">
       <!-- command help: rows generated from commands.COMMANDS by server.py -->
@@ -472,7 +475,8 @@
     <pre>## Simply supported beam           <i>## makes a heading, # a comment</i>
 L = 4.5'm
 w = 12'kN / 'm
-M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i></pre>
+M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i>
+# at midspan `M = w*L^2/8`         <i>backticks typeset math in a comment</i></pre>
     <p>One statement per line. An error on a line never stops the lines after it. Evaluation runs top to bottom, so define things before you use them.</p>
     <p><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) and <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) use plain-text <code>.lens</code> files. In Chrome or Edge, Save writes back to the file you opened; <strong>Save As</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) picks a new one, and renaming the sheet makes the next Save ask. Firefox and Safari download a copy each time.</p>
     <div id="exampleBox" hidden>
@@ -587,7 +591,7 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
     </ul>
 
     <h3>Editor shortcuts <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Editor-Shortcuts" target="_blank" rel="noopener">Editor Shortcuts</a></h3>
-    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines and on the text under a plot or solver: titles, labels, a note's text, the method.</p>
+    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines (but on in a comment's inline math between backticks) and on the text under a plot or solver: titles, labels, a note's text, the method.</p>
     <ul>
       <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot. With text highlighted, they apply to the whole terms it touches.</li>
       <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
@@ -944,6 +948,18 @@ document.fonts.ready.then(() => MathFit.fitAll(out, true));
 const BODY = {
   none: () => {},
   text: (el, b) => { el.textContent = b.text; },
+  inline: (el, b) => {
+    for (const [kind, value] of b.parts) {
+      if (kind === "text") { el.append(value); continue; }
+      const s = document.createElement(kind === "math" ? "span" : "code");
+      s.className = kind === "math" ? "imath" : "icode";
+      // KaTeX not loaded yet: the source shows, and render() runs again on load.
+      if (kind === "math" && window.katex) katex.render(value, s, {...KATEX_OPTS, displayMode: false});
+      else s.textContent = value;
+      el.append(s);
+    }
+    titleGlobals(el);
+  },
   tex: (el, b, r) => {
     typeset(el, b.tex, b.rows);
     if (b.matrix) el.append(matrixToggle(r.n, b.matrix));

@@ -125,6 +125,14 @@ def test_the_display_parts_of_a_row():
     assert "'delta_degC" in three[-1]
 
 
+def test_a_comment_with_inline_math_carries_its_parts():
+    """Only a comment or heading with inline math between backticks has `parts`, [kind, value] pairs."""
+    head, note, plain = rows("## Area `A = w*h`\n# with `w` and `!x` and one `\n# none `` here")
+    assert head["parts"] == [["text", "Area "], ["math", "A = w \\cdot h"]] and head["text"] == "Area `A = w*h`"
+    assert note["parts"] == [["text", "with "], ["math", "w"], ["text", " and "], ["code", "!x"], ["text", " and one `"]]
+    assert set(head) == set(note) == set(COMMON) | {"parts"} and set(plain) == set(COMMON)
+
+
 def test_a_row_under_hide_is_hidden_unless_it_failed():
     out = rows("!hide\nx = 1\nnope +\n!show\ny = 2")
     assert [r["hidden"] for r in out] == [False, True, False, False, False]
@@ -162,13 +170,13 @@ def test_the_latex_view_adds_a_snippet_to_every_row():
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 def test_the_page_reads_every_row_the_server_sends():
     """static/rows.js over real rows, so a change to the shape that the page would miss fails here."""
-    text = "## Head\n\n!sigfigs 3\nx = 2\nnope +\n" + PLOT + ROOT
+    text = "## Head `h`\n\n!sigfigs 3\nx = 2\nnope +\n" + PLOT + ROOT
     script = ("const R = require(process.argv[1]); const rows = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
               "console.log(JSON.stringify(rows.map((r) => { const m = R.model(r, {view: 'latex'});"
               " return m && [m.line, m.end, m.body.type]; })))")
     rows_js = Path(__file__).parents[1] / "laconic" / "static" / "rows.js"
     # the blank line (2) has no row in either view (#143)
-    for view, kinds in (("typeset", ["text", "none", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
+    for view, kinds in (("typeset", ["inline", "none", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
                         ("latex", ["snippet", "snippet", "snippet", "error", "snippet", "snippet", "snippet",
                                    "snippet", "snippet", "snippet"])):
         r = subprocess.run(["node", "-e", script, str(rows_js)], input=json.dumps(rows(text, view=view)),

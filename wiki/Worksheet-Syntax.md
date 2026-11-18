@@ -6,6 +6,7 @@ One statement per line. An error on a line never stops the lines after it; a lat
 
 ```
 # comment                      ## section heading
+# force `F = m*a` in newtons   backticks typeset math in a comment or heading
 L = 4.5'm                      a unit starts with an apostrophe
 w = 12'kN / 'm                 every unit in a compound gets its own apostrophe
 M = w * L^2 / 8 -> 'kN * 'm    -> converts units
@@ -111,12 +112,15 @@ Using a name that `!clear` removed says so: `'m' was removed by !clear`. See [Ou
 
 The Rename button or F2 renames a variable, function or custom unit everywhere (the name at the caret is pre-filled).
 
-- Comments and commands are untouched; text under a plot (titles, labels) is never renamed.
+- Comments and commands are untouched, except the inline math between backticks in a comment or heading; text under a plot (titles, labels) is never renamed.
 - `m` and `'m` are different names. Built-in names and names already in use are refused.
 - Only units the sheet itself defines can be renamed freely. Replacing a standard unit asks for confirmation and, if the new name is not an existing unit, adds a definition for you to adjust.
 
 ## Comments, headings, meta lines
 
 - `# text` is a comment, `## text` a section heading (a `\subsection*` in the export).
+- **Inline math**: in a comment or heading, text between a pair of backticks is read as a LENS expression and typeset as math in the line of text, as a calculation's first stage is shown: `` # the moment `M = w*L^2/8` at midspan `` shows M = wL²/8 with the fraction, the names and units typeset and nothing worked out. An expression (`` `sqrt(F/A)` ``), an assignment (`` `F = m*a` ``) or a function definition (`` `f(x) = x^2` ``) can go between the backticks; it defines nothing and gives no warning, and a name defined above shows as it does in a calculation (a global marked). Text that does not read as math (`` `!plot` ``) shows in the code font instead, with no error. Backticks pair up from the left: one left over, or a pair with only spaces between, shows as typed. A backtick inside the math would end it, so the dot mark (``v` ``) cannot be used there.
+- The exports keep it: inline `$...$` in the LaTeX document and the Markdown note, and typeset in the PDF.
+- With Math keys on, the keys work between the backticks as on a calculation line, and the spellchecker is off while the caret is there. Rename renames a name inside inline math too.
 - `#@ ...` lines are written by LENS (the saved unit block) and are not displayed as comments.
 - The browser's spellchecker is on while the caret is on a comment, a heading or a plot's title, label or note, and off on calculations, so names and units are never marked. The editor is one text box, and the browser only checks words as you type them and drops every mark when spellcheck goes off: a misspelling is underlined while you write the line, and the marks go away when the caret moves to a calculation.
