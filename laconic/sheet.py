@@ -12,7 +12,7 @@ from .blockedit import newline
 from .evaluator import EvalError, Evaluator, is_symbolic
 from .functions import FUNCTIONS
 from .latex import Fmt, Printer, name_latex
-from .lineresult import LineResult, LoopPayload, PlotPayload, RegressionPayload, SolverPayload
+from .lineresult import LineResult, LoopPayload, PlotPayload, RegressionPayload, SliderPayload, SolverPayload
 from .nodes import Assign, Call, Convert, ExprStmt, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
@@ -21,7 +21,7 @@ from .plotspec import Builder
 from .sheettext import inline_spans, scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import adnauseum, commands, loop, regression, rpn, solver, symsolve
+from . import adnauseum, commands, loop, regression, rpn, slider, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -111,7 +111,8 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         elif i in owned:
             results.append(owned.pop(i))
         elif l.kind == "solver":
-            run_block = {"regression": _run_regression, "symsolve": _run_symsolve}.get(sheet.block(i).command, _run_solver)
+            run_block = {"regression": _run_regression, "symsolve": _run_symsolve,
+                         "slider": _run_slider}.get(sheet.block(i).command, _run_solver)
             r, owned = run_block(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "plot":
@@ -478,7 +479,8 @@ def block_at(text, line, global_units=None):
 def solver_blocks(text, global_units=None):
     """The results of the solver blocks that read (they carry a SolverPayload), top to bottom. The
     sheet runs only as far as the last block, and not at all when there is none."""
-    ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver" and b.command not in ("regression", "symsolve")]
+    ends = [b.end for b in scan(text).blocks.values()
+            if b.kind == "solver" and b.command not in ("regression", "symsolve", "slider")]
     if not ends:
         return []
     ws = evaluate(text, global_units=global_units, until=max(ends))
@@ -654,6 +656,55 @@ def _run_symsolve(i, raw, handle, ev, fmt, used):
                 ev.symbols.define(key, v, text=symbolic.plain(v, fmt), stale=stale)
     return LineResult(i, raw, "symsolve", stages=[tex], text=plain, block=handle, stale=stale,
                       warning=warning), owned()
+
+
+def _run_slider(i, raw, handle, ev, fmt, used):
+    """A `!slider x = 2'm` line with its options. The header is an assignment, run as `x = 2'm` would
+    be, so x holds the typed value below; the options only say where the slider stands. A value
+    outside the range keeps the value typed, with a warning, and the slider shows the nearer end."""
+    block = slider.parse_block(handle)
+
+    def owned():
+        return {l.n: LineResult(l.n, l.text, "error" if l.n in block.errors else "solveropt",
+                                error=block.errors.get(l.n, "")) for l in handle.members}
+
+    def fail(msg):
+        return LineResult(i, raw, "error", error=msg, block=handle), owned()
+
+    if block.problem:
+        return fail(block.problem)
+    for node in block.nodes():
+        used |= refs(node).units
+    try:
+        st, q = slider.setting(block, ev)
+    except slider.SliderError as e:
+        line, msg = e.args
+        msg = msg if isinstance(msg, str) else describe(msg)
+        if line == i:
+            return fail(msg)
+        block.errors[line] = msg
+        return fail("1 option line below needs fixing")
+    except Exception as e:
+        return fail(describe(e))
+    r = _run_line(i, raw, f"{block.name} = {block.body}", ev, fmt, used)
+    r.block = handle
+    if r.kind == "error":
+        return r, owned()
+    r.kind = "slider"
+    key = ev.vkey(block.name)
+
+    def shown(v):
+        return fmt.plain(ev.Q(v, q.units), 12)
+    unit = shown(1).removeprefix("1").strip()
+    labels = [shown(st.low), shown(st.high)]
+    r.payload = SliderPayload(key, st.value, st.low, st.high, st.step, st.scale, st.power, st.ticks,
+                              st.position(st.value), unit, labels)
+    if not r.payload.inside:
+        end = "low" if st.value < st.low else "high"
+        r.warning = ". ".join(filter(None, [r.warning, f"{key} is outside the slider's range, {labels[0]} .. "
+                                                       f"{labels[1]}, so the slider stands at its {end} end"]))
+    r.stale = r.stale or ev.symbols.tainted(block.option_nodes())
+    return r, owned()
 
 
 def _bare_number(expr):

@@ -25,7 +25,7 @@ On a line typed in reverse Polish (below `!rpn`, see [Worksheet Syntax](Workshee
 | `Ctrl+G` | Extended character (Greek letters, ∞, ∀) for the character before the caret. Press again to revert |
 | `Ctrl+[` , `Ctrl+Shift+[` | Wrap in `idx( , )` / `elem( , , )` |
 | `Ctrl+/`, `Ctrl+\` | A literal `/` (spaced) or `\`, with no fraction or radical slot |
-| `Enter` | With only closing brackets left on the line, finishes the line. After a block header (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`) or one of the block's indented lines, the new line takes the block's indent; on a line that is only that indent, Enter removes it, leaving the block. This works with Math keys off too |
+| `Enter` | With only closing brackets left on the line, finishes the line. After a block header (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!slider`) or one of the block's indented lines, the new line takes the block's indent; on a line that is only that indent, Enter removes it, leaving the block. This works with Math keys off too |
 | `g` then space, operator, `(`, `)` or `Enter` | When `g` is a global from an earlier line, adds its `~`: `~g`. Not in a unit (`'g`), a function's own parameters or a comment's text |
 | `Ctrl+Space` | Opens suggestions by hand. With text highlighted: pick a function to wrap it in |
 | `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
@@ -73,9 +73,9 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 | `'` | units: exactly what you typed first, so the list confirms it is a unit (`'kB` shows *kilobyte*, any prefix on any unit included, and a spelling that is not a unit says so), then your own and the machine's, then common units (`kN`, `mm`, `GPa`) and everything Pint knows, matched by symbol or full name (`newt` finds `N`) |
 | `!` | commands |
 | two letters of a name | variables defined above (with their current value), your functions, built-in functions, `pi` and `e` |
-| an indented line under any block: `!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve` | the block's options (`title`, `xlim`, `color`, ... under a plot; `equation`, `objective`, `bounds x`, `method`, ... under a solver; `data`, `degree`, `model`, `r2` under a regression; `equation`, `pick` under a symbolic solve), each with what it is for, inserted with their colon |
-| the value of an option with a few choices | its choices: a solver's `method:` (the methods that block kind takes, each with what it is for) and `autorun:`; a plot's `grid:`, `xscale:`, `yscale:`, `legend:`, `dash:`, `marker:`, `gaps:` and `color:` |
-| the value of an option that is an expression | names and units, as on any line: an equation, `data:`, a plot's `xlim:` or `points:`, a note's `at (x, y)`, after `'` in `xunit:` |
+| an indented line under any block: `!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!slider` | the block's options (`title`, `xlim`, `color`, ... under a plot; `equation`, `objective`, `bounds x`, `method`, ... under a solver; `data`, `degree`, `model`, `r2` under a regression; `equation`, `pick` under a symbolic solve; `range`, `step`, `scale` under a slider), each with what it is for, inserted with their colon |
+| the value of an option with a few choices | its choices: a solver's `method:` (the methods that block kind takes, each with what it is for) and `autorun:`; a plot's `grid:`, `xscale:`, `yscale:`, `legend:`, `dash:`, `marker:`, `gaps:` and `color:`; a slider's `scale:` |
+| the value of an option that is an expression | names and units, as on any line: an equation, `data:`, a plot's `xlim:` or `points:`, a note's `at (x, y)`, after `'` in `xunit:`, a slider's `range:` and `step:` and the value in its `!slider` line |
 | the unknowns in `!root x, y` | variables defined above |
 | `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`); inside `haprops(`, the humid air keys |
 

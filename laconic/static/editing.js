@@ -13,6 +13,8 @@
  *   editor.elsewhere()              the user is typing in another field (a dialog, the name box)
  *   editor.place(r)                 make edit r without taking the focus or joining the undo stack
  *   editor.apply(r)                 make edit r in the editor's undo stack
+ * (`r.group`, when applyEdits is given one, says the edit undoes as one step with the others of its
+ * group, as a slider's drag does.)
  * `nameAt` is the name or unit the rename dialog starts with (F2). `headerOf` and `blockAt` read
  * the blocks (`!plot`, `!root`, ...) as laconic/sheettext.py does, and `newline` is what Enter does
  * in one: the new line keeps the block's indent, with or without Math keys.
@@ -104,17 +106,23 @@
 
   // ---- blocks --------------------------------------------------------------
   // A block header (laconic/sheettext.py): `!plot ...` or a solver's `!root x, y` (also `!minimize`,
-  // `!maximize`, `!regression`, `!symsolve`), or `!loop i = 1 .. n`, at any indent since loops nest.
-  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, and a plot or a loop
-  // names no unknowns.
+  // `!maximize`, `!regression`, `!symsolve`, and `!slider x = 2'm`, which reads as one), or
+  // `!loop i = 1 .. n`, at any indent since loops nest.
+  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, a plot or a loop
+  // names no unknowns, and a slider the one name it sets.
   const PLOT_HEAD = /^[ \t]*!plot[ \t]+\S/;
-  const SOLVER_HEAD = /^[ \t]*!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*?))?[ \t]*$/;
+  const SOLVER_HEAD = /^[ \t]*!(root|minimize|maximize|regression|symsolve|slider)(?:[ \t]+(.*?))?[ \t]*$/;
+  const SLIDER_NAME = /^(~?[^\s=~$]+?)\s*=(?!=)/;
   const LOOP_HEAD = /^[ \t]*!loop(?:[ \t].*)?$/;
   const PLOT_OPT = /^[ \t]+[A-Za-z]\w*(?:[ \t]+\d+)?[ \t]*:/;
   function headerOf(line) {
     if (PLOT_HEAD.test(line)) return { kind: 'plot', unknowns: [] };
     if (LOOP_HEAD.test(line)) return { kind: 'loop', unknowns: [] };
     const m = SOLVER_HEAD.exec(line);
+    if (m && m[1] === 'slider') {
+      const d = SLIDER_NAME.exec(m[2] || '');
+      return { kind: 'slider', unknowns: d ? [d[1]] : [] };
+    }
     return m ? { kind: m[1], unknowns: (m[2] || '').split(',').map((x) => x.trim()).filter(Boolean) } : null;
   }
   // The block that the line starting at `ls` belongs to, as headerOf gives it, or null. A plot owns
@@ -202,11 +210,13 @@
   // The server's edits against `base`, made in the editor as one edit, so one Ctrl+Z takes them
   // back. If the text changed while the server was working, the edits no longer fit: nothing is
   // made and this says false. An edit made while the user types somewhere else does not take the
-  // focus, unless `asked` (an edit the user asked for in a dialog, such as a rename).
-  function applyEdits(editor, base, edits, asked = false) {
+  // focus, unless `asked` (an edit the user asked for in a dialog, such as a rename). Edits given the
+  // same `group` undo as one step (a slider's drag, #178).
+  function applyEdits(editor, base, edits, asked = false, group = null) {
     if (editor.text() !== base) return false;
     const r = merge(base, edits, editor.caret());
     if (!r) return true;
+    if (group !== null) r.group = group;
     if (!asked && editor.elsewhere()) editor.place(r);
     else editor.apply(r);
     return true;

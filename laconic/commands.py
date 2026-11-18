@@ -303,6 +303,8 @@ COMMANDS = (
             "fit a polynomial or a model to points: !regression a, b, c, then indented data: lines"),
     Command("symsolve", Statement("A symbolic solve reads `!symsolve x, y`"),
             "solve equations for symbols with sympy: !symsolve x, then indented equation: lines"),
+    Command("slider", Statement("A slider reads `!slider x = 2'm`, then an indented `range: low .. high` line"),
+            "a variable set with a slider in the results: !slider x = 2'm, then range: 0'm .. 10'm"),
     Command("loop", Statement("A loop reads `!loop i = 1 .. n`: the index, then the first and last values"),
             "run the indented lines once for each i: !loop i = 1 .. n"),
 )

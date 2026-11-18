@@ -33,6 +33,8 @@ def block(text, line):
         raise SolverError(f"Line {line} is a !regression, which is fitted as the sheet runs and needs no solving")
     if b.command == "symsolve":
         raise SolverError(f"Line {line} is a !symsolve, which is solved as the sheet runs and needs no Run")
+    if b.command == "slider":
+        raise SolverError(f"Line {line} is a !slider, which sets a variable and has nothing to solve")
     return solver.parse_block(b)
 
 

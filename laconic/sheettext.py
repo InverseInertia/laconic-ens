@@ -8,7 +8,8 @@ anything; this is the one place that reads the shape of the text.
     sheet.line(5).tokens("name") the names in its expressions, with their columns
 
 A plot owns the `key: value` lines indented under it; a solver block and a `!loop` own every
-indented, non-blank line under it. Lines are numbered from 1 and split on "\\n" only, so the numbers are
+indented, non-blank line under it. A `!regression`, `!symsolve` or `!slider` block reads as a
+solver block. Lines are numbered from 1 and split on "\\n" only, so the numbers are
 the editor's; a "\\r" before the "\\n" belongs to the line's `eol`, not its text.
 
 The lexer patterns (NAME, UNIT, NUMBER, STRING) are the grammar's terminals as well. The
@@ -41,7 +42,7 @@ _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 
 _PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
 _LOOP_RE = re.compile(r"^!loop(?:[ \t]+(.*\S))?[ \t]*$")
-_SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*\S))?[ \t]*$")
+_SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve|slider)(?:[ \t]+(.*\S))?[ \t]*$")
 _PLOT_OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
@@ -53,7 +54,8 @@ _RPN_RE = re.compile(r"^!rpn(?:\s+(on|off))?$")
 # is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
 # (static/editing.js isTextAt; tests/sheettext_vectors.json holds the two together).
 PLOT_LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")
-SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "model", "r2", "xunit", "yunit", "function")
+SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "model", "r2", "xunit", "yunit", "function",
+                    "range", "step")
 
 
 @dataclass(frozen=True)
@@ -173,7 +175,7 @@ class Line:
 class Block:
     """A `!plot`, solver or `!loop` header and the lines it owns."""
     kind: str           # "plot", "solver" or "loop"
-    command: str        # "plot", "root", "minimize", "maximize", "regression", "symsolve" or "loop"
+    command: str        # "plot", "root", "minimize", "maximize", "regression", "symsolve", "slider" or "loop"
     args: str           # what follows the command on the header line
     lines: list = field(default_factory=list)   # the header Line, then the owned lines
 
@@ -307,6 +309,9 @@ def scan(text):
                     cur = Block("plot", "plot", _PLOT_RE.match(s).group(1))
                 blocks[n] = cur
                 line.spans = _header_spans(t)
+                if cur.command == "slider":   # `!slider x = 2'm` defines x, as `x = 2'm` does
+                    d = definition(cur.args)
+                    line.definition = d if d and d.kind == "assign" else None
             elif line.kind not in ("blank", "heading", "meta", "comment", "command"):
                 line.spans = ((0, len(t)),)
         if cur:

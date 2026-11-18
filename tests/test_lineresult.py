@@ -21,6 +21,8 @@ COMMON = {"n": int, "end": int, "kind": str, "source": str, "text": str, "latex"
 PLOT_KEYS = {"svg", "spec", "moved"}
 SOLVER_KEYS = {"kind", "unknowns", "hash", "status", "tainted", "autorun", "method", "timeout",
                "values", "problem", "summary", "note", "record"}
+SLIDER = "!slider x = 2'm\n  range: 0'm .. 10'm\n  step: 0.5'm\ny = x\n"
+SLIDER_KEYS = {"name", "value", "low", "high", "step", "scale", "power", "ticks", "position", "unit", "labels"}
 
 
 @pytest.fixture(autouse=True)
@@ -83,18 +85,19 @@ def test_solver_blocks_are_the_blocks_that_read_with_their_hashes():
 
 def test_every_row_has_the_common_fields_and_only_its_own_payload():
     text = ("## Head\n# note\n\n!sigfigs 3\n'smoot = 1.7'm\nf(t) = 2*t\nx = f(2)\nx + 1\nnope +\n"
-            + PLOT + ROOT)
+            + PLOT + ROOT + SLIDER)
     out = rows(text)
     json.dumps(out)                           # what the page gets is plain JSON
     assert [r["n"] for r in out] == list(range(1, len(text.splitlines()) + 1))
     for r in out:
-        payload = {"plot"} if r["kind"] == "plot" else {"solver"} if r["kind"] == "solver" else set()
+        payload = {r["kind"]} if r["kind"] in ("plot", "solver", "slider") else set()
         assert set(r) == set(COMMON) | payload, r["kind"]
         assert all(isinstance(r[k], t) for k, t in COMMON.items()), r["kind"]
         assert set(r["symbols"]) == {"defines", "uses"}
     kinds = [r["kind"] for r in out]
     assert kinds == ["heading", "comment", "blank", "command", "unitdef", "funcdef", "assign", "expr", "error",
-                     "assign", "plot", "plotopt", "plotopt", "assign", "assign", "solver", "solveropt", "assign"]
+                     "assign", "plot", "plotopt", "plotopt", "assign", "assign", "solver", "solveropt", "assign",
+                     "slider", "solveropt", "solveropt", "assign"]
 
 
 def test_a_row_says_the_lines_it_owns():
@@ -154,6 +157,20 @@ def test_a_regression_row_is_typeset_math_with_its_fit():
     assert [s["name"] for s in r["symbols"]["defines"]] == ["a", "b"]
 
 
+def test_a_slider_row_is_its_assignment_and_where_the_slider_stands():
+    out = rows(SLIDER)
+    r = out[0]
+    assert set(r) == set(COMMON) | {"slider"} and (r["kind"], r["end"]) == ("slider", 3)
+    assert r["text"] == "x = 2 m" and r["latex"].startswith("x =")
+    s = r["slider"]
+    assert set(s) == SLIDER_KEYS
+    assert s == {"name": "x", "value": 2, "low": 0, "high": 10, "step": 0.5, "scale": "linear", "power": 1,
+                 "ticks": 20, "position": pytest.approx(0.2), "unit": "m", "labels": ["0 m", "10 m"]}
+    assert [x["kind"] for x in out[1:]] == ["solveropt", "solveropt", "assign"]
+    assert [d["name"] for d in r["symbols"]["defines"]] == ["x"] and r["symbols"]["uses"][0][:2] == [8, 1]
+    assert evaluate(SLIDER).results[0].slider.inside
+
+
 def test_a_solver_row_carries_its_state():
     s = rows(ROOT)[1]["solver"]
     assert set(s) == SOLVER_KEYS
@@ -170,15 +187,16 @@ def test_the_latex_view_adds_a_snippet_to_every_row():
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 def test_the_page_reads_every_row_the_server_sends():
     """static/rows.js over real rows, so a change to the shape that the page would miss fails here."""
-    text = "## Head `h`\n\n!sigfigs 3\nx = 2\nnope +\n" + PLOT + ROOT
+    text = "## Head `h`\n\n!sigfigs 3\nx = 2\nnope +\n" + PLOT + ROOT + SLIDER
     script = ("const R = require(process.argv[1]); const rows = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
               "console.log(JSON.stringify(rows.map((r) => { const m = R.model(r, {view: 'latex'});"
               " return m && [m.line, m.end, m.body.type]; })))")
     rows_js = Path(__file__).parents[1] / "laconic" / "static" / "rows.js"
     # the blank line (2) has no row in either view (#143)
-    for view, kinds in (("typeset", ["inline", "none", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex"]),
+    for view, kinds in (("typeset", ["inline", "none", "tex", "error", "tex", "plot", "tex", "tex", "solver", "tex",
+                                     "slider", "tex"]),
                         ("latex", ["snippet", "snippet", "snippet", "error", "snippet", "snippet", "snippet",
-                                   "snippet", "snippet", "snippet"])):
+                                   "snippet", "snippet", "snippet", "snippet", "snippet"])):
         r = subprocess.run(["node", "-e", script, str(rows_js)], input=json.dumps(rows(text, view=view)),
                            capture_output=True, text=True, check=True)
         models = [m for m in json.loads(r.stdout) if m]

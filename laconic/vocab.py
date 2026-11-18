@@ -1,7 +1,7 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
-from . import catalogue, plotopts, regression, solver, symsolve
+from . import catalogue, plotopts, regression, slider, solver, symsolve
 from .commands import COMMANDS
 from .evaluator import CONSTANTS, registry
 from .functions import FUNCTIONS
@@ -97,6 +97,8 @@ def blocks():
                            SOLVER_EXPR_KEYS, {"bounds": "unknown"})
     out["regression"] = _block({k: regression.KEY_NOTES[k] for k in regression.KEYS}, math=SOLVER_EXPR_KEYS)
     out["symsolve"] = _block({k: symsolve.KEY_NOTES[k] for k in symsolve.KEYS}, math=SOLVER_EXPR_KEYS)
+    out["slider"] = _block({k: slider.KEY_NOTES[k] for k in slider.KEYS},
+                           {"scale": [[s, n] for s, n in slider.SCALES.items()]}, SOLVER_EXPR_KEYS)
     return out
 
 

@@ -71,6 +71,8 @@ CASES = {
     "regression": ("D = [0, 1, 2; 1, 3, 5]\n!regression a, b\n  data: D", 2, None,
                    lambda rs: rs[1].kind == "regression"),
     "symsolve": ("$x\n!symsolve x\n  equation: 2*x = 1", 2, None, lambda rs: rs[1].kind == "symsolve"),
+    "slider": ("!slider x = 2'm\n  range: 0'm .. 10'm\ny = 2*x", 1, None,
+               lambda rs: rs[0].kind == "slider" and rs[2].text == "y = 4 m"),
     "loop": ("S = 0\n!loop i = 1 .. 3\n  S = S + i", 2, None, lambda rs: rs[1].kind == "loop" and rs[1].text.startswith("S = 6")),
 }
 
@@ -96,8 +98,8 @@ def test_command(command):
     if text is not None:
         assert (rs[n - 1].kind, rs[n - 1].text) == ("command", text)
     assert after(rs)
-    if command.name in ("root", "minimize", "maximize", "regression", "symsolve"):
-        return                      # a bare `!root` is still a block, reported by solver.py, regression.py or symsolve.py
+    if command.name in ("root", "minimize", "maximize", "regression", "symsolve", "slider"):
+        return                      # a bare `!root` is still a block, reported by solver.py, regression.py, symsolve.py or slider.py
     line, error = (f(command) for f in BAD[type(command.args)])
     r = run(line)[0]
     assert r.kind == "error" and error in r.error

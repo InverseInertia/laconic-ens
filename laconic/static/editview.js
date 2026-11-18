@@ -27,7 +27,8 @@
  *   shift(folds, text, e)  the folds after edit `e` to `text`: lines below it move with it, and a
  *                          line the edit removed loses its fold
  *   History                undo and redo of the sheet text, for when the view is not the text and
- *                          the browser's own undo cannot be used
+ *                          the browser's own undo cannot be used, or for edits that undo as one step
+ *                          (`record`'s group: a slider's drag)
  */
 (function (root) {
   'use strict';
@@ -236,19 +237,21 @@
   }
 
   // Undo and redo over the sheet text. Typing one character after another, on from where the
-  // last left off, is one step, as in the browser's own undo.
+  // last left off, is one step, as in the browser's own undo. So is a run of edits recorded with the
+  // same `group` (not null), such as every edit one drag of a slider makes (#178).
   class History {
-    constructor() { this.undos = []; this.redos = []; this.lastTyped = null; }
-    record(before, e, typed) {
-      const joins = typed && this.lastTyped !== null && e.from === this.lastTyped && e.to === e.from
-        && e.insert.length === 1 && e.insert !== '\n';
+    constructor() { this.undos = []; this.redos = []; this.lastTyped = null; this.group = null; }
+    record(before, e, typed, group = null) {
+      const joins = (group !== null && group === this.group) || (typed && this.lastTyped !== null
+        && e.from === this.lastTyped && e.to === e.from && e.insert.length === 1 && e.insert !== '\n');
       if (!joins) this.undos.push(before);
       this.redos = [];
+      this.group = group;
       this.lastTyped = typed && e.to === e.from && e.insert.length === 1 && e.insert !== '\n' ? e.from + 1 : null;
     }
-    undo(current) { this.lastTyped = null; const s = this.undos.pop(); if (s) this.redos.push(current); return s || null; }
-    redo(current) { this.lastTyped = null; const s = this.redos.pop(); if (s) this.undos.push(current); return s || null; }
-    clear() { this.undos = []; this.redos = []; this.lastTyped = null; }
+    undo(current) { this.lastTyped = this.group = null; const s = this.undos.pop(); if (s) this.redos.push(current); return s || null; }
+    redo(current) { this.lastTyped = this.group = null; const s = this.redos.pop(); if (s) this.undos.push(current); return s || null; }
+    clear() { this.undos = []; this.redos = []; this.lastTyped = this.group = null; }
   }
 
   const api = {regions, literals, foldable, layout, edit, widen, shift, History};
