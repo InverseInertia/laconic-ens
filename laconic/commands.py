@@ -36,6 +36,8 @@ class SheetMode:
     cleared_funcs: set = field(default_factory=set)  # functions removed by !clearf
     hidden: bool = False       # True after !hide: lines still run, but their results are not shown
                                # (sheet.py marks them; errors are never hidden), until !show
+    rpn: bool = False          # True after !rpn: expressions are read in reverse Polish (rpn.py), until
+                               # !rpn off. sheettext.py's Line.rpn reads the same lines from the text
 
 
 class CommandError(Exception):
@@ -70,16 +72,22 @@ class Whole:
 
 @dataclass(frozen=True)
 class Choice:
-    """One word from `options`."""
+    """One word from `options`. With a `default`, the word may be left out (`!rpn` is `!rpn on`)."""
     options: tuple
+    default: str = None
 
     @property
     def hint(self):
-        return " " + "|".join(self.options)
+        words = "|".join(self.options)
+        return f" [{words}]" if self.default else " " + words
 
     def parse(self, name, rest):
+        if not rest and self.default:
+            return self.default
         if rest not in self.options:
-            raise CommandError(f"!{name} takes one of {', '.join(self.options)}, e.g. `!{name} {self.options[0]}`")
+            alone = ", or nothing" if self.default else ""
+            example = next(o for o in self.options if o != self.default)
+            raise CommandError(f"!{name} takes one of {', '.join(self.options)}{alone}, e.g. `!{name} {example}`")
         return rest
 
 
@@ -179,6 +187,12 @@ def _freq(mode, ev, how):
     return _FREQ_TEXT[how]
 
 
+def _rpn(mode, ev, how):
+    mode.rpn = how == "on"
+    return ("Expressions below are reverse Polish, F = m a *, until !rpn off" if mode.rpn
+            else "Expressions are infix again")
+
+
 def _plotspec(mode, ev, rest):
     """`!plotspec grid: off` sets an option for every plot below it; `!plotspec reset` clears them."""
     if rest == "reset":
@@ -236,6 +250,11 @@ _FREQ_HELP = ("What frequencies are. Below <code>!freq hz</code> or <code>!freq 
               "<code>3000'rpm -&gt; 'Hz</code> is 50 Hz. A result in plain 1/s, such as <code>sqrt(k/m)</code>, "
               "is shown in Hz after <code>hz</code> and in rad/s after <code>rad</code>. <code>si</code>, the "
               "default, makes Hz, rad/s and 1/s the same unit")
+_RPN_HELP = ("Below <code>!rpn</code>, expressions are typed in reverse Polish: values first, then the "
+             "operator or function, separated by spaces: <code>F = m a *</code>, <code>3'm 4'm +</code>, "
+             "<code>f(x) = x 2 ^ 1 +</code>, <code>x sqrt</code>. A function that takes a varying number of "
+             "values is given it after a slash: <code>A B hstack/2</code>. <code>neg</code> is unary minus. "
+             "Results are shown in ordinary infix. <code>!rpn off</code> returns to infix")
 
 COMMANDS = (
     Command("clear", NoArgs(), "remove all non-global variables", _clear, _CLEAR_HELP),
@@ -269,6 +288,8 @@ COMMANDS = (
             _complex, _COMPLEX_HELP),
     Command("freq", Choice(("hz", "rad", "si")), "Hz is cycles/s, 2π rad/s; show 1/s results in hz or rad",
             _freq, _FREQ_HELP),
+    Command("rpn", Choice(("on", "off"), default="on"), "type the expressions below in reverse Polish: F = m a *",
+            _rpn, _RPN_HELP),
     Command("plot", Statement("A plot reads `!plot f(x), x = low .. high`, or `!plot x, y` for points"),
             "plot functions or points: !plot f(x), x = 0 .. 1, or !plot x, y"),
     Command("plotspec", Text(), "set a plot option for the plots below, e.g. !plotspec grid: off", _plotspec),
@@ -282,6 +303,8 @@ COMMANDS = (
             "fit a polynomial or a model to points: !regression a, b, c, then indented data: lines"),
     Command("symsolve", Statement("A symbolic solve reads `!symsolve x, y`"),
             "solve equations for symbols with sympy: !symsolve x, then indented equation: lines"),
+    Command("slider", Statement("A slider reads `!slider x = 2'm`, then an indented `range: low .. high` line"),
+            "a variable set with a slider in the results: !slider x = 2'm, then range: 0'm .. 10'm"),
     Command("loop", Statement("A loop reads `!loop i = 1 .. n`: the index, then the first and last values"),
             "run the indented lines once for each i: !loop i = 1 .. n"),
 )

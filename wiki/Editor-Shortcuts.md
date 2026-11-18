@@ -4,7 +4,9 @@ The editor is a plain text box with extra keys that edit the source. **Settings 
 
 ## Math keys
 
-These are off on comment lines, on the text lines under a plot (title, labels, a note's text but not its `at (x, y)`) and on a solver's `method:` line. The **Math keys** checkbox switches them all off.
+These are off on comment lines (but on in a comment's inline math between backticks, see [Worksheet Syntax](Worksheet-Syntax#comments-headings-meta-lines)), on the text lines under a plot (title, labels, a note's text but not its `at (x, y)`) and on a solver's `method:` line. The **Math keys** checkbox switches them all off.
+
+On a line typed in reverse Polish (below `!rpn`, see [Worksheet Syntax](Worksheet-Syntax#reverse-polish-input)) they are off too, since they write infix: every operator, bracket and space goes in as typed and Backspace deletes one character. What still works there is the subscript period after a name (`M.max` gives `M_max`), `Ctrl+G`, `Ctrl+<` for `∠`, `Ctrl+M` for a matrix's brackets and the `~` added to a global.
 
 | Key | Effect |
 |---|---|
@@ -23,8 +25,8 @@ These are off on comment lines, on the text lines under a plot (title, labels, a
 | `Ctrl+G` | Extended character (Greek letters, ∞, ∀) for the character before the caret. Press again to revert |
 | `Ctrl+[` , `Ctrl+Shift+[` | Wrap in `idx( , )` / `elem( , , )` |
 | `Ctrl+/`, `Ctrl+\` | A literal `/` (spaced) or `\`, with no fraction or radical slot |
-| `Enter` | With only closing brackets left on the line, finishes the line. After a block header (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`) or one of the block's indented lines, the new line takes the block's indent; on a line that is only that indent, Enter removes it, leaving the block. This works with Math keys off too |
-| `g` then space, operator, `(`, `)` or `Enter` | When `g` is a global from an earlier line, adds its `~`: `~g`. Not in a unit (`'g`), a function's own parameters or a comment |
+| `Enter` | With only closing brackets left on the line, finishes the line. After a block header (`!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!slider`) or one of the block's indented lines, the new line takes the block's indent; on a line that is only that indent, Enter removes it, leaving the block. This works with Math keys off too |
+| `g` then space, operator, `(`, `)` or `Enter` | When `g` is a global from an earlier line, adds its `~`: `~g`. Not in a unit (`'g`), a function's own parameters or a comment's text |
 | `Ctrl+Space` | Opens suggestions by hand. With text highlighted: pick a function to wrap it in |
 | `Alt+Up`, `Alt+Down` | Grow the selection by one term-aware step, or step back |
 | `Tab`, `Shift+Tab` | Indent or unindent the line, or every highlighted line, by two spaces. Works with Math keys off. Press `Esc` first to move the focus out of the editor with `Tab` |
@@ -68,16 +70,16 @@ Suggestions appear as you type, from the **Suggest** box in the header.
 
 | After | Offers |
 |---|---|
-| `'` | units: your own and the machine's first, then common units (`kN`, `mm`, `GPa`) and everything Pint knows, matched by symbol or full name (`newt` finds `N`) |
+| `'` | units: exactly what you typed first, so the list confirms it is a unit (`'kB` shows *kilobyte*, any prefix on any unit included, and a spelling that is not a unit says so), then your own and the machine's, then common units (`kN`, `mm`, `GPa`) and everything Pint knows, matched by symbol or full name (`newt` finds `N`) |
 | `!` | commands |
 | two letters of a name | variables defined above (with their current value), your functions, built-in functions, `pi` and `e` |
-| an indented line under any block: `!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve` | the block's options (`title`, `xlim`, `color`, ... under a plot; `equation`, `objective`, `bounds x`, `method`, ... under a solver; `data`, `degree`, `model`, `r2` under a regression; `equation`, `pick` under a symbolic solve), each with what it is for, inserted with their colon |
-| the value of an option with a few choices | its choices: a solver's `method:` (the methods that block kind takes, each with what it is for) and `autorun:`; a plot's `grid:`, `xscale:`, `yscale:`, `legend:`, `dash:`, `marker:`, `gaps:` and `color:` |
-| the value of an option that is an expression | names and units, as on any line: an equation, `data:`, a plot's `xlim:` or `points:`, a note's `at (x, y)`, after `'` in `xunit:` |
+| an indented line under any block: `!plot`, `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!slider` | the block's options (`title`, `xlim`, `color`, ... under a plot; `equation`, `objective`, `bounds x`, `method`, ... under a solver; `data`, `degree`, `model`, `r2` under a regression; `equation`, `pick` under a symbolic solve; `range`, `step`, `scale` under a slider), each with what it is for, inserted with their colon |
+| the value of an option with a few choices | its choices: a solver's `method:` (the methods that block kind takes, each with what it is for) and `autorun:`; a plot's `grid:`, `xscale:`, `yscale:`, `legend:`, `dash:`, `marker:`, `gaps:` and `color:`; a slider's `scale:` |
+| the value of an option that is an expression | names and units, as on any line: an equation, `data:`, a plot's `xlim:` or `points:`, a note's `at (x, y)`, after `'` in `xunit:`, a slider's `range:` and `step:` and the value in its `!slider` line |
 | the unknowns in `!root x, y` | variables defined above |
 | `"` inside `props(` | the property keys (state inputs only where an input goes, with each key's meaning and SI unit) or, in the fluid's place, the CoolProp fluids, matched by alias too (`h2o` finds `Water`); inside `haprops(`, the humid air keys |
 
-`Tab` accepts, `Up`/`Down` choose, `Esc` closes. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(`. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions, nor do option values that are text or a number (a title, `samples:`, `degree:`). Every block's options come from one table the server builds from the lists it reads the blocks with (`vocab.py` `blocks()`), so a new option is offered as soon as it exists.
+`Tab` accepts, `Up`/`Down` choose, `Esc` closes. The list shows eight at first; `Down` past the last loads the next eight, until every match is listed. `Enter` accepts only after you have moved with the arrows, so it still ends the line when you just kept typing. A function is inserted with brackets and the caret inside, unless the word is already followed by `(` or the line is reverse Polish (below `!rpn`), where the name alone goes in; `Ctrl+Space` over a highlight there puts the function's name after it. A global is inserted with its `~`, whether or not you typed one. The props list loads the first time it is needed (CoolProp takes a few seconds to import), and Math keys leave text inside quotes alone, so `"1-Butene"` keeps its hyphen. The name left of `=`, function parameters and comment lines get no suggestions, nor do option values that are text or a number (a title, `samples:`, `degree:`). Every block's options come from one table the server builds from the lists it reads the blocks with (`vocab.py` `blocks()`), so a new option is offered as soon as it exists.
 
 ## Extended characters
 

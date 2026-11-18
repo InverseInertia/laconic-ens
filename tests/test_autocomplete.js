@@ -27,6 +27,8 @@ Object.assign(vocab.blocks, {
   minimize: optimize, maximize: optimize,
   regression: { keys: [['data', 'points'], ['degree', 'n'], ['model', 'f'], ['r2', 'R²']], choices: {}, math: ['data', 'model', 'r2'], args: {} },
   symsolve: { keys: [['equation', 'lhs = rhs'], ['pick', 'n']], choices: {}, math: ['equation'], args: {} },
+  slider: { keys: [['range', 'low .. high'], ['step', 'snap'], ['scale', 'linear, log or pow n']],
+            choices: { scale: [['linear', 'even'], ['log', 'factor'], ['pow', 'pow n']] }, math: ['range', 'step'], args: {} },
   plot: { keys: [['title', 'title'], ['xlim', 'x range'], ['points', 'points'], ['color', 'a color'], ['grid', 'on or off'], ['xunit', 'x unit'], ['note', 'a dot'], ['samples', 'n']],
           choices: { grid: [['on', ''], ['off', '']], color: [['red', '#d55e00'], ['blue', '#0072b2']], legend: [['auto', ''], ['top right', '']] },
           math: ['xlim', 'points', 'note', 'xunit'], args: { color: 'series' } },
@@ -110,10 +112,10 @@ eq(pick("w = 12'|").slice(0, 3), ['smoot', 'N', 'm'], 'an empty query lists your
 eq(pick("w = 12'sm|"), ['smoot'], 'your own unit');
 eq(pick("w = 12'newt|"), ['N', 'kN'], 'by description, then inside a description');
 eq(pick("w = 12'kil|"), ['kN', 'kg'], 'by description, shorter first');
-eq(pick("w = 12'mm|"), [], 'a unit that is already complete offers nothing');
+eq(pick("w = 12'mm|"), ['mm'], 'a unit that is complete is still shown, to confirm it is one (#183)');
 eq(pick("w = 12'GPA|"), ['GPa'], 'ignoring case');
 eq(pick("w = 12'xyz|"), [], 'no match');
-eq(pick("w = 12'k|"), ['kN', 'kg', 'k'], 'common units before an exact match on something obscure');
+eq(pick("w = 12'k|"), ['k', 'kN', 'kg'], 'what is typed first, even something obscure, then the common units (#183)');
 eq(pick("'zap = 3'm\nw = 12'za|"), ['zap'], 'a unit defined in this sheet');
 eq(pick("w = 12'za|\n'zap = 3'm"), ['zap'], 'even when it is defined below');
 
@@ -136,6 +138,27 @@ eq(pick(below(9, 'x = Lmax|')), [], 'a name that is already complete offers noth
 eq(A.candidates(at(below(9, 'x = Lma|')).ctx, vocab, below(9, 'x = Lma'), { symbols: TABLE })[0].detail, '4.5 m', 'value shown');
 eq(A.candidates(at("w = 12'|").ctx, vocab, "w = 12'").length, 8, 'at most eight');
 
+// A spelling the vocabulary does not list (#183): the list asks for it, then shows it first.
+{
+  const open = (src, v) => { const i = src.indexOf('|'), t = src.replace('|', ''); return A.open(t, i, i, { enabled: true, fresh: true }, { vocab: v, symbols: TABLE }); };
+  eq(open("w = 12'kB|", vocab).check, 'kB', 'an unlisted unit is checked with the server');
+  eq(open("w = 12'kN|", vocab).check, null, 'a listed one is not');
+  const known = { ...vocab, checked: { kB: { known: true, detail: 'kilobyte' }, kQ: { known: false, detail: '' } } };
+  const kb = open("w = 12'kB|", known);
+  eq([kb.check, kb.items.map((c) => [c.insert, c.detail])], [null, [['kB', 'kilobyte']]], 'then it is shown with what it is');
+  eq(open("w = 12'kQ|", known).items.map((c) => [c.insert, c.detail, !!c.unknown]), [['kQ', 'not a unit LENS knows', true]], 'or said not to be a unit');
+  // The arrows past the last item load the next ones.
+  const many = { ...vocab, units: Array.from({ length: 20 }, (_, i) => ['u' + String(i).padStart(2, '0'), 'unit ' + i, 0]) };
+  let l = open("w = 12'u|", many);
+  eq([l.items.length, l.limit], [8, 8], 'eight at first');
+  for (let i = 0; i < 8; i++) l = A.key(l, 'ArrowDown', {}, "w = 12'u", { vocab: many, symbols: TABLE }).list;
+  eq([l.items.length, l.index, l.items[l.index].insert], [16, 8, 'u08'], 'down past the last loads eight more');
+  for (let i = 0; i < 8; i++) l = A.key(l, 'ArrowDown', {}, "w = 12'u", { vocab: many, symbols: TABLE }).list;
+  eq([l.items.length, l.index], [20, 16], 'until there are no more');
+  for (let i = 0; i < 4; i++) l = A.key(l, 'ArrowDown', {}, "w = 12'u", { vocab: many, symbols: TABLE }).list;
+  eq(l.index, 0, 'then it wraps to the top');
+}
+
 // --- accepting ----------------------------------------------------------------
 function accepting(src, i = 0, opts) {
   const { text, ctx } = at(src, opts);
@@ -144,9 +167,10 @@ function accepting(src, i = 0, opts) {
   const out = text.slice(0, r.from) + r.insert + text.slice(r.to);
   return out.slice(0, r.caret) + '|' + out.slice(r.caret);
 }
-eq(accepting("w = 12'k|"), "w = 12'kN|", 'a unit');
+eq(accepting("w = 12'k|", 1), "w = 12'kN|", 'a unit');
 eq(accepting('x = so|'), 'x = solve(|)', 'a function gets brackets with the caret inside');
 eq(accepting('x = so|(a, b)'), 'x = solve|(a, b)', 'unless it already has them');
+eq(accepting('!rpn\nx = A b so|'), '!rpn\nx = A b solve|', 'or the line is reverse Polish, where the name comes after its values');
 eq(accepting('x = so|lv(a)'), 'x = solve|(a)', 'the rest of the word is replaced');
 eq(accepting(below(9, 'x = del|')), below(9, 'x = delta_max|'), 'a variable');
 eq(accepting(below(9, 'x = ~g|'), 0, { force: true }), below(9, 'x = ~grav|'), 'a global is inserted with its ~');
@@ -212,6 +236,13 @@ eq(at('!regression a, b\n  data: Lm|').ctx.kind, 'name', 'its data is an express
 eq(at('!regression a\n  degree: 2|', { force: true }).ctx, null, 'its degree is a number');
 eq(pick('!symsolve x\n  eq|'), ['equation'], 'a symbolic solve offers its keys');
 eq(at('!symsolve x\n  pick: 1|', { force: true }).ctx, null, 'its pick is a number');
+eq(A.blockAt("!slider x = 2'm\n  range: 0 .. 1", 16), { kind: 'slider', unknowns: ['x'] }, 'a slider is a block that sets one name');
+eq(pick("!slider x = 2'm\n  |", { force: true }), ['range', 'step', 'scale'], 'a slider offers its keys');
+eq(pick("!slider x = 2'm\n  range: 0 .. 1\n  scale: l|"), ['linear', 'log'], 'and the scales');
+eq(at("!slider x = 2'm\n  range: 0 .. Lm|").ctx.kind, 'name', 'its range is an expression');
+eq(at("!slider x = 2'm\n  step: 0.1'm|").ctx.kind, 'unit', 'with units, as its step is');
+eq(at("!slider x = Lm|").ctx.kind, 'name', 'its header is an assignment, so its value is math');
+eq(at("!slider x = 2'm|").ctx.kind, 'unit', 'units included');
 eq(A.candidates(at(PLOT + '  g|').ctx, { ...vocab, blocks: undefined }, PLOT + '  g'), [], 'nothing before the table has arrived');
 eq(at(PLOT + '  xlim: 0 .. Lm|', { vocab: { ...vocab, blocks: undefined } }).ctx, null, 'not even names in a value');
 

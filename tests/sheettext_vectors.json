@@ -1,5 +1,5 @@
 {
-  "about": "Shared test vectors for the worksheet lexer and line shapes. tests/test_sheettext.py checks laconic/sheettext.py against them and tests/test_sheettext.js checks the editor's copies in static/ (editing.js tokens, isTok and nameAt, autocomplete.js definition, editing.js blockAt), so the two sides cannot drift apart. A token is [kind, column, text]. names_at: the name or unit at a caret, which F2 fills in for a rename. text_at: whether a caret is in prose (editing.js isTextAt, where math keys are off) and so outside every expression span; lines that are neither, such as a command or a plot's grid option, are not listed.",
+  "about": "Shared test vectors for the worksheet lexer and line shapes. tests/test_sheettext.py checks laconic/sheettext.py against them and tests/test_sheettext.js checks the editor's copies in static/ (editing.js tokens, isTok and nameAt, autocomplete.js definition, editing.js blockAt), so the two sides cannot drift apart. A token is [kind, column, text]. names_at: the name or unit at a caret, which F2 fills in for a rename. text_at: whether a caret is in prose (editing.js isTextAt, where math keys are off) and so outside every expression span; lines that are neither, such as a command or a plot's grid option, are not listed. rpn_at: whether a line is read in reverse Polish (sheettext Line.rpn; editing.js isRpnAt, where most math keys are off): below `!rpn` or `!rpn on` and above `!rpn off`, a calculation no block owns, or a blank line.",
   "tokens": [
     {"line": "x = 1", "tokens": [["name", 0, "x"], ["num", 4, "1"]]},
     {"line": "F = 12'kN * 2.5e-3'm", "tokens": [["name", 0, "F"], ["num", 4, "12"], ["unit", 6, "'kN"], ["num", 12, "2.5e-3"], ["unit", 18, "'m"]]},
@@ -20,7 +20,10 @@
     {"line": "e5 = 1e5 + .5", "tokens": [["name", 0, "e5"], ["num", 5, "1e5"], ["num", 11, ".5"]]},
     {"line": "props(\"D\", \"T\", 300'K, \"Water\")", "tokens": [["name", 0, "props"], ["text", 6, "\"D\""], ["text", 11, "\"T\""], ["num", 16, "300"], ["unit", 19, "'K"], ["text", 23, "\"Water\""]]},
     {"line": "'smoot = 1.7018'm", "tokens": [["unit", 0, "'smoot"], ["num", 9, "1.7018"], ["unit", 15, "'m"]]},
-    {"line": "A = [1, 2; 3, 4] -> 'mm", "tokens": [["name", 0, "A"], ["num", 5, "1"], ["num", 8, "2"], ["num", 11, "3"], ["num", 14, "4"], ["unit", 20, "'mm"]]}
+    {"line": "A = [1, 2; 3, 4] -> 'mm", "tokens": [["name", 0, "A"], ["num", 5, "1"], ["num", 8, "2"], ["num", 11, "3"], ["num", 14, "4"], ["unit", 20, "'mm"]]},
+    {"line": "F = m a *", "tokens": [["name", 0, "F"], ["name", 4, "m"], ["name", 6, "a"]]},
+    {"line": "c = 3'm 4'm hypot 2.5e3'Pa neg", "tokens": [["name", 0, "c"], ["num", 4, "3"], ["unit", 5, "'m"], ["num", 8, "4"], ["unit", 9, "'m"], ["name", 12, "hypot"], ["num", 18, "2.5e3"], ["unit", 23, "'Pa"], ["name", 27, "neg"]]},
+    {"line": "f(x) = x 2 ^ a b max/2 + .g/1", "tokens": [["name", 0, "f"], ["name", 2, "x"], ["name", 7, "x"], ["num", 9, "2"], ["name", 13, "a"], ["name", 15, "b"], ["name", 17, "max"], ["num", 21, "2"], ["name", 26, "g"], ["num", 28, "1"]]}
   ],
   "definitions": [
     {"line": "x = 1", "def": ["assign", "x", []]},
@@ -34,6 +37,8 @@
     {"line": "T_∞ = 300'K", "def": ["assign", "T_∞", []]},
     {"line": "q_∞(h, T_s) = h*(T_s - T_∞)", "def": ["funcdef", "q_∞", ["h", "T_s"]]},
     {"line": "f(x) = x^2", "def": ["funcdef", "f", ["x"]]},
+    {"line": "f(x) = x 2 ^ 1 +", "def": ["funcdef", "f", ["x"]]},
+    {"line": "F = m a *", "def": ["assign", "F", []]},
     {"line": "~h(a, b) = a*b", "def": ["funcdef", "~h", ["a", "b"]]},
     {"line": "g(V`, ∀) = V`*∀", "def": ["funcdef", "g", ["V`", "∀"]]},
     {"line": "V@(x) = 2*x", "def": ["funcdef", "V@", ["x"]]},
@@ -59,7 +64,10 @@
     {"text": "!root\n  equation: x = 1", "line": 2, "block": {"kind": "root", "unknowns": []}},
     {"text": "!loop i = 1 .. 3\n  !loop j = 1 .. 2\n    x = i*j", "line": 3, "block": {"kind": "loop", "unknowns": []}},
     {"text": "!loop i = 1 .. 3\n  S = S + i", "line": 2, "block": {"kind": "loop", "unknowns": []}},
-    {"text": "!loop i = 1 .. 3\n  S = S + i\nT = S", "line": 3, "block": null}
+    {"text": "!loop i = 1 .. 3\n  S = S + i\nT = S", "line": 3, "block": null},
+    {"text": "!slider x = 2'm\n  range: 0'm .. 10'm\n  scale: log", "line": 3, "block": {"kind": "slider", "unknowns": ["x"]}},
+    {"text": "!slider ~v_0 = 2\n  step: 0.5", "line": 2, "block": {"kind": "slider", "unknowns": ["~v_0"]}},
+    {"text": "!slider x = 2\n  range: 0 .. 3\ny = x", "line": 3, "block": null}
   ],
   "names_at": [
     {"text": "σ_max = 3", "caret": 2, "name": "σ_max"},
@@ -75,6 +83,16 @@
   ],
   "text_at": [
     {"text": "# note x", "caret": 3, "prose": true},
+    {"text": "# force `F = m*a` here", "caret": 4, "prose": true},
+    {"text": "# force `F = m*a` here", "caret": 9, "prose": false},
+    {"text": "# force `F = m*a` here", "caret": 13, "prose": false},
+    {"text": "# force `F = m*a` here", "caret": 16, "prose": false},
+    {"text": "# force `F = m*a` here", "caret": 18, "prose": true},
+    {"text": "## Area `A = w*h`", "caret": 12, "prose": false},
+    {"text": "# one ` stays text", "caret": 9, "prose": true},
+    {"text": "# a `  ` pair of spaces `x` is text", "caret": 6, "prose": true},
+    {"text": "# a `  ` pair of spaces `x` is text", "caret": 25, "prose": false},
+    {"text": "#@ meta `x`", "caret": 9, "prose": true},
     {"text": "x = 1", "caret": 2, "prose": false},
     {"text": "x = 1", "caret": 5, "prose": false},
     {"text": "!plot f(x), x = 0 .. 1", "caret": 8, "prose": false},
@@ -94,6 +112,29 @@
     {"text": "!minimize d\n  bounds d: 0 .. 1", "caret": 26, "prose": false},
     {"text": "!root x\n  equation: x^2 = 2", "caret": 24, "prose": false},
     {"text": "!plot f(x), x = 0 .. 1\n  points: t, s", "caret": 35, "prose": false},
-    {"text": "!regression a\n  model: f(x) = a*x", "caret": 30, "prose": false}
+    {"text": "!regression a\n  model: f(x) = a*x", "caret": 30, "prose": false},
+    {"text": "!slider x = 2'm", "caret": 13, "prose": false},
+    {"text": "!slider x = 2\n  range: 0 .. L", "caret": 28, "prose": false}
+  ],
+  "rpn_at": [
+    {"text": "F = m*a\n!rpn\nF = m a *", "line": 1, "rpn": false},
+    {"text": "F = m*a\n!rpn\nF = m a *", "line": 2, "rpn": false},
+    {"text": "F = m*a\n!rpn\nF = m a *", "line": 3, "rpn": true},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 2, "rpn": true},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 3, "rpn": true},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 4, "rpn": true},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 5, "rpn": false},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 6, "rpn": false},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 7, "rpn": false},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 8, "rpn": false},
+    {"text": "!rpn\n3'm 4'm +\nf(x) = x 2 ^\n\n# x y +\n'u = 2'm\n$a\n!sigfigs 3\n!rpn off\nx + 1", "line": 10, "rpn": false},
+    {"text": "!rpn on\n'm 3 *", "line": 2, "rpn": true},
+    {"text": "!rpn\n!rpn nonsense\nx 1 +", "line": 3, "rpn": true},
+    {"text": "x = 1\n!rpnx\nx 1 +", "line": 3, "rpn": false},
+    {"text": "!rpn\nx = 1\n!root x\n  equation: x^2 = 2\n  !rpn off\ny 1 +", "line": 4, "rpn": false},
+    {"text": "!rpn\nx = 1\n!root x\n  equation: x^2 = 2\n  !rpn off\ny 1 +", "line": 6, "rpn": true},
+    {"text": "!rpn\nS = 0\n!loop i = 1 .. 3\n  S = S + i\nS 2 *", "line": 4, "rpn": false},
+    {"text": "!rpn\nS = 0\n!loop i = 1 .. 3\n  S = S + i\nS 2 *", "line": 5, "rpn": true},
+    {"text": "!rpn\n!plot x, x = 0 .. 1\n  grid: off\n  !rpn off\nx 1 +", "line": 5, "rpn": false}
   ]
 }

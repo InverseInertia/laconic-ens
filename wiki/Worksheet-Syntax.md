@@ -6,6 +6,7 @@ One statement per line. An error on a line never stops the lines after it; a lat
 
 ```
 # comment                      ## section heading
+# force `F = m*a` in newtons   backticks typeset math in a comment or heading
 L = 4.5'm                      a unit starts with an apostrophe
 w = 12'kN / 'm                 every unit in a compound gets its own apostrophe
 M = w * L^2 / 8 -> 'kN * 'm    -> converts units
@@ -16,6 +17,7 @@ z = 3 + 4i   v = 10'V∠30'deg   complex numbers (see Complex Numbers)
 σ_max = 3   T_∞ = 300'K        Greek letters and subscripts in names
 'smoot = 1.7018'm              define a unit (see Units)
 ~g = 9.81'm / 's^2             global variable (see below)
+!slider L = 2'm                a variable set with a slider (see Sliders below)
 $a, $x   q = a*x^2            symbols, and an expression over them (see Symbolic Math)
 x` = 2   F! = 5   a@ = 1       dot, arrow and hat over a variable
 u& = 3                         bar over a variable
@@ -100,23 +102,73 @@ In the results, every `!` line is marked the same way, so you can see what was c
 | `!sigfigs n` / `!sigfigsbig n` | show n significant figures (default 4), without / with trailing zeros |
 | `!decplace n` | show n decimal places |
 | `!freq hz\|rad\|si` | Hz is cycles per second, so `->` between Hz and rad/s puts in the 2π, and 1/s results show in Hz / rad/s; `si` (default) keeps 1 Hz = 1 rad/s, see [Units](Units#frequencies-hz-and-rads) |
+| `!rpn` / `!rpn off` | type the expressions below in reverse Polish (`F = m a *`) / in infix again (default), see [Reverse Polish input](#reverse-polish-input) |
 | `!complex rect\|polar\|real` | show complex results as `3 + 4i` (default) or `5∠53.13°`, or make any complex result an error, see [Complex Numbers](Complex-Numbers) |
 | `!plot ...` | draw a graph, see [Plots](Plots) |
 | `!plotspec key: value` | default plot option for the plots below, see [Plots](Plots) |
 | `!root`, `!minimize`, `!maximize` | solve equations or optimize, see [Solving and Optimizing](Solving-and-Optimizing) |
+| `!slider x = 2'm` | a variable set with a slider in the results, see [Sliders](#sliders) |
 
 Using a name that `!clear` removed says so: `'m' was removed by !clear`. See [Output and Export](Output-and-Export) for what the display commands do.
+
+## Reverse Polish input
+
+`!rpn` on a line of its own makes the lines below it reverse Polish (RPN): values first, then what is done to them, every value and operator separated by spaces. `!rpn off` (or the end of the sheet) returns to infix; `!rpn on` is the same as `!rpn`. `!clear` leaves the mode alone. The results pane and every export show the lines in ordinary infix, so the input is quick and the output still reads as math.
+
+```
+m = 2'kg   a = 3'm/'s^2
+!rpn
+F = m a *                      F = m · a = 6 N
+3'm 4'm +                      7 m
+hyp(x, y) = x 2 ^ y 2 ^ + sqrt hyp(x, y) = √(x² + y²)
+c = 3 4 hyp                    c = hyp(3, 4) = 5
+v = 9.81'm/'s^2 'ft/'s^2 ->    convert: v -> 'ft/'s^2
+A B hstack/2                   hstack(A, B)
+x neg                          -x
+!rpn off
+```
+
+- **What is RPN**: an assignment keeps its name on the left (`F = m a *`); its right side is RPN. A bare expression is RPN throughout. A function definition keeps its head, `f(x) = x 2 ^ 1 +`, and takes its body in RPN. Unit definitions, `$` symbol declarations, comments, headings, commands and every line a block owns (plot options, solver equations, a `!loop`'s lines) are read as usual.
+- **Values**: a number written as anywhere in the sheet, units and all (`3'm`, `2.5e3'Pa`, `9.81'm/'s^2`, `-4`, `4i`, `∞`); a unit on its own (`'km`, for `->`); a quoted string (`"Water"`); a matrix, written as usual (`[1, 2; 3, 4]`, one value, its entries read as infix); or a name.
+- **Operators** take two values: `+ - * / ^`, `.*` and `./` (elementwise), `∠` (polar: `5'V 30'deg ∠`) and `->` (convert the value below into the units on top: `x 'km ->`). `neg` is unary minus, so in RPN `neg` cannot be a variable's name.
+- **Functions**: a user function, or a built-in that always takes the same number of arguments, is called by its name alone and takes that many values (`x sqrt`, `A i idx`, `3 4 hyp`). Any function can be given its number of values after a slash: `A B hstack/2`, `"Tcrit" "Water" props/2`, `n zeros/1`; that is the only way to call one that takes a varying number (`hstack`, `vstack`, `zeros`, `ones`, `props`, `haprops`). A period in front calls it on each element: `A B .f/2`.
+- **Names**: a variable the line can see always means the variable, as does a function definition's parameter, so after `f = 10`, `f 1 +` is 11; `f/1` still calls the function `f`.
+- **Errors** are the line's own: ``RPN: `+` needs two values, the stack has one`` when the stack runs short, `RPN: 2 values are left on the stack; an expression must leave exactly one` when it does not end with one value, and a note when a token is not RPN (`m*a`, `sqrt(2)`).
+- Rename (F2) renames names on RPN lines too. On an RPN line the editor's math keys are off, since they write infix; see [Editor Shortcuts](Editor-Shortcuts#math-keys).
+
+## Sliders
+
+`!slider` defines a variable, as an assignment does, and puts a slider for it in the results. Drag it and the number in the `!slider` line changes, and every line below follows as you drag.
+
+```
+!slider L = 2'm                the value: a number, with its units if it has any
+  range: 0'm .. 10'm           required: the slider's ends, in units that agree with the value's
+  step: 0.5'm                  optional: snap to whole steps from the low end
+  scale: linear                optional: linear (the default), log, or pow n
+A = 3*L                        L is 2 m here, as after L = 2'm
+```
+
+- **range** is `low .. high`. Each end may be an expression (`0'm .. 2*w`), and a bare `0` is zero in any unit. The slider works in the units the value is typed in, so `!slider d = 250'mm` with `range: 0 .. 1'm` runs from 0 mm to 1000 mm.
+- **step** snaps the value to the low end plus a whole number of steps. Without a step the slider is continuous, and a drag writes as many digits as the slider can tell apart at that point.
+- **scale** decides how the slider's travel maps onto the range. `log` gives each stretch of the slider the same factor (the range must be above zero), for a frequency or a size spanning decades. `pow n` maps the position *p* (0 to 1) to low + (high − low)·*p*ⁿ, so `pow 2` or `pow 3` gives finer control near the low end.
+- The sheet text is the only record: a drag rewrites the number in the `!slider` line, keeping its units and everything else on the line as you typed it, and one Ctrl+Z undoes the whole drag. Arrow keys move a focused slider one step (or one notch) at a time.
+- A value typed outside the range is kept as typed. The slider stands at the nearer end, and the row warns that the value is out of range.
+- A bad option is an error on its own line, and then the slider's line is an error too and defines nothing.
+- Rename (F2) renames the variable in the `!slider` line and in its `range:` and `step:` lines. The exports print only the assignment, `L = 2 m`: the slider is for the page.
 
 ## Renaming
 
 The Rename button or F2 renames a variable, function or custom unit everywhere (the name at the caret is pre-filled).
 
-- Comments and commands are untouched; text under a plot (titles, labels) is never renamed.
+- Comments and commands are untouched, except the inline math between backticks in a comment or heading; text under a plot (titles, labels) is never renamed.
 - `m` and `'m` are different names. Built-in names and names already in use are refused.
 - Only units the sheet itself defines can be renamed freely. Replacing a standard unit asks for confirmation and, if the new name is not an existing unit, adds a definition for you to adjust.
 
 ## Comments, headings, meta lines
 
 - `# text` is a comment, `## text` a section heading (a `\subsection*` in the export).
+- **Inline math**: in a comment or heading, text between a pair of backticks is read as a LENS expression and typeset as math in the line of text, as a calculation's first stage is shown: `` # the moment `M = w*L^2/8` at midspan `` shows M = wL²/8 with the fraction, the names and units typeset and nothing worked out. An expression (`` `sqrt(F/A)` ``), an assignment (`` `F = m*a` ``) or a function definition (`` `f(x) = x^2` ``) can go between the backticks; it defines nothing and gives no warning, and a name defined above shows as it does in a calculation (a global marked). Text that does not read as math (`` `!plot` ``) shows in the code font instead, with no error. Backticks pair up from the left: one left over, or a pair with only spaces between, shows as typed. A backtick inside the math would end it, so the dot mark (``v` ``) cannot be used there.
+- The exports keep it: inline `$...$` in the LaTeX document and the Markdown note, and typeset in the PDF.
+- With Math keys on, the keys work between the backticks as on a calculation line, and the spellchecker is off while the caret is there. Rename renames a name inside inline math too.
 - `#@ ...` lines are written by LENS (the saved unit block) and are not displayed as comments.
 - The browser's spellchecker is on while the caret is on a comment, a heading or a plot's title, label or note, and off on calculations, so names and units are never marked. The editor is one text box, and the browser only checks words as you type them and drops every mark when spellcheck goes off: a misspelling is underlined while you write the line, and the marks go away when the caret moves to a calculation.

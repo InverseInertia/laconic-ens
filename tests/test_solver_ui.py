@@ -176,3 +176,12 @@ def test_run_writes_the_result_into_a_folded_block_and_keeps_the_folds(page):
     assert page.evaluate("[...folds].sort((a, b) => a - b)") == [5, 10]
     page.click("#out .row[data-line='9']")         # z = x * 2, one line lower now
     assert page.evaluate("caretLine()") == 9
+
+
+def test_the_row_shows_what_the_block_solves_above_the_values(page):
+    """#182: the equations over the values, so a printed sheet says what was solved."""
+    show(page, ROOT)
+    text = page.inner_text(".solver-box .s-problem")
+    assert "x" in text and "4" in text
+    assert page.evaluate("(() => { const b = document.querySelector('.solver-box');"
+                         " return b.firstElementChild.classList.contains('s-problem'); })()")

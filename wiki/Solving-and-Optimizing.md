@@ -37,7 +37,7 @@ The block is checked as you edit: an undefined name, a unit mismatch or the wron
 
 ## Running, and what is stored
 
-Solvers can be slow, so evaluating a sheet **never runs one**. Under each block the output side shows the values and a control strip:
+Solvers can be slow, so evaluating a sheet **never runs one**. Under each block the output side shows what it solves (its equations, or the objective with its constraints and bounds), then the values and a control strip:
 
 - **Run** solves in a separate worker process and writes the answer into the block as one line: `  #@ result {"hash":"54401af82124","method":"hybr","values":[...],...}`. It is plain text in the `.lens` file, so a saved sheet opens with its answers and Ctrl+Z undoes a run.
 - **Interrupt** kills the worker, which is the only way to stop a calculation that is stuck inside one call. Nothing is stored. A run is also killed when it passes its `timeout:`, and when the inputs change while it is running (its answer would describe inputs that no longer exist).
@@ -57,7 +57,7 @@ The hash covers everything the block reads: its own lines (apart from `timeout:`
 | ⟳ Running | a worker is solving |
 | ✕ Failed, ■ Interrupted | the last run did not store anything. Open the log |
 
-Any line computed from an out-of-date block (and any plot) gets a ⚠ beside it, through variables and user functions alike, and a later block that reads an out-of-date unknown is flagged as built on stale values. Only a result that converged is ever stored. The LaTeX export prints the stored values, with a comment line above any block that is out of date.
+Any line computed from an out-of-date block (and any plot) gets a ⚠ beside it, through variables and user functions alike, and a later block that reads an out-of-date unknown is flagged as built on stale values. Only a result that converged is ever stored. The exports print what the block solves, then the stored values, with a note above any block that is out of date.
 
 ## Regression
 

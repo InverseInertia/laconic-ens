@@ -31,8 +31,8 @@ from .plotopts import PlotError, apply_patch
 from .rename import RenameError, RenameWarning, rename
 from .solver import SolverError, set_option
 from .solverjobs import Busy, jobs
-from . import solvesession
-from .vocab import props_vocabulary, vocabulary
+from . import slider, solvesession
+from .vocab import props_vocabulary, unit_check, vocabulary
 
 app = FastAPI(title="laconic")
 STATIC = Path(__file__).parent / "static"
@@ -79,6 +79,12 @@ class PlotEditBody(BaseModel):
     text: str
     line: int                                           # the plot's `plot` line, 1-based
     patch: dict[str, str | list[float] | None]          # option -> new value; None removes it
+
+
+class SliderEditBody(BaseModel):
+    text: str
+    line: int                                           # the `!slider` line, 1-based
+    position: float                                     # from 0 (the range's low end) to 1 (its high end)
 
 
 class PlotImageBody(BaseModel):
@@ -307,6 +313,21 @@ def plot_image(body: PlotImageBody):
     return Response(plot.image(uid=body.line), media_type="image/svg+xml")
 
 
+@app.post("/api/slideredit")
+def slider_edit(body: SliderEditBody):
+    """The `!slider` header on `line` rewritten for the slider moved to `position`: its number, snapped
+    to the step, with its units kept (slider.py). Returns the edits to the text; the page applies them
+    and the sheet runs again from the text. Nothing changes on error."""
+    r = block_at(body.text, body.line, settings.global_units())
+    if r is None or r.slider is None:
+        return {"ok": False, "error": f"Line {body.line} is not a slider that reads"}
+    try:
+        edits = slider.drag(body.text, body.line, r.slider, body.position)
+    except slider.SliderError as e:
+        return {"ok": False, "error": str(e.args[1])}
+    return {"ok": True, "edits": to_json(body.text, edits)}
+
+
 # ---- solver blocks ---------------------------------------------------------------------------------
 # Evaluating a sheet never runs a solver. The page starts a job, polls it, and when it has finished
 # asks for the result to be written into the block (/store), which returns the edits to the text.
@@ -466,6 +487,12 @@ def get_example(name: str):
 @app.get("/api/vocab")
 def vocab():
     return vocabulary(settings.global_units())
+
+
+@app.get("/api/unit")
+def unit(name: str):
+    """Whether one spelling typed after a quote is a unit, for the suggestions (#183)."""
+    return unit_check(name)
 
 
 @app.get("/api/vocab/props")

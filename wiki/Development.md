@@ -37,6 +37,7 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `test_laconic.py`, `test_units.py` | evaluation, LaTeX, custom units |
 | `test_plots.py`, `test_props.py`, `test_rename.py`, `test_server.py`, `test_lifecycle.py`, `test_blockedit.py`, `test_commands.py`, `test_symbols.py`, `test_markdown.py`, `test_pdfdoc.py`, `test_fileassoc.py`, `test_instance.py`, `test_exports.py`, `test_functions.py` | one module each |
 | `test_complex.py` | complex numbers |
+| `test_rpn.py` | reverse Polish input (`!rpn`): the translation into the infix AST, units, functions, stack errors, infix typesetting and exports, Rename, and which lines the mode covers |
 | `test_release_notes.py`, `test_stamp_changelog.py` | the release scripts in `packaging/` that read and stamp `CHANGELOG.md` |
 | `test_sheettext.py`, `sheettext_vectors.json` | line kinds, blocks, spans and tokens; the vectors are shared with `test_sheettext.js` |
 | `test_lineresult.py` | the line result interface, the block lookups, and the contract on the `/api/eval` row shape (it also runs `rows.js` over real rows) |
@@ -44,10 +45,11 @@ Python 3.10 or newer. Dependencies: pint, numpy, lark, fastapi, uvicorn, CoolPro
 | `test_solver.py`, `test_solverjobs.py` | solver blocks, the solve session, and the worker process with its runner |
 | `test_symbolic.py` | symbols (`$x`, `~$g`), symbolic expressions, units and late binding, `!symsolve`, and their errors, exports and rename |
 | `test_loop.py` | `!loop` blocks: what they leave below, entries, loops inside loops, errors, Rename and exports |
+| `test_slider.py` | `!slider` blocks: the variable they define, where the slider stands for each scale, the errors, the text a drag writes and `/api/slideredit`, Rename and the exports |
 | `test_regression.py`, `matrix_vectors.json` | `!regression` blocks (the fit, units, errors, exports), and large matrices collapsed in documents; the vectors are shared with `test_matrixview.js` |
 | `test_install_linux.py` | `packaging/install-linux.sh` run in a throwaway home folder with a stand-in program and a stand-in `curl` serving fake releases: the launcher it writes, what `--uninstall` removes, installing and updating to the latest release, the copy of itself it keeps in the install folder (which LENS's Update runs), `--release`, what it does offline or when a download fails, stopping a LENS still running from the install folder, and installer 1.0.0 updating through `packaging/v1-bridge.sh` |
 | `test_updates.py` | the update check and the Update action (`updates.py`) with a stand-in GitHub and installer: version comparison, which release counts, what Update does for each kind of install, the endpoints and the setting. `conftest.py` makes the check offline for every other test, so no test reaches the network |
-| `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py`, `test_regression_ui.py`, `test_update_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
+| `test_ui.py`, `test_plots_ui.py`, `test_solver_ui.py`, `test_regression_ui.py`, `test_slider_ui.py`, `test_update_ui.py` | the real page in Chromium (Playwright); the second uses real pointer events on plots. Fixtures are in `conftest.py`, shared helpers in `uihelpers.py` |
 
 Browser tests are skipped unless `playwright` is installed (`pip install playwright`; set `CHROMIUM_PATH` to use an existing browser). One test compiles an exported document with plots and is skipped unless `pdflatex` (with pgfplots and siunitx v3) is installed.
 
