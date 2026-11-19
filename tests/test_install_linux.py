@@ -263,16 +263,21 @@ def test_installer_1_updates_through_the_bridge(tmp_path, github):
     assert f'Exec="{app / "lens"}" --window %f' in desktop
 
 
-@pytest.mark.skipif(not Path("/proc/self/exe").exists() or shutil.which("sleep") is None, reason="needs /proc")
+@pytest.mark.skipif(not Path("/proc/self/exe").exists() or shutil.which("perl") is None, reason="needs /proc and perl")
 @pytest.mark.parametrize("deleted", [False, True])
 def test_stops_a_lens_still_running_from_the_install_folder(tmp_path, downloads, deleted):
     """A running LENS takes every new launch over, so the old release would keep showing; it is
-    stopped even when its files were already deleted by hand (#101)."""
+    stopped even when its files were already deleted by hand (#101).
+
+    The stand-in LENS is a copy of perl: the installer knows a LENS by the file it runs from, so
+    any program will do, as long as it keeps running under another name. A copy of `sleep` did
+    until the CI runner's coreutils became uutils, whose `sleep` exits at once when it is not
+    called `sleep`."""
     app = tmp_path / "home" / ".local/share/laconic-lens"
     app.mkdir(parents=True)
-    shutil.copy(shutil.which("sleep"), app / "lens")
-    old = subprocess.Popen([str(app / "lens"), "300"])
-    elsewhere = subprocess.Popen([shutil.which("sleep"), "300"])
+    shutil.copy(shutil.which("perl"), app / "lens")
+    old = subprocess.Popen([str(app / "lens"), "-e", "sleep 300"])
+    elsewhere = subprocess.Popen([shutil.which("perl"), "-e", "sleep 300"])
     try:
         if deleted:
             shutil.rmtree(app)
