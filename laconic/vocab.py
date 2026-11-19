@@ -1,7 +1,7 @@
 """What the editor can suggest: units, functions, constants and commands."""
 from functools import lru_cache
 
-from . import catalogue, plotopts, regression, solver, symsolve
+from . import catalogue, plotopts, regression, slider, solver, symsolve
 from .commands import COMMANDS
 from .evaluator import CONSTANTS, registry
 from .functions import FUNCTIONS
@@ -55,6 +55,25 @@ def _units():
     return out
 
 
+def unit_check(name):
+    """Whether `name` is a unit the sheet can use, typed after a quote, and what it is: the editor
+    asks for a spelling it does not list (`kB` reads as kilo + byte), so it can show what was typed
+    at the top of its suggestions, or say it is not a unit (#183). A sheet's own units and the
+    global ones are the editor's to check."""
+    ureg = registry()
+    try:
+        units = ureg.parse_units(name) if name.strip() else None
+    except Exception:
+        units = None
+    if units is None:
+        return {"name": name, "known": False, "detail": ""}
+    try:
+        detail = catalogue.detail(name) or str(units)
+    except Exception:
+        detail = str(units)
+    return {"name": name, "known": True, "detail": detail}
+
+
 def _block(notes, choices=None, math=(), args=None):
     return {"keys": [[k, n] for k, n in notes.items()], "choices": choices or {},
             "math": [k for k in notes if k in math], "args": args or {}}
@@ -78,6 +97,8 @@ def blocks():
                            SOLVER_EXPR_KEYS, {"bounds": "unknown"})
     out["regression"] = _block({k: regression.KEY_NOTES[k] for k in regression.KEYS}, math=SOLVER_EXPR_KEYS)
     out["symsolve"] = _block({k: symsolve.KEY_NOTES[k] for k in symsolve.KEYS}, math=SOLVER_EXPR_KEYS)
+    out["slider"] = _block({k: slider.KEY_NOTES[k] for k in slider.KEYS},
+                           {"scale": [[s, n] for s, n in slider.SCALES.items()]}, SOLVER_EXPR_KEYS)
     return out
 
 

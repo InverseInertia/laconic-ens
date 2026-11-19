@@ -20,6 +20,10 @@ eq(body(row('heading', { text: 'Loads' })), { type: 'text', text: 'Loads' }, 'a 
 eq(body(row('symdef', { text: 'symbols a, b' })), { type: 'text', text: 'symbols a, b' }, 'a symbol declaration names its symbols');
 eq(body(row('symsolve', { latex: 'x = 1' })).type, 'tex', 'a symbolic solve is typeset');
 eq(body(row('comment', { text: 'n' })), { type: 'text', text: 'n' }, 'so does a comment');
+const parts = [['text', 'force '], ['math', 'F = m \\cdot a'], ['text', ', '], ['code', '!x']];
+eq(body(row('comment', { text: 'force `F = m*a`, `!x`', parts })), { type: 'inline', parts },
+  'a comment with inline math is drawn part by part');
+eq(body(row('heading', { text: 'Area `A`', parts: [['text', 'Area '], ['math', 'A']] })).type, 'inline', 'so is a heading');
 eq(body(row('command', { source: '!sigfigs 3  ', text: 'sigfigs 3' })), { type: 'none' },
   'a command is all head: it shows itself and what it did');
 eq(body(row('error', { source: '  x = +', error: 'Bad' })), { type: 'error', source: 'x = +', message: 'Bad' },
@@ -27,6 +31,8 @@ eq(body(row('error', { source: '  x = +', error: 'Bad' })), { type: 'error', sou
 eq(body(row('plot', { plot: {} })), { type: 'plot', pending: false }, 'a plot draws from its payload');
 eq(body(row('plot', { pending: true })), { type: 'plot', pending: true }, 'or says it is not drawn yet');
 eq(body(row('solver', { solver: {} })), { type: 'solver' }, 'so does a solver block');
+eq(body(row('slider', { latex: 'x = 2 m', slider: {} })), { type: 'slider', tex: 'x = 2 m', rows: ['x = 2 m'] },
+  'a slider shows its assignment typeset, and draws the slider from its payload');
 eq(R.model(row('plotopt'), {}), null, 'a plot option line has no row of its own');
 eq(R.model(row('solveropt'), {}), null, 'nor has a solver option line');
 eq(R.model(row('loopline'), {}), null, 'nor has a line a loop runs');
@@ -41,7 +47,7 @@ eq(R.model(row('command', { source: '!hide', text: 'hidden' }), {}).head.command
 const head = (r, view) => R.model(r, { view }).head;
 eq(head(row('command', { source: '!sigfigs 3  ', text: 'Results show 3' })), { command: '!sigfigs 3', effect: 'Results show 3' },
   'a command names itself and what it did');
-for (const kind of ['plot', 'solver', 'regression', 'symsolve', 'loop']) {
+for (const kind of ['plot', 'solver', 'regression', 'symsolve', 'slider', 'loop']) {
   const r = row(kind, { source: '  !' + kind + ' a, b', latex: 'a = 1', plot: {}, solver: {} });
   eq(head(r), { command: '!' + kind + ' a, b', effect: '' }, `a ${kind} block names the command it was called with`);
   eq(head({ ...r, snippet: 'S' }, 'latex'), head(r), `in the LaTeX view too (${kind})`);

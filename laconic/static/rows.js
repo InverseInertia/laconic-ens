@@ -10,11 +10,14 @@
  *     line, end    the lines the row owns (a block header owns its block)
  *     cls          the row's class names
  *     head         the command indicator, the same on every row a `!` line makes (a command, a
- *                  plot, a solver, regression, symsolve, loop or plugin block, a `!pluginvar` line), in both views: {command, effect},
+ *                  plot, a solver, regression, symsolve, slider, loop or plugin block, a `!pluginvar` line), in both views: {command, effect},
  *                  the command as typed and, for a one-line command, what it did (else ""). null
  *                  on every other row, a failed one included (its error shows the line as typed)
  *     body         {type: "none"}                   nothing under the head (a command)
  *                  {type: "text", text}             plain text
+ *                  {type: "inline", parts}          a comment or heading with inline math: its
+ *                                                   [kind, value] parts, "text", "math" (typeset
+ *                                                   inline) or "code" (backticked, not math)
  *                  {type: "tex", tex, rows, matrix} typeset math, and the same one stage per row
  *                                                   for a pane too narrow for it (mathfit.js). A
  *                                                   matrix too large to read is collapsed to its
@@ -25,6 +28,8 @@
  *                  {type: "plot", pending}          drawn from the row's own payload; `pending`:
  *                                                   not drawn yet (plotOrder says when it is)
  *                  {type: "solver"}                 drawn from the row's own payload
+ *                  {type: "slider", tex, rows}      the assignment typeset as `tex` is, and a slider
+ *                                                   drawn from the row's own payload
  *                  {type: "plugin"}                 the plugin's picture and controls (plugins.js)
  *                  {type: "snippet", text, solver}  the LaTeX view; `solver`: add its controls
  *     warning      shown under the body, or ""
@@ -48,6 +53,8 @@
   'use strict';
 
   const text = (r) => ({ type: 'text', text: r.text });
+  // A comment or heading with inline math (`F = m*a`) is drawn part by part.
+  const prose = (r) => (r.parts ? { type: 'inline', parts: r.parts } : text(r));
   const MV = root.MatrixView || (typeof require === 'function' ? require('./matrixview.js') : null);
 
   function calc(r, opts) {
@@ -64,14 +71,15 @@
   // line kind -> its body, or null when the line has no row of its own. Other kinds are calculations.
   const BODY = {
     blank: null,   // blank lines keep the sheet text readable; the results are readable already (#143)
-    heading: text,
-    comment: text,
+    heading: prose,
+    comment: prose,
     meta: text,
     command: () => ({ type: 'none' }),
     symdef: text,
     error: (r) => ({ type: 'error', source: r.source.trim(), message: r.error }),
     plot: (r) => ({ type: 'plot', pending: !!r.pending }),
     solver: () => ({ type: 'solver' }),
+    slider: (r) => ({ type: 'slider', tex: r.latex, rows: r.latex_rows || [r.latex] }),
     plugin: () => ({ type: 'plugin' }),
     pluginvar: () => ({ type: 'none' }),
     plotopt: null,
@@ -81,7 +89,7 @@
   };
 
   // The kinds a `!` line makes, which show the command indicator (`head`).
-  const COMMAND = new Set(['command', 'plot', 'solver', 'regression', 'symsolve', 'loop', 'plugin', 'pluginvar']);
+  const COMMAND = new Set(['command', 'plot', 'solver', 'regression', 'symsolve', 'slider', 'loop', 'plugin', 'pluginvar']);
   const EFFECT = new Set(['command', 'pluginvar']);   // one-line commands, which say what they did
 
   function model(r, opts) {

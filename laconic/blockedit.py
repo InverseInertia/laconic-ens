@@ -10,6 +10,7 @@ applies them as one undoable change (`Editing.merge` in static/editing.js).
     ed.remove("autorun")                 every `autorun:` line
     ed.store_result(record)              the `#@ result` line, replacing any earlier one
     ed.append("# checked by hand")       any other block-owned line
+    ed.header("!slider x = 2.5'm")       the header line itself (a slider's new value)
     ed.assign("L", "[1; 2] 'm")          under a plugin: the line defining L, replaced where it is or added
     ed.store_state({"cells": []})        under a plugin: its `#@ state` line, replacing any earlier one
     ed.edits()                           -> [Edit], as small as possible, against `text`
@@ -94,8 +95,9 @@ class BlockEditor:
         if not b:
             return
         at = sum(len(l.text) + len(l.eol) for l in sheet.lines[:b.header - 1])
-        self._start = at + len(b.lines[0].text)       # the edited region: the header's ending to the
+        self._start = at                              # the edited region: the header to the
         self._end = at + sum(len(l.text) + len(l.eol) for l in b.lines) - len(b.lines[-1].eol)   # last line's text
+        self._header = b.lines[0].text
         self._eol = b.lines[0].eol or newline(text)
         self._members = [_Member(l.text, l.eol, l.option.key if l.option else None,
                                  _arg(l.option.arg) if l.option else None,
@@ -164,6 +166,11 @@ class BlockEditor:
         self._check()
         self._add(line)
 
+    def header(self, line):
+        """Write the header line as `line` (without its ending)."""
+        self._check()
+        self._header = line
+
     def edits(self):
         """The changes so far, as at most one Edit against the text. The last line's ending lies
         outside the edit, so a file without a final newline still has none."""
@@ -173,7 +180,7 @@ class BlockEditor:
         order = [m for m in self._members if not m.result] + [m for m in self._members if m.result]
         # each line is preceded by the ending of the one before it; a missing one is the file's
         endings = [self.block.lines[0].eol] + [m.eol for m in order]
-        new = "".join((e or self._eol) + m.text for e, m in zip(endings, order))
+        new = self._header + "".join((e or self._eol) + m.text for e, m in zip(endings, order))
         if old == new:
             return []
         n = min(len(old), len(new))

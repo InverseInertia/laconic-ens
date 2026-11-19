@@ -176,6 +176,9 @@
   .row .body { overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
   .row.heading .body { font: 600 calc(17px * var(--fs))/var(--row) var(--sans); border-bottom: 1px solid var(--ink); margin-top: 10px; padding: 0; }
   .row.comment .body { font: 400 calc(14px * var(--fs))/var(--row) var(--sans); color: var(--text-soft); }
+  /* Inline math in a comment or heading (`F = m*a`), and backticked text that is not math. */
+  .row .imath .katex { font-size: 1.08em; color: var(--text); }
+  .row .icode { font: 400 .92em var(--mono); }
   .row.error .body { font: 400 calc(13px * var(--fs))/1.35 var(--mono); color: var(--err); padding: 5px 0; white-space: pre-wrap; }
   .row.error .src { color: var(--text-soft); display: block; }
   /* Math is fitted to this box (mathfit.js); the margin is room to spare, so a pane narrowed a little
@@ -186,6 +189,11 @@
   .row .katex { font-size: 1.12em; }
   .row .mx-toggle { display: block; margin: 0 0 3px; padding: 0 7px; font-size: calc(12px * var(--fs)); border-color: var(--rule); color: var(--text-soft); }
   .row .mx-toggle:hover { color: var(--on-ink); border-color: var(--ink); }
+  /* A !slider's control under its assignment: the range's ends either side of a range input. */
+  .row .slider { display: flex; align-items: center; gap: 8px; margin: 2px 12px 4px 0; max-width: 32em;
+    font: 400 calc(12.5px * var(--fs))/1.3 var(--mono); color: var(--text-soft); }
+  .row .slider input[type=range] { flex: 1; min-width: 6em; margin: 0; accent-color: var(--ink); cursor: pointer; }
+  .row .slider .slider-end { white-space: nowrap; }
   /* A formula too wide for the pane, one stage per row (mathfit.js); a row KaTeX breaks again goes on indented. */
   .row .math.wrapped .wrow { margin: 1px 0 1px 1.5em; text-indent: -1.5em; }
   .row .math.wrapped .wrow .base { margin: .3em 0; }   /* room between wrapped lines of fractions */
@@ -253,6 +261,8 @@
   .row.stale .stale-mark { position: absolute; right: 4px; top: 3px; font: 400 calc(13px * var(--fs))/1 var(--sans); color: var(--text-soft); cursor: help; }
   .row.stale:not(.solver) .body { opacity: .72; }
   .row.solver .body { padding: 6px 0 4px; }
+  .solver-box .s-problem { margin: 2px 0 6px; padding-bottom: 4px; border-bottom: 1px dotted var(--rule); }
+  .solver-box .s-problem .katex-display { margin: 0; }
   .solver-box .s-values { margin: 2px 0 4px; }
   .solver-box.is-stale .s-values { opacity: .6; }
   .solver-box .s-val .katex-display { margin: 0; }
@@ -306,6 +316,7 @@
   .ac-item .lbl { font-weight: 500; }
   .ac-item .det { margin-left: auto; padding-left: 12px; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--sans); color: var(--text-soft); }
   .ac-item[aria-selected="true"] .kind, .ac-item[aria-selected="true"] .det { color: var(--on-hl); opacity: .85; }
+  .ac-item.unknown .det { color: var(--err); font-style: italic; }
   .ac-hint { padding: 3px 8px; border-top: 1px solid var(--grid); font: 400 11.5px var(--sans); color: var(--text-soft); }
 
   .u-row { display: grid; grid-template-columns: 11ch auto 1fr auto; align-items: center; gap: 4px 8px; margin-bottom: 8px; }
@@ -465,7 +476,7 @@
 <dialog id="keysDlg" aria-labelledby="keysTitle">
   <div class="dlg-head"><h2 id="keysTitle">Math keys</h2><button class="close">Close</button></div>
   <div class="dlg-body">
-    <p class="note">These keys edit the source text. The result column shows the typeset math. They are inactive on comment lines (starting with <code>#</code>) and can be switched off with the Math keys box.</p>
+    <p class="note">These keys edit the source text. The result column shows the typeset math. They are inactive on comment lines (starting with <code>#</code>), except in inline math between backticks, and can be switched off with the Math keys box.</p>
     <table class="keys" id="keysTable"></table>
     <template id="commandHelp">
       <!-- command help: rows generated from commands.COMMANDS by server.py -->
@@ -491,7 +502,8 @@
     <pre>## Simply supported beam           <i>## makes a heading, # a comment</i>
 L = 4.5'm
 w = 12'kN / 'm
-M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i></pre>
+M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i>
+# at midspan `M = w*L^2/8`         <i>backticks typeset math in a comment</i></pre>
     <p>One statement per line. An error on a line never stops the lines after it. Evaluation runs top to bottom, so define things before you use them.</p>
     <p><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) and <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) use plain-text <code>.lens</code> files. In Chrome or Edge, Save writes back to the file you opened; <strong>Save As</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) picks a new one, and renaming the sheet makes the next Save ask. Firefox and Safari download a copy each time.</p>
     <div id="exampleBox" hidden>
@@ -559,6 +571,11 @@ w    = haprops("W", "T", 25'degC, "P", 1'atm, "R", 0.5)   <i>humid air</i></pre>
   xunit: 's                <i>points without units are read in the units the plot gives</i>
   yunit: 'm</pre>
     <p>Indented <code>key: value</code> lines set the details; <code>!plotspec key: value</code> sets a default for every plot below it. Drag the plot to pan, <kbd>Ctrl</kbd> + wheel to zoom, double-click to reset. The new view is written back into the sheet as <code>xview:</code> and <code>yview:</code> lines, so <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes it. Each plot saves as SVG or PNG, and the LaTeX export draws it with <code>pgfplots</code>. Plots are drawn after the math, nearest the line you are on first; the line under each says whether it is still drawing or up to date.</p>
+    <pre>!slider L = 2'm            <i>a variable you set with a slider in the results</i>
+  range: 0'm .. 10'm      <i>the slider's ends, in the value's units</i>
+  step: 0.1'm             <i>optional: snap to whole steps</i>
+  scale: log              <i>optional: linear, log, or pow 2</i></pre>
+    <p>Dragging the slider writes the new value into the <code>!slider</code> line, and the lines below follow as you drag; <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes the whole drag. Exports show only <code>L = 2 m</code>.</p>
 
     <h3>Solving and optimizing <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Solving-and-Optimizing" target="_blank" rel="noopener">Solving and Optimizing</a></h3>
     <pre>x = 1'm                   <i>starting values come from ordinary variables</i>
@@ -606,7 +623,7 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
     </ul>
 
     <h3>Editor shortcuts <a class="wiki" href="https://github.com/inverseinertia/laconic-ens/wiki/Editor-Shortcuts" target="_blank" rel="noopener">Editor Shortcuts</a></h3>
-    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines and on the text under a plot or solver: titles, labels, a note's text, the method.</p>
+    <p>With <strong>Math keys</strong> on, the editor shapes the text as you type. They are off on comment lines (but on in a comment's inline math between backticks) and on the text under a plot or solver: titles, labels, a note's text, the method.</p>
     <ul>
       <li><kbd>/</kbd> makes a fraction from the term on its left, <kbd>^</kbd> opens an exponent, <kbd>\</kbd> a square root. <kbd>&rarr;</kbd> or <kbd>)</kbd> steps out of the slot. With text highlighted, they apply to the whole terms it touches.</li>
       <li><kbd>.</kbd> after a name makes a subscript: <code>M.max</code> becomes <code>M_max</code>.</li>
@@ -835,8 +852,8 @@ function pruneFolds() {
   const can = EditView.foldable(model);
   for (const n of [...folds]) if (!can.has(n)) folds.delete(n);
 }
-function commit(e, sel, typed = false) {
-  undoStack.record({text: model, sel: [e.from, e.to]}, e, typed);
+function commit(e, sel, typed = false, group = null) {
+  undoStack.record({text: model, sel: [e.from, e.to]}, e, typed, group);
   folds = EditView.shift(folds, model, e);
   model = model.slice(0, e.from) + e.insert + model.slice(e.to);
   pruneFolds();
@@ -896,9 +913,12 @@ const ed = {
   get selectionStart() { if (src.value !== lay.view) sync(); return lay.toModel(src.selectionStart); },
   get selectionEnd() { if (src.value !== lay.view) sync(); return lay.toModel(src.selectionEnd); },
   setSelectionRange(a, b = a) { src.setSelectionRange(lay.toView(a), lay.toView(b, b !== a)); },
-  setRangeText(insert, from, to) {
+  // `group`: edits that undo as one step with the others of their group (a slider's drag). They are
+  // the page's own, so its undo takes over from the browser's, which setting the textarea's text clears.
+  setRangeText(insert, from, to, mode, group = null) {
     if (src.value !== lay.view) sync();
-    commit({from, to, insert}, [from + insert.length, from + insert.length]);
+    if (group !== null) ownUndo = true;
+    commit({from, to, insert}, [from + insert.length, from + insert.length], false, group);
   },
   toView: (m, before) => lay.toView(m, before),
 };
@@ -975,6 +995,18 @@ document.fonts.ready.then(() => MathFit.fitAll(out, true));
 const BODY = {
   none: () => {},
   text: (el, b) => { el.textContent = b.text; },
+  inline: (el, b) => {
+    for (const [kind, value] of b.parts) {
+      if (kind === "text") { el.append(value); continue; }
+      const s = document.createElement(kind === "math" ? "span" : "code");
+      s.className = kind === "math" ? "imath" : "icode";
+      // KaTeX not loaded yet: the source shows, and render() runs again on load.
+      if (kind === "math" && window.katex) katex.render(value, s, {...KATEX_OPTS, displayMode: false});
+      else s.textContent = value;
+      el.append(s);
+    }
+    titleGlobals(el);
+  },
   tex: (el, b, r) => {
     typeset(el, b.tex, b.rows);
     if (b.matrix) el.append(matrixToggle(r.n, b.matrix));
@@ -985,6 +1017,7 @@ const BODY = {
   },
   plot: (el, b, r) => el.append(plotBody(r)),
   solver: (el, b, r) => el.append(Solvers.build(r)),
+  slider: (el, b, r) => { typeset(el, b.tex, b.rows); el.append(sliderBody(r)); },
   plugin: (el, b, r) => el.append(Plugins.build(r, last)),
   snippet: (el, b, r) => {
     const pre = document.createElement("pre"); pre.textContent = b.text; el.append(pre);
@@ -1025,7 +1058,14 @@ function render(rows) {
   // and blank lines get none at all.
   const items = rows.map((r) => [r, Rows.model(r, {view, expanded})]).filter(([, m]) => m);
   shown = items.map(([, m]) => m);
-  out.replaceChildren(...items.map(([r, m]) => rowEl(r, m)));
+  const els = items.map(([r, m]) => rowEl(r, m)), keep = holdSlider(els);
+  if (!keep) out.replaceChildren(...els);
+  else {   // the slider being dragged stays in the page, or the drag would end
+    for (const c of [...out.children]) if (c !== keep) c.remove();
+    const i = els.indexOf(keep);
+    keep.before(...els.slice(0, i));
+    keep.after(...els.slice(i + 1));
+  }
   MathFit.fitAll(out);
   markActive();
   Solvers.after(rows);
@@ -1079,13 +1119,15 @@ function replaceRows(rows) {
   paintGlobals();
 }
 
-async function evaluate() {
+// `onMath`, if given, is called once the math is on the page, before the plots are drawn.
+async function evaluate(onMath) {
   const mine = ++seq, text = ed.value, at = performance.now();
   // Plots come back pending: the math shows at once, and the plots are drawn after it.
   const res = await post("/api/eval", {plots: false});
   if (mine !== seq) return;
   render(await res.json()); tableText = text; acRetry();
   Plugins.after(last, at);   // the plugins' frames get the sheet's values (plugins.js)
+  if (typeof onMath === "function") onMath();
   await drawPlots(mine, text);
 }
 
@@ -1358,7 +1400,7 @@ const editor = {
     return !!o && o !== src && o !== document.body && /^(INPUT|TEXTAREA|SELECT)$/.test(o.tagName);
   },
   place: (r) => {
-    ed.setRangeText(r.insert, r.from, r.to, "preserve");
+    ed.setRangeText(r.insert, r.from, r.to, "preserve", r.group ?? null);
     ed.setSelectionRange(r.caret, r.caret);
     src.dispatchEvent(new Event("input", {bubbles: true}));
   },
@@ -1368,7 +1410,7 @@ const editor = {
     apply(r);
   },
 };
-const applyEdits = (base, edits, asked = false) => Editing.applyEdits(editor, base, edits, asked);
+const applyEdits = (base, edits, asked = false, group = null) => Editing.applyEdits(editor, base, edits, asked, group);
 
 // ---- plots -----------------------------------------------------------------
 // The picture is drawn on the server from the worksheet text. Dragging or zooming it
@@ -1384,6 +1426,77 @@ async function patchPlot(line, patch) {
   // scrolling back to wherever the caret was.
   focusLine(line);
   return true;
+}
+
+// ---- sliders ---------------------------------------------------------------
+// A `!slider x = 2'm` row has a range input under its assignment. Moving it asks the server for the
+// header with the number at the new position (laconic/slider.py), writes that into the editor and runs
+// the sheet, so the lines below follow while the slider moves. One request is out at a time, and only
+// the latest position waits for the next. Every edit of one drag joins one undo step (`group`). While
+// the slider has the focus, a redraw keeps its row's control in place, or the drag would end.
+let heldSlider = null;   // {line, row, input}: the slider that has the focus
+let sliderGroup = 0, sliderNext = null, sliderBusy = false;
+function sliderBody(r) {
+  const s = r.slider, n = Rows.line(r);
+  const box = document.createElement("div"); box.className = "slider";
+  const end = (text) => Object.assign(document.createElement("span"), {className: "slider-end", textContent: text});
+  const input = Object.assign(document.createElement("input"), {type: "range", min: 0, max: s.ticks, step: 1});
+  input.value = String(Math.round(s.position * s.ticks));
+  input.setAttribute("aria-label", `${s.name}, from ${s.labels[0]} to ${s.labels[1]}`);
+  input.title = `Drag to set ${s.name}; its line in the sheet changes with it`;
+  let group = null;
+  const hold = () => { heldSlider = {line: n, row: box.closest(".row"), input}; };
+  input.addEventListener("pointerdown", () => { hold(); group = null; });
+  input.addEventListener("focus", hold);
+  input.addEventListener("blur", () => { if (heldSlider && heldSlider.input === input) heldSlider = null; });
+  input.addEventListener("input", () => {
+    if (group === null) group = ++sliderGroup;
+    slideTo(n, Number(input.value) / s.ticks, group);
+  });
+  input.addEventListener("change", () => { group = null; });   // the drag (or the key press) is over
+  box.addEventListener("click", (ev) => ev.stopPropagation());   // not a click that jumps the editor to the line
+  box.append(end(s.labels[0]), input, end(s.labels[1]));
+  return box;
+}
+function slideTo(line, position, group) {
+  sliderNext = {line, position, group};
+  if (!sliderBusy) pumpSlider();
+}
+async function pumpSlider() {
+  sliderBusy = true;
+  try {
+    while (sliderNext) {
+      const {line, position, group} = sliderNext; sliderNext = null;
+      const text = ed.value;
+      let res;
+      try { res = await Api.json("/api/slideredit", {text, line, position}); } catch (e) { say(e.message); continue; }
+      if (!res.ok) { say(res.error); continue; }
+      if (!applyEdits(text, res.edits, false, group)) { say("The sheet changed meanwhile, so the slider was not moved"); continue; }
+      clearTimeout(timer);
+      await new Promise((resolve) => { evaluate(resolve).then(resolve, resolve); });   // the math, not the plots
+    }
+  } finally { sliderBusy = false; }
+}
+// The rows of a redraw (`els`), with the focused slider's row in place of its new one: the new row's
+// parts, around the control still in use. That row, or null when no slider is held.
+function holdSlider(els) {
+  const h = heldSlider;
+  if (!h || !h.row || !h.row.isConnected || document.activeElement !== h.input) return null;
+  const i = els.findIndex((e) => +e.dataset.line === h.line);
+  const fresh = els[i], control = h.input.parentElement, next = fresh && fresh.querySelector(".slider");
+  if (!next) return null;
+  const body = h.row.querySelector(".body"), fbody = fresh.querySelector(".body");
+  const kids = [...fbody.children], at = kids.indexOf(next);
+  for (const c of [...body.children]) if (c !== control) c.remove();
+  control.before(...kids.slice(0, at));
+  control.after(...kids.slice(at + 1));
+  for (const c of [...h.row.children]) if (c !== body) c.remove();
+  const outer = [...fresh.children], bi = outer.indexOf(fbody);
+  body.before(...outer.slice(0, bi));
+  body.after(...outer.slice(bi + 1));
+  h.row.className = fresh.className;
+  els[i] = h.row;
+  return h.row;
 }
 
 const plotSvg = (line) => Api.text("/api/plotimage", sheetBody({line}));
@@ -1648,10 +1761,15 @@ function apply(r) {
   else if (r.insert !== undefined) {
     applying = true;
     ed.setSelectionRange(r.from, r.to);
-    // execCommand edits whatever has the focus, so it is used only while the editor has it.
-    let ok = document.activeElement === src
+    // execCommand edits whatever has the focus, so it is used only while the editor has it, and
+    // only while the textarea shows the sheet text: with lines folded or matrix rows broken, the
+    // edit's range can reach into a placeholder, which reads as opening it and drops the edit, so
+    // a solver's result under a folded block was never written (#180). The page's own undo is in
+    // use then anyway.
+    // An edit of a group (a slider's drag) is the page's own, so the group can undo as one step.
+    let ok = r.group == null && lay.identity && document.activeElement === src
       && (r.insert === "" ? document.execCommand("delete") : document.execCommand("insertText", false, r.insert));
-    if (!ok) { ed.setRangeText(r.insert, r.from, r.to, "end"); src.dispatchEvent(new Event("input", {bubbles: true})); }
+    if (!ok) { ed.setRangeText(r.insert, r.from, r.to, "end", r.group ?? null); src.dispatchEvent(new Event("input", {bubbles: true})); }
     ed.setSelectionRange(...(r.sel || [r.caret, r.caret]));
     applying = false;
   }
@@ -1743,11 +1861,22 @@ src.addEventListener("dblclick", () => {
 const acEl = $("#ac"), suggest = $("#suggest");
 suggest.checked = store.get("suggest", true);
 suggest.onchange = () => { store.set("suggest", suggest.checked); if (!suggest.checked) acClose(); src.focus(); };
-let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands: []};
+let vocab = {units: [], globalUnits: [], functions: [], constants: [], commands: [], checked: {}};
 let ac = null, acSkip = false;
 
 async function loadVocab() {
-  try { vocab = {...await Api.json("/api/vocab"), props: vocab.props}; } catch {}
+  try { vocab = {...await Api.json("/api/vocab"), props: vocab.props, checked: vocab.checked}; } catch {}
+}
+// A unit spelling the vocabulary does not list (`kB`: kilo + byte) is asked about once, so the list
+// can show it first, or say it is not a unit (#183).
+const unitChecks = new Map();
+function checkUnit(name) {
+  if (!unitChecks.has(name)) {
+    unitChecks.set(name, Api.json(`/api/unit?name=${encodeURIComponent(name)}`, undefined, "GET")
+      .then((r) => { vocab.checked[name] = {known: !!r.known, detail: r.detail || ""}; })
+      .catch(() => { unitChecks.delete(name); }));
+  }
+  return unitChecks.get(name);
 }
 // props() keys and fluids need CoolProp on the server, which takes seconds to import, so they are
 // fetched the first time a props string is typed; the list opens when they arrive.
@@ -1778,7 +1907,7 @@ function acClose() {
 function acPaint() {
   const items = ac.items.map((c, i) => {
     const el = document.createElement("div");
-    el.className = "ac-item"; el.id = "ac-" + i; el.role = "option"; el.ariaSelected = i === ac.index;
+    el.className = "ac-item" + (c.unknown ? " unknown" : ""); el.id = "ac-" + i; el.role = "option"; el.ariaSelected = i === ac.index;
     const kind = Object.assign(document.createElement("span"), {className: "kind", textContent: c.custom ? "custom" : c.kind});
     const lbl = Object.assign(document.createElement("span"), {className: "lbl", textContent: c.label});
     const det = Object.assign(document.createElement("span"), {className: "det", textContent: c.detail || ""});
@@ -1817,6 +1946,9 @@ function acUpdate(force = false) {
   }
   acShow(next);
   acWaiting = next.stale && {force};
+  if (next.check) checkUnit(next.check).then(() => {
+    if (vocab.checked[next.check] && ed.value === text && document.activeElement === src) acUpdate(force);
+  });
 }
 // Names come from the symbol table of the last evaluation. When that was of older text, the
 // suggestions are worked out again once the evaluation of this text arrives.
@@ -1827,7 +1959,9 @@ function acRetry() {
 function acOpenByHand() {
   if (ed.selectionStart === ed.selectionEnd) { acUpdate(true); if (!ac) say("Nothing to suggest here"); return; }
   if (onCommentLine()) return;
-  const range = Editing.snap(ed.value, ed.selectionStart, ed.selectionEnd);
+  // Reverse Polish puts the function after the highlight, whatever it holds (Editing.wrapWithCall).
+  const range = Editing.isRpnAt(ed.value, ed.selectionStart) ? [ed.selectionStart, ed.selectionEnd]
+    : Editing.snap(ed.value, ed.selectionStart, ed.selectionEnd);
   if (!range) { say("Highlight something on one line to wrap it"); return; }
   ed.setSelectionRange(range[0], range[1]);
   acShow(Autocomplete.wrapping(ed.value, range, "", 0, acEnv()));

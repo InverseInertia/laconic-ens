@@ -57,6 +57,10 @@ CASES = {
              "Hz is cycles per second, 1 Hz = 2π rad/s; a 1/s result is shown in rad/s",
              lambda rs: rs[1].text == "w = 2 rad/s" and shown(rs[2]) == "0.3183 Hz"
              and rs[3].text == "Hz and rad/s are both 1/s again, 1 Hz = 1 rad/s" and shown(rs[4]) == "50 rad/s"),
+    "rpn": ("m = 2\na = 3\n!rpn\nF = m a *\n!clear\nm = 4\nm 1 +\n!rpn off\nm*2", 3,
+            "Expressions below are reverse Polish, F = m a *, until !rpn off",
+            lambda rs: rs[3].text == "F = 6" and shown(rs[6]) == "5"     # !clear leaves the mode alone
+            and rs[7].text == "Expressions are infix again" and shown(rs[8]) == "8"),
     "plotspec": ("!plotspec grid: off\n!plotspec reset", 1, "Plots below: grid off",
                  lambda rs: rs[1].text == "Plot options are back to the defaults"),
     # Statements: their lines are run by plotspec.py, solver.py and loop.py, never by the dispatcher.
@@ -67,6 +71,8 @@ CASES = {
     "regression": ("D = [0, 1, 2; 1, 3, 5]\n!regression a, b\n  data: D", 2, None,
                    lambda rs: rs[1].kind == "regression"),
     "symsolve": ("$x\n!symsolve x\n  equation: 2*x = 1", 2, None, lambda rs: rs[1].kind == "symsolve"),
+    "slider": ("!slider x = 2'm\n  range: 0'm .. 10'm\ny = 2*x", 1, None,
+               lambda rs: rs[0].kind == "slider" and rs[2].text == "y = 4 m"),
     "loop": ("S = 0\n!loop i = 1 .. 3\n  S = S + i", 2, None, lambda rs: rs[1].kind == "loop" and rs[1].text.startswith("S = 6")),
     "plugin": ("!plugin pipenet\n  x = 2", 1, None, lambda rs: rs[0].kind == "plugin" and rs[1].text == "x = 2"),
     "pluginvar": ("x = 2\n!pluginvar x", 2, None,
@@ -95,8 +101,8 @@ def test_command(command):
     if text is not None:
         assert (rs[n - 1].kind, rs[n - 1].text) == ("command", text)
     assert after(rs)
-    if command.name in ("root", "minimize", "maximize", "regression", "symsolve"):
-        return                      # a bare `!root` is still a block, reported by solver.py, regression.py or symsolve.py
+    if command.name in ("root", "minimize", "maximize", "regression", "symsolve", "slider"):
+        return                      # a bare `!root` is still a block, reported by solver.py, regression.py, symsolve.py or slider.py
     line, error = (f(command) for f in BAD[type(command.args)])
     r = run(line)[0]
     assert r.kind == "error" and error in r.error

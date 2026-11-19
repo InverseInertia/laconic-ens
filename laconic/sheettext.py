@@ -8,7 +8,8 @@ anything; this is the one place that reads the shape of the text.
     sheet.line(5).tokens("name") the names in its expressions, with their columns
 
 A plot owns the `key: value` lines indented under it; a solver block, a `!loop` and a `!plugin`
-own every indented, non-blank line under it. Lines are numbered from 1 and split on "\\n" only, so the numbers are
+own every indented, non-blank line under it. A `!regression`, `!symsolve` or `!slider` block reads as a
+solver block. Lines are numbered from 1 and split on "\\n" only, so the numbers are
 the editor's; a "\\r" before the "\\n" belongs to the line's `eol`, not its text.
 
 The lexer patterns (NAME, UNIT, NUMBER, STRING) are the grammar's terminals as well. The
@@ -41,7 +42,7 @@ _ASSIGN_RE = re.compile(rf"^({NAME})\s*=(?!=)\s*(.+)$")
 
 _PLOT_RE = re.compile(r"^!plot[ \t]+(\S.*)$")
 _LOOP_RE = re.compile(r"^!loop(?:[ \t]+(.*\S))?[ \t]*$")
-_SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*\S))?[ \t]*$")
+_SOLVER_RE = re.compile(r"^!(root|minimize|maximize|regression|symsolve|slider)(?:[ \t]+(.*\S))?[ \t]*$")
 # `!plugin pipenet`: a plugin's block (plugins.py). It owns the `name = value` lines the plugin writes
 # and its `#@ state {...}` line. `!pluginvar a, b` names the variables the sheet sends to plugins.
 _PLUGIN_RE = re.compile(r"^!plugin(?:[ \t]+(.*\S))?[ \t]*$")
@@ -50,12 +51,16 @@ _PLOT_OPT_RE = re.compile(r"^[ \t]+([A-Za-z]\w*)(?:[ \t]+(\d+))?[ \t]*:[ \t]*(.*
 _SOLVER_OPT_RE = re.compile(rf"^[ \t]+([A-Za-z]\w*)(?:[ \t]+({NAME}))?[ \t]*:[ \t]*(.*?)[ \t]*$")
 _RESULT_RE = re.compile(r"^[ \t]+#@[ \t]*result[ \t]+(\{.*\})[ \t]*$")
 _STATE_RE = re.compile(r"^[ \t]+#@[ \t]*state[ \t]+(\{.*\})[ \t]*$")
+# `!rpn` (or `!rpn on`) and `!rpn off`, as commands.py accepts them: the lines between are read in
+# reverse Polish (rpn.py). The editor turns its math keys off on them (static/editing.js isRpnAt).
+_RPN_RE = re.compile(r"^!rpn(?:\s+(on|off))?$")
 
 # Option values that are expressions. Everything else under a block (titles, colours, methods)
 # is text, so a rename leaves it alone. The editor turns its math keys off in the prose among it
 # (static/editing.js isTextAt; tests/sheettext_vectors.json holds the two together).
 PLOT_LIMIT_KEYS = ("xlim", "ylim", "xview", "yview")
-SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "model", "r2", "xunit", "yunit", "function")
+SOLVER_EXPR_KEYS = ("equation", "objective", "constraint", "bounds", "data", "model", "r2", "xunit", "yunit", "function",
+                    "range", "step")
 
 
 @dataclass(frozen=True)
@@ -143,12 +148,14 @@ class Line:
     kind: str           # blank heading meta comment command pluginvar unitdef funcdef assign symdef expr plot plotopt
                         # solver solveropt loop loopline plugin pluginline
     block: int = None   # header line of the plot or solver block that owns this line (the header owns itself)
-    spans: tuple = ()   # (start, end) of each part that holds expressions
+    spans: tuple = ()   # (start, end) of each part that holds expressions (on a comment, its inline math)
     option: Option = None   # under a block: the parsed option line
     result: str = None      # under a solver: the JSON of a stored `#@ result` line
     state: str = None       # under a plugin: the JSON of its `#@ state` line
     comment: bool = False   # a `#` line (comment, heading or meta), also when a block owns it
     definition: Definition = None
+    rpn: bool = False       # below `!rpn`: a line whose expression is reverse Polish (or a blank one,
+                            # which would be); never a block's line, a unit definition or a symbol declaration
 
     @property
     def indent(self):
@@ -175,7 +182,7 @@ class Line:
 class Block:
     """A `!plot`, solver, `!loop` or `!plugin` header and the lines it owns."""
     kind: str           # "plot", "solver", "loop" or "plugin"
-    command: str        # "plot", "root", "minimize", "maximize", "regression", "symsolve", "loop" or "plugin"
+    command: str        # "plot", "root", "minimize", "maximize", "regression", "symsolve", "slider", "loop" or "plugin"
     args: str           # what follows the command on the header line
     lines: list = field(default_factory=list)   # the header Line, then the owned lines
 
@@ -252,6 +259,14 @@ def _kind(s):
     return d.kind if d else "expr"
 
 
+def inline_spans(text):
+    """(start, end) of what is between each pair of backticks on a comment or heading line: the
+    **inline math** (`F = m*a`) the sheet typesets in the comment. Backticks pair up left to right;
+    an odd one left over, and a pair with nothing but spaces in it, stay as typed."""
+    ticks = [i for i, c in enumerate(text) if c == "`"]
+    return tuple((a + 1, b) for a, b in zip(ticks[::2], ticks[1::2]) if text[a + 1:b].strip())
+
+
 def _header_spans(text):
     m = re.match(r"[ \t]*!\w+", text)
     return ((m.end(), len(text)),)
@@ -274,7 +289,7 @@ def _solver_spans(o):
 
 def scan(text):
     """Read `text` into a Sheet: one Line per line, and the blocks."""
-    lines, blocks, cur = [], {}, None
+    lines, blocks, cur, rpn = [], {}, None, False
     for n, (t, eol) in enumerate(_split(text), 1):
         s = t.strip()
         line = Line(n, t, eol, _kind(s))
@@ -314,6 +329,9 @@ def scan(text):
                     cur = Block("plot", "plot", _PLOT_RE.match(s).group(1))
                 blocks[n] = cur
                 line.spans = _header_spans(t)
+                if cur.command == "slider":   # `!slider x = 2'm` defines x, as `x = 2'm` does
+                    d = definition(cur.args)
+                    line.definition = d if d and d.kind == "assign" else None
             elif line.kind == "pluginvar":
                 line.spans = _header_spans(t)
             elif line.kind not in ("blank", "heading", "meta", "comment", "command"):
@@ -323,7 +341,12 @@ def scan(text):
                 line.kind = {"loop": "loopline", "plugin": "pluginline"}.get(cur.kind, cur.kind + "opt")
             line.block = cur.lines[0].n if cur.lines else n
             cur.lines.append(line)
+        if line.comment and not s.startswith("#@"):
+            line.spans = inline_spans(t)
         if line.kind in ("unitdef", "funcdef", "assign", "symdef", "expr"):
             line.definition = definition(s)
+        if line.kind == "command" and (m := _RPN_RE.match(s)):
+            rpn = m.group(1) != "off"
+        line.rpn = rpn and line.kind in ("blank", "funcdef", "assign", "expr")
         lines.append(line)
     return Sheet(lines, blocks)

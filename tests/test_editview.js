@@ -74,4 +74,18 @@ eq(h.redo({text: ''}), {text: 'ab'}, 'redo');
 eq(h.undo({text: 'ab'}), {text: ''}, 'undo again');
 eq(h.undo({text: ''}), null, 'nothing more');
 
+// A slider's drag (#178): every edit of one group is one step, and the next group is another.
+const g = new EV.History();
+g.record({text: 'x = 1'}, {from: 4, to: 5, insert: '2'}, false, 7);
+g.record({text: 'x = 2'}, {from: 4, to: 5, insert: '3'}, false, 7);
+g.record({text: 'x = 3'}, {from: 4, to: 5, insert: '4'}, false, 7);
+g.record({text: 'x = 4'}, {from: 4, to: 5, insert: '5'}, false, 8);
+g.record({text: 'x = 5'}, {from: 4, to: 5, insert: '6'}, false, 8);
+eq(g.undo({text: 'x = 6'}), {text: 'x = 4'}, 'the second drag is one step');
+eq(g.undo({text: 'x = 4'}), {text: 'x = 1'}, 'and the first another');
+eq(g.redo({text: 'x = 1'}), {text: 'x = 4'}, 'redo puts a drag back whole');
+g.record({text: 'x = 4'}, {from: 5, to: 5, insert: 'm'}, true);
+g.record({text: 'x = 4m'}, {from: 4, to: 6, insert: '7'}, false, 8);
+eq(g.undo({text: 'x = 7'}), {text: 'x = 4m'}, 'an edit between them ends a group, even one of the same id');
+
 console.log(`editview: ${n} checks passed`);

@@ -22,11 +22,24 @@ STALE = "Reads an out-of-date solver result."
 @dataclass
 class Heading:
     text: str
+    parts: list = None      # the text as (kind, value) parts, as a paragraph's lines are
+
+    def __post_init__(self):
+        if self.parts is None:
+            self.parts = [("text", self.text)]
 
 
 @dataclass
 class Paragraph:
-    lines: list             # comment lines, one per worksheet line, run on as one paragraph
+    """Comment lines, one per worksheet line, run on as one paragraph. Each line is a list of
+    (kind, value) parts: "text" as typed, "math" (inline math, LaTeX in the run's flavour) or
+    "code" (backticked text that is not math). A writer renders each part (`inline`)."""
+    lines: list
+
+
+def inline(parts, text, math, code):
+    """One line of parts rendered with a function for each kind of part, joined."""
+    return "".join({"text": text, "math": math, "code": code}[k](v) for k, v in parts)
 
 
 @dataclass
@@ -77,9 +90,9 @@ def element(r, commands=False):
     if r.hidden:
         return None
     if r.kind == "heading":
-        return Heading(r.text)
+        return Heading(r.text, r.parts)
     if r.kind == "comment":
-        return Paragraph([r.text])
+        return Paragraph([r.parts or [("text", r.text)]])
     if r.kind == "error":
         return Error(r.n, r.error)
     if r.kind in ("command", "symdef", "plugin", "pluginvar"):   # kept as typed, like a command: a symbol
@@ -87,9 +100,12 @@ def element(r, commands=False):
         return Source(r.n, r.source.strip()) if commands else None
     if r.plot:
         return Figure(r.n, r.plot)
-    if r.solver:
-        vals = r.solver.values
-        return Math(r.n, [aligned(v["lhs"], [v["rhs"]])[0] for v in vals], r",\; ".join(v["latex"] for v in vals),
+    if r.solver:   # what it solves (#182), then its values
+        vals, problem = r.solver.values, r.solver.problem or []
+        inline = r",\; ".join(v["latex"] for v in vals)
+        if problem:
+            inline = r",\; ".join(p.replace("&", "", 1) for p in problem) + r"\quad\Rightarrow\quad " + inline
+        return Math(r.n, problem + [aligned(v["lhs"], [v["rhs"]])[0] for v in vals], inline,
                     out_of_date=not r.solver.current)
     if r.regression:
         fit = r.regression
@@ -100,7 +116,7 @@ def element(r, commands=False):
     if r.loop:   # the steps, left-aligned, then what each name holds after the last pass
         rows = r.loop.code + [aligned(v["lhs"], [v["rhs"]])[0] for v in r.loop.values]
         return Math(r.n, rows, r.latex, note=r.warning or (STALE if r.stale else ""))
-    if r.kind in ("assign", "expr", "funcdef", "unitdef", "symsolve"):
+    if r.kind in ("assign", "expr", "funcdef", "unitdef", "symsolve", "slider"):   # a slider exports as its assignment
         return Math(r.n, aligned(r.lhs, r.stages), r.latex, flat=r.latex_rows,
                     note=r.warning or (STALE if r.stale else ""))
     return None

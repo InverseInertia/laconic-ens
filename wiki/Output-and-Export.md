@@ -65,7 +65,7 @@ The wrapper menu next to the switch chooses how a calculation is wrapped:
 | `\[ \]` | `\[ a = b = c \]` |
 | `\begin{align*}` | an `align*` block with one row per stage |
 
-Headings and comments become `\subsection*{}` and plain text, and commands such as `!clear` become a `%` comment. Choices are remembered in the browser. On a narrow or vertical screen the results sit above the editor.
+Headings and comments become `\subsection*{}` and plain text, with their inline math between backticks as `$...$` (see [Worksheet Syntax](Worksheet-Syntax#comments-headings-meta-lines)), and commands such as `!clear` become a `%` comment. Choices are remembered in the browser. On a narrow or vertical screen the results sit above the editor.
 
 ## Files
 
@@ -73,7 +73,7 @@ Headings and comments become `\subsection*{}` and plain text, and commands such 
 |---|---|
 | Save | the `.lens` source, with needed global unit definitions appended (see [Units](Units)) |
 | Export → LaTeX document | a complete `.tex` document with `align*` blocks, `\DeclareSIUnit` lines for custom units and for built-in units siunitx lacks (`ft`, `psi`, `g0`), and `pgfplots` when a sheet has plots |
-| Export → Markdown note | a `.md` note for Obsidian: headings stay headings, comments become plain text, each calculation becomes a `$$` block (one row per stage, aligned at the equals signs), plots are embedded as SVG images and errors as callouts. Commands such as `!clear` and plot or solver options are left out |
+| Export → Markdown note | a `.md` note for Obsidian: headings stay headings, comments become plain text (inline math between backticks as `$...$`), each calculation becomes a `$$` block (one row per stage, aligned at the equals signs), plots are embedded as SVG images and errors as callouts. Commands such as `!clear` and plot or solver options are left out |
 | Export → PDF | opens the browser's print dialog on a plain, printable copy of the results, where **Save as PDF** saves it: broken into pages: headings, comments, each calculation with its line number, plots and errors, in one column. A calculation never splits across pages and a heading stays with what follows it. A calculation a little too wide for the page is shrunk; one much too wide is wrapped after `+` and `=`, the same way as in the results pane. It is a quick, readable printout, not a typeset document; use the LaTeX export for that |
 | Plot SVG / PNG | the picture exactly as drawn (see [Plots](Plots)) |
 | `lens file.lens --tex out.tex` | the same `.tex` from the command line |

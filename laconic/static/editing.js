@@ -13,6 +13,8 @@
  *   editor.elsewhere()              the user is typing in another field (a dialog, the name box)
  *   editor.place(r)                 make edit r without taking the focus or joining the undo stack
  *   editor.apply(r)                 make edit r in the editor's undo stack
+ * (`r.group`, when applyEdits is given one, says the edit undoes as one step with the others of its
+ * group, as a slider's drag does.)
  * `nameAt` is the name or unit the rename dialog starts with (F2). `headerOf` and `blockAt` read
  * the blocks (`!plot`, `!root`, ...) as laconic/sheettext.py does, and `newline` is what Enter does
  * in one: the new line keeps the block's indent, with or without Math keys.
@@ -65,12 +67,23 @@
   const lineStartOf = (t, p) => t.lastIndexOf('\n', p - 1) + 1;
   const lineEndOf = (t, p) => { const i = t.indexOf('\n', p); return i < 0 ? t.length : i; };
   // Where the text is prose, not math: outside laconic/sheettext.py's expression spans, as
-  // tests/sheettext_vectors.json holds them together. Comment lines; under a plot, a title or label
-  // and a note's text (its `at (x, y)` is math); under a solver, the method.
+  // tests/sheettext_vectors.json holds them together. Comment lines, outside their inline math
+  // between backticks; under a plot, a title or label and a note's text (its `at (x, y)` is math);
+  // under a solver, the method.
   const TEXT_OPTION = /^[ \t]+(title|xlabel|ylabel|label|note|method)(?:[ \t]+[^\s:]+)?[ \t]*:/;
+  // A comment's or heading's inline math: [start, end] of what is between each pair of backticks,
+  // as sheettext.inline_spans has them (an odd backtick, or a pair holding only spaces, is text).
+  function inlineSpans(line) {
+    const ticks = [...line.matchAll(/`/g)].map((m) => m.index), out = [];
+    for (let k = 0; k + 1 < ticks.length; k += 2) {
+      if (line.slice(ticks[k] + 1, ticks[k + 1]).trim()) out.push([ticks[k] + 1, ticks[k + 1]]);
+    }
+    return out;
+  }
   function isTextAt(t, p) {
-    const ls = lineStartOf(t, p), line = t.slice(ls, lineEndOf(t, p));
-    if (line.trimStart().startsWith('#')) return true;
+    const ls = lineStartOf(t, p), line = t.slice(ls, lineEndOf(t, p)), head = line.trimStart();
+    if (head.startsWith('#@')) return true;
+    if (head.startsWith('#')) return !inlineSpans(line).some(([a, b]) => a <= p - ls && p - ls <= b);
     const m = TEXT_OPTION.exec(line);
     if (!m) return false;
     if (m[1] !== 'note') return true;
@@ -80,11 +93,12 @@
   }
   // The browser may spellcheck the selection's lines when every one is prose: a comment or heading
   // (not a `#@` line LENS writes), or a plot's title, label or note. A solver's `method:` is a
-  // name, not prose. The editor is one textarea, so its spellcheck follows the caret's lines.
+  // name, not prose, nor is a comment's inline math while the caret is in it. The editor is one textarea, so its spellcheck follows the caret's lines.
   function isProse(t, s, e) {
     for (let ls = lineStartOf(t, s); ; ls = lineEndOf(t, ls) + 1) {
       const line = t.slice(ls, lineEndOf(t, ls)), m = TEXT_OPTION.exec(line), head = line.trimStart();
       if (!(head.startsWith('#') ? !head.startsWith('#@') : m && m[1] !== 'method')) return false;
+      if (head.startsWith('#') && ls === lineStartOf(t, s) && !isTextAt(t, s)) return false;   // in a comment's inline math
       if (lineEndOf(t, ls) >= (e === undefined ? s : e)) return true;
     }
   }
@@ -92,12 +106,13 @@
 
   // ---- blocks --------------------------------------------------------------
   // A block header (laconic/sheettext.py): `!plot ...` or a solver's `!root x, y` (also `!minimize`,
-  // `!maximize`, `!regression`, `!symsolve`), `!plugin name`, or `!loop i = 1 .. n`, at any indent
-  // since loops nest.
-  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, and a plot or a loop
-  // names no unknowns.
+  // `!maximize`, `!regression`, `!symsolve`, and `!slider x = 2'm`, which reads as one), `!plugin name`,
+  // or `!loop i = 1 .. n`, at any indent since loops nest.
+  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, a plot, a plugin or a loop
+  // names no unknowns, and a slider the one name it sets.
   const PLOT_HEAD = /^[ \t]*!plot[ \t]+\S/;
-  const SOLVER_HEAD = /^[ \t]*!(root|minimize|maximize|regression|symsolve)(?:[ \t]+(.*?))?[ \t]*$/;
+  const SOLVER_HEAD = /^[ \t]*!(root|minimize|maximize|regression|symsolve|slider)(?:[ \t]+(.*?))?[ \t]*$/;
+  const SLIDER_NAME = /^(~?[^\s=~$]+?)\s*=(?!=)/;
   const LOOP_HEAD = /^[ \t]*!loop(?:[ \t].*)?$/;
   const PLUGIN_HEAD = /^[ \t]*!plugin(?:[ \t]+\S.*)?[ \t]*$/;
   const PLOT_OPT = /^[ \t]+[A-Za-z]\w*(?:[ \t]+\d+)?[ \t]*:/;
@@ -106,6 +121,10 @@
     if (LOOP_HEAD.test(line)) return { kind: 'loop', unknowns: [] };
     if (PLUGIN_HEAD.test(line)) return { kind: 'plugin', unknowns: [] };
     const m = SOLVER_HEAD.exec(line);
+    if (m && m[1] === 'slider') {
+      const d = SLIDER_NAME.exec(m[2] || '');
+      return { kind: 'slider', unknowns: d ? [d[1]] : [] };
+    }
     return m ? { kind: m[1], unknowns: (m[2] || '').split(',').map((x) => x.trim()).filter(Boolean) } : null;
   }
   // The block that the line starting at `ls` belongs to, as headerOf gives it, or null. A plot owns
@@ -125,6 +144,23 @@
       p = ps;
     }
     return null;
+  }
+
+  // Whether the line at `p` is read in reverse Polish: below a `!rpn` (or `!rpn on`) command and
+  // above the next `!rpn off`, a calculation that no block owns, or a blank line that would be one.
+  // As laconic/sheettext.py's Line.rpn (tests/sheettext_vectors.json). Most math keys are off there.
+  const RPN_CMD = /^\s*!rpn(?:\s+(on|off))?\s*$/;
+  function isRpnAt(t, p) {
+    const ls = lineStartOf(t, p);
+    if (t.lastIndexOf('!rpn', ls) < 0) return false;
+    const s = t.slice(ls, lineEndOf(t, p)).trim();
+    if (/^[#!]|^~?\$/.test(s) || (s.startsWith("'") && s.includes('=')) || blockAt(t, ls)) return false;
+    let on = false;
+    for (let a = 0; a < ls; a = lineEndOf(t, a) + 1) {
+      const m = RPN_CMD.exec(t.slice(a, lineEndOf(t, a)));
+      if (m && !blockAt(t, a)) on = m[1] !== 'off';
+    }
+    return on;
   }
 
   // Enter keeps a block going: after a block header, the new line takes the block's indent (that of
@@ -176,11 +212,13 @@
   // The server's edits against `base`, made in the editor as one edit, so one Ctrl+Z takes them
   // back. If the text changed while the server was working, the edits no longer fit: nothing is
   // made and this says false. An edit made while the user types somewhere else does not take the
-  // focus, unless `asked` (an edit the user asked for in a dialog, such as a rename).
-  function applyEdits(editor, base, edits, asked = false) {
+  // focus, unless `asked` (an edit the user asked for in a dialog, such as a rename). Edits given the
+  // same `group` undo as one step (a slider's drag, #178).
+  function applyEdits(editor, base, edits, asked = false, group = null) {
     if (editor.text() !== base) return false;
     const r = merge(base, edits, editor.caret());
     if (!r) return true;
+    if (group !== null) r.group = group;
     if (!asked && editor.elsewhere()) editor.place(r);
     else editor.apply(r);
     return true;
@@ -538,8 +576,13 @@
     return single && (!sel.includes("'") || sel[0] === "'") ? sel : '(' + sel + ')';
   }
 
-  // name(selection): wraps whole terms in a call and leaves the caret after it.
+  // name(selection): wraps whole terms in a call and leaves the caret after it. On a reverse
+  // Polish line the name goes after the selection instead: `a b` becomes `a b hypot`.
   function wrapWithCall(t, s, e, name) {
+    if (isRpnAt(t, s)) {
+      const sel = t.slice(s, e).trimEnd(), ins = sel + ' ' + name;
+      return sel.includes('\n') ? null : edit(s, s + sel.length, ins, s + ins.length);
+    }
     const n = snap(t, s, e);
     if (!n) return null;
     const ins = name + '(' + t.slice(n[0], n[1]) + ')';
@@ -712,6 +755,8 @@
     if (((t.slice(ls, s).match(/"/g) || []).length % 2) === 1) return null;
     const g = e === s && !isTok(ch) && !MARKS.includes(ch) ? globalStart(t, s, ctx) : -1;
     if (g >= 0) return withTilde(t, s, g, ch, (t2, s2) => charAction(ch, t2, s2, s2, plainCtx(ctx)));
+    // Reverse Polish has no brackets or spaced operators to add: only a name's subscript period.
+    if (isRpnAt(t, s)) return ch === '.' ? subscript(t, s, e, ls) : null;
     if (e > s && WRAPPERS.has(ch)) {
       const n = snap(t, s, e); // act on whole terms, however the text was highlighted
       if (!n) {
@@ -801,11 +846,14 @@
     if (ctx && ctx.enabled === false) return plain && key === 'Enter' ? newline(t, s, e) : null;
     const ls = lineStartOf(t, s), le = lineEndOf(t, e);
     const comment = isTextAt(t, s);
+    // On a reverse Polish line only Ctrl+G, Ctrl+<, Ctrl+M and the ~ of a global work: the rest
+    // write infix (calls, fractions, spaced operators) or take it apart.
+    const rpn = !comment && isRpnAt(t, s);
     const k = key.length === 1 ? key.toLowerCase() : key;
 
     // Ctrl+[ takes the term as an array and opens one index: idx(A, i), shown A_i.
     // Ctrl+Shift+[ opens row and column: elem(A, i, j), shown A_i,j.
-    if (mods.ctrl && !mods.alt && !mods.meta && !comment && (key === '[' || key === '{')) {
+    if (mods.ctrl && !mods.alt && !mods.meta && !comment && !rpn && (key === '[' || key === '{')) {
       return mods.shift || key === '{' ? indexCall(t, s, e, ls, 'elem') : indexCall(t, s, e, ls, 'idx');
     }
     // Ctrl+< (Ctrl+Shift+, on a US keyboard) types the polar angle sign: 5'V∠30'deg.
@@ -820,6 +868,7 @@
         const n = snap(t, s, e);
         return n ? edit(n[0], n[1], '[' + t.slice(n[0], n[1]) + ']', n[1] + 2) : null;
       }
+      if (rpn) return null;
       if (k === 't') return transpose(t, s, e, ls);
       if (key === '/') {
         return t[s - 1] === '_' && isIdent(t[s - 2]) && e === s ? spaced(t, s - 1, e, './', ls) : spaced(t, s, e, '/', ls);
@@ -827,7 +876,7 @@
       if (key === '\\') return edit(s, e, '\\', s + 1);
     }
     // Ctrl+T is reserved by most browsers, so Alt+T does the same thing.
-    if (mods.alt && !mods.ctrl && !mods.shift && !mods.meta && k === 't' && !comment) {
+    if (mods.alt && !mods.ctrl && !mods.shift && !mods.meta && k === 't' && !comment && !rpn) {
       return transpose(t, s, e, ls);
     }
     // Alt+Up grows the selection by one term-aware step (Alt+Down, in the page, undoes a step).
@@ -843,7 +892,7 @@
       return newline(t, le, le) || edit(le, le, '\n', le + 1);
     }
     if (plain && key === 'Enter') return newline(t, s, e);
-    if (plain && !comment) {
+    if (plain && !comment && !rpn) {
       if (key === 'ArrowRight' && e === s) return exitSlot(t, s, ls);
       if (key === 'Backspace') return backspace(t, s, e, ls, le);
     }
@@ -854,7 +903,7 @@
     DEFAULT_GREEK, charAction, keyAction, nameKeyAction, indentLines, newline, headerOf, blockAt, merge, applyEdits, nameAt,
     termBefore, termAfter, matchBack, matchFwd, enclosing,
     snap, grow, wrapWithCall, tokens, isTok,
-    isTextAt, isProse,
+    isTextAt, isProse, isRpnAt,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Editing = api;

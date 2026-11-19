@@ -24,6 +24,26 @@ def test_unit_suggestions_and_tab_accept(page):
     assert value(page).startswith("x = 5'k")
 
 
+def test_the_unit_typed_is_confirmed_first_and_the_arrows_load_more(page):
+    """#183: `'kB` is not in the list the page has, so it asks the server, then shows it first."""
+    reset(page, "w = 12")
+    page.keyboard.type("'kB")
+    page.wait_for_function("document.querySelector('#ac .ac-item .lbl')?.textContent === 'kB'")
+    assert "kilobyte" in page.inner_text("#ac .ac-item")
+    reset(page, "w = 12")
+    page.keyboard.type("'kQ")
+    page.wait_for_selector("#ac .ac-item.unknown")
+    assert "not a unit" in page.inner_text("#ac .ac-item.unknown")
+    reset(page, "w = 12")
+    page.keyboard.type("'m")
+    page.wait_for_selector("#ac:not([hidden])")
+    assert page.locator("#ac .ac-item").count() == 8
+    for _ in range(8):
+        page.keyboard.press("ArrowDown")
+    assert page.locator("#ac .ac-item").count() == 16
+    assert page.get_attribute("#ac .ac-item:nth-child(9)", "aria-selected") == "true"
+
+
 def test_enter_ends_the_line_unless_you_chose(page):
     reset(page, "delta_max = 3\nx = ")
     page.keyboard.type("delt")
@@ -605,6 +625,31 @@ def test_symbols_are_marked_and_their_results_typeset(page):
     assert value(page).endswith("\n$g\n")
 
 
+def test_inline_math_in_comments_is_typeset_in_the_row(page):
+    """Backticks in a comment or heading typeset what is between them as math (#174); text that is
+    not math shows as code, and a backtick left over as itself."""
+    reset(page, "~g = 9.81'm/'s^2\n## Weight `W = m*g`\n# with `F = m*g/2`, `!plot` and one ` left")
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")
+    page.wait_for_selector("#out .row[data-line='3'] .imath .katex")
+    assert page.locator("#out .row[data-line='2'] .imath .katex").count() == 1
+    note = "#out .row[data-line='3']"
+    assert page.locator(f"{note} .imath .katex").count() == 1
+    assert page.locator(f"{note} .imath .katex .mfrac").count() == 1        # m*g/2, not worked out
+    assert page.locator(f"{note} .imath [data-global='g']").count() == 1    # the global is marked
+    assert page.inner_text(f"{note} .icode") == "!plot"
+    text = page.inner_text(f"{note} .body")
+    assert text.startswith("with ") and text.endswith(", !plot and one ` left") and "`" not in text[:-6]
+    assert page.locator(f"{note} .katex-display").count() == 0             # inline, in the line of text
+    # Math keys work between the backticks, and not outside them.
+    reset(page, "# force `F = m*a`")
+    select(page, 16, 16)
+    page.keyboard.type("/")
+    assert value(page) == "# force `F = m*a / ()`"
+    reset(page, "# force `F = m*a` and a")
+    page.keyboard.type("/")
+    assert value(page) == "# force `F = m*a` and a/"
+
+
 def test_each_kind_of_line_shows_its_row(page):
     """What the results pane shows for each kind of line (static/rows.js, drawn by index.html)."""
     text = "## Loads\n!sigfigs 3\nx = 2'm\nnope +\n!plot x, x = 0 .. 1\n  grid: off\n  bad: 1\ny = 1\n!root y\n  equation: y^2 = 2"
@@ -1152,3 +1197,16 @@ def test_with_wrapping_a_matrix_shows_one_row_per_line_but_a_vector_does_not(pag
         page.focus("#src")
         page.keyboard.press("Alt+z")
     assert value(page) == "A = [1, 2; 30, 5, 4]\nv = [1; 2; 3]"
+
+
+def test_reverse_polish_lines_are_typed_as_is_and_shown_in_infix(page):
+    """Below !rpn the math keys add no spaces, brackets or fractions, a function suggestion takes no
+    brackets, and the result is typeset as ordinary infix."""
+    reset(page, "m = 2'kg\na = 3'm/'s^2\n!rpn\n")
+    page.keyboard.type("F = m a *\nx = m 2 ^ 3 / 1'kg^2 -\n9 sqr")
+    page.wait_for_selector("#ac:not([hidden])")
+    page.keyboard.press("Tab")
+    assert value(page) == "m = 2'kg\na = 3'm/'s^2\n!rpn\nF = m a *\nx = m 2 ^ 3 / 1'kg^2 -\n9 sqrt"
+    page.wait_for_selector("#out .row[data-line='6'] .katex .sqrt")              # sqrt(9), typeset
+    assert "F=m⋅a" in page.inner_text("#out .row[data-line='4']").replace("\n", "").replace(" ", "")
+    assert page.locator("#out .row[data-line='5'] .katex .mfrac").count() >= 1      # m^2/3 - 1'kg^2

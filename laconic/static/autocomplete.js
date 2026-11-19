@@ -9,19 +9,22 @@
  *                                        come from extras.symbols, the last symbol table
  *   accept(text, ctx, candidate)         the edit that inserts one
  *
- * The open list, {ctx, items, index, moved, wrap: [from, to] | null, query, stale}, and what keys
- * do to it, are here too; the page draws it and passes `env` = {vocab, symbols}:
+ * The open list, {ctx, items, index, moved, wrap: [from, to] | null, query, stale, limit, check},
+ * and what keys do to it, are here too; the page draws it and passes `env` = {vocab, symbols}:
  *   open(text, s, e, {force, enabled, fresh}, env)
  *       the list for the caret (its items may be none), null for no list, or {props: true} when
  *       vocab.props must be fetched first. `stale`: names came from the symbol table of other text
- *       (`fresh` false), so ask again once this text's arrives
+ *       (`fresh` false), so ask again once this text's arrives. `check`: a unit spelling the
+ *       vocabulary does not list (`kB`, kilo + byte), which the page asks the server about and
+ *       keeps in vocab.checked ({name: {known, detail}}), then opens the list again (#183)
+ *   The list shows the first `limit` items; the arrow keys past the last load the next ones.
  *   wrapping(text, wrap, query, index, env)  Ctrl+Space over a highlight: functions to wrap it in
  *   key(list, key, mods, text, env)  what a key does: {use} whether it is spent on the list, and
  *       one of {list} (the list after it), {accept}, {close} or {message}
  *   pick(text, list)                 the edit for the chosen item, or null
  *
  * Besides names, units and commands it completes, on the indented lines of every block (`!plot`,
- * `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`), from one table, vocab.blocks
+ * `!root`, `!minimize`, `!maximize`, `!regression`, `!symsolve`, `!slider`), from one table, vocab.blocks
  * (laconic/vocab.py blocks(), built from the tables the server parses the blocks with): the option
  * keys, a solver's unknown after `bounds `, the values of a key with a few choices (`method:`,
  * `grid:`, `color:`), and names and units in the keys whose values are expressions. From
@@ -39,7 +42,7 @@
   const FUNC_RE = new RegExp('^(~?' + NAME_START + '[`!@&]*)\\s*\\(([^)]*)\\)\\s*=(?!=)', 'u');
   const ASSIGN_RE = new RegExp('^(~?' + NAME_START + '[`!@&]*)\\s*=(?!=)', 'u');
   const UNITDEF_RE = /^'([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)\s*(.+)$/;
-  const MAX = 8;
+  const MAX = 8;   // items shown at first, and loaded each time the arrows go past the last
   const SYMDEF_RE = /^~?\$/;
 
   // What a trimmed line defines: {kind: 'unitdef' | 'funcdef' | 'assign' | 'symdef', name, params}, or null.
@@ -131,8 +134,8 @@
     const before = t.slice(ls, s), after = t.slice(e, le);
 
     const head = Editing.headerOf(line);
-    // A plot or loop statement holds expressions, unlike other commands.
-    const isMath = !!head && (head.kind === 'plot' || head.kind === 'loop');
+    // A plot, loop or slider statement holds expressions, unlike other commands.
+    const isMath = !!head && (head.kind === 'plot' || head.kind === 'loop' || head.kind === 'slider');
     // A solver header names its unknowns: variables defined above.
     if (head && !isMath && !/^\s*!$/.test(before)) {
       // A regression's header names new variables, the coefficients it defines: nothing to offer.
@@ -187,9 +190,10 @@
     return -1;
   }
 
-  // Among the prefix matches (tiers 0 to 2) the kind of thing decides first, so `'k` offers kN and kg
-  // before the Boltzmann constant; an exact match only breaks ties.
-  const group = (c) => Math.max(c.tier, 2);
+  // What is typed exactly comes first, so the list confirms it is known (#183): `'k` offers the
+  // Boltzmann constant, then kN and kg. Among the other prefix matches (tiers 1 and 2) the kind of
+  // thing decides first.
+  const group = (c) => (c.tier === 0 ? 0 : Math.max(c.tier, 2));
   const order = (a, b) => group(a) - group(b) || a.rank - b.rank || a.tier - b.tier || a.insert.length - b.insert.length || (a.insert < b.insert ? -1 : 1);
 
   // extras: {symbols} is the symbol table (symbols.js) the variables and functions come from, with
@@ -244,7 +248,14 @@
       }
       for (const [name, detail, common] of vocab.units || []) {
         if (seen.has(name)) continue;
+        seen.add(name);
         add({ kind: 'unit', insert: name, label: name, detail }, common ? 1 : 2, name, detail);
+      }
+      // A spelling not listed (a prefix on any unit: kB, MiB), once the server has said what it is.
+      const checked = q && !seen.has(q) && vocab.checked && vocab.checked[q];
+      if (checked) {
+        found.push(checked.known ? { kind: 'unit', insert: q, label: q, detail: checked.detail, tier: 0, rank: 0 }
+          : { kind: 'unit', insert: q, label: q, detail: 'not a unit LENS knows', unknown: true, tier: 0, rank: 0 });
       }
     } else {
       const line = text.slice(0, ctx.start).split('\n').length;
@@ -269,14 +280,16 @@
     found.sort(order);
     const kinds = (extras && extras.kinds) || ctx.only;
     const out = found.filter((c) => !kinds || kinds.includes(c.kind)).slice(0, (extras && extras.max) || MAX);
-    // Nothing to offer when the only suggestion is exactly what is typed, except in a props string that
-    // is still open: there accepting closes it, and the detail shows what the key means and its unit.
-    if (out.length === 1 && out[0].insert === text.slice(ctx.start, ctx.end) && !(ctx.kind === 'prop' && !ctx.closed)) return [];
+    // Nothing to offer when the only suggestion is exactly what is typed, except a unit, which the list
+    // confirms (#183), and in a props string that is still open: there accepting closes it, and the
+    // detail shows what the key means and its unit.
+    if (out.length === 1 && out[0].insert === text.slice(ctx.start, ctx.end) && ctx.kind !== 'unit' && !(ctx.kind === 'prop' && !ctx.closed)) return [];
     return out;
   }
 
   // The edit that completes `ctx` with `cand`. A function gets brackets with the
-  // caret inside, unless the word is already followed by one.
+  // caret inside, unless the word is already followed by one, or the line is reverse Polish
+  // (below `!rpn`), where a function's name comes after its values.
   function accept(t, ctx, cand) {
     if (ctx.kind === 'prop') {   // the whole string's text, closed, caret after the quote
       const insert = cand.insert + (ctx.closed ? '' : '"');
@@ -289,7 +302,7 @@
     }
     const le = lineEndOf(t, ctx.end);
     const hasParen = t[ctx.end] === '(' && ctx.end < le;
-    if (cand.call && !hasParen) {
+    if (cand.call && !hasParen && !Editing.isRpnAt(t, ctx.start)) {
       return { from: ctx.start, to: ctx.end, insert: cand.insert + '()', caret: ctx.start + cand.insert.length + 1 };
     }
     return { from: ctx.start, to: ctx.end, insert: cand.insert, caret: ctx.start + cand.insert.length };
@@ -303,7 +316,9 @@
     if (!ctx) return null;
     if (ctx.kind === 'prop' && !env.vocab.props) return { props: true };
     const items = candidates(ctx, env.vocab, t, { symbols: env.symbols });
-    return { ctx, items, index: 0, moved: false, wrap: null, query: '', stale: ctx.kind === 'name' && !opts.fresh };
+    const q = ctx.query, checked = env.vocab.checked || {};
+    const check = ctx.kind === 'unit' && q && !(q in checked) && !items.some((c) => c.insert === q) ? q : null;
+    return { ctx, items, index: 0, moved: false, wrap: null, query: '', stale: ctx.kind === 'name' && !opts.fresh, limit: MAX, check };
   }
 
   function wrapping(t, wrap, query, index, env) {
@@ -327,7 +342,14 @@
       if (k.length === 1) return requery(list.query + k);
       if (k === 'Backspace') return requery(list.query.slice(0, -1));
     }
-    if (k === 'ArrowDown') return { use: true, list: { ...list, index: (list.index + 1) % n, moved: true } };
+    if (k === 'ArrowDown') {
+      if (list.index === n - 1 && !list.wrap && n >= list.limit) {   // past the last: load the next ones
+        const limit = list.limit + MAX;
+        const items = candidates(list.ctx, env.vocab, t, { symbols: env.symbols, max: limit });
+        if (items.length > n) return { use: true, list: { ...list, items, limit, index: n, moved: true } };
+      }
+      return { use: true, list: { ...list, index: (list.index + 1) % n, moved: true } };
+    }
     if (k === 'ArrowUp') return { use: true, list: { ...list, index: (list.index + n - 1) % n, moved: true } };
     if (k === 'Tab' && !mods.shift) return { use: true, accept: true };
     if (k === 'Enter' && (list.moved || list.wrap)) return { use: true, accept: true };

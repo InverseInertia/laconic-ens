@@ -11,18 +11,19 @@ import pint
 from . import catalogue
 from .blockedit import newline
 from .evaluator import EvalError, Evaluator, is_symbolic
+from .functions import FUNCTIONS
 from .latex import Fmt, Printer, name_latex
 from .lineresult import (LineResult, LoopPayload, PlotPayload, PluginPayload, PluginVarPayload, RegressionPayload,
-                         SolverPayload)
-from .nodes import Assign, Call, Convert, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
+                         SliderPayload, SolverPayload)
+from .nodes import Assign, Call, Convert, ExprStmt, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
 from .plotspec import Builder
-from .sheettext import is_name, scan
+from .sheettext import inline_spans, is_name, scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import adnauseum, commands, loop, plugins, regression, solver, symsolve
+from . import adnauseum, commands, loop, plugins, regression, rpn, slider, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -114,7 +115,8 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         elif i in owned:
             results.append(owned.pop(i))
         elif l.kind == "solver":
-            run_block = {"regression": _run_regression, "symsolve": _run_symsolve}.get(sheet.block(i).command, _run_solver)
+            run_block = {"regression": _run_regression, "symsolve": _run_symsolve,
+                         "slider": _run_slider}.get(sheet.block(i).command, _run_solver)
             r, owned = run_block(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
         elif l.kind == "plot":
@@ -134,10 +136,11 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
             results.append(_run_pluginvar(i, raw, s, ev))
         elif l.kind == "blank":
             results.append(LineResult(i, raw, "blank"))
-        elif l.kind in ("heading", "meta"):
+        elif l.kind == "meta":
             results.append(LineResult(i, raw, l.kind, text=s[2:].strip()))
-        elif l.kind == "comment":
-            results.append(LineResult(i, raw, "comment", text=s[1:].strip()))
+        elif l.kind in ("heading", "comment"):
+            text = s[2:].strip() if l.kind == "heading" else s[1:].strip()
+            results.append(LineResult(i, raw, l.kind, text=text, parts=_inline(text, ev, fmt)))
         elif l.kind == "command":
             results.append(_run_command(i, raw, s, ev))
         elif l.kind == "symdef":
@@ -191,6 +194,49 @@ def _define_unit(i, raw, s, ev, fmt, here, used):
                           stages=[fmt.quantity(shown)], text=f"1 {name} = {fmt.plain(shown)}")
     except Exception as e:
         return LineResult(i, raw, "error", error=describe(e))
+
+
+def _inline(text, ev, fmt):
+    """A comment's or heading's text as parts, [(kind, value)]: "text" as typed, "math" for the
+    inline math between a pair of backticks (sheettext.inline_spans), typeset as the first stage
+    of a line is, or "code" for backticked text that does not read as math, kept as typed. None
+    when the text has no inline math."""
+    spans = inline_spans(text)
+    if not spans:
+        return None
+    parts, at = [], 0
+    for a, b in spans:
+        if a - 1 > at:
+            parts.append(("text", text[at:a - 1]))
+        tex = _inline_math(text[a:b].strip(), ev, fmt)
+        parts.append(("math", tex) if tex else ("code", text[a:b]))
+        at = b + 1
+    if at < len(text):
+        parts.append(("text", text[at:]))
+    return parts
+
+
+def _inline_math(src, ev, fmt):
+    """`src` typeset as written (names, units, functions; nothing is worked out), or None when it
+    is not an expression, an assignment or a function definition. It defines nothing, and the
+    comment shows no warning from it."""
+    mark = len(ev.notes)
+    try:
+        stmt = parse_line(src)
+        if isinstance(stmt, ExprStmt):
+            return Printer(ev, fmt).tex(stmt.expr)
+        if isinstance(stmt, Assign):
+            return f"{Printer(ev, fmt).tex(Name(stmt.name))} = {Printer(ev, fmt).tex(stmt.expr)}"
+        if isinstance(stmt, FuncDef):
+            key = ev.fkey(stmt.name)
+            name = fmt.var(key, function=True) if key in ev.funcs else name_latex(stmt.name)
+            head = f"{name}\\left({', '.join(name_latex(p) for p in stmt.params)}\\right)"
+            return f"{head} = {Printer(ev, fmt, local=stmt.params).tex(stmt.body)}"
+        return None
+    except Exception:   # not math: the comment shows it as code
+        return None
+    finally:
+        del ev.notes[mark:]
 
 
 def _run_command(i, raw, s, ev):
@@ -293,8 +339,10 @@ def _run_solver(i, raw, handle, ev, fmt, used):
         word = "minimum" if block.kind == "minimize" else "maximum"
         values.append(_value(word, rf"\text{{{word}}}", fmt.quantity(obj)))
         plain.append(f"{word} = {fmt.plain(obj)}")
+    printer = Printer(ev, fmt)
+    problem = solver.problem_rows(block, printer.tex, lambda name: fmt.var(ev.vkey(name)))
     info = SolverPayload(block.kind, block.unknowns, h, status, taint, block.autorun, prob.method,
-                         block.timeout, values, summary=solver.describe_record(stored) if qs is not None else "",
+                         block.timeout, values, problem=problem, summary=solver.describe_record(stored) if qs is not None else "",
                          note=block.stored_note, record=stored if qs is not None else None)
     return LineResult(i, raw, "solver", text="; ".join(plain), block=handle, payload=info,
                       stale=status != "valid" or taint), owned
@@ -567,17 +615,33 @@ def block_at(text, line, global_units=None):
 def solver_blocks(text, global_units=None):
     """The results of the solver blocks that read (they carry a SolverPayload), top to bottom. The
     sheet runs only as far as the last block, and not at all when there is none."""
-    ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver" and b.command not in ("regression", "symsolve")]
+    ends = [b.end for b in scan(text).blocks.values()
+            if b.kind == "solver" and b.command not in ("regression", "symsolve", "slider")]
     if not ends:
         return []
     ws = evaluate(text, global_units=global_units, until=max(ends), plots=False)   # a plot defines nothing
     return [r for r in ws.results if r.solver]
 
 
+def _arity(ev):
+    """For reverse Polish input (rpn.py): how many values a bare name takes as a call on the current
+    line, or None when it is a variable. A variable the line can see wins, then a user function,
+    then a built-in that always takes the same number of arguments."""
+    def arity(name):
+        if ev.is_var(name):
+            return None
+        fkey = ev.fkey(name)
+        if fkey in ev.funcs:
+            return len(ev.funcs[fkey][0])
+        fn = FUNCTIONS.get(name)
+        return fn.arity if fn else None
+    return arity
+
+
 def _run_line(i, raw, s, ev, fmt, used):
     stmt = None
     try:
-        stmt = parse_line(s)
+        stmt = rpn.parse_line(s, _arity(ev)) if ev.mode.rpn else parse_line(s)
         used |= refs(stmt).units
         if isinstance(stmt, FuncDef):
             printer = Printer(ev, fmt, local=stmt.params)
@@ -728,6 +792,55 @@ def _run_symsolve(i, raw, handle, ev, fmt, used):
                 ev.symbols.define(key, v, text=symbolic.plain(v, fmt), stale=stale)
     return LineResult(i, raw, "symsolve", stages=[tex], text=plain, block=handle, stale=stale,
                       warning=warning), owned()
+
+
+def _run_slider(i, raw, handle, ev, fmt, used):
+    """A `!slider x = 2'm` line with its options. The header is an assignment, run as `x = 2'm` would
+    be, so x holds the typed value below; the options only say where the slider stands. A value
+    outside the range keeps the value typed, with a warning, and the slider shows the nearer end."""
+    block = slider.parse_block(handle)
+
+    def owned():
+        return {l.n: LineResult(l.n, l.text, "error" if l.n in block.errors else "solveropt",
+                                error=block.errors.get(l.n, "")) for l in handle.members}
+
+    def fail(msg):
+        return LineResult(i, raw, "error", error=msg, block=handle), owned()
+
+    if block.problem:
+        return fail(block.problem)
+    for node in block.nodes():
+        used |= refs(node).units
+    try:
+        st, q = slider.setting(block, ev)
+    except slider.SliderError as e:
+        line, msg = e.args
+        msg = msg if isinstance(msg, str) else describe(msg)
+        if line == i:
+            return fail(msg)
+        block.errors[line] = msg
+        return fail("1 option line below needs fixing")
+    except Exception as e:
+        return fail(describe(e))
+    r = _run_line(i, raw, f"{block.name} = {block.body}", ev, fmt, used)
+    r.block = handle
+    if r.kind == "error":
+        return r, owned()
+    r.kind = "slider"
+    key = ev.vkey(block.name)
+
+    def shown(v):
+        return fmt.plain(ev.Q(v, q.units), 12)
+    unit = shown(1).removeprefix("1").strip()
+    labels = [shown(st.low), shown(st.high)]
+    r.payload = SliderPayload(key, st.value, st.low, st.high, st.step, st.scale, st.power, st.ticks,
+                              st.position(st.value), unit, labels)
+    if not r.payload.inside:
+        end = "low" if st.value < st.low else "high"
+        r.warning = ". ".join(filter(None, [r.warning, f"{key} is outside the slider's range, {labels[0]} .. "
+                                                       f"{labels[1]}, so the slider stands at its {end} end"]))
+    r.stale = r.stale or ev.symbols.tainted(block.option_nodes())
+    return r, owned()
 
 
 def _bare_number(expr):
