@@ -44,4 +44,8 @@ n++;
   eq([got.name, [...got.files.keys()]], ['pipenet', ['manifest.json', 'app.js']], "a folder's own files, not those below it");
 }
 
+// --- which plugin wrote a block ------------------------------------------------------------------
+eq([P.newer('1.4.1', '1.4.0'), P.newer('1.4.0', '1.4.0'), P.newer('1.10', '1.9.9'), P.newer('1.2', '1.4.1'), P.newer('2', '1.99.0')],
+  [true, false, true, false, true], 'versions compare part by part, as numbers');
+
 console.log(`plugins: ${n} checks passed`);

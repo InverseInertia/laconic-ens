@@ -289,3 +289,30 @@ def test_a_sink_takes_no_circulator_and_a_regulating_valve(page):
     valve.press("Enter")
     page.wait_for_function("document.querySelector('#src').value.match(/  valves! = \\[12\\.5;/)")
     frame.locator("#sinks tbody tr").first.locator("td:nth-child(3):text-is('none')").wait_for()
+
+
+def test_an_older_plugin_than_wrote_the_sheet_says_so_and_does_not_write(page):
+    """A copy installed from a folder is never fetched again; one older than the copy that last wrote
+    the block left that block's newer lines as they were (pumps!, valves!: the wrong length), so it
+    may not write until it is updated. LENS stamps each write with the plugin's version."""
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    assert '"by":"1.4.1"' in original
+    newer = original.replace('"by":"1.4.1"', '"by":"9.0.0"')
+    show(page, newer)
+    page.wait_for_function("document.querySelector('.plugin-status.err')?.textContent.includes('last written by Pipe network 9.0.0')")
+    page.wait_for_selector(".plugin-box button:has-text('Open'):not([disabled])")
+    page.click(".plugin-box button:has-text('Open')")
+    frame = page.frame_locator("#pluginFrames .plugin-frame")
+    frame.locator("#segments tbody tr").first.wait_for()
+    frame.locator("#dpv").fill("0.5")
+    frame.locator("#dpv").press("Enter")
+    page.wait_for_timeout(1200)
+    assert "  Δp_target = 0.02 'psi" in value(page)          # not written
+    page.click("#pluginDlg .close")
+    show(page, original)                                       # its own version: it writes, and stamps it
+    page.wait_for_function("document.querySelector('.plugin-status')?.textContent.startsWith('Pipe network 1.4.1')")
+    page.click(".plugin-box button:has-text('Open')")
+    frame.locator("#dpv").fill("0.5")
+    frame.locator("#dpv").press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 0.5 'psi\")")
+    assert '"by":"1.4.1"' in value(page)

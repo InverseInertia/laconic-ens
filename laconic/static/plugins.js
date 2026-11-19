@@ -93,6 +93,13 @@
     return null;
   }
 
+  // Whether version `a` ("1.4.0") is later than `b`. Numbers compare as numbers; a part missing is 0.
+  function newer(a, b) {
+    const pa = String(a).split('.').map((x) => parseInt(x, 10) || 0), pb = String(b).split('.').map((x) => parseInt(x, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+    return false;
+  }
+
   const imageUrl = (svg) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 
   // ---- the page's side: frames, messages, the dialog --------------------------------------------
@@ -177,6 +184,9 @@
       }
       e.line = b.line;
       e.outputs = b.outputs;
+      const was = stale(e);
+      e.state = b.state;
+      if (stale(e) !== was) paint(e);
       const update = { inputs: vals, outputs: b.outputs, overridden: b.overridden };
       if (startedAt > e.wroteAt) update.state = b.state;   // older rows than its last write: keep its own
       e.last = update;
@@ -204,7 +214,22 @@
     host.openSheet(text, name);
   }
 
+  // Which plugin wrote a block is kept in its state, as `by` (the plugin's version), stamped here and
+  // not by the plugin, so the check works for any plugin. A copy older than the one that last wrote
+  // the block may not know every line the newer one wrote, and would leave those out of date (lines of
+  // the wrong length, a sheet that no longer adds up), so it may not write until it is updated.
+  function stale(e) {
+    const by = e.state && typeof e.state.by === 'string' ? e.state.by : null;
+    return by && e.manifest && e.manifest.version && newer(by, e.manifest.version) ? by : null;
+  }
+
   async function write(e, msg) {
+    const by = stale(e);
+    if (by) {
+      host.say(`This sheet was last written by ${e.manifest.title} ${by}, newer than the ${e.manifest.version} installed here: update the plugin before changing it`);
+      return;
+    }
+    if (msg.state && e.manifest && e.manifest.version) msg.state = { ...msg.state, by: e.manifest.version };
     for (let tries = 0; tries < 3; tries++) {
       const text = host.text();
       let res;
@@ -379,8 +404,11 @@
       box.append(img);
     }
     const tools = el('div', 'plugin-tools');
-    const say = el('span', 'plugin-status' + (e && e.error ? ' err' : ''),
+    const old = e && stale(e);
+    const say = el('span', 'plugin-status' + (e && (e.error || old) ? ' err' : ''),
       !e ? 'Starting…' : e.error ? e.error : !e.manifest ? `Fetching the ${name} plugin…` : !e.ready ? 'Loading…'
+        : old ? `This sheet was last written by ${e.manifest.title} ${old}, but ${e.manifest.version} is installed here. `
+          + 'Update the plugin (Settings → Plugins, or install it from its folder again): until then it shows the sheet but does not change it'
         : e.manifest.version ? `${e.manifest.title} ${e.manifest.version}` : e.manifest.title);
     const openBtn = el('button', '', 'Open');
     openBtn.disabled = !e || !e.frame;
@@ -396,7 +424,7 @@
     for (const box of document.querySelectorAll(`.plugin-box[data-key="${CSS.escape(e.key)}"]`)) fill(box, e, null);
   }
 
-  const api = { THEME, blocks, inputs, check, imageUrl, folderFiles, init, after, build, open, reload, retheme, install, installFolder, remove, settings, openTemplate,
+  const api = { THEME, blocks, inputs, check, imageUrl, folderFiles, newer, init, after, build, open, reload, retheme, install, installFolder, remove, settings, openTemplate,
     get current() { return current; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plugins = api;
