@@ -220,10 +220,10 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert not [r for r in ws.results if r.kind == "error"]
     head = next(r for r in ws.results if r.plugin)
     assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "A_r", "L_r!", "D_r!", "N_fit_r!",
-                                   "K_extra_r!", "exchangers!", "pumps!", "fit_method!", "Δp_target"]
+                                   "K_extra_r!", "exchangers!", "pumps!", "valves!", "fit_method!", "Δp_target"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar and "mag" in r.pluginvar.values[0]).pluginvar.values
-    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur"]
+    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ"]
     assert sent[0]["unit"] == "gal/min"
 
 
@@ -508,3 +508,27 @@ def test_the_plugins_sheet_names_its_exchanger_and_pump_curves():
     assert sent == [{"name": "exchangers", "names": ["HX_A", "HX_B"]},
                     {"name": "pumps", "names": ["GRUND_43100A", "GRUND_43100B", "GRUND_43100C", "GRUND_2699A", "GRUND_2699B",
                                                 "GRUND_2699C", "GRUND_1542A"]}]
+
+
+def test_the_plugins_sheet_takes_regulating_valves_instead_of_or_beside_circulators():
+    """The prospective layout: no circulators, a regulating valve on each spur, and a larger main pump."""
+    import re
+    from laconic.parser import parse_expr
+    from laconic.sheet import evaluator_at
+    from laconic.solvesession import solve_all
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    ev = evaluator_at(text, len(text.split("\n")))
+    q = lambda src: ev.eval(parse_expr(src))
+    sg = q("SG_w").magnitude
+    assert q("VALVE(20'gal/'min, 10)").to("psi").magnitude == pytest.approx(sg * 4)    # SG (Q/Cv)^2
+    assert q("VALVE(20'gal/'min, 0)").magnitude == 0 and q("PUMP_sel(20'gal/'min, 0)").magnitude == 0
+    assert (q("PUMP_sel(20'gal/'min, 3)") - q("GRUND_43100C(20'gal/'min)")).magnitude == 0
+    n = len(re.search(r"\n  pumps! = \[([^\n]*)\]", text).group(1).split(";"))
+    text = re.sub(r"\n  pumps! = \[[^\n]*", "\n  pumps! = [" + "; ".join(["0"] * n) + "]", text)
+    text = re.sub(r"\n  valves! = \[[^\n]*", "\n  valves! = [" + "; ".join(["15"] * n) + "]", text)
+    text = re.sub(r"\n  Δp_target = [^\n]*", "\n  Δp_target = 12 'psi", text)
+    text = re.sub(r"\n  #@ result [^\n]*", "", text)
+    ws = evaluate(solve_all(text, log=lambda m: None), plots=False)
+    assert next(r for r in ws.results if r.solver).solver.current
+    sent = {v["name"]: [x[0] for x in v["mag"]] for r in ws.results if r.pluginvar for v in r.pluginvar.values if "mag" in v}
+    assert sent["Δp_circ"] == [0] * n and all(dp > 0.5 for dp in sent["Δp_valve"])

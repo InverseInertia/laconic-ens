@@ -275,3 +275,17 @@ def test_the_drawing_shows_the_sets_ticked_and_sinks_pick_curves_by_name(page):
     pick.select_option(label="HX_B")
     page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[2;/)")
     frame.locator("#sinks tbody tr").first.locator("td:nth-child(2):text-is('HX_B')").wait_for()
+
+
+def test_a_sink_takes_no_circulator_and_a_regulating_valve(page):
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    show(page, original)
+    frame = opened(page)
+    frame.locator("#sinks tbody tr").first.click()
+    frame.locator("#inspector select[aria-label='Circulator']").select_option(label="None")
+    page.wait_for_function("document.querySelector('#src').value.match(/  pumps! = \\[0;/)")
+    valve = frame.locator("#inspector label:has-text('Regulating valve Cv') input")
+    valve.fill("12.5")
+    valve.press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.match(/  valves! = \\[12\\.5;/)")
+    frame.locator("#sinks tbody tr").first.locator("td:nth-child(3):text-is('none')").wait_for()

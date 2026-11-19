@@ -36,7 +36,7 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   eq(a.A, [[1]], 'of one segment, the spur');
   eq(P.outputs(s, P.network(s)), { A: '[1]', 'L!': "[30] * 'ft", 'D_h!': "[4.026] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]',
     A_r: '[1]', 'L_r!': "[30] * 'ft", 'D_r!': "[4.026] * 'in", 'N_fit_r!': '[0, 0, 0]', 'K_extra_r!': '[0]',
-    'exchangers!': '[1]', 'pumps!': '[1]', 'fit_method!': '1', Δp_target: "0.1 'psi" },
+    'exchangers!': '[1]', 'pumps!': '[1]', 'valves!': '[0]', 'fit_method!': '1', Δp_target: "0.1 'psi" },
     "three tiles of 10 ft of 4\" Sch 40; the return the same as the supply, as lines of its own");
   s.method = 3;
   eq(P.outputs(s, P.network(s))['fit_method!'], '3', 'the method chosen goes to the sheet');
@@ -119,7 +119,7 @@ eq(P.analyze(net([row(0, 0, 2), col(2, 0, 2)], '0,0', [])).errors.some((e) => /D
 // --- reading a state ----------------------------------------------------------------------------
 eq(P.normalize(null), P.blank(), 'nothing is an empty layout');
 eq(P.normalize({ show: { size: true, numbers: 'yes', hide: ['Q', 3] } }).show,
-  { numbers: true, size: true, L: false, D: false, hx: false, pump: false, hide: ['Q'] }, 'what the drawing shows, cleaned');
+  { numbers: true, size: true, L: false, D: false, hx: false, pump: false, valve: false, hide: ['Q'] }, 'what the drawing shows, cleaned');
 eq(P.normalize({ cells: { '0,0': { t: 'pipe', p: 99 }, 'x': { t: 'pipe', p: 1 }, '1,1': { t: 'pump', p: 1 } }, cell: -3, units: { L: 'parsec' } }),
   { ...P.blank(), cells: { '0,0': { t: 'pipe', p: 3 } } }, 'odd tiles and settings are dropped');
 eq(P.normalize({ ret: true }).ret, 'same', 'a return that matches the supply, the old way of saying so');
@@ -283,6 +283,24 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   const svg = P.draw(s, P.network(s), { theme: { rule: '#123456', paper: '#fedcba' } });
   assert.ok(/stroke="#123456" stroke-width="7"[^>]*\/><line[^>]*stroke="#fedcba" stroke-width="3"/.test(svg), 'a pipe off the network is drawn hollow');
   n++;
+}
+
+// --- circulators and regulating valves ----------------------------------------------------------
+{
+  const s = net([row(0, 0, 5), col(3, 0, 2)], '0,0', ['0,5', '2,3']);
+  s.cells['0,5'].s = 0; s.cells['0,5'].v = 12.5;     // a valve and no circulator
+  s.cells['2,3'].s = 2; s.cells['2,3'].v = 8;        // both
+  const o = P.outputs(s, P.network(s));
+  eq([o['pumps!'], o['valves!']], ['[0; 2]', '[12.5; 8]'], "each sink's circulator (0: none) and valve Cv (0: none)");
+  eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, s: 0, v: 4 }, '0,1': { t: 'sink', p: 8, s: -2, v: -1 } } }).cells,
+    { '0,0': { t: 'sink', p: 8, x: 1, s: 0, v: 4 }, '0,1': { t: 'sink', p: 8, x: 1, s: 1 } }, 'a circulator of 0 is kept; a bad valve is none');
+  eq([P.curveName(['P1'], 0), P.curveName(['P1'], 1)], ['none', 'P1'], 'circulator 0 is none');
+  s.show = { ...s.show, valve: true, numbers: false };
+  const svg = P.draw(s, P.network(s), {});
+  assert.ok(svg.includes('valve Cv 12.5') && svg.includes('valve Cv 8'), 'the drawing can show the valves');
+  s.cells['2,3'].v = 0; delete s.cells['2,3'].v;
+  assert.ok(P.draw(s, P.network(s), {}).includes('no valve'), 'and a sink without one');
+  n += 2;
 }
 
 console.log(`pipenet: ${n} checks passed`);

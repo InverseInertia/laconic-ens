@@ -22,14 +22,15 @@
  *        supply layer's pad only (syncPads keeps the pads of the two layers in the same squares)
  *   method: how the sheet works out fitting losses: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K (METHODS)
  *   dp: the pressure difference the pump holds, {v, u} (u one of DP_UNITS), written as Δp_target
- *   show: what the drawing shows: {numbers, size, L, D, hx, pump} each true or false (segment numbers;
- *        each segment's pipe size, length and bore; each sink's exchanger curve and pump curve), and
+ *   show: what the drawing shows: {numbers, size, L, D, hx, pump, valve} each true or false (segment
+ *        numbers; each segment's pipe size, length and bore; each sink's exchanger, circulator and valve), and
  *        `hide`, the names of the sheet's !pluginvar values left off it (any other is shown)
  *   nps, sch: the network's pipe, a nominal size (PIPE_SIZES) or null for a diameter D of its own, and
  *        its schedule, "40" or "80"
  *   tile: {t: "pipe"|"source"|"sink", p: sides, L?: length of this tile, nps?: its pipe size, d?: or diameter,
  *          k?: extra loss coefficient K on this tile (a valve, from its datasheet), name?,
- *          x?: its exchanger curve, s?: its pump, each by number (the sheet's lists name them)}
+ *          x?: its exchanger curve, s?: its circulator, each by number (the sheet's lists name them; a
+ *          circulator of 0 is none), v?: its regulating valve's Cv (none when absent)}
  *
  * `analyze(layer)` walks one layer's tree from the source: the supply out from the pump's discharge
  * to the sinks, the return out from its suction to the sinks (its water flows the other way, but a
@@ -115,7 +116,8 @@
 
   function blank() {
     return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, nps: '4', sch: '40', ret: 'same', method: 1, dp: { v: 0.1, u: 'psi' },
-      show: { numbers: true, size: false, L: false, D: false, hx: false, pump: false, hide: [] }, cells: {}, rcells: {} };
+      show: { numbers: true, size: false, L: false, D: false, hx: false, pump: false, valve: false, hide: [] },
+      cells: {}, rcells: {} };
   }
 
   // A state as given, with anything missing or odd replaced by the default, and tiles cleaned.
@@ -149,7 +151,9 @@
         if (t.t === 'sink' && supply) {
           if (typeof t.name === 'string') tile.name = t.name.slice(0, 40);
           tile.x = Math.max(1, Math.round(num(t.x, 1)));
-          tile.s = Math.max(1, Math.round(num(t.s, 1)));
+          // its circulator, by number (0: none), and its regulating valve's Cv (0 or absent: none)
+          tile.s = typeof t.s === 'number' && isFinite(t.s) && t.s >= 0 ? Math.round(t.s) : 1;
+          if (typeof t.v === 'number' && isFinite(t.v) && t.v > 0) tile.v = t.v;
         }
         into[k] = tile;
       }
@@ -289,7 +293,7 @@
     res.order = spurs.concat(pre.filter((id) => segs[id].sink === null));
     res.sinks = spurs.map((id, j) => {
       const t = cells[segs[id].sink];
-      return { key: segs[id].sink, seg: id, name: t.name || `S${j + 1}`, x: t.x || 1, s: t.s || 1 };
+      return { key: segs[id].sink, seg: id, name: t.name || `S${j + 1}`, x: t.x || 1, s: t.s ?? 1, v: t.v || 0 };
     });
     const row = new Map(res.order.map((id, i) => [id, i]));
     for (const s of segs) s.row = row.get(s.id);
@@ -330,6 +334,7 @@
       ...lines(net.r, net.Ar, ['A_r', 'L_r!', 'D_r!', 'N_fit_r!', 'K_extra_r!']),
       'exchangers!': column(net.sinks.map((s) => s.x)),
       'pumps!': column(net.sinks.map((s) => s.s)),
+      'valves!': column(net.sinks.map((s) => s.v)),
       ...settings,
     };
   }
@@ -364,7 +369,7 @@
     const find = (n) => { const v = (inputs || []).find((x) => x.name === n && Array.isArray(x.names)); return v ? v.names : null; };
     return { exchangers: find('exchangers'), pumps: find('pumps') };
   }
-  const curveName = (names, i) => (names && names[i - 1]) || `curve ${i}`;
+  const curveName = (names, i) => (i === 0 ? 'none' : (names && names[i - 1]) || `curve ${i}`);
 
   function flatten(m) {
     if (typeof m === 'number' || m === null) return [m];
@@ -527,6 +532,7 @@
         const lines = [{ text: sink.name, bold: true }];
         if (show.hx) lines.push({ text: `hx ${curveName(names.exchangers, sink.x)}` });
         if (show.pump) lines.push({ text: `pump ${curveName(names.pumps, sink.s)}` });
+        if (show.valve) lines.push({ text: sink.v ? `valve Cv ${fmt(sink.v)}` : 'no valve' });
         for (const v of vals.sinks) if (!hidden.has(v.name)) lines.push({ text: `${v.name} ${fmt(v.values[j], v.unit)}`, soft: v.stale });
         if (cells[sink.key] && cells[sink.key].p === E) balloon(x(c) + 8, cy, x(c) + 2, y(r) + 14, lines, 'end');   // the pipe comes from the right
         else balloon(x(c) + CELL - 8, cy, x(c) + CELL - 2, y(r) + 14, lines);
@@ -641,7 +647,7 @@
     const old = state.cells[k] || {};
     const t = { t: tile.t, p: tile.p };
     for (const f of ['L', 'd', 'k', 'nps']) if (old[f] !== undefined) t[f] = old[f];
-    if (tile.t === 'sink') { t.x = old.x || 1; t.s = old.s || 1; if (old.name) t.name = old.name; }
+    if (tile.t === 'sink') { t.x = old.x || 1; t.s = old.s ?? 1; if (old.v) t.v = old.v; if (old.name) t.name = old.name; }
     if (tile.auto && tile.t !== 'pipe') {
       const d = DIRS.find((x) => { const n = state.cells[step(k, x)]; return n && n.p & OPP[x]; });
       if (d) t.p = d;
