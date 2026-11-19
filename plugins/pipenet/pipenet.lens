@@ -21,48 +21,60 @@ Re(D_h, V@) = (ρ * V@ * D_h) / μ
 ε_PVC = 0.002 'mm
 
 ## Major Losses via Niazkhar formulation for the Darcy Friction Factor.
-# The best closed form approximation for the Moody Chart currently known.
-A(ε_D, Re) = -2 * log10(ε_D / 3.7 + 4.5547 / Re^0.8784)
-B(ε_D, Re) = -2 * log10(ε_D / 3.7 + (2.15 * A(ε_D, Re)) / Re)
-C(ε_D, Re) = -2 * log10(ε_D / 3.7 + (2.15 * B(ε_D, Re)) / Re)
-f_D_Niazkhar(ε_D, Re) = (A(ε_D, Re) - (B(ε_D, Re) - A(ε_D, Re))^2 / (C(ε_D, Re) - 2 * B(ε_D, Re) + A(ε_D, Re)))^(-2)
+# The best closed form approximation for the Moody Chart currently known. Its three iterates are
+# a = -2 log10(ε/3.7D + 4.5547/Re^0.8784), b = -2 log10(ε/3.7D + 2.15 a/Re) and c the same from b,
+# and f_D = (a - (b - a)^2 / (c - 2 b + a))^-2. Each is worked out once and passed on, so a friction
+# factor takes three logarithms.
+nz_next(ε_D, Re, a) = -2 * log10(ε_D / 3.7 + 2.15 * a / Re)
+nz_f(a, b, c) = (a - (b - a)^2 / (c - 2 * b + a))^(-2)
+nz_ab(ε_D, Re, a, b) = nz_f(a, b, nz_next(ε_D, Re, b))
+nz_a(ε_D, Re, a) = nz_ab(ε_D, Re, a, nz_next(ε_D, Re, a))
+f_D_Niazkhar(ε_D, Re) = nz_a(ε_D, Re, -2 * log10(ε_D / 3.7 + 4.5547 / Re^0.8784))
 
-# Darcy-Weisbach head loss
+# Darcy-Weisbach pressure drop for a flow ∀` in a pipe, through its velocity, worked out once
 V@(D_h, ∀`) = 4 * ∀` / (pi * D_h^2)
-ΔP_DW(ε, D_h, ∀`, L, ΣK) = (f_D_Niazkhar(ε / D_h, Re(D_h, (4 * ∀` / (pi * D_h^2)))) * L / D_h + ΣK) * (ρ * (4 * ∀` / (pi * D_h^2))^2 / 2)
+ΔP_V(ε, D_h, V@, L, ΣK) = (f_D_Niazkhar(ε / D_h, Re(D_h, V@)) * L / D_h + ΣK) * ρ * V@^2 / 2
+ΔP_DW(ε, D_h, ∀`, L, ΣK) = ΔP_V(ε, D_h, V@(D_h, ∀`), L, ΣK)
 
-## SWEP BPHE Pressure Drop Functions.
-# Raw Data from SWEP SSP
-SWEP_B26W = [5, 10, 15, 20, 25, 30, 35; 0.1875, 0.75, 1.6875, 3, 4.6875, 6.75, 9.1875]
-SWEP_DB300 = [15, 20, 25, 30, 35, 40, 45; 1.0125, 1.8, 2.8125, 4.05, 5.5125, 7.2, 9.1125]
-
-# Quadratic Regression
-!regression B26
-  degree: 2
-  data: SWEP_B26W
-!regression DB_300
-  degree: 2
-  data: SWEP_DB300
-
-# Function Definitions
 ~polyvec_2(x) = [1; x; x^2]
 ~polyvec_4(x) = [1; x; x^2; x^3; x^4]
-SWEP_B26W(∀`) = idx(B26 * polyvec_2(∀` * ('gal / ('min))^(-1)), 1) * 'psi
-!plot SWEP_B26W(x), x = 10 'gal / 'min .. 35 'gal / ('min)
-  yunit: 'psi
-  xunit: 'gal / ('min)
-SWEP_DB300(∀`) = idx(DB_300 * polyvec_2(∀` * ('gal / ('min))^(-1)), 1) * 'psi
-!plot SWEP_DB300(x), x = 15 'gal / 'min .. 45 'gal / ('min)
-  yunit: 'psi
-  xunit: 'gal / ('min)
 
-SWEP(∀`, curve) = idx([SWEP_B26W(∀`), SWEP_DB300(∀`)], curve)
+## Heat Exchanger Pressure Drop
+# Each exchanger's pressure drop is the quadratic through its points, fitted by least squares
+# when it is used. HX(∀`, k) is exchanger k's at the flow ∀`.
+sq(x) = x^2
+hx_rows(q) = hstack(ones(cols(q), 1), transpose(q), transpose(.sq(q)))
+hx_fit(k) = lstsq(hx_rows(row(HX_data, 2 * k - 1)), transpose(row(HX_data, 2 * k)))
+HX(∀`, k) = idx(transpose(hx_fit(k)) * polyvec_2(∀` * ('gal / 'min)^-1), 1) * 'psi
+
+# ---- Exchanger data: paste your own over the lines from here to the next ---- line --------------
+# HX_data holds two rows per exchanger, in order: its flows in gal/min, then its pressure drops in psi
+# at those flows, as the manufacturer's selection software gives them. Every row has the same number
+# of points. Then give each exchanger a name, its number (its place in HX_data), and list the names
+# on the !pluginvar line, so the plugin offers them by name. Plot them with the !plot line below.
+# The two below are made-up placeholders (dp = k Q^2), not real exchangers: replace them.
+HX_data = [5, 10, 15, 20, 25, 30, 35; 0.1875, 0.75, 1.6875, 3, 4.6875, 6.75, 9.1875; 15, 20, 25, 30, 35, 40, 45; 1.0125, 1.8, 2.8125, 4.05, 5.5125, 7.2, 9.1125]
+HX_A = 1
+HX_B = 2
+!pluginvar exchangers: HX_A, HX_B
+!plot HX(x, HX_A), HX(x, HX_B), x = 5 'gal / 'min .. 45 'gal / 'min
+  title: "Heat exchanger pressure drop"
+  yunit: 'psi
+  xunit: 'gal / 'min
+  label 1: "HX_A"
+  label 2: "HX_B"
+# ---- end of the exchanger data -----------------------------------------------------------------
 
 ## Grundfos Pump Curves
-# Raw data from online product information
+# Raw data from online product information. Each curve is a pump of its own: the 43-100 F's and the
+# 26-99 FC's three speed settings, and the 15-42.
 GRUND_43100A = transpose([21.4, 10.2; 2.3, 27.7; 0.7, 27.9; 5.45, 26.1; 3.9, 27.1; 10.1, 22; 27.6, 4.6; 7, 25.1; 14.6, 17.3; 18.15, 13.4; 23.36, 8.3; 25.5, 6.5; 31.76, 1.7; 29.6, 3.3; 11.7, 20.5; 19.8, 11.9; 13.2, 18.7; 16.55, 15.2; 8.6, 23.7])
 GRUND_43100B = transpose([37.6, 11.7; 3.96, 30; 1.24, 30.2; 9.14, 28.9; 6.8, 29.5; 18.5, 24.8; 44.7, 5.9; 12.4, 27.7; 27.2, 19.5; 32.54, 15.6; 39.95, 9.7; 42.8, 7.5; 49.7, 2; 47.15, 4; 20.8, 23.5; 35.2, 13.5; 24.1, 21.4; 29.95, 17.5; 16.7, 25.8])
 GRUND_43100C = transpose([42.1, 16.6; 4.24, 30.9; 0.6, 31.1; 11.2, 29.9; 8.1, 30.5; 63.6, 1.1; 55.8, 6.9; 15.14, 29.1; 27.7, 24.9; 33.6, 21.7; 46.9, 13.3; 51.04, 10.4; 61.46, 2.6; 59.7, 4; 20.4, 27.7; 37.5, 19.5; 23.35, 26.6; 30.8, 23.3; 17.9, 28.4])
+GRUND_2699A = transpose([17.7, 1.2; 8, 11.1; 13.3, 4.7; 6.53, 13.3; 5.35, 15.15; 9.5, 9.1; 3.95, 17.4; 15.54, 2.7; 1.85, 20.94; 2.9, 19.1; 11.44, 6.8; 0.55, 23.34])
+GRUND_2699B = transpose([15.3, 13; 22.57, 5.3; 12.8, 15.6; 10.93, 17.6; 18, 10.3; 8.7, 19.8; 24.4, 3.3; 3.17, 25.1; 6.53, 22.04; 20.7, 7.35; 0.5, 27.44])
+GRUND_2699C = transpose([30.33, 1.55; 20.2, 14.04; 28, 4.9; 17.55, 16.56; 14.4, 19.3; 22.8, 11.3; 11.55, 21.6; 8.6, 23.7; 5.65, 25.7; 3.35, 27.13; 25.43, 8.2; 0.66, 28.8])
+GRUND_1542A = [4.64, 5.65, 6.8, 2.8, 3.5, 4.1, 5.13, 6.17, 2.04, 1.56, 1.14, 0.7, 0.23; 0.77, 0.44, 0.14, 1.55, 1.22, 0.98, 0.6, 0.3, 1.9, 2.15, 2.38, 2.62, 2.91]
 
 !regression G_43100A
   data: GRUND_43100A
@@ -76,11 +88,36 @@ GRUND_43100C = transpose([42.1, 16.6; 4.24, 30.9; 0.6, 31.1; 11.2, 29.9; 8.1, 30
   data: GRUND_43100C
   degree: 4
 
-# Each speed setting of the 43-100 F is treated as a pump of its own: GRUND_43100A (speed 1), GRUND_43100B
-# (speed 2) and GRUND_43100C (speed 3).
-GRUND_43100A(∀`) = idx(G_43100A * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
-GRUND_43100B(∀`) = idx(G_43100B * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
-GRUND_43100C(∀`) = idx(G_43100C * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) * 'ft * 'g_0 * ρ
+!regression G_2699A
+  data: GRUND_2699A
+  degree: 4
+
+!regression G_2699B
+  data: GRUND_2699B
+  degree: 4
+  
+!regression G_2699C
+  data: GRUND_2699C
+  degree: 4
+
+!regression G_1542
+  data: GRUND_1542A
+  degree: 4
+
+# The pumps by number, as pumps! picks them: one row of PUMP_C (a fit's coefficients) and one entry of
+# PUMP_max (the flow its curve is good to, past which it gives no head; 1000 gal/min for no limit) each. The plugin offers them by the
+# names on the !pluginvar pumps: line, in the same order.
+PUMP_C = vstack(G_43100A, G_43100B, G_43100C, G_2699A, G_2699B, G_2699C, G_1542)
+PUMP_max = [1000, 1000, 1000, 20.551, 1000, 1000, 10] * 'gal / 'min
+PUMP(∀`, n) = idx(row(PUMP_C, n) * polyvec_4(∀` * ('gal / 'min)^-1), 1) * 'ft * 'g_0 * ρ * heaviside(idx(PUMP_max, n) - ∀`)
+GRUND_43100A(∀`) = PUMP(∀`, 1)
+GRUND_43100B(∀`) = PUMP(∀`, 2)
+GRUND_43100C(∀`) = PUMP(∀`, 3)
+GRUND_2699A(∀`) = PUMP(∀`, 4)
+GRUND_2699B(∀`) = PUMP(∀`, 5)
+GRUND_2699C(∀`) = PUMP(∀`, 6)
+GRUND_1542A(∀`) = PUMP(∀`, 7)
+!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C, GRUND_2699A, GRUND_2699B, GRUND_2699C, GRUND_1542A
 
 !plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x), x = 0 'gal / 'min .. 60 'gal / ('min)
   title: "Grundfos 43-100 F Pump Curves"
@@ -91,10 +128,24 @@ GRUND_43100C(∀`) = idx(G_43100C * polyvec_4(∀` * ('gal / ('min))^(-1)), 1) *
   label 1: "Speed 1"
   label 2: "Speed 2"
   label 3: "Speed 3"
-  label 4: "raw data" 
+  label 4: "raw data"
 
-# The circulator on each spur, by number, as SWEP picks an exchanger: pumps! says which of these each spur has
-PUMP(∀`, n) = idx([GRUND_43100A(∀`), GRUND_43100B(∀`), GRUND_43100C(∀`)], n)
+!plot GRUND_2699A(x), GRUND_2699B(x), GRUND_2699C(x), x = 0 'gal / 'min .. 35 'gal / ('min)
+  title: "Grundfos 26-99 FC Pump Curves"
+  points: hstack(GRUND_2699A, GRUND_2699B, GRUND_2699C), 'gal / 'min, 'ft_H2O
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
+  label 1: "Speed 1"
+  label 2: "Speed 2"
+  label 3: "Speed 3"
+  label 4: "raw data"
+
+!plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x),GRUND_2699A(x), GRUND_2699B(x), GRUND_2699C(x), GRUND_1542A(x), x = 0 'gal / 'min .. 60 'gal / ('min)
+  title: "Grundfos Pump Curves"
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
 
 !show
 ## Pipe Network
@@ -109,26 +160,26 @@ PUMP(∀`, n) = idx([GRUND_43100A(∀`), GRUND_43100B(∀`), GRUND_43100C(∀`)]
 # and the return's, the same for its own segments: A_r, L_r!, D_r!, N_fit_r!, K_extra_r!. A_r's columns are
 # the same sinks in the same order. With the return the same as the supply (the plugin's Return pipe), they
 # are copies of the supply's; laid out on its own, the return is drawn on its own side of the grid.
-#   exchangers!  the exchanger curve each spur ends at; pumps! its circulator (PUMP above)
+#   exchangers!  the exchanger each spur ends at (HX above); pumps! its circulator (PUMP above)
 #   fit_method!  how fittings become loss coefficients: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K
 #   Δp_target    the pressure difference the pump holds (Network → Pump target Δp). The pump runs off pressure sensor
 #                data, so it ramps the flow down when spurs are shut off for maintenance: this sets the loop's total flow
 !plugin pipenet
   A = [1, 0, 0, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 0, 0; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 0, 0, 0, 1; 1, 1, 1, 1, 1, 1, 1, 1; 1, 1, 1, 1, 1, 1, 1, 0; 1, 1, 1, 1, 1, 1, 0, 0; 1, 1, 1, 1, 1, 0, 0, 0; 1, 1, 1, 1, 0, 0, 0, 0; 1, 1, 1, 0, 0, 0, 0, 0; 0, 1, 1, 0, 0, 0, 0, 0]
   L! = [30; 40; 20; 40; 50; 40; 50; 40; 20; 30; 30; 30; 30; 30; 10] * 'ft
-  D_h! = [4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026] * 'in
+  D_h! = [2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026] * 'in
   N_fit! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 0, 0, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 0, 1]
   K_extra! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
-  A_r = [1, 0, 0, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 0, 0; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 0, 0, 0, 1; 1, 1, 1, 1, 1, 1, 1, 1; 1, 1, 1, 1, 1, 1, 1, 0; 1, 1, 1, 1, 1, 1, 0, 0; 1, 1, 1, 1, 1, 0, 0, 0; 1, 1, 1, 1, 0, 0, 0, 0; 1, 1, 1, 0, 0, 0, 0, 0; 0, 1, 1, 0, 0, 0, 0, 0]
-  L_r! = [30; 40; 20; 40; 50; 40; 50; 40; 20; 30; 30; 30; 30; 30; 10] * 'ft
+  A_r = [1, 0, 0, 0, 0, 0, 0, 0; 0, 0, 0, 0, 0, 0, 0, 1; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 1, 0, 0, 0; 1, 1, 1, 1, 1, 1, 1, 1; 1, 0, 0, 1, 0, 1, 0, 1; 0, 0, 0, 1, 0, 1, 0, 1; 0, 0, 0, 0, 0, 1, 0, 1; 0, 1, 1, 0, 1, 0, 1, 0; 0, 1, 1, 0, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 1, 0]
+  L_r! = [20; 70; 10; 10; 30; 10; 70; 10; 170; 10; 50; 60; 20; 60; 40] * 'ft
   D_r! = [4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026] * 'in
-  N_fit_r! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 0, 0, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 0, 1]
+  N_fit_r! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 0, 0, 1; 1, 1, 0; 0, 0, 1; 1, 1, 0; 0, 0, 1; 0, 0, 0; 0, 1, 0; 1, 0, 1; 0, 1, 0; 0, 0, 1; 2, 1, 0; 0, 0, 1]
   K_extra_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
   exchangers! = [1; 1; 1; 1; 1; 1; 1; 1]
-  pumps! = [2; 2; 2; 2; 2; 2; 2; 2]
+  pumps! = [1; 1; 1; 1; 1; 1; 1; 1]
   fit_method! = 1
-  Δp_target = 0.1 'psi
-  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"nps":"4","sch":"40","ret":"same","method":1,"dp":{"v":0.1,"u":"psi"},"labels":"values","cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10},"2,19":{"t":"pipe","p":10},"2,20":{"t":"sink","p":8,"x":1,"s":2},"1,2":{"t":"pipe","p":5},"0,2":{"t":"pipe","p":6},"0,3":{"t":"pipe","p":10},"0,4":{"t":"sink","p":8,"x":1,"s":2},"3,5":{"t":"pipe","p":5},"4,5":{"t":"pipe","p":5},"5,5":{"t":"pipe","p":3},"5,6":{"t":"pipe","p":10},"5,7":{"t":"sink","p":8,"x":1,"s":2},"1,8":{"t":"pipe","p":5},"0,8":{"t":"pipe","p":6},"0,9":{"t":"pipe","p":10},"0,10":{"t":"sink","p":8,"x":1,"s":2},"3,11":{"t":"pipe","p":5},"4,11":{"t":"pipe","p":5},"5,11":{"t":"pipe","p":3},"5,12":{"t":"pipe","p":10},"5,13":{"t":"sink","p":8,"x":1,"s":2},"1,14":{"t":"pipe","p":5},"0,14":{"t":"pipe","p":6},"0,15":{"t":"pipe","p":10},"0,16":{"t":"sink","p":8,"x":1,"s":2},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5},"5,17":{"t":"pipe","p":3},"5,18":{"t":"pipe","p":10},"5,19":{"t":"sink","p":8,"x":1,"s":2},"3,18":{"t":"pipe","p":10},"3,19":{"t":"sink","p":8,"x":1,"s":2}},"rcells":{"2,0":{"t":"source","p":0},"2,20":{"t":"sink","p":0},"0,4":{"t":"sink","p":0},"5,7":{"t":"sink","p":0},"0,10":{"t":"sink","p":0},"5,13":{"t":"sink","p":0},"0,16":{"t":"sink","p":0},"5,19":{"t":"sink","p":0},"3,19":{"t":"sink","p":0}}}
+  Δp_target = 0.02 'psi
+  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"ret":"separate","nps":"4","sch":"40","method":1,"dp":{"v":0.02,"u":"psi"},"show":{"numbers":true,"size":false,"L":false,"D":false,"hx":false,"pump":false,"hide":[]},"cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10,"nps":"2"},"2,19":{"t":"pipe","p":10,"nps":"2"},"2,20":{"t":"sink","p":8,"x":1,"s":1},"1,2":{"t":"pipe","p":5,"nps":"2"},"0,2":{"t":"pipe","p":6,"nps":"2"},"0,3":{"t":"pipe","p":10,"nps":"2"},"0,4":{"t":"sink","p":8,"x":1,"s":1},"3,5":{"t":"pipe","p":5,"nps":"2"},"4,5":{"t":"pipe","p":5,"nps":"2"},"5,5":{"t":"pipe","p":3,"nps":"2"},"5,6":{"t":"pipe","p":10,"nps":"2"},"5,7":{"t":"sink","p":8,"x":1,"s":1},"1,8":{"t":"pipe","p":5,"nps":"2"},"0,8":{"t":"pipe","p":6,"nps":"2"},"0,9":{"t":"pipe","p":10,"nps":"2"},"0,10":{"t":"sink","p":8,"x":1,"s":1},"3,11":{"t":"pipe","p":5,"nps":"2"},"4,11":{"t":"pipe","p":5,"nps":"2"},"5,11":{"t":"pipe","p":3,"nps":"2"},"5,12":{"t":"pipe","p":10,"nps":"2"},"5,13":{"t":"sink","p":8,"x":1,"s":1},"1,14":{"t":"pipe","p":5,"nps":"2"},"0,14":{"t":"pipe","p":6,"nps":"2"},"0,15":{"t":"pipe","p":10,"nps":"2"},"0,16":{"t":"sink","p":8,"x":1,"s":1},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5,"nps":"2"},"5,17":{"t":"pipe","p":3,"nps":"2"},"5,18":{"t":"pipe","p":10,"nps":"2"},"5,19":{"t":"sink","p":8,"x":1,"s":1},"3,18":{"t":"pipe","p":10,"nps":"2"},"3,19":{"t":"sink","p":8,"x":1,"s":1}},"rcells":{"2,0":{"t":"source","p":2},"2,20":{"t":"sink","p":8},"0,4":{"t":"sink","p":1},"5,7":{"t":"sink","p":1},"0,10":{"t":"sink","p":1},"5,13":{"t":"sink","p":1},"0,16":{"t":"sink","p":1},"5,19":{"t":"sink","p":2},"3,19":{"t":"sink","p":2},"3,20":{"t":"pipe","p":12},"4,20":{"t":"pipe","p":5},"5,20":{"t":"pipe","p":13},"6,20":{"t":"pipe","p":9},"6,19":{"t":"pipe","p":10},"6,18":{"t":"pipe","p":10},"6,17":{"t":"pipe","p":3},"5,17":{"t":"pipe","p":5},"4,17":{"t":"pipe","p":13},"3,17":{"t":"pipe","p":5},"2,19":{"t":"pipe","p":10},"2,18":{"t":"pipe","p":11},"2,16":{"t":"pipe","p":10},"2,15":{"t":"pipe","p":10},"-1,16":{"t":"pipe","p":14},"-1,10":{"t":"pipe","p":14},"-1,4":{"t":"pipe","p":6},"-1,5":{"t":"pipe","p":10},"-1,6":{"t":"pipe","p":10},"-1,7":{"t":"pipe","p":10},"-1,8":{"t":"pipe","p":10},"-1,9":{"t":"pipe","p":10},"-1,11":{"t":"pipe","p":10},"-1,12":{"t":"pipe","p":10},"-1,13":{"t":"pipe","p":10},"-1,14":{"t":"pipe","p":10},"-1,15":{"t":"pipe","p":10},"-1,17":{"t":"pipe","p":10},"-1,18":{"t":"pipe","p":12},"0,18":{"t":"pipe","p":5},"1,18":{"t":"pipe","p":5},"2,17":{"t":"pipe","p":14},"2,14":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,12":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,9":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,6":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,3":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":10},"2,1":{"t":"pipe","p":10},"4,7":{"t":"pipe","p":6},"4,13":{"t":"pipe","p":14},"4,8":{"t":"pipe","p":10},"4,9":{"t":"pipe","p":10},"4,10":{"t":"pipe","p":10},"4,11":{"t":"pipe","p":10},"4,12":{"t":"pipe","p":10},"4,14":{"t":"pipe","p":10},"4,15":{"t":"pipe","p":10},"4,16":{"t":"pipe","p":10}}}
 
 ## Fitting Losses
 # Each method's coefficients, one row per kind of fitting in N_fit!'s order: 90° elbow, tee run, tee branch.
@@ -150,13 +201,14 @@ FIT_Darby = [800, 0.14, 4; 200, 0.091, 4; 500, 0.274, 4]
 darby_D(d) = (d / 'in)^-0.3
 
 # Each segment's ΣK, for segments with fittings N, extra K K_x and diameters D carrying flows ∀`, by the
-# method chosen. The supply and the return each call it with their own.
+# method chosen. The supply and the return each call it with their own. The Reynolds numbers are worked out once.
 w_fit = row(identity(3), fit_method!)
 K_Crane(N, D) = (N * FIT_Crane) .* .f_T(D)
 K_Hooper(N, D, Re_s) = (N * col(FIT_Hooper, 1)) ./ Re_s + (N * col(FIT_Hooper, 2)) .* .hooper_D(D)
 K_Darby(N, D, Re_s) = (N * col(FIT_Darby, 1)) ./ Re_s + (N * col(FIT_Darby, 2)) + (N * (col(FIT_Darby, 2) .* col(FIT_Darby, 3))) .* .darby_D(D)
 Re_seg(∀`, D) = .Re(D, .V@(D, ∀`))
-ΣK(∀`, N, D, K_x) = idx(w_fit, 1) * K_Crane(N, D) + idx(w_fit, 2) * K_Hooper(N, D, Re_seg(∀`, D)) + idx(w_fit, 3) * K_Darby(N, D, Re_seg(∀`, D)) + K_x
+ΣK_Re(Re_s, N, D, K_x) = idx(w_fit, 1) * K_Crane(N, D) + idx(w_fit, 2) * K_Hooper(N, D, Re_s) + idx(w_fit, 3) * K_Darby(N, D, Re_s) + K_x
+ΣK(∀`, N, D, K_x) = ΣK_Re(Re_seg(∀`, D), N, D, K_x)
 
 # Each segment's pressure drop, on the supply and on the return, for the flows ∀_des! to the spurs.
 Δp_supply(∀_des!) = .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK(A * ∀_des!, N_fit!, D_h!, K_extra!))
@@ -168,11 +220,11 @@ Re_seg(∀`, D) = .Re(D, .V@(D, ∀`))
 # The pump's target pressure difference, Δp_target, comes from the plugin's block above.
 
 # root solver finds where all pressure drops across all paths are equal. The path to spur j runs out along the supply, through its exchanger and back along the return: transpose(A) * Δp_supply and transpose(A_r) * Δp_return add up the segments each path passes through.
-residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_return(∀_des!) + .SWEP(∀_des!, exchangers!) - .PUMP(∀_des!, pumps!) - Δp_target
+residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_return(∀_des!) + .HX(∀_des!, exchangers!) - .PUMP(∀_des!, pumps!) - Δp_target
 !root ∀_des!
   equation: residual(∀_des!)
   autorun: on
-  #@ result {"hash":"11f99b0493b4","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0017586397033829367],[0.0017544409244061021],[0.0017551221883242915],[0.0017674623000074224],[0.0017837267373207327],[0.001809138751475584],[0.0018435897118286864],[0.0018900738291947239]],"unit":"meter ** 3 / second"}],"nfev":23,"message":"The solution converged.","resid":0.00022}
+  #@ result {"hash":"2c9dd9f2440a","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0012953032613255125],[0.0012845803639646644],[0.0012892805699231452],[0.001286603948546959],[0.001289578887295717],[0.001295752923737711],[0.0013056640590469427],[0.0013179310901469132]],"unit":"meter ** 3 / second"}],"nfev":18,"message":"The solution converged.","resid":1.25e-06}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min
@@ -182,13 +234,10 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 Δp_paths = Δp_supply(∀_des!) -> 'psi
 Δp_r = Δp_return(∀_des!) -> 'psi
 Δp_spur = transpose(A) * Δp_paths + transpose(A_r) * Δp_r -> 'psi
-Δp_hx = .SWEP(∀_des!, exchangers!) -> 'psi
+Δp_hx = .HX(∀_des!, exchangers!) -> 'psi
 Δp_circ = .PUMP(∀_des!, pumps!) -> 'psi
-Δp_residual = residual(∀_des!)
+# The residual from the pieces above, rather than running the pipes' pressure drops again
+Δp_residual = Δp_spur + Δp_hx - Δp_circ - Δp_target -> 'psi
 # Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
 # in _r) each return segment, and the piping's pressure drop on each spur's path, supply and return
 !pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur
-# What exchangers! and pumps! pick, by name and in order (SWEP and PUMP above): the plugin offers each
-# sink's exchanger and pump by these names
-!pluginvar exchangers: SWEP_B26W, SWEP_DB300
-!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C

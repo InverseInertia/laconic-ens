@@ -222,12 +222,12 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "A_r", "L_r!", "D_r!", "N_fit_r!",
                                    "K_extra_r!", "exchangers!", "pumps!", "fit_method!", "Δp_target"]
     assert next(r for r in ws.results if r.solver).solver.current
-    sent = next(r for r in ws.results if r.pluginvar).pluginvar.values
+    sent = next(r for r in ws.results if r.pluginvar and "mag" in r.pluginvar.values[0]).pluginvar.values
     assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur"]
     assert sent[0]["unit"] == "gal/min"
 
 
-@pytest.mark.parametrize("method, first", [(1, 0.3262), (2, 0.1318), (3, 0.3377)])
+@pytest.mark.parametrize("method, first", [(1, 0.3804), (2, 0.1532), (3, 0.3886)])
 def test_each_fitting_loss_method_gives_the_segments_their_K(method, first):
     """Crane (L/D * f_T for steel), Hooper 2-K and Darby 3-K on the plugin's sheet, from its own tables."""
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
@@ -458,20 +458,30 @@ def test_the_fonts_may_be_borrowed_by_a_sandboxed_plugin_frame():
 
 
 def test_the_plugins_sheet_solves_a_return_laid_out_on_its_own():
-    """A_r, L_r! and the rest differ from the supply's: each path is its supply, its exchanger and its return."""
+    """Its layout has a return of its own (another route, 4" where the supply's spurs are 2"): solved from
+    nothing, each path is its supply, its exchanger and its return."""
     import re
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
-    text = re.sub(r"\n  L_r! = \[[^\n]*", "\n  L_r! = [30; 40; 20; 40; 50; 40; 50; 40; 50; 100; 30; 30; 30; 30; 10] * 'ft", text)
+    assert '"ret":"separate"' in text
     text = re.sub(r"\n  #@ result [^\n]*", "", text)
     from laconic.solvesession import solve_all
     solved = solve_all(text, log=lambda m: None)
-    ws = evaluate(solved)
+    ws = evaluate(solved, plots=False)
     assert next(r for r in ws.results if r.solver).solver.current
-    sent = {v["name"]: v for v in next(r for r in ws.results if r.pluginvar).pluginvar.values}
+    sent = {v["name"]: v for r in ws.results if r.pluginvar for v in r.pluginvar.values}
     flat = lambda v: [x[0] for x in v["mag"]]
-    assert flat(sent["∀!"]) == pytest.approx(flat(sent["∀_r!"]))    # the same pipes, so the same flows
-    assert flat(sent["Δp_r"])[9] > 2 * flat(sent["Δp_paths"])[9]     # but the longer return loses more
+    assert sum(flat(sent["∀!"])[:8]) == pytest.approx(sum(flat(sent["∀_r!"])[:8]))   # the same water out and back
+    residual = next(r for r in ws.results if r.text.startswith("Δp_residual"))
+    assert all(abs(float(x)) < 1e-3 for x in re.findall(r"-?\d+\.?\d*(?:e-?\d+)?", residual.text.split("=", 1)[1].replace("psi", "")))
 
+
+def test_the_plugins_sheet_ships_no_manufacturers_exchanger_data():
+    """Its exchangers are made-up placeholders to paste real data over; the SWEP curves are not for
+    redistribution and must not come back."""
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    assert "SWEP" not in text
+    assert "HX_data = [5, 10, 15, 20, 25, 30, 35; 0.1875, 0.75" in text     # 0.0075 Q^2
+    assert "# ---- Exchanger data: paste your own over the lines from here" in text
 
 def test_a_line_that_defines_a_plugins_name_again_is_warned_and_named_to_the_plugin():
     """A sheet older than the plugin writing Δp_target kept its own Δp_target line below the block, which
@@ -495,5 +505,6 @@ def test_a_pluginvar_line_can_send_a_list_of_names():
 def test_the_plugins_sheet_names_its_exchanger_and_pump_curves():
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
     sent = [v for r in evaluate(text).results if r.pluginvar for v in r.pluginvar.values if "names" in v]
-    assert sent == [{"name": "exchangers", "names": ["SWEP_B26W", "SWEP_DB300"]},
-                    {"name": "pumps", "names": ["GRUND_43100A", "GRUND_43100B", "GRUND_43100C"]}]
+    assert sent == [{"name": "exchangers", "names": ["HX_A", "HX_B"]},
+                    {"name": "pumps", "names": ["GRUND_43100A", "GRUND_43100B", "GRUND_43100C", "GRUND_2699A", "GRUND_2699B",
+                                                "GRUND_2699C", "GRUND_1542A"]}]

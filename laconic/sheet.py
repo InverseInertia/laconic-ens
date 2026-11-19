@@ -81,8 +81,9 @@ def evaluate(text, siunitx=False, global_units=None, until=None, plots=True):
 
 def evaluator_at(text, line, global_units=None):
     """The evaluator as line `line` finds it: every line above has run, none from `line` on.
-    What a solve session builds its problem on, so a run sees what the block sees on screen."""
-    ev = _run(text, global_units=global_units, until=line - 1)[1]
+    What a solve session builds its problem on, so a run sees what the block sees on screen. Plots
+    above it are not drawn: a plot defines nothing, and drawing them was most of a solve's time."""
+    ev = _run(text, global_units=global_units, until=line - 1, plots=False)[1]
     ev.symbols.line = line
     ev.notes.clear()
     return ev
@@ -462,7 +463,7 @@ def _run_pluginvar(i, raw, s, ev):
     plugins (a pipe network shows the flows the sheet worked out on its drawing).
 
     `!pluginvar list: f, g, h` sends a list of names instead, in order, under the name `list`: what
-    a number in the sheet picks (`exchangers: SWEP_B26W, SWEP_DB300` names exchanger curves 1 and 2),
+    a number in the sheet picks (`exchangers: HX_A, HX_B` names exchanger curves 1 and 2),
     so a plugin can show the names. Each must be a variable or function defined here."""
     rest = s[len("!pluginvar"):].strip()
     m = _NAMES_RE.match(rest)
@@ -569,7 +570,7 @@ def solver_blocks(text, global_units=None):
     ends = [b.end for b in scan(text).blocks.values() if b.kind == "solver" and b.command not in ("regression", "symsolve")]
     if not ends:
         return []
-    ws = evaluate(text, global_units=global_units, until=max(ends))
+    ws = evaluate(text, global_units=global_units, until=max(ends), plots=False)   # a plot defines nothing
     return [r for r in ws.results if r.solver]
 
 

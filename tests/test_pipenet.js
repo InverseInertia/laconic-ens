@@ -157,8 +157,8 @@ eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'AHU-1' } } }).cells['
   s.show = { ...s.show, hide: [], size: true, L: true, D: true, hx: true, pump: true, numbers: false };
   s.cells['0,5'].x = 2; s.cells['0,5'].s = 2;
   const all = P.draw(s, P.network(s), { inputs: [v('Q', [3, 1], [[1.234], [2], [3]]),
-    { name: 'exchangers', names: ['SWEP_B26W', 'SWEP_DB300'] }, { name: 'pumps', names: ['GRUND_A', 'GRUND_B'] }] });
-  for (const t of ['4" Sch 40', 'L 20 ft', 'D_h 4.03 in', 'hx SWEP_DB300', 'pump GRUND_B', 'hx SWEP_B26W'])
+    { name: 'exchangers', names: ['HX_A', 'HX_B'] }, { name: 'pumps', names: ['GRUND_A', 'GRUND_B'] }] });
+  for (const t of ['4" Sch 40', 'L 20 ft', 'D_h 4.03 in', 'hx HX_B', 'pump GRUND_B', 'hx HX_A'])
     assert.ok(all.includes(t.replace('"', '&quot;')), `the drawing can show ${t}`);
   assert.ok(!/<circle[^>]*r="10"/.test(all), 'and the segment numbers can be left off');
   eq(P.curveName(null, 2), 'curve 2', 'a curve the sheet does not name goes by its number');

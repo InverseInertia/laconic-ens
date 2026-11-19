@@ -17,7 +17,7 @@ The block's row in the results shows the plugin's picture, with **Open** (the pl
 - **Don't define its names again.** A line below the block that defines one of the names the plugin writes replaces the plugin's value for the lines after it, so a change made in the plugin would not reach them. Such a line gets a warning in the results (shown even under `!hide`), and the plugin names it too.
 - **The state line** (`#@ state {...}`) is the plugin's own record, so it opens as you left it. Undo in the editor undoes a plugin's change, and the plugin follows.
 - **`!pluginvar a, b`** sends the values of `a` and `b`, as they are on that line, to every plugin in the sheet. Put it below the calculation. A value that reads an out-of-date solver result is sent marked as such.
-- **`!pluginvar list: f, g`** sends names instead: `f` and `g`, in that order, under the name `list`, each a variable or function defined above. It tells a plugin what the sheet's numbers pick: `!pluginvar exchangers: SWEP_B26W, SWEP_DB300` says exchanger curve 1 is `SWEP_B26W` and 2 is `SWEP_DB300`.
+- **`!pluginvar list: f, g`** sends names instead: `f` and `g`, in that order, under the name `list`, each a variable or function defined above. It tells a plugin what the sheet's numbers pick: `!pluginvar exchangers: HX_A, HX_B` says exchanger curve 1 is `HX_A` and 2 is `HX_B`.
 
 ## Where plugins come from
 
@@ -78,7 +78,10 @@ Crane's K does not change with the flow, which suits fully turbulent flow; Hoope
 
 **On the drawing** has a checkbox for each set the balloons can show: segment numbers, each segment's pipe size, length and D_h (its bore), each sink's exchanger curve and pump, and each of the sheet's `!pluginvar` values. They are kept in the plugin's state, so the row's picture shows the same.
 
-**Curves by name.** A sink's exchanger curve and pump are numbers in the sheet (`exchangers!`, `pumps!`), which `SWEP` and `PUMP` turn into curves. The plugin's sheet names them, in order, with `!pluginvar exchangers: SWEP_B26W, SWEP_DB300` and `!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C` (the 43-100 F's three speed settings, each treated as a pump of its own), and the plugin then offers and shows them by those names. Add a curve to the sheet (to `SWEP` or `PUMP` and to the list), and it can be picked. Without the lists, they are picked by number.
+**Exchangers and pumps.** A sink's exchanger and pump are numbers in the sheet (`exchangers!`, `pumps!`), which `HX` and `PUMP` turn into pressure differences. The plugin's sheet names them, in order, with `!pluginvar exchangers: ...` and `!pluginvar pumps: ...`, and the plugin then offers and shows them by those names; without the lists, they are picked by number.
+
+- **Exchangers** come from one table, `HX_data`: two rows per exchanger, its flows in gal/min, then its pressure drops in psi at those flows, as a manufacturer's selection software gives them. `HX(∀`, k)` is the quadratic through exchanger k's points, fitted by least squares. The sheet ships with two made-up exchangers (`HX_A`, `HX_B`, Δp = kQ²), because manufacturers' data is usually not for redistribution: paste your own over the marked lines (the table, a number-name per exchanger, the `!pluginvar exchangers:` line and the plot), and keep that copy of the sheet to yourself. The plugin will say those lines differ from its own sheet, which is expected.
+- **Pumps** are Grundfos curves from their public product information: the 43-100 F's and the 26-99 FC's three speed settings and the 15-42, each a pump of its own. `PUMP_C` holds each fit's coefficients, one row per pump, and `PUMP_max` the flow each curve is good to. Add a pump with its points, a `!regression`, a row of each, and its name on the `!pluginvar pumps:` line.
 
 **Check.** Each side must be a tree from the one source. An open end, a dead end, a loop or a pipe running back into the source is pointed out on the drawing and listed under **Check**, and the sheet's lines are left as they were until it is fixed. Tiles not connected to the source are left out, with a note.
 
