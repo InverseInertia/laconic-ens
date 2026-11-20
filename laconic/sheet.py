@@ -127,8 +127,8 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         elif l.kind == "meta":
             results.append(LineResult(i, raw, l.kind, text=s[2:].strip()))
         elif l.kind in ("heading", "comment"):
-            text = s[2:].strip() if l.kind == "heading" else s[1:].strip()
-            results.append(LineResult(i, raw, l.kind, text=text, parts=_inline(text, ev, fmt)))
+            words = s[2:].strip() if l.kind == "heading" else s[1:].strip()
+            results.append(LineResult(i, raw, l.kind, text=words, parts=_inline(words, ev, fmt)))
         elif l.kind == "command":
             results.append(_run_command(i, raw, s, ev))
         elif l.kind == "symdef":

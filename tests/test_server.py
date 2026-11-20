@@ -390,3 +390,9 @@ def test_the_claim_key_is_made_once_and_kept(tmp_path):
     from laconic import opened
     key = opened._key_in(tmp_path / "cfg")
     assert len(key) == 32 and opened._key_in(tmp_path / "cfg") == key == (tmp_path / "cfg" / "opened.key").read_bytes()
+
+
+def test_save_returns_the_whole_sheet_whatever_its_last_comment_or_heading():
+    # A comment's or heading's words once took the sheet's place, so Save wrote only those.
+    for text in ("x = 1\n# the last comment\n", "## 19\nx = 2'mm\n## 26\ny = 3'mm\n"):
+        assert server.save(Sheet(text=text)) == text
