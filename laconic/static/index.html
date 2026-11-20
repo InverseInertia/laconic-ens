@@ -420,6 +420,7 @@
   <button id="unitsBtn" class="wide" title="Browse units: search them, filter by tag, and add tags of your own">Units</button>
   <button id="renameBtn" data-icon="rename" class="sq" title="Rename a variable, function or custom unit everywhere (F2)" aria-label="Rename"></button>
   <button id="settingsBtn" data-icon="settings" class="sq" title="Settings" aria-label="Settings"></button>
+  <button id="newSheet" data-icon="new" class="sq" title="New sheet: a blank worksheet in a window of its own" aria-label="New sheet"></button>
   <button id="open" data-icon="open" class="sq" title="Open a worksheet (Ctrl+O)" aria-label="Open"></button>
   <button id="save" data-icon="save" class="sq" title="Save the worksheet (Ctrl+S)" aria-label="Save"></button>
   <button id="saveAs" data-icon="saveas" class="sq" title="Save the worksheet as a new file (Ctrl+Shift+S)" aria-label="Save As"></button>
@@ -483,7 +484,7 @@ w = 12'kN / 'm
 M_max = w * L^2 / 8 -> 'kN * 'm    <i>-> converts the result to other units</i>
 # at midspan `M = w*L^2/8`         <i>backticks typeset math in a comment</i></pre>
     <p>One statement per line. An error on a line never stops the lines after it. Evaluation runs top to bottom, so define things before you use them.</p>
-    <p><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) and <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) use plain-text <code>.lens</code> files. In Chrome or Edge, Save writes back to the file you opened; <strong>Save As</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) picks a new one, and renaming the sheet makes the next Save ask. Firefox and Safari download a copy each time.</p>
+    <p><strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) and <strong>Open</strong> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) use plain-text <code>.lens</code> files. In Chrome or Edge, Save writes back to the file you opened; <strong>Save As</strong> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>) picks a new one, and renaming the sheet makes the next Save ask. Firefox and Safari download a copy each time. <strong>New sheet</strong>, the button left of Open, opens a blank worksheet in a window of its own.</p>
     <div id="exampleBox" hidden>
       <p>Worked examples ship with the program, so they are always here. Opening one replaces the sheet in the editor:</p>
       <ul id="exampleList" class="examples"></ul>
@@ -1341,6 +1342,13 @@ async function openFile() {
   load(await f.text(), o.name, o.handle);
 }
 $("#open").onclick = openFile;
+// New sheet (#186): another window on a blank worksheet. The app's server opens it as it opens a
+// window another launch hands over; a server that opens no windows leaves it to this page.
+$("#newSheet").onclick = async () => {
+  let r;
+  try { r = await Api.json("/api/new", {}); } catch (e) { say(`Could not open a new window: ${e.message}`); return; }
+  if (!r.ok && !window.open(r.path, "_blank")) say("The browser blocked the new window: allow pop-ups for LENS");
+};
 $("#file").onchange = async (e) => {
   const f = e.target.files[0]; if (!f) return;
   load(await f.text(), SaveFile.opened(f.name).name);
@@ -2473,6 +2481,21 @@ function openedApi(path) {
   return sheet === null ? path : `${path}?sheet=${encodeURIComponent(sheet)}`;
 }
 
+// A window the New sheet button opened (?new) starts blank, with no file to save to. Nothing is
+// stored until something is typed, so a new window closed untouched leaves the stored sheet, file
+// and name as they were; then the flag comes off the address, so a reload keeps what was typed.
+function openNewSheet() {
+  if (!new URLSearchParams(location.search).has("new")) return false;
+  ed.value = "";
+  nameEl.value = "sheet"; fitName(); setFile(null, false);
+  src.addEventListener("input", () => {
+    const q = new URLSearchParams(location.search);
+    q.delete("new");
+    history.replaceState(null, "", `${location.pathname}?${q}`.replace(/\?$/, ""));
+  }, {once: true});
+  return true;
+}
+
 // A sheet the program was started with replaces the stored text, once: reloading the page keeps
 // the edits made since (they are in the stored text) and still saves to that file.
 async function openStartFile() {
@@ -2565,7 +2588,7 @@ $("#checkUpdates").onchange = (ev) => {
 
 (async () => {
   const [cfg] = await Promise.all([loadSettings(), loadVocab()]);
-  if (!(await openStartFile())) {
+  if (!openNewSheet() && !(await openStartFile())) {
     const text = store.get("text", null);
     ed.value = text ?? await Api.text("/static/example.lens");
     // The name and file the stored text was last opened from or saved to (#168).

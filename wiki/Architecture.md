@@ -138,6 +138,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and bl
 | `GET /api/examples`, `GET /api/examples/{name}` | the example worksheets in `laconic/examples/` |
 | `POST /api/ping`, `POST /api/bye` | page lifecycle for the packaged app |
 | `GET /api/update?wait=&fresh=&asked=`, `POST /api/update` | a newer release, if the check found one (`{checking, update, current, dev, failed}`; `fresh` asks GitHub again and `asked` marks the user's own check, which runs with the setting off, with its version, notes, page and what Update does here; `{off: true}` when the setting is off); start its installer, given the version the page offered, after which LENS exits |
+| `POST /api/new` | the New sheet button: open another window on a blank sheet (`/?sheet=&new`); `{ok: false, path}` when this server opens no windows, and the page opens that path itself |
 | `GET /api/hello`, `POST /api/window` | how another launch recognizes a running LENS and hands it the window (`instance.py`) |
 
 Endpoints that change the text return `{"ok": true, "edits": [{"from", "to", "insert"}, ...]}`: edits against the text in the request, not overlapping, with offsets in UTF-16 code units as JavaScript counts them. The page makes them only if its text is still the one it sent.

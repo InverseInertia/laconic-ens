@@ -565,3 +565,17 @@ def open_window(body: WindowBody):
         updates.updater.check(fresh=True)
     sheets.show(path)
     return {"ok": True}
+
+
+NEW_SHEET = "/?sheet=&new"   # a window on no file (?sheet= with no token) that starts blank (#186)
+
+
+@app.post("/api/new")
+def new_window():
+    """The New sheet button: open another window here on a blank sheet. {ok: false} when this
+    server opens no windows (a plain `lens --serve`), and the page opens the window itself."""
+    if not sheets.opens_windows:
+        return {"ok": False, "path": NEW_SHEET}
+    lifecycle.expect()
+    sheets.show(NEW_SHEET)
+    return {"ok": True}
