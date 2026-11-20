@@ -863,6 +863,41 @@ def test_a_window_handed_over_by_another_launch_opens_and_saves_its_own_sheet(pa
     assert first.read_bytes() == b"a = 1\n"
 
 
+def test_new_sheet_opens_a_blank_window_that_leaves_the_others_alone(page, server, tmp_path, sheets):
+    """New sheet (#186) opens another window on a blank sheet, with no file to save to; until
+    something is typed there, the first window's stored sheet and name are as they were."""
+    first = tmp_path / "first.lens"
+    first.write_text("a = 1\n", encoding="utf-8")
+    sheets.start(first)
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.startsWith('a = 1')")
+    # A plain --serve opens no windows of its own: the page opens it.
+    with page.context.expect_page() as new:
+        page.click("#newSheet")
+    blank = new.value
+    blank.wait_for_load_state()
+    blank.wait_for_function("document.querySelector('#name').value === 'sheet'")
+    assert blank.input_value("#src") == ""
+    assert blank.get_attribute("#save", "title") == "Save the worksheet (Ctrl+S)"
+    assert page.evaluate("JSON.parse(localStorage.getItem('lens:text'))").startswith("a = 1")
+    blank.click("#src")
+    blank.keyboard.type("b = 2")
+    blank.wait_for_function("!location.search.includes('new')")
+    blank.reload()
+    blank.wait_for_function("document.querySelector('#src').value === 'b = 2'")
+    assert first.read_bytes() == b"a = 1\n"
+    blank.close()
+    # The app's server opens the window itself.
+    opened = []
+    sheets.serve(opened.append)
+    page.click("#newSheet")
+    for _ in range(50):
+        if opened:
+            break
+        page.wait_for_timeout(100)
+    assert opened == ["/?sheet=&new"]
+
+
 def test_export_menu_downloads_latex_and_markdown(page):
     reset(page, "## Loads\nF = 2'kN")
     page.fill("#name", "loads")
