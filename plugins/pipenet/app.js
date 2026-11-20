@@ -333,8 +333,21 @@
     parts.push(el('div', { class: 'kv' },
       el('span', {}, 'Tile'), el('span', {}, `${sh} at row ${r}, column ${c}${where}`),
       ...(seg && seg.row !== undefined ? [el('span', {}, 'Segment'), el('span', {}, `${prefix}${seg.row + 1}: ${P.fmt(seg.L)} ${state.units.L} long, ${P.sizeName(state, seg.nps)} (${P.fmt(seg.D)} ${state.units.D}), ${fittings(seg.n)}${seg.K ? `, extra K ${P.fmt(seg.K)}` : ''}`)] : [])));
-    if (t.t === 'pipe' || t.t === 'sink') {
+    if (seg && seg.row !== undefined) {
+      // a segment's length as a whole (blank: back to the length of its squares)
+      const lengthField = field(`Segment length (${state.units.L})`, Number(seg.L.toPrecision(6)),
+        String(seg.tiles.length * state.cell), (v) => {
+          const x = v.trim() === '' ? null : positive(v);
+          if (v.trim() !== '' && !x) { refresh(); return; }
+          const before = JSON.stringify(state);
+          if (!P.setSegmentLength(cells(), seg, x, state.cell)) { refresh(); return; }   // not possible: as it was
+          commit(before);
+        });
+      parts.push(lengthField);
+    } else if (t.t === 'pipe' || t.t === 'sink') {
       parts.push(field(`Length (${state.units.L})`, t.L, String(state.cell), (v) => edit(() => { const x = positive(v); if (x) t.L = x; else delete t.L; })));
+    }
+    if (t.t === 'pipe' || t.t === 'sink') {
       parts.push(field('Extra K (a valve, from its datasheet)', t.k, '0', (v) => edit(() => { const x = parseFloat(v); if (isFinite(x) && x > 0) t.k = x; else delete t.k; })));
     }
     if (seg) {

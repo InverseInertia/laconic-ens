@@ -208,7 +208,7 @@ def test_the_return_is_laid_out_on_a_side_of_its_own(page):
     page.wait_for_function(f"!document.querySelector('#src').value.includes({old_r!r})")
     after = value(page)
     assert next(l for l in after.split("\n") if l.startswith("  L! = ")) == supply
-    assert next(l for l in after.split("\n") if l.startswith("  L_r! = ")).startswith("  L_r! = [30; 40; 20; 40; 50; 40; 50; 40; 20; 100;")
+    assert next(l for l in after.split("\n") if l.startswith("  L_r! = ")).startswith("  L_r! = [30; 40; 20; 40; 50; 40; 50; 40; 20; 80;")   # R10 set to 80 as a whole
     assert '"ret":"separate"' in after
     frame.locator("#retHead").wait_for(state="visible")             # the return's segments, in a table of their own
 
@@ -296,8 +296,8 @@ def test_an_older_plugin_than_wrote_the_sheet_says_so_and_does_not_write(page):
     the block left that block's newer lines as they were (pumps!, valves!: the wrong length), so it
     may not write until it is updated. LENS stamps each write with the plugin's version."""
     original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
-    assert '"by":"1.4.1"' in original
-    newer = original.replace('"by":"1.4.1"', '"by":"9.0.0"')
+    assert '"by":"1.4.2"' in original
+    newer = original.replace('"by":"1.4.2"', '"by":"9.0.0"')
     show(page, newer)
     page.wait_for_function("document.querySelector('.plugin-status.err')?.textContent.includes('last written by Pipe network 9.0.0')")
     page.wait_for_selector(".plugin-box button:has-text('Open'):not([disabled])")
@@ -310,9 +310,27 @@ def test_an_older_plugin_than_wrote_the_sheet_says_so_and_does_not_write(page):
     assert "  Δp_target = 0.02 'psi" in value(page)          # not written
     page.click("#pluginDlg .close")
     show(page, original)                                       # its own version: it writes, and stamps it
-    page.wait_for_function("document.querySelector('.plugin-status')?.textContent.startsWith('Pipe network 1.4.1')")
+    page.wait_for_function("document.querySelector('.plugin-status')?.textContent.startsWith('Pipe network 1.4.2')")
     page.click(".plugin-box button:has-text('Open')")
     frame.locator("#dpv").fill("0.5")
     frame.locator("#dpv").press("Enter")
     page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 0.5 'psi\")")
-    assert '"by":"1.4.1"' in value(page)
+    assert '"by":"1.4.2"' in value(page)
+
+
+def test_a_segments_length_is_set_as_a_whole(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes('#@ state')")
+    before = next(l for l in value(page).split("\n") if l.startswith("  L! = "))
+    frame.locator("#segments tbody tr").nth(8).click()                 # segment 9: the trunk off the pump
+    field = frame.locator("#inspector label:has-text('Segment length') input")
+    assert field.input_value() == "20"                                 # two squares of 10 ft
+    field.fill("300")
+    field.press("Enter")
+    page.wait_for_function(f"!document.querySelector('#src').value.includes({before!r})")
+    after = next(l for l in value(page).split("\n") if l.startswith("  L! = "))
+    old, new = (l.split("[")[1].split("]")[0].split("; ") for l in (before, after))
+    assert new[8] == "300" and [x for i, x in enumerate(new) if i != 8] == [x for i, x in enumerate(old) if i != 8]
+    frame.locator("#segments tbody tr").nth(8).locator("td:nth-child(2):text-is('300')").wait_for()

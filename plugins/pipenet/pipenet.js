@@ -674,6 +674,22 @@
     }
   }
 
+  // Give segment `seg` (of the layer whose tiles are `cells`) the length `L`, or back the length of its
+  // squares (`L` null): a segment is the pipe from one junction to the next, so its length is set as a
+  // whole, spread evenly over its tiles. A crossover's tile is shared with the pipe that runs across it,
+  // so it keeps its own length and the others make up the rest. Returns false when there is no tile
+  // the length can go on (a segment of crossovers only), or the crossovers alone are longer than `L`.
+  function setSegmentLength(cells, seg, L, cell) {
+    const own = seg.tiles.filter((k) => cells[k] && shape(cells[k]) !== 'cross');
+    if (L === null) { for (const k of own) delete cells[k].L; return true; }
+    const shared = seg.tiles.filter((k) => cells[k] && shape(cells[k]) === 'cross')
+      .reduce((sum, k) => sum + (cells[k].L !== undefined ? cells[k].L : cell), 0);
+    if (!own.length || !(L > shared)) return false;
+    const each = (L - shared) / own.length;
+    for (const k of own) cells[k].L = each;
+    return true;
+  }
+
   // The segment a tile belongs to (the first, for a crossover), or null.
   function segmentAt(a, k) {
     return a.segments.find((s) => s.tiles.includes(k)) || null;
@@ -713,7 +729,7 @@
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
     blank, normalize, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
-    connect, erase, place, segmentAt, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, spread, curveNames, curveName };
+    connect, erase, place, segmentAt, setSegmentLength, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, spread, curveNames, curveName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);

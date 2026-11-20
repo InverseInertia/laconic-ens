@@ -303,4 +303,30 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   n += 2;
 }
 
+// --- a segment's length, set as a whole ----------------------------------------------------------
+{
+  // source 0,0 -> tee 0,3 -> sink 0,5; branch 1,3 .. 2,3 sink
+  const s = net([row(0, 0, 5), col(3, 0, 2)], '0,0', ['0,5', '2,3'], { ret: 'same' });
+  let nt = P.network(s);
+  const trunk = nt.s.segments[0];                    // 0,1 0,2 0,3: 30 ft of squares
+  eq(trunk.L, 30, 'a segment is as long as its squares');
+  eq(P.setSegmentLength(s.cells, trunk, 300, s.cell), true, 'set as a whole');
+  nt = P.network(s);
+  eq(Number(nt.s.segments[0].L.toFixed(9)), 300, 'it is that long');
+  eq(P.outputs(s, nt)['L!'].split('; ').slice(-1)[0], "300] * 'ft", 'and the sheet says so');
+  eq(nt.s.segments.slice(1).map((x) => x.L), [20, 20], 'the others are not touched');
+  P.setSegmentLength(s.cells, nt.s.segments[0], null, s.cell);
+  eq(P.network(s).s.segments[0].L, 30, 'blank: back to its squares');
+}
+{
+  // a crossover keeps its length: the rest of the segment makes up the difference
+  const s = net([row(1, 0, 4), ['1,1', '0,1'], row(0, 1, 3), col(3, 0, 3)], '1,0', ['1,4', '3,3'], { ret: 'same' });
+  const nt = P.network(s);
+  const crossing = nt.s.segments.find((x) => x.tiles.includes('1,3') && x.tiles.includes('2,3'));
+  eq(P.setSegmentLength(s.cells, crossing, 100, s.cell), true, 'a segment through a crossover');
+  eq(s.cells['1,3'].L, undefined, "the crossover's own length is left alone");
+  eq(Number(P.network(s).s.segments.find((x) => x.tiles.includes('2,3')).L.toFixed(9)), 100, 'and the segment is 100 long');
+  eq(P.setSegmentLength(s.cells, crossing, 5, s.cell), false, 'shorter than its crossover: refused');
+}
+
 console.log(`pipenet: ${n} checks passed`);
