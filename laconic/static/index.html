@@ -895,6 +895,16 @@ src.addEventListener("beforeinput", (ev) => {
   }
 });
 src.addEventListener("input", sync);
+// Copy and Cut take the sheet's text, not the view's: no row breaks a matrix is shown with, and the
+// lines a fold hides rather than its placeholder, so what is copied pastes back as the same sheet.
+for (const kind of ["copy", "cut"]) src.addEventListener(kind, (ev) => {
+  if (lay.identity || !ev.clipboardData) return;
+  const from = ed.selectionStart, to = ed.selectionEnd;
+  if (from === to) return;
+  ev.preventDefault();
+  ev.clipboardData.setData("text/plain", model.slice(from, to));
+  if (kind === "cut") commit({from, to, insert: ""}, [from, from], false);
+});
 function undo(redo) {
   const cur = {text: model, sel: [ed.selectionStart, ed.selectionEnd]};
   const s = redo ? undoStack.redo(cur) : undoStack.undo(cur);

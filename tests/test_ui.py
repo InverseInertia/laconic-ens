@@ -1164,6 +1164,31 @@ def test_vectors_and_matrices_fold_on_their_line(page):
     assert sheet_text(page) == "A = [1, 2; 3, 4]\nv = [1; 2; 3]"
 
 
+def test_copy_and_cut_take_the_sheet_text_not_the_rows_a_matrix_is_shown_in(page):
+    """A copy pasted back must be the same sheet: no row breaks from the view, no fold placeholder."""
+    load_sheet(page, "A = [1, 2; 3, 4]\nv = [1; 2; 3]")
+    clip = """kind => { const d = new DataTransfer();
+        src.dispatchEvent(new ClipboardEvent(kind, {clipboardData: d, bubbles: true, cancelable: true}));
+        return d.getData("text/plain"); }"""
+    page.keyboard.press("Alt+z")
+    try:
+        assert value(page) == "A = [1, 2;\n     3, 4]\nv = [1; 2; 3]"
+        page.evaluate("ed.setSelectionRange(0, 16)")
+        assert page.evaluate(clip, "copy") == "A = [1, 2; 3, 4]"
+        page.evaluate("ed.setSelectionRange(4, 16)")
+        assert page.evaluate(clip, "cut") == "[1, 2; 3, 4]"
+        assert sheet_text(page) == "A = \nv = [1; 2; 3]"
+    finally:
+        page.focus("#src")
+        page.keyboard.press("Alt+z")
+    load_sheet(page, "## a\nx = 1\ny = 2")
+    page.evaluate("ed.setSelectionRange(0, 0)")
+    page.keyboard.press("Alt+BracketLeft")
+    assert "⋯" in value(page)
+    page.evaluate("ed.setSelectionRange(0, 17)")
+    assert page.evaluate(clip, "copy") == "## a\nx = 1\ny = 2"
+
+
 def test_with_wrapping_a_matrix_shows_one_row_per_line_but_a_vector_does_not(page):
     """#155: the rows are the view's; the sheet keeps the matrix on one line."""
     load_sheet(page, "A = [1, 2; 3, 4]\nv = [1; 2; 3]")
