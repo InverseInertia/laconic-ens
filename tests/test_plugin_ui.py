@@ -334,3 +334,91 @@ def test_a_segments_length_is_set_as_a_whole(page):
     old, new = (l.split("[")[1].split("]")[0].split("; ") for l in (before, after))
     assert new[8] == "300" and [x for i, x in enumerate(new) if i != 8] == [x for i, x in enumerate(old) if i != 8]
     frame.locator("#segments tbody tr").nth(8).locator("td:nth-child(2):text-is('300')").wait_for()
+
+
+def _png(path, w=200, h=100):
+    """A plain grey PNG, w by h."""
+    import struct
+    import zlib
+    raw = b"".join(b"\x00" + b"\x80" * w for _ in range(h))
+    chunk = lambda kind, data: struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+    return path
+
+
+def _bg(page):
+    import json
+    line = next(l for l in value(page).split("\n") if l.startswith("  #@ state "))
+    return json.loads(line[len("  #@ state "):]).get("bg")
+
+
+def test_a_planset_is_placed_behind_the_grid_moved_scaled_and_recalled(page, tmp_path):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#bgFile").set_input_files(str(_png(tmp_path / "plan.png")))
+    page.wait_for_function("document.querySelector('#src').value.includes('\"plan.png\"')")
+    g = _bg(page)
+    assert g["ar"] == 0.5 and g["o"] == 0.5 and g["key"].startswith("img-")
+    assert "data:" not in value(page)                       # the picture is not in the sheet
+    frame.locator("#bg:not([hidden])").wait_for()
+    # Move: dragging the picture moves it by as many squares
+    box = frame.locator("#canvas").bounding_box()
+    cell = 56
+    page.mouse.move(box["x"] + 100, box["y"] + 100)
+    page.mouse.down()
+    page.mouse.move(box["x"] + 100 + 2 * cell, box["y"] + 100 + cell, steps=4)
+    page.mouse.up()
+    page.wait_for_function(f"!document.querySelector('#src').value.includes('\"x\":{g['x']},')")
+    moved = _bg(page)
+    assert (round(moved["x"] - g["x"], 6), round(moved["y"] - g["y"], 6)) == (2, 1)
+    # Scale: two points three squares apart are said to be 60 ft (six squares of 10 ft): twice as large
+    frame.locator("button[data-tool=measure]").click()
+    page.mouse.click(box["x"] + 3 * cell, box["y"] + 3 * cell)
+    page.mouse.click(box["x"] + 6 * cell, box["y"] + 3 * cell)
+    frame.locator("#bgDist").fill("60")
+    frame.locator("#bgDist").press("Enter")
+    page.wait_for_function(f"!document.querySelector('#src').value.includes('\"w\":{moved['w']},')")
+    scaled = _bg(page)
+    assert round(scaled["w"] / moved["w"], 6) == 2
+    # about the first point: the one point the scale leaves where it was, on a corner of a square
+    ax, ay = 2 * moved["x"] - scaled["x"], 2 * moved["y"] - scaled["y"]
+    assert (round(ax, 6) % 1, round(ay, 6) % 1) == (0, 0)
+    assert abs(float(frame.locator("#bgW").input_value()) - scaled["w"] * 10) < 1e-3   # the width in ft
+    # The page opened again on the same sheet recalls the picture from the browser
+    text = value(page)
+    page.reload()
+    page.wait_for_function("document.querySelector('#src').value.length > 0")
+    show(page, text)
+    frame = opened(page)
+    frame.locator("#bg:not([hidden])").wait_for()
+    assert frame.locator("#bg").evaluate("i => i.src.startsWith('data:image/png')")
+
+
+def test_a_planset_not_kept_in_this_browser_says_so(page):
+    show(page, '!plugin pipenet\n  #@ state {"v":1,"cells":{},"bg":{"key":"img-nothere-1","name":"plan.png","x":0,"y":0,"w":10,"ar":1,"o":0.5}}\n')
+    frame = opened(page)
+    frame.locator("#bgNote:has-text('plan.png is not kept in this browser')").wait_for()
+    assert frame.locator("#bg").is_hidden()
+
+
+def test_ctrl_and_the_wheel_zoom_about_the_pointer(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    assert frame.locator("#zoomLevel").inner_text() == "100%"
+    box = frame.locator("#canvas").bounding_box()
+    x, y = box["x"] + 5.5 * 56, box["y"] + 3.5 * 56            # the middle of row 3, column 5
+    page.mouse.move(x, y)
+    page.keyboard.down("Control")
+    page.mouse.wheel(0, -300)
+    page.keyboard.up("Control")
+    frame.locator("#zoomLevel:not(:text-is('100%'))").wait_for()
+    # the point under the pointer is still under it: the middle of row 3, column 5
+    after = frame.locator("#canvas").bounding_box()
+    side = after["width"] / (box["width"] / 56)               # a square's size now
+    assert side > 56
+    assert (round((x - after["x"]) / side, 2), round((y - after["y"]) / side, 2)) == (5.5, 3.5)
+    frame.locator("#zoomOut").click()
+    frame.locator("#zoom100").click()
+    assert frame.locator("#zoomLevel").inner_text() == "100%"

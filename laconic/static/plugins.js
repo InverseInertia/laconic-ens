@@ -22,6 +22,12 @@
                                                one (the page asks the user first)
      page -> plugin  {type: "lens:check", missing, changed}  for a plugin that ships a sheet, after
                      each run: what of that sheet this one lacks or has changed (plugins.differences)
+     plugin -> page  {type: "lens:keep", key, data}  keep a string too large for the sheet (an image),
+                     in this browser, under the plugin's name and `key` (letters, digits, - _ .);
+                     data null forgets it. The sheet holds only the key, so on another computer it is
+                     not there to recall
+                     {type: "lens:recall", key}
+     page -> plugin  {type: "lens:recalled", key, data}  the answer: what was kept, or null
 
    Pure functions, also run under Node (tests/test_plugins.js):
      blocks(rows)   the plugin blocks among the eval rows: [{key, line, name, state, outputs}]; `key`
@@ -45,6 +51,7 @@
   // digits, _ and ∞, then any of ` ! @ &. The server checks it again before it writes anything.
   const NAME = /^[\p{L}_∀][\p{L}\p{N}_∞∀]*[`!@&]*$/u;
   const MAX_SVG = 2000000;
+  const KEY = /^[\w.-]{1,100}$/, MAX_KEEP = 60000000;
 
   // The page's theme variables a plugin is given (index.html :root, theme.js): colours and fonts.
   const THEME = ['--paper', '--paper-deep', '--grid', '--text', '--text-soft', '--ink', '--on-ink', '--rule', '--err',
@@ -90,6 +97,13 @@
       }
       return { type: 'lens:write', state, outputs };
     }
+    if (msg.type === 'lens:keep') {
+      const data = msg.data === undefined ? null : msg.data;
+      if (typeof msg.key !== 'string' || !KEY.test(msg.key)) return null;
+      if (data !== null && (typeof data !== 'string' || data.length > MAX_KEEP)) return null;
+      return { type: 'lens:keep', key: msg.key, data };
+    }
+    if (msg.type === 'lens:recall') return typeof msg.key === 'string' && KEY.test(msg.key) ? { type: 'lens:recall', key: msg.key } : null;
     return null;
   }
 
@@ -252,6 +266,32 @@
     else if (msg.type === 'lens:open-template') openTemplate(e.name);
     else if (msg.type === 'lens:preview') { e.preview = imageUrl(msg.svg); paint(e); }
     else if (msg.type === 'lens:write') write(e, msg);
+    else if (msg.type === 'lens:keep') kept(`${e.name}/${msg.key}`, msg.data).catch((err) => host.say(`The ${e.name} plugin could not keep ${msg.key}: ${err.message}`));
+    else if (msg.type === 'lens:recall') {
+      const frame = e.frame;
+      kept(`${e.name}/${msg.key}`).catch(() => null)
+        .then((data) => frame.contentWindow && frame.contentWindow.postMessage({ type: 'lens:recalled', key: msg.key, data: data ?? null }, '*'));
+    }
+  }
+
+  // What plugins keep in this browser (lens:keep): IndexedDB "lens-plugins", store "kept", keyed
+  // "plugin/key". kept(k) reads; kept(k, data) writes, or deletes for null.
+  // Removing a plugin keeps them, so a plugin reinstalled finds them again.
+  let keptDb = null;
+  function keptStore(mode) {
+    keptDb = keptDb || new Promise((ok, fail) => {
+      const rq = indexedDB.open('lens-plugins', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('kept');
+      rq.onsuccess = () => ok(rq.result);
+      rq.onerror = () => { keptDb = null; fail(rq.error); };
+    });
+    return keptDb.then((db) => db.transaction('kept', mode).objectStore('kept'));
+  }
+  const done = (rq) => new Promise((ok, fail) => { rq.onsuccess = () => ok(rq.result); rq.onerror = () => fail(rq.error); });
+  async function kept(k, data) {
+    if (data === undefined) return done((await keptStore('readonly')).get(k));
+    const store = await keptStore('readwrite');
+    return done(data === null ? store.delete(k) : store.put(data, k));
   }
 
   function open(key) {

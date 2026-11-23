@@ -6,7 +6,11 @@
  *
  * With the return laid out on its own, the grid has two layers, as a circuit board has two sides:
  * the supply and the return. The tools work on the layer in front (Supply | Return, or F), and the
- * other is drawn faded behind it. The source and the sinks are on both. */
+ * other is drawn faded behind it. The source and the sinks are on both.
+ *
+ * A background image (a planset) can be put behind the grid, moved, and scaled from two points a
+ * known distance apart, so the pipes can be traced over it. The sheet holds where it is (state.bg);
+ * the picture itself is kept in this browser by LENS (lens:keep, lens:recall). */
 (function () {
   'use strict';
   const P = window.PipeNet;
@@ -29,6 +33,10 @@
   }
   let past = [], future = [];
   let drag = null, writeTimer = 0, previewTimer = 0, heard = false, zoom = 1;
+  // The background's picture, as a data: URL, for the key it was recalled or placed under
+  // (data null: LENS has nothing under that key in this browser). `measure`: the two points of a scale.
+  let bg = { key: null, data: null, asked: null }, measure = null, pan = null, space = false;
+  const ZOOM_MIN = 0.1, ZOOM_MAX = 4;
 
   const post = (msg) => window.parent.postMessage(msg, '*');
 
@@ -65,6 +73,10 @@
     const m = ev.data;
     if (m && m.type === 'lens:theme' && m.theme) { applyTheme(m.theme); refresh(); return; }
     if (m && m.type === 'lens:check') { drift(m); return; }
+    if (m && m.type === 'lens:recalled') {
+      if (m.key === bg.asked) { bg = { key: m.key, data: typeof m.data === 'string' ? m.data : null, asked: null }; refresh(); }
+      return;
+    }
     if (!m || m.type !== 'lens:update') return;
     if (m.theme) applyTheme(m.theme);
     inputs = Array.isArray(m.inputs) ? m.inputs : [];
@@ -100,24 +112,28 @@
     net = P.network(state);
     if (selected && !cells()[selected]) selected = null;
     const old = fresh ? null : shownBounds;
-    const b = old ? grow(old, P.bounds(state)) : P.bounds(state);
+    const want = extent();
+    const b = old ? grow(old, want) : want;
     // at least as large as the view, so growing up or left can always be scrolled back
     const main = $('main'), side = P.CELL * zoom;
     b.c1 = Math.max(b.c1, b.c0 + Math.ceil(main.clientWidth / side) - 1);
     b.r1 = Math.max(b.r1, b.r0 + Math.ceil(main.clientHeight / side) - 1);
     shownBounds = b;
-    const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front(), rounds: drag ? 40 : 600 });
+    const shown = !!(state.bg && bg.key === state.bg.key && bg.data);
+    const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front(), rounds: drag ? 40 : 600, underlay: shown });
     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
     canvas.replaceChildren(...[...doc.childNodes].map((n) => document.importNode(n, true)));
     for (const a of ['viewBox', 'font-family']) canvas.setAttribute(a, doc.getAttribute(a));
     canvas.setAttribute('width', doc.getAttribute('width') * zoom);
     canvas.setAttribute('height', doc.getAttribute('height') * zoom);
     $('#zoomLevel').textContent = Math.round(zoom * 100) + '%';
+    background(shown);
+    if (measure) markers();
     if (old) {
       main.scrollLeft += (old.c0 - b.c0) * P.CELL * zoom;
       main.scrollTop += (old.r0 - b.r0) * P.CELL * zoom;
     }
-    $('#empty').hidden = Object.keys(state.cells).length > 0;
+    $('#empty').hidden = Object.keys(state.cells).length > 0 || !!state.bg;
     for (const btn of document.querySelectorAll('[data-tool]')) btn.setAttribute('aria-pressed', String(btn.dataset.tool === tool));
     for (const btn of document.querySelectorAll('#palette button')) btn.setAttribute('aria-pressed', String(tool === 'shape' + btn.dataset.i));
     $('#undo').disabled = !past.length; $('#redo').disabled = !future.length;
@@ -130,16 +146,29 @@
     $('#sides').hidden = state.ret !== 'separate';
     for (const btn of document.querySelectorAll('[data-layer]')) btn.setAttribute('aria-pressed', String(btn.dataset.layer === front()));
     document.body.dataset.layer = front();
+    document.body.dataset.tool = tool;
     if (state.ret === 'separate') document.body.dataset.two = ''; else delete document.body.dataset.two;
     showSets();
     $('#method').value = String(state.method);
     setNum($('#dpv'), state.dp.v); $('#dpu').value = state.dp.u;
-    messages(); inspector(); tables();
+    messages(); inspector(); tables(); bgPanel();
     schedulePreview();
+  }
+
+  // What the grid must cover: the tiles and the background image.
+  function extent() {
+    const b = P.bounds(state), g = P.backdrop(state);
+    return g ? grow(b, { r0: g.r0 - 1, c0: g.c0 - 1, r1: g.r1 + 1, c1: g.c1 + 1 }) : b;
   }
 
   const grow = (a, b) => ({ r0: Math.min(a.r0, b.r0), c0: Math.min(a.c0, b.c0), r1: Math.max(a.r1, b.r1), c1: Math.max(a.c1, b.c1) });
   function setNum(el, v) { if (document.activeElement !== el) el.value = v; }
+
+  // The point under the pointer in squares, not whole ones (column, row), from the grid's corner.
+  function pointAt(ev) {
+    const r = canvas.getBoundingClientRect(), b = shownBounds, side = r.width / (b.c1 - b.c0 + 1);
+    return [(ev.clientX - r.left) / side + b.c0, (ev.clientY - r.top) / side + b.r0];
+  }
 
   function cellAt(ev) {
     const r = canvas.getBoundingClientRect(), b = shownBounds;
@@ -151,7 +180,29 @@
 
   // ---- the grid's pointer ------------------------------------------------------------------
   canvas.addEventListener('pointerdown', (ev) => {
+    // The middle button, or the left with Space held, scrolls the view by dragging it.
+    if (ev.button === 1 || (ev.button === 0 && space)) {
+      ev.preventDefault();
+      canvas.setPointerCapture(ev.pointerId);
+      const main = $('main');
+      pan = { x: ev.clientX, y: ev.clientY, left: main.scrollLeft, top: main.scrollTop };
+      document.body.dataset.panning = '';
+      return;
+    }
     if (ev.button !== 0) return;
+    if (tool === 'measure') {
+      const pt = pointAt(ev);
+      measure = !measure || measure.b ? { a: pt, b: null } : { ...measure, b: pt };
+      refresh();
+      if (measure.b) $('#bgDist') && $('#bgDist').focus();
+      return;
+    }
+    if (tool === 'move') {
+      if (!state.bg) return;
+      canvas.setPointerCapture(ev.pointerId);
+      drag = { before: JSON.stringify(state), from: pointAt(ev), x: state.bg.x, y: state.bg.y, moved: false, image: true };
+      return;
+    }
     canvas.setPointerCapture(ev.pointerId);
     const k = cellAt(ev);
     drag = { before: JSON.stringify(state), last: k, moved: false };
@@ -166,7 +217,22 @@
   });
 
   canvas.addEventListener('pointermove', (ev) => {
+    if (pan) {
+      const main = $('main');
+      main.scrollLeft = pan.left - (ev.clientX - pan.x);
+      main.scrollTop = pan.top - (ev.clientY - pan.y);
+      return;
+    }
     if (!drag) return;
+    if (drag.image) {
+      // only the picture moves while dragging; the drawing catches up when the drag ends
+      const [x, y] = pointAt(ev);
+      state.bg.x = drag.x + x - drag.from[0];
+      state.bg.y = drag.y + y - drag.from[1];
+      drag.moved = true;
+      background(true);
+      return;
+    }
     const k = cellAt(ev);
     if (k === drag.last) return;
     drag.moved = true;
@@ -186,6 +252,7 @@
   });
 
   const endDrag = () => {
+    if (pan) { pan = null; delete document.body.dataset.panning; return; }
     if (!drag) return;
     const d = drag;
     drag = null;
@@ -196,7 +263,7 @@
   canvas.addEventListener('pointercancel', endDrag);
 
   // ---- tools and keys ----------------------------------------------------------------------
-  for (const btn of document.querySelectorAll('[data-tool]')) btn.onclick = () => { tool = btn.dataset.tool; refresh(); };
+  for (const btn of document.querySelectorAll('[data-tool]')) btn.onclick = () => { tool = btn.dataset.tool; measure = null; refresh(); };
   P.PALETTE.forEach((item, i) => {
     const btn = document.createElement('button');
     btn.dataset.i = i;
@@ -212,13 +279,35 @@
   function edit(fn) { const before = JSON.stringify(state); fn(); commit(before); }
   function undo() { if (!past.length) return; future.push(JSON.stringify(state)); state = JSON.parse(past.pop()); scheduleWrite(); refresh(); }
   function redo() { if (!future.length) return; past.push(JSON.stringify(state)); state = JSON.parse(future.pop()); scheduleWrite(); refresh(); }
-  const zoomBy = (f) => { zoom = Math.min(2, Math.max(0.4, Math.round(zoom * f * 10) / 10)); refresh(); };
-  $('#zoomOut').onclick = () => zoomBy(1 / 1.25);
-  $('#zoomIn').onclick = () => zoomBy(1.25);
+  // Zoom to `z`, keeping the point at (clientX, clientY) where it is: the middle of the view for the
+  // buttons, the pointer for Ctrl + the wheel (and a touchpad's pinch, which the browser sends as that).
+  function zoomTo(z, clientX, clientY) {
+    const main = $('main'), r = main.getBoundingClientRect();
+    if (clientX === undefined) { clientX = r.left + main.clientWidth / 2; clientY = r.top + main.clientHeight / 2; }
+    const ox = clientX - r.left, oy = clientY - r.top, b = shownBounds, side = P.CELL * zoom;
+    const col = (main.scrollLeft + ox) / side + b.c0, row = (main.scrollTop + oy) / side + b.r0;
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+    refresh();
+    const nb = shownBounds, ns = P.CELL * zoom;
+    main.scrollLeft = (col - nb.c0) * ns - ox;
+    main.scrollTop = (row - nb.r0) * ns - oy;
+  }
+  $('#zoomOut').onclick = () => zoomTo(zoom / 1.25);
+  $('#zoomIn').onclick = () => zoomTo(zoom * 1.25);
+  $('#zoom100').onclick = () => zoomTo(1);
+  $('main').addEventListener('wheel', (ev) => {
+    if (!ev.ctrlKey && !ev.metaKey) return;
+    ev.preventDefault();
+    const d = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+    zoomTo(zoom * Math.exp(-d * 0.0015), ev.clientX, ev.clientY);
+  }, { passive: false });
+  // Fit: the tiles and the background image, in the view.
   $('#zoomFit').onclick = () => {
-    const box = $('main'), bb = P.bounds(state), w = (bb.c1 - bb.c0 + 1) * P.CELL, h = (bb.r1 - bb.r0 + 1) * P.CELL;
-    zoom = Math.min(2, Math.max(0.4, Math.floor(Math.min(box.clientWidth / w, box.clientHeight / h) * 10) / 10));
+    const box = $('main'), bb = extent(), w = (bb.c1 - bb.c0 + 1) * P.CELL, h = (bb.r1 - bb.r0 + 1) * P.CELL;
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.min(box.clientWidth / w, box.clientHeight / h)));
     refresh(true);
+    box.scrollLeft = (bb.c0 - shownBounds.c0) * P.CELL * zoom;
+    box.scrollTop = (bb.r0 - shownBounds.r0) * P.CELL * zoom;
   };
   $('#undo').onclick = undo;
   $('#redo').onclick = redo;
@@ -235,9 +324,16 @@
   }
   for (const btn of document.querySelectorAll('[data-layer]')) btn.onclick = () => flip(btn.dataset.layer);
 
+  document.addEventListener('keyup', (ev) => { if (ev.key === ' ') { space = false; delete document.body.dataset.space; } });
+  window.addEventListener('blur', () => { space = false; delete document.body.dataset.space; });
   document.addEventListener('keydown', (ev) => {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
     const k = ev.key.toLowerCase();
+    if (k === ' ') { ev.preventDefault(); space = true; document.body.dataset.space = ''; return; }
+    if (k === 'escape' && measure) { measure = null; refresh(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && (k === '=' || k === '+')) { ev.preventDefault(); zoomTo(zoom * 1.25); return; }
+    if ((ev.ctrlKey || ev.metaKey) && k === '-') { ev.preventDefault(); zoomTo(zoom / 1.25); return; }
+    if ((ev.ctrlKey || ev.metaKey) && k === '0') { ev.preventDefault(); zoomTo(1); return; }
     if ((ev.ctrlKey || ev.metaKey) && k === 'z') { ev.preventDefault(); ev.shiftKey ? redo() : undo(); }
     else if ((ev.ctrlKey || ev.metaKey) && k === 'y') { ev.preventDefault(); redo(); }
     else if (k === 'r' && selected && cells()[selected]) edit(() => { const t = cells()[selected]; t.p = P.rotate(t.p); });
@@ -468,6 +564,127 @@
     if (vals.unplaced.length) notes.push(`Not drawn (not one per segment or per sink): ${vals.unplaced.join(', ')}`);
     if (!inputs.length) notes.push('Add `!pluginvar Q, Δp` below the calculation to see the sheet\'s values here.');
     $('#about').textContent = notes.join('. ');
+  }
+
+  // ---- the background image -----------------------------------------------------------------
+  // The picture behind the grid: an <img> under the drawing, so it is not drawn again with every
+  // change. It is recalled from LENS the first time its key is seen.
+  function background(shown) {
+    const img = $('#bg'), g = state.bg;
+    if (g && bg.key !== g.key && bg.asked !== g.key) { bg.asked = g.key; post({ type: 'lens:recall', key: g.key }); }
+    img.hidden = !shown;
+    if (!shown) { img.removeAttribute('src'); return; }
+    if (img.getAttribute('src') !== bg.data) img.src = bg.data;
+    const b = shownBounds, side = P.CELL * zoom;
+    Object.assign(img.style, { left: (g.x - b.c0) * side + 'px', top: (g.y - b.r0) * side + 'px',
+      width: g.w * side + 'px', height: g.w * g.ar * side + 'px', opacity: g.o });
+  }
+
+  // The two points of a scale, and the line between them, on the drawing.
+  function markers() {
+    const b = shownBounds, X = (p) => (p[0] - b.c0) * P.CELL, Y = (p) => (p[1] - b.r0) * P.CELL, ns = 'http://www.w3.org/2000/svg';
+    const add = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const [a, v] of Object.entries(attrs)) e.setAttribute(a, v); canvas.append(e); };
+    const color = css('err');
+    if (measure.b) add('line', { x1: X(measure.a), y1: Y(measure.a), x2: X(measure.b), y2: Y(measure.b), stroke: color, 'stroke-width': 2 / zoom, 'stroke-dasharray': `${6 / zoom} ${4 / zoom}` });
+    for (const p of [measure.a, measure.b].filter(Boolean)) {
+      add('circle', { cx: X(p), cy: Y(p), r: 6 / zoom, fill: 'none', stroke: color, 'stroke-width': 2 / zoom });
+      add('line', { x1: X(p) - 10 / zoom, y1: Y(p), x2: X(p) + 10 / zoom, y2: Y(p), stroke: color, 'stroke-width': 1 / zoom });
+      add('line', { x1: X(p), y1: Y(p) - 10 / zoom, x2: X(p), y2: Y(p) + 10 / zoom, stroke: color, 'stroke-width': 1 / zoom });
+    }
+  }
+
+  // A key for a picture: a hash of its data, so the same picture placed again is kept once.
+  function keyFor(data) {
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (let i = 0; i < data.length; i++) {
+      const c = data.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+      h2 = Math.imul(h2 ^ c, 0x5bd1e995) >>> 0;
+    }
+    return `img-${h1.toString(16)}${h2.toString(16)}-${data.length.toString(36)}`;
+  }
+
+  // Place a picture: a new one goes at the top left of the view, as wide as the view; one placed over
+  // another (an updated planset, or the same one on a computer that did not have it) takes its place
+  // and its size, so the pipes still line up with it.
+  function place(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { say(`${file.name} is not an image. Save a PDF's page as PNG or JPEG first.`); return; }
+    const reader = new FileReader();
+    reader.onerror = () => say(`Could not read ${file.name}.`);
+    reader.onload = () => {
+      const data = reader.result, img = new Image();
+      img.onerror = () => say(`${file.name} could not be shown as an image.`);
+      img.onload = () => {
+        const key = keyFor(data), ar = img.naturalHeight / img.naturalWidth || 1, main = $('main'), side = P.CELL * zoom, b = shownBounds;
+        post({ type: 'lens:keep', key, data });
+        bg = { key, data, asked: null };
+        edit(() => {
+          const old = state.bg;
+          state.bg = old ? { ...old, key, name: file.name, ar }
+            : { key, name: file.name, x: main.scrollLeft / side + b.c0, y: main.scrollTop / side + b.r0, w: main.clientWidth / side, ar, o: 0.5 };
+        });
+        tool = 'move';
+        refresh();
+      };
+      img.src = data;
+    };
+    reader.readAsDataURL(file);
+  }
+  let note = '';
+  const say = (msg) => { note = msg; bgPanel(); };
+  $('#bgPlace').onclick = () => $('#bgFile').click();
+  $('#bgFile').onchange = (e) => { place(e.target.files[0]); e.target.value = ''; };
+  const main = $('main');
+  main.addEventListener('dragover', (ev) => { if ([...ev.dataTransfer.types].includes('Files')) ev.preventDefault(); });
+  main.addEventListener('drop', (ev) => { const f = ev.dataTransfer.files[0]; if (f) { ev.preventDefault(); place(f); } });
+  $('#bgRemove').onclick = () => { measure = null; if (tool === 'move' || tool === 'measure') tool = 'draw'; edit(() => { delete state.bg; }); };
+  // the picture follows the slider as it moves; the sheet gets the opacity when it is let go
+  $('#bgO').oninput = (e) => { $('#bg').style.opacity = +e.target.value / 100; };
+  $('#bgO').onchange = (e) => { if (state.bg) edit(() => { state.bg.o = +e.target.value / 100; }); };
+  $('#bgW').onchange = (e) => {
+    const x = positive(e.target.value);
+    if (x && state.bg) edit(() => { state.bg.w = x / state.cell; }); else refresh();
+  };
+  // Scale from two points: the picture grows or shrinks about the first so the two are as far apart
+  // on the grid as the distance given (in squares of the square length).
+  function applyScale() {
+    const d = positive($('#bgDist').value);
+    if (!d || !measure || !measure.b || !state.bg) return;
+    const [ax, ay] = measure.a, [bx, by] = measure.b, now = Math.hypot(bx - ax, by - ay);
+    if (!(now > 0)) return;
+    const f = d / state.cell / now;
+    measure = null;
+    tool = 'move';
+    edit(() => { const g = state.bg; g.x = ax + (g.x - ax) * f; g.y = ay + (g.y - ay) * f; g.w *= f; });
+  }
+
+  function bgPanel() {
+    const g = state.bg, has = !!g, here = has && bg.key === g.key && bg.data;
+    $('#bgRemove').disabled = !has;
+    $('#bgEdit').hidden = !has;
+    $('#bgPlace').textContent = has ? 'Replace image…' : 'Place image…';
+    $('#bgPlace').title = has ? 'Put another picture in its place, at its size (an updated planset)' : 'Put a picture behind the grid (PNG, JPEG, SVG, WebP), or drop one on the grid';
+    let hint = note;
+    if (has && bg.key === g.key && !bg.data) hint = `${g.name} is not kept in this browser. Replace image… with it to put it back where it was.`;
+    else if (!hint && has) hint = here ? `${g.name}. Move: drag it. Scale: click two points a known distance apart.` : `Loading ${g.name}…`;
+    $('#bgNote').textContent = hint;
+    note = '';
+    if (!has) return;
+    setNum($('#bgW'), +(g.w * state.cell).toPrecision(6));
+    $('#bgWUnit').textContent = `Width (${state.units.L})`;
+    if (document.activeElement !== $('#bgO')) $('#bgO').value = Math.round(g.o * 100);
+    const box = $('#bgMeasure');
+    if (tool !== 'measure') { box.replaceChildren(); return; }
+    if (!measure || !measure.b) {
+      box.replaceChildren(el('p', { class: 'hint' }, measure ? 'Now click the second point.' : 'Click the first of two points a known distance apart on the picture (the ends of a dimension, a grid line to the next).'));
+      return;
+    }
+    if ($('#bgDist')) return;   // the field is up: leave what is being typed alone
+    const input = el('input', { id: 'bgDist', type: 'number', min: '0', step: 'any', placeholder: 'distance' });
+    input.onkeydown = (e) => { if (e.key === 'Enter') applyScale(); if (e.key === 'Escape') { measure = null; refresh(); } };
+    box.replaceChildren(el('label', { class: 'f stack' }, `Distance between the points (${state.units.L})`,
+      el('span', { class: 'pair' }, input, el('button', { onclick: applyScale }, 'Scale'))));
   }
 
   window.addEventListener('resize', () => refresh());   // the frame is sized when its dialog opens

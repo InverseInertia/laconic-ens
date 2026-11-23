@@ -329,4 +329,20 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   eq(P.setSegmentLength(s.cells, crossing, 5, s.cell), false, 'shorter than its crossover: refused');
 }
 
+// --- the background image ------------------------------------------------------------------------
+{
+  const g = { key: 'img-ab-1', name: 'plan.png', x: -1.5, y: 2.25, w: 10, ar: 0.5, o: 0.4 };
+  eq(P.normalize({ bg: g }).bg, g, 'a background image is kept as the sheet holds it');
+  eq(P.normalize({ bg: { key: 'img-ab-1', x: 'a', w: -1, o: 7 } }).bg, { key: 'img-ab-1', name: 'image', x: 0, y: 0, w: 20, ar: 1, o: 1 },
+    'odd numbers in it are replaced');
+  eq(P.normalize({ bg: { key: '../etc', w: 5 } }).bg, undefined, 'a key that is not a plain name: no image');
+  eq(P.normalize({}).bg, undefined, 'none unless placed');
+  eq(P.backdrop({ bg: g }), { r0: 2, c0: -2, r1: 7, c1: 8 }, 'the squares it covers, partly covered ones included');
+  eq(P.backdrop(P.blank()), null, 'none without an image');
+  const s = net([row(0, 0, 3)], '0,0', ['0,3']), nt = P.network(s);
+  const svg = (o) => P.draw(s, nt, { theme: { paper: '#123456' }, ...o });
+  eq([svg({}).includes('fill="#123456"/>'), svg({ underlay: true }).includes('<rect width')], [true, false],
+    'drawn over an image, the drawing leaves out its paper');
+}
+
 console.log(`pipenet: ${n} checks passed`);

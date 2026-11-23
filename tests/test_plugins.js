@@ -48,4 +48,13 @@ n++;
 eq([P.newer('1.4.1', '1.4.0'), P.newer('1.4.0', '1.4.0'), P.newer('1.10', '1.9.9'), P.newer('1.2', '1.4.1'), P.newer('2', '1.99.0')],
   [true, false, true, false, true], 'versions compare part by part, as numbers');
 
+// --- what a plugin keeps in the browser ----------------------------------------------------------
+eq(P.check({ type: 'lens:keep', key: 'img-1a2b-3c', data: 'data:image/png;base64,AAAA' }),
+  { type: 'lens:keep', key: 'img-1a2b-3c', data: 'data:image/png;base64,AAAA' }, 'keep a string under a key');
+eq(P.check({ type: 'lens:keep', key: 'img-1' }), { type: 'lens:keep', key: 'img-1', data: null }, 'keep nothing: forget it');
+eq(P.check({ type: 'lens:recall', key: 'img-1' }), { type: 'lens:recall', key: 'img-1' }, 'recall it');
+for (const bad of [{ type: 'lens:keep', key: '../x', data: 'a' }, { type: 'lens:keep', key: '', data: 'a' },
+  { type: 'lens:keep', key: 'a', data: 3 }, { type: 'lens:keep', key: 'a/b', data: 'a' }, { type: 'lens:recall', key: 7 }])
+  eq(P.check(bad), null, `refused: ${JSON.stringify(bad)}`);
+
 console.log(`plugins: ${n} checks passed`);

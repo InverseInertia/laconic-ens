@@ -161,7 +161,25 @@
     clean(s.cells, out.cells, true);
     clean(s.rcells, out.rcells, false);
     syncPads(out, 's');
+    const g = s.bg;
+    if (g && typeof g === 'object' && typeof g.key === 'string' && /^[\w.-]{1,100}$/.test(g.key)) {
+      const fin = (x) => typeof x === 'number' && isFinite(x);
+      out.bg = { key: g.key, name: typeof g.name === 'string' ? g.name.slice(0, 120) : 'image',
+                 x: fin(g.x) ? g.x : 0, y: fin(g.y) ? g.y : 0, w: num(g.w, 20), ar: num(g.ar, 1),
+                 o: fin(g.o) ? Math.min(1, Math.max(0.05, g.o)) : 0.5 };
+    }
     return out;
+  }
+
+  /* The background image (a planset to lay the pipes over): state.bg = {key, name, x, y, w, ar, o}.
+     Its top left corner is at column x, row y (in squares, not whole ones), it is w squares wide and
+     w * ar high, and drawn at opacity o. The picture itself is not in the state, which the sheet
+     holds: the page keeps it in the browser under `key` (lens:keep). backdrop(state) is the squares
+     it covers, as bounds() gives them, or null. */
+  function backdrop(state) {
+    const g = state.bg;
+    if (!g) return null;
+    return { r0: Math.floor(g.y), c0: Math.floor(g.x), r1: Math.ceil(g.y + g.w * g.ar) - 1, c1: Math.ceil(g.x + g.w) - 1 };
   }
 
   // One layer of a state, as the walk and the editing functions take one: the state with `cells`
@@ -406,7 +424,8 @@
      rule, err, grid, sans, soft, hi}, layer: the layer in front ("s" or "r"; the other is drawn faded
      behind it, as the far side of a circuit board is), selected: a tile key on that layer, grid: draw
      the grid (the editor) or not (the preview), inputs: the !pluginvar values, rounds: how long `spread`
-     may work at the balloons (less while the mouse drags)}. */
+     may work at the balloons (less while the mouse drags), underlay: leave out the paper, so the
+     background image the page puts behind the drawing shows through}. */
   function draw(state, net, opts = {}) {
     const th = Object.assign({ paper: '#ffffff', text: '#1d2b3a', ink: '#1f5fa8', ret: '#00838f', rule: '#9fb4c8', err: '#c62828',
       grid: '#e3eaf1', sans: 'sans-serif', soft: '#5b7086', hi: '#e08a00' }, opts.theme || {});
@@ -414,8 +433,8 @@
     const b = opts.bounds || (grid ? bounds(state) : bounds(state, 1));
     const W_ = (b.c1 - b.c0 + 1) * CELL, H_ = (b.r1 - b.r0 + 1) * CELL;
     const x = (c) => (c - b.c0) * CELL, y = (r) => (r - b.r0) * CELL;
-    const out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W_} ${H_}" width="${W_}" height="${H_}" font-family="${esc(th.sans)}">`,
-      `<rect width="${W_}" height="${H_}" fill="${esc(th.paper)}"/>`];
+    const out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W_} ${H_}" width="${W_}" height="${H_}" font-family="${esc(th.sans)}">`];
+    if (!opts.underlay) out.push(`<rect width="${W_}" height="${H_}" fill="${esc(th.paper)}"/>`);
     if (grid) {
       for (let r = b.r0; r <= b.r1 + 1; r++) out.push(`<line x1="0" y1="${y(r)}" x2="${W_}" y2="${y(r)}" stroke="${esc(th.grid)}" stroke-width="1"/>`);
       for (let c = b.c0; c <= b.c1 + 1; c++) out.push(`<line x1="${x(c)}" y1="0" x2="${x(c)}" y2="${H_}" stroke="${esc(th.grid)}" stroke-width="1"/>`);
@@ -728,7 +747,7 @@
   ];
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
-    blank, normalize, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
+    blank, normalize, backdrop, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
     connect, erase, place, segmentAt, setSegmentLength, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, spread, curveNames, curveName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;

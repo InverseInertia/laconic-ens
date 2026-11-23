@@ -62,8 +62,14 @@
   label.c { display: flex; align-items: center; gap: 6px; margin: 6px 0; cursor: pointer; }
   .hint { color: var(--text-soft); font-size: 12px; margin: 6px 0; }
   main { overflow: auto; position: relative; }
-  #canvas { display: block; touch-action: none; user-select: none; cursor: crosshair; }
-  #empty { position: absolute; left: 24px; top: 20px; max-width: 420px; pointer-events: none; color: var(--text-soft); }
+  #canvas { display: block; position: relative; touch-action: none; user-select: none; cursor: crosshair; }
+  /* the background image, under the drawing (which leaves out its paper while one is shown) */
+  #bg { position: absolute; left: 0; top: 0; max-width: none; pointer-events: none; user-select: none; }
+  body[data-tool="move"] #canvas { cursor: move; }
+  body[data-space] #canvas { cursor: grab; }
+  body[data-panning] #canvas { cursor: grabbing; }
+  input[type=range] { width: 100%; accent-color: var(--ink); padding: 0; border: 0; }
+  #empty { position: absolute; z-index: 1; left: 24px; top: 20px; max-width: 420px; pointer-events: none; color: var(--text-soft); }
   #empty strong { color: var(--text); }
   #empty button { pointer-events: auto; margin-top: 8px; }
   .msgs { list-style: none; margin: 0; padding: 0; }
@@ -115,11 +121,29 @@
   </div>
   <h3>View</h3>
   <div class="row-btns">
-    <button id="zoomOut" title="Smaller">−</button>
-    <button id="zoomFit" title="Fit the window">Fit</button>
-    <button id="zoomIn" title="Larger">+</button>
+    <button id="zoomOut" title="Zoom out (Ctrl+−)">−</button>
+    <button id="zoom100" title="Actual size (Ctrl+0)">1:1</button>
+    <button id="zoomFit" title="Fit the layout and the background image in the window">Fit</button>
+    <button id="zoomIn" title="Zoom in (Ctrl+=)">+</button>
     <span class="hint" id="zoomLevel"></span>
   </div>
+  <p class="hint"><kbd>Ctrl</kbd> + wheel (or pinch) zooms at the pointer; drag with the middle button, or with <kbd>Space</kbd> held, to move around.</p>
+  <h3>Background</h3>
+  <div class="row-btns">
+    <button id="bgPlace">Place image…</button>
+    <button id="bgRemove" title="Take the picture away (the pipes stay)">Remove</button>
+  </div>
+  <input id="bgFile" type="file" accept="image/*" hidden>
+  <div id="bgEdit" hidden>
+    <div class="tools" style="grid-template-columns: 1fr 1fr; margin-top: 6px">
+      <button data-tool="move" title="Drag the picture to line it up with the grid">Move</button>
+      <button data-tool="measure" title="Click two points a known distance apart, then give the distance">Scale</button>
+    </div>
+    <div id="bgMeasure"></div>
+    <label class="f"><span id="bgWUnit">Width</span> <input id="bgW" type="number" min="0" step="any" title="How wide the picture is on the grid, in the square length's unit"></label>
+    <label class="f">Opacity <input id="bgO" type="range" min="5" max="100" step="5"></label>
+  </div>
+  <p class="hint" id="bgNote"></p>
   <p class="hint key"><span class="k-solid"></span> pipe in use &nbsp; <span class="k-hollow"></span> not connected<span class="k-back-row"> &nbsp; <span class="k-dash"></span> the other side</span></p>
   <h3>Network</h3>
   <label class="f">Length unit <select id="unitL"><option>ft</option><option>m</option><option>in</option><option>mm</option></select></label>
@@ -141,6 +165,7 @@
   <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick
     <em>Draw</em> and drag between them. Pipes join at tees; the sheet works out the flow in each branch.<br>
     <button id="example">Start from an example</button></div>
+  <img id="bg" alt="" hidden>
   <svg id="canvas"></svg>
 </main>
 <aside class="right">
