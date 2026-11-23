@@ -106,9 +106,28 @@ HBH006 = 3
   label 3: "data"
 # ---- end of the exchanger data -----------------------------------------------------------------
 
-## Grundfos Pump Curves
-# Raw data from online product information, flow in gal/min against head in ft. Each curve is a pump of
-# its own: the 43-100 F's and the 26-99 FC's three speed settings, the 15-42 and the C1016T.
+## Pump Curves
+# The pumps by number, as pumps! picks them: one row of PUMP_C (a fit's coefficients) and one row of
+# PUMP_q (the least and the greatest flow in its data, in gal/min) each, from the pump data below. A fit
+# holds only between those flows (interpolation, not extrapolation). PUMP_curve(∀`, n) is pump n's fit
+# there, and no head outside, for plotting. PUMP(∀`, n), the one the solver uses, follows the fit inside
+# and is a wall outside, as HX is: its head falls at WALL past the greatest flow and rises at WALL below
+# the least, so the solver is pushed back inside.
+pump_lo(n) = idx(row(PUMP_q, n), 1)
+pump_hi(n) = idx(row(PUMP_q, n), 2)
+pump_at(q, n) = idx(row(PUMP_C, n) * polyvec_4(q), 1) * 'ft * 'g_0 * ρ
+PUMP_curve(∀`, n) = pump_at(∀` * ('gal / 'min)^-1, n) * heaviside(∀` * ('gal / 'min)^-1 - pump_lo(n)) * heaviside(pump_hi(n) - ∀` * ('gal / 'min)^-1)
+PUMP_c(q, qc, n) = pump_at(qc, n) - WALL * (q - qc) * 'gal / 'min
+PUMP(∀`, n) = PUMP_c(∀` * ('gal / 'min)^-1, clamp(∀` * ('gal / 'min)^-1, pump_lo(n), pump_hi(n)), n)
+# A spur with no circulator (pumps! 0) gets no head from one
+PUMP_sel(∀`, n) = heaviside(n - 0.5) * PUMP(∀`, max([n, 1]))
+
+# ---- Pump data: paste your own over the lines from here to the next ---- line -------------------
+# Each pump's data is two rows: its flows in gal/min, then its heads in ft. Give each a !regression of
+# degree 4, its rows of PUMP_C and PUMP_q, a curve by name, and list the names on the !pluginvar line,
+# so the plugin offers them by name.
+# Grundfos circulators, from their public product information. Each curve is a pump of its own: the
+# 43-100 F's and the 26-99 FC's three speed settings, the 15-42 and the C1016T.
 GRUND_43100A = transpose([21.4, 10.2; 2.3, 27.7; 0.7, 27.9; 5.45, 26.1; 3.9, 27.1; 10.1, 22; 27.6, 4.6; 7, 25.1; 14.6, 17.3; 18.15, 13.4; 23.36, 8.3; 25.5, 6.5; 31.76, 1.7; 29.6, 3.3; 11.7, 20.5; 19.8, 11.9; 13.2, 18.7; 16.55, 15.2; 8.6, 23.7])
 GRUND_43100B = transpose([37.6, 11.7; 3.96, 30; 1.24, 30.2; 9.14, 28.9; 6.8, 29.5; 18.5, 24.8; 44.7, 5.9; 12.4, 27.7; 27.2, 19.5; 32.54, 15.6; 39.95, 9.7; 42.8, 7.5; 49.7, 2; 47.15, 4; 20.8, 23.5; 35.2, 13.5; 24.1, 21.4; 29.95, 17.5; 16.7, 25.8])
 GRUND_43100C = transpose([42.1, 16.6; 4.24, 30.9; 0.6, 31.1; 11.2, 29.9; 8.1, 30.5; 63.6, 1.1; 55.8, 6.9; 15.14, 29.1; 27.7, 24.9; 33.6, 21.7; 46.9, 13.3; 51.04, 10.4; 61.46, 2.6; 59.7, 4; 20.4, 27.7; 37.5, 19.5; 23.35, 26.6; 30.8, 23.3; 17.9, 28.4])
@@ -137,7 +156,7 @@ GRUND_1542A = [4.64, 5.65, 6.8, 2.8, 3.5, 4.1, 5.13, 6.17, 2.04, 1.56, 1.14, 0.7
 !regression G_2699B
   data: GRUND_2699B
   degree: 4
-  
+
 !regression G_2699C
   data: GRUND_2699C
   degree: 4
@@ -150,20 +169,8 @@ GRUND_1542A = [4.64, 5.65, 6.8, 2.8, 3.5, 4.1, 5.13, 6.17, 2.04, 1.56, 1.14, 0.7
   data: GRUND_C1016T
   degree: 4
 
-# The pumps by number, as pumps! picks them: one row of PUMP_C (a fit's coefficients) and one row of
-# PUMP_q (the least and the greatest flow in its data, in gal/min) each. A fit holds only between those
-# flows (interpolation, not extrapolation). PUMP_curve(∀`, n) is pump n's fit there, and no head outside,
-# for plotting. PUMP(∀`, n), the one the solver uses, follows the fit inside and is a wall outside, as HX
-# is: its head falls at WALL past the greatest flow and rises at WALL below the least, so the solver is
-# pushed back inside. The plugin offers the pumps by the names on the !pluginvar pumps: line, in order.
 PUMP_C = vstack(G_43100A, G_43100B, G_43100C, G_2699A, G_2699B, G_2699C, G_1542, G_C1016T)
 PUMP_q = vstack(q_span(GRUND_43100A), q_span(GRUND_43100B), q_span(GRUND_43100C), q_span(GRUND_2699A), q_span(GRUND_2699B), q_span(GRUND_2699C), q_span(GRUND_1542A), q_span(GRUND_C1016T))
-pump_lo(n) = idx(row(PUMP_q, n), 1)
-pump_hi(n) = idx(row(PUMP_q, n), 2)
-pump_at(q, n) = idx(row(PUMP_C, n) * polyvec_4(q), 1) * 'ft * 'g_0 * ρ
-PUMP_curve(∀`, n) = pump_at(∀` * ('gal / 'min)^-1, n) * heaviside(∀` * ('gal / 'min)^-1 - pump_lo(n)) * heaviside(pump_hi(n) - ∀` * ('gal / 'min)^-1)
-PUMP_c(q, qc, n) = pump_at(qc, n) - WALL * (q - qc) * 'gal / 'min
-PUMP(∀`, n) = PUMP_c(∀` * ('gal / 'min)^-1, clamp(∀` * ('gal / 'min)^-1, pump_lo(n), pump_hi(n)), n)
 GRUND_43100A(∀`) = PUMP_curve(∀`, 1)
 GRUND_43100B(∀`) = PUMP_curve(∀`, 2)
 GRUND_43100C(∀`) = PUMP_curve(∀`, 3)
@@ -173,9 +180,6 @@ GRUND_2699C(∀`) = PUMP_curve(∀`, 6)
 GRUND_1542A(∀`) = PUMP_curve(∀`, 7)
 GRUND_C1016T(∀`) = PUMP_curve(∀`, 8)
 !pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C, GRUND_2699A, GRUND_2699B, GRUND_2699C, GRUND_1542A, GRUND_C1016T
-# A spur with no circulator (pumps! 0) gets no head from one
-PUMP_sel(∀`, n) = heaviside(n - 0.5) * PUMP(∀`, max([n, 1]))
-
 
 !plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x), x = 0 'gal / 'min .. 60 'gal / ('min)
   title: "Grundfos 43-100 F Pump Curves"
@@ -213,6 +217,8 @@ PUMP_sel(∀`, n) = heaviside(n - 0.5) * PUMP(∀`, max([n, 1]))
   yunit: 'psi
   xunit: 'gal / 'min
   ylim: 0 'psi .. auto
+
+# ---- end of the pump data ---------------------------------------------------------------------
 
 ## Regulating Valves
 # A regulating (balancing) valve on a spur, set to a flow coefficient Cv (gal/min at 1 psi of water at 60 °F),

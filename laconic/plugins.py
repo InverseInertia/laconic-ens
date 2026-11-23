@@ -371,20 +371,45 @@ def templates():
     return out
 
 
+# A data section of a plugin's sheet: from a comment line `# ---- ...` to the next `# ---- end ...`. What
+# is between is the user's to replace (an exchanger's or a pump's data, their names), so it is not compared.
+_FENCE = re.compile(r"\s*#\s*-{4}\s*(end\b)?", re.I)
+
+
+def _fenced(sheet):
+    """The line numbers inside data sections, the fences included. A section left open (its `end` line
+    deleted) is not one: the lines below it are compared, so losing a fence does not hide them."""
+    section, out = None, set()
+    for ln in sheet.lines:
+        m = _FENCE.match(ln.text) if ln.kind == "comment" else None
+        if m and section is None and not m.group(1):
+            section = []
+        if section is not None:
+            section.append(ln.n)
+            if m and m.group(1):
+                out.update(section)
+                section = None
+    return out
+
+
 def _parts(text):
-    """What a sheet holds outside its plugin blocks, by what it is: {key: (label, {content, ...})}.
-    A definition is keyed by its name (a global's ~ dropped), a block by its header line, any other
-    `!` line by itself; content is the definition's parameters and body, or a block's owned lines
+    """What a sheet holds outside its plugin blocks and data sections, by what it is: {key: (label,
+    {content, ...})}. A definition is keyed by its name (a global's ~ dropped), a block by its header line,
+    any other `!` line by itself; content is the definition's parameters and body, or a block's owned lines
     without a stored result, with spaces dropped. Comments, blank lines and stored results are not
-    compared, nor is anything a plugin block owns (the plugin writes it)."""
+    compared, nor is anything a plugin block owns (the plugin writes it), nor what is in a data section
+    (`# ---- ...` to `# ---- end ...`: data the user replaces)."""
     from .sheettext import scan
     sheet = scan(text)
     squeeze = lambda s: "".join(s.split())
     out = {}
+    fenced = _fenced(sheet)
 
     def add(key, label, content):
         out.setdefault(key, (label, set()))[1].add(content)
     for ln in sheet.lines:
+        if ln.n in fenced:
+            continue
         owner = sheet.owner(ln.n)
         if owner is not None:
             if owner.kind == "plugin" or ln.n != owner.header:
@@ -405,7 +430,8 @@ def differences(text, original):
     """How the sheet `text` differs from a plugin's `original` sheet: {"missing": [...], "changed": [...]},
     each a list of what the original has, in its order: a name it defines, or a `!` line. A name the
     sheet defines differently is changed; one it does not define, or a `!` line it lacks, is missing.
-    What the sheet adds is not counted."""
+    What the sheet adds is not counted, nor anything in either sheet's data sections, so a sheet with
+    other exchangers or pumps pasted in is the same as long as its calculation is."""
     have, want = _parts(text), _parts(original)
     missing, changed = [], []
     for key, (label, contents) in want.items():

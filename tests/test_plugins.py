@@ -247,6 +247,29 @@ def test_a_sheet_is_compared_with_the_plugins_own():
     assert plugins.differences(edited, original) == {"missing": ["f", "!pluginvar y"], "changed": ["T", "!root y"]}
 
 
+def test_a_sheets_data_sections_are_its_own_and_the_rest_is_checked():
+    """Between `# ---- ...` and `# ---- end ...` is data the user replaces (other exchangers, other pumps,
+    names of their own): not compared. Outside, the calculation is."""
+    original = ("f(x) = 2*x\n# ---- Pump data: paste your own ----\nP = [1, 2]\nP_A = 1\n!pluginvar pumps: P_A\n"
+                "# ---- end of the pump data ----\ng(x) = f(x) + idx(P, 1)\n")
+    mine = ("f(x) = 2*x\n# ---- Pump data: mine ----\nP = [7, 8, 9]\nMINE = 1\n!pluginvar pumps: MINE\n"
+            "# ---- end ----\ng(x) = f(x) + idx(P, 1)\n")
+    assert plugins.differences(mine, original) == {"missing": [], "changed": []}
+    assert plugins.differences(mine.replace("2*x", "3*x"), original) == {"missing": [], "changed": ["f"]}
+    # a section whose end line was lost is no section: what follows it is still checked
+    open_ended = mine.replace("# ---- end ----\n", "").replace("f(x) + idx", "f(x) - idx")
+    assert plugins.differences(open_ended, original)["changed"] == ["g"]
+
+
+def test_the_plugins_sheet_keeps_its_data_in_sections_and_its_calculation_outside():
+    """The exchangers and pumps are data sections; HX, PUMP, the walls and the solver are not."""
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    parts = plugins._parts(text)
+    names = {k[1] for k in parts if k[0] == "def"}
+    assert {"HX", "HX_c", "HX_curve", "PUMP", "PUMP_c", "PUMP_curve", "PUMP_sel", "WALL", "clamp", "residual"} <= names
+    assert not names & {"HXD_HBH060", "HX_C", "HX_q", "HBH060", "PUMP_C", "PUMP_q", "GRUND_43100A", "GRUND_C1016T"}
+
+
 def test_a_plugins_sheet_is_offered_with_the_examples_and_checked(cfg, monkeypatch):
     from fastapi.testclient import TestClient
     from laconic.server import app
