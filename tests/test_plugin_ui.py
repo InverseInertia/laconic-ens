@@ -310,12 +310,15 @@ def test_an_older_plugin_than_wrote_the_sheet_says_so_and_does_not_write(page):
     assert "  Δp_target = 0.02 'psi" in value(page)          # not written
     page.click("#pluginDlg .close")
     show(page, original)                                       # its own version: it writes, and stamps it
-    page.wait_for_function("document.querySelector('.plugin-status')?.textContent.startsWith('Pipe network 1.4.2')")
+    import json
+    from pathlib import Path
+    version = json.loads((Path(__file__).parent.parent / "plugins/pipenet/manifest.json").read_text())["version"]
+    page.wait_for_function(f"document.querySelector('.plugin-status')?.textContent.startsWith('Pipe network {version}')")
     page.click(".plugin-box button:has-text('Open')")
     frame.locator("#dpv").fill("0.5")
     frame.locator("#dpv").press("Enter")
     page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 0.5 'psi\")")
-    assert '"by":"1.4.2"' in value(page)
+    assert f'"by":"{version}"' in value(page)
 
 
 def test_a_segments_length_is_set_as_a_whole(page):
