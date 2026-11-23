@@ -425,3 +425,40 @@ def test_ctrl_and_the_wheel_zoom_about_the_pointer(page):
     frame.locator("#zoomOut").click()
     frame.locator("#zoom100").click()
     assert frame.locator("#zoomLevel").inner_text() == "100%"
+
+
+def test_a_sinks_settings_are_copied_to_others_and_sinks_alike_are_marked(page):
+    import json
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes('#@ state')")
+    frame.locator("#segments th:has-text('Q gal/min')").wait_for()     # the sheet has run on it
+    marks = lambda: frame.locator("#canvas g.twin").count()
+    assert marks() == 8                                    # the example's sinks start alike
+    # S1 takes exchanger 2: it is like no other now
+    frame.locator("#sinks tbody tr").first.click()
+    field = frame.locator("#inspector label:has-text('Exchanger curve') input")
+    field.fill("2")
+    field.press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[2; 1;/)")
+    frame.locator("#inspector p:has-text('Set up like no other sink')").wait_for()
+    assert marks() == 7
+    # Copy settings to…, then click S2's tile
+    frame.locator("#inspector button:has-text('Copy settings to')").click()
+    frame.locator("#inspector p:has-text('Click sinks to give them S1')").wait_for()
+    state = json.loads(next(l for l in value(page).split("\n") if l.startswith("  #@ state "))[len("  #@ state "):])
+    s2, (r0, c0) = frame.locator("body").evaluate(
+        "(_, s) => { const P = PipeNet, st = P.normalize(s), b = P.bounds(st); return [P.network(st).sinks[1].key, [b.r0, b.c0]]; }", state)
+    r, c = map(int, s2.split(","))
+    frame.locator("main").evaluate(f"m => {{ m.scrollLeft = {(c - c0) * 56 - 100}; m.scrollTop = {(r - r0) * 56 - 100}; }}")
+    box = frame.locator("#canvas").bounding_box()
+    page.mouse.click(box["x"] + (c - c0 + 0.5) * 56, box["y"] + (r - r0 + 0.5) * 56)
+    page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[2; 2; 1;/)")
+    assert marks() == 8                                    # S1 and S2 alike, the other six alike
+    page.keyboard.press("Escape")
+    frame.locator("#inspector p:has-text('Set up like S2')").wait_for()
+    # To every sink
+    frame.locator("#inspector button:has-text('Copy settings to')").click()
+    frame.locator("#inspector button:has-text('To every sink')").click()
+    page.wait_for_function("document.querySelector('#src').value.includes('  exchangers! = [2; 2; 2; 2; 2; 2; 2; 2]')")

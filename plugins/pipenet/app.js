@@ -36,6 +36,8 @@
   // The background's picture, as a data: URL, for the key it was recalled or placed under
   // (data null: LENS has nothing under that key in this browser). `measure`: the two points of a scale.
   let bg = { key: null, data: null, asked: null }, measure = null, pan = null, space = false;
+  // Copy settings: the sink whose exchanger, circulator, valve and extra K the sinks clicked take.
+  let copyFrom = null;
   const ZOOM_MIN = 0.1, ZOOM_MAX = 4;
 
   const post = (msg) => window.parent.postMessage(msg, '*');
@@ -111,6 +113,7 @@
   function refresh(fresh = false) {
     net = P.network(state);
     if (selected && !cells()[selected]) selected = null;
+    if (tool === 'copy' && !(state.cells[copyFrom] && state.cells[copyFrom].t === 'sink')) { tool = 'select'; copyFrom = null; }
     const old = fresh ? null : shownBounds;
     const want = extent();
     const b = old ? grow(old, want) : want;
@@ -190,6 +193,11 @@
       return;
     }
     if (ev.button !== 0) return;
+    if (tool === 'copy') {
+      const k = cellAt(ev), from = state.cells[copyFrom], to = state.cells[k];
+      if (from && to && to.t === 'sink' && k !== copyFrom) edit(() => P.copySink(from, to));
+      return;
+    }
     if (tool === 'measure') {
       const pt = pointAt(ev);
       measure = !measure || measure.b ? { a: pt, b: null } : { ...measure, b: pt };
@@ -263,7 +271,8 @@
   canvas.addEventListener('pointercancel', endDrag);
 
   // ---- tools and keys ----------------------------------------------------------------------
-  for (const btn of document.querySelectorAll('[data-tool]')) btn.onclick = () => { tool = btn.dataset.tool; measure = null; refresh(); };
+  for (const btn of document.querySelectorAll('[data-tool]')) btn.onclick = () => { tool = btn.dataset.tool; measure = null; copyFrom = null; refresh(); };
+  function endCopy() { tool = 'select'; if (copyFrom && state.cells[copyFrom]) selected = copyFrom; copyFrom = null; refresh(); }
   P.PALETTE.forEach((item, i) => {
     const btn = document.createElement('button');
     btn.dataset.i = i;
@@ -331,6 +340,7 @@
     const k = ev.key.toLowerCase();
     if (k === ' ') { ev.preventDefault(); space = true; document.body.dataset.space = ''; return; }
     if (k === 'escape' && measure) { measure = null; refresh(); return; }
+    if (k === 'escape' && tool === 'copy') { endCopy(); return; }
     if ((ev.ctrlKey || ev.metaKey) && (k === '=' || k === '+')) { ev.preventDefault(); zoomTo(zoom * 1.25); return; }
     if ((ev.ctrlKey || ev.metaKey) && k === '-') { ev.preventDefault(); zoomTo(zoom / 1.25); return; }
     if ((ev.ctrlKey || ev.metaKey) && k === '0') { ev.preventDefault(); zoomTo(1); return; }
@@ -420,8 +430,28 @@
     return el('label', { class: 'f stack' }, label, pick);
   }
 
+  // "S3" for a sink: its name, else its number
+  const sinkName = (k) => (state.cells[k] && state.cells[k].name) || 'S' + ((net.sinks.findIndex((s) => s.key === k) + 1) || '?');
+
+  // A sink's settings in words, by the sheet's names where it gives them.
+  function describe(pad) {
+    const names = P.curveNames(inputs), name = (list, n, none) => (n === 0 && none ? none : (list && list[n - 1]) || `curve ${n}`);
+    return [`exchanger ${name(names.exchangers, pad.x)}`, `circulator ${name(names.pumps, pad.s, 'none')}`,
+      pad.v ? `valve Cv ${P.fmt(pad.v)}` : 'no valve', ...(pad.k ? [`extra K ${P.fmt(pad.k)}`] : [])].join(', ');
+  }
+
   function inspector() {
-    const box = $('#inspector'), t = selected && cells()[selected];
+    const box = $('#inspector');
+    if (tool === 'copy' && state.cells[copyFrom]) {
+      const from = state.cells[copyFrom];
+      box.replaceChildren(
+        el('p', {}, `Click sinks to give them ${sinkName(copyFrom)}'s settings: ${describe(from)}.`),
+        el('div', { class: 'row-btns' },
+          el('button', { onclick: () => edit(() => { for (const t of Object.values(state.cells)) if (t.t === 'sink' && t !== from) P.copySink(from, t); }) }, 'To every sink'),
+          el('button', { onclick: endCopy }, 'Done (Esc)')));
+      return;
+    }
+    const t = selected && cells()[selected];
     if (!t) { box.replaceChildren(el('p', { class: 'hint' }, 'Click a tile with Select (or click without dragging while drawing).')); return; }
     const [r, c] = P.at(selected), seg = P.segmentAt(walked(), selected), pad = state.cells[selected];
     const sh = P.shape(t), parts = [], prefix = front() === 'r' ? 'R' : '';
@@ -470,6 +500,15 @@
         const x = parseFloat(v);
         if (isFinite(x) && x > 0) pad.v = x; else delete pad.v;
       })));
+      // the sinks set up the same way, and copying this one's settings to others
+      const alike = P.twins(state), mine = alike[selected];
+      const same = mine === undefined ? [] : Object.keys(alike).filter((k) => k !== selected && alike[k] === mine);
+      parts.push(el('p', { class: 'hint' }, same.length
+        ? `Set up like ${same.map(sinkName).join(', ')} (the mark at their corner).`
+        : 'Set up like no other sink.'));
+      parts.push(el('div', { class: 'row-btns' },
+        el('button', { title: 'Then click the sinks that should have this exchanger, circulator, valve and extra K',
+          onclick: () => { copyFrom = selected; tool = 'copy'; refresh(); } }, 'Copy settings to…')));
     }
     parts.push(el('div', { class: 'row-btns' },
       el('button', { onclick: () => edit(() => { t.p = P.rotate(t.p); }) }, 'Turn (R)'),

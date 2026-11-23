@@ -14,7 +14,7 @@ T_water = 90'degF
 ρ = props("D", "T", T_water, "P", 1'atm, "Water")
 μ = props("V", "T", T_water, "P", 1'atm, "Water")
 
-Re(D_h, V@) = (ρ * V@ * D_h) / μ
+Re(D_h, V@) = (ρ * abs(V@) * D_h) / μ
 
 ## Pipe Properties
 
@@ -31,9 +31,11 @@ nz_ab(ε_D, Re, a, b) = nz_f(a, b, nz_next(ε_D, Re, b))
 nz_a(ε_D, Re, a) = nz_ab(ε_D, Re, a, nz_next(ε_D, Re, a))
 f_D_Niazkhar(ε_D, Re) = nz_a(ε_D, Re, -2 * log10(ε_D / 3.7 + 4.5547 / Re^0.8784))
 
-# Darcy-Weisbach pressure drop for a flow ∀` in a pipe, through its velocity, worked out once
+# Darcy-Weisbach pressure drop for a flow ∀` in a pipe, through its velocity, worked out once. It takes the
+# flow's sign (V |V| rather than V^2, and Re from |V|), so a solver's step through a backward flow gives a
+# backward pressure drop to come back from rather than a number that is not one.
 V@(D_h, ∀`) = 4 * ∀` / (pi * D_h^2)
-ΔP_V(ε, D_h, V@, L, ΣK) = (f_D_Niazkhar(ε / D_h, Re(D_h, V@)) * L / D_h + ΣK) * ρ * V@^2 / 2
+ΔP_V(ε, D_h, V@, L, ΣK) = (f_D_Niazkhar(ε / D_h, Re(D_h, V@)) * L / D_h + ΣK) * ρ * V@ * abs(V@) / 2
 ΔP_DW(ε, D_h, ∀`, L, ΣK) = ΔP_V(ε, D_h, V@(D_h, ∀`), L, ΣK)
 
 ~polyvec_2(x) = [1; x; x^2]
@@ -56,6 +58,8 @@ hx_hi(k) = idx(row(HX_q, k), 2)
 HX_curve(∀`, k) = hx_at(∀` * ('gal / 'min)^-1, k) * heaviside(∀` * ('gal / 'min)^-1 - hx_lo(k)) * heaviside(hx_hi(k) - ∀` * ('gal / 'min)^-1)
 HX_c(q, qc, k) = hx_at(qc, k) + WALL * (q - qc) * 'gal / 'min
 HX(∀`, k) = HX_c(∀` * ('gal / 'min)^-1, clamp(∀` * ('gal / 'min)^-1, hx_lo(k), hx_hi(k)), k)
+# the middle of exchanger k's data, in gal/min: where the solver starts that exchanger's spur
+hx_mid(k) = (hx_lo(k) + hx_hi(k)) / 2
 
 # ---- Exchanger data: paste your own over the lines from here to the next ---- line --------------
 # Each exchanger's data is two rows: its flows in gal/min, then its pressure drops in psi at those flows,
@@ -298,8 +302,8 @@ Re_seg(∀`, D) = .Re(D, .V@(D, ∀`))
 Δp_return(∀_des!) = .ΔP_DW(ε_PVC, D_r!, A_r * ∀_des!, L_r!, ΣK(A_r * ∀_des!, N_fit_r!, D_r!, K_extra_r!))
 
 ## Pressure Drop Solver
-# init vector
-∀_des! = ones(cols(A), 1) * (121 / (cols(A))) * ('gal / 'min)
+# The start: each spur in the middle of its exchanger's data, so none starts against a wall
+∀_des! = .hx_mid(exchangers!) * ('gal / 'min)
 # The pump's target pressure difference, Δp_target, comes from the plugin's block above.
 
 # root solver finds where all pressure drops across all paths are equal. The path to spur j runs out along the supply, through its exchanger and its regulating valve and back along the return, its circulator adding head: transpose(A) * Δp_supply and transpose(A_r) * Δp_return add up the segments each path passes through.
@@ -307,7 +311,7 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 !root ∀_des!
   equation: residual(∀_des!)
   autorun: on
-  #@ result {"hash":"831f7e9c4292","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0008378875569394949],[0.0008358452676800979],[0.0008367833576501388],[0.0008362652547693466],[0.0008368281486426847],[0.0008380404954045485],[0.0008399407323612278],[0.0008423008893579462]],"unit":"meter ** 3 / second"}],"nfev":34,"message":"The solution converged.","resid":2.59e-08}
+  #@ result {"hash":"e0ef9283b429","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0008378875567920616],[0.000835845267889351],[0.0008367833576592761],[0.0008362652548745717],[0.000836828148642861],[0.000838040495222131],[0.0008399407321448343],[0.0008423008895804308]],"unit":"meter ** 3 / second"}],"nfev":19,"message":"The solution converged.","resid":4.32e-05}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min

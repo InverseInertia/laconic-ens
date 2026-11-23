@@ -418,6 +418,85 @@
     return { r0, c0, r1, c1 };
   }
 
+  // ---- sinks set up alike ----------------------------------------------------------------------
+  // A sink's own settings, the ones the plugin can copy from one sink to others: its exchanger (x), its
+  // circulator (s), its regulating valve's Cv (v) and its extra K (k). Its name, place and length are its own.
+  const SINK_SETTINGS = ['x', 's', 'v', 'k'];
+  const settingsOf = (pad) => JSON.stringify(SINK_SETTINGS.map((f) => (pad[f] === undefined ? null : pad[f])));
+  function copySink(from, to) {
+    for (const f of SINK_SETTINGS) if (from[f] === undefined) delete to[f]; else to[f] = from[f];
+  }
+
+  /* The marks that tell sinks set up alike: tours of a 3 by 3 grid of points, a step to any neighbour
+     (diagonals too), as a travelling salesman would go: the 16 that come back to the start and the 376
+     that do not. Each is a list of the points 0..8 (row by row) in order, and its steps as a set. */
+  const TOURS = (() => {
+    const near = (a, b) => a !== b && Math.abs(((a / 3) | 0) - ((b / 3) | 0)) <= 1 && Math.abs((a % 3) - (b % 3)) <= 1;
+    const closed = [], open = [];
+    const walk = (path, used) => {
+      if (path.length === 9) {
+        if (path[0] === 0 && near(path[8], 0) && path[1] < path[8]) closed.push({ points: path.slice(), closed: true });
+        else if (path[0] < path[8]) open.push({ points: path.slice(), closed: false });
+        return;
+      }
+      for (let n = 0; n < 9; n++) if (!used[n] && near(path[path.length - 1], n)) { used[n] = true; path.push(n); walk(path, used); path.pop(); used[n] = false; }
+    };
+    for (let start = 0; start < 9; start++) { const used = []; used[start] = true; walk([start], used); }
+    return closed.concat(open).map((t) => {
+      const steps = t.points.slice(0, t.closed ? 9 : 8).map((p, i) => { const q = t.points[(i + 1) % 9]; return p < q ? `${p}-${q}` : `${q}-${p}`; });
+      return { ...t, steps: new Set(steps) };
+    });
+  })();
+  // how unlike two tours look: the steps one takes that the other does not
+  const unlike = (a, b) => { let n = 0; for (const e of a.steps) if (!b.steps.has(e)) n++; for (const e of b.steps) if (!a.steps.has(e)) n++; return n; };
+
+  // A string's hash, to pick a group's tour: the same settings, the same mark, whenever it is drawn.
+  function hash(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x01000193) >>> 0;
+    return h;
+  }
+
+  /* The sinks set up alike: {key: tour index} for each sink whose settings at least one other sink has.
+     Each group's tour is the one most unlike the marks the groups before it took (the fewest steps in
+     common), looking from where its settings' hash points: the same settings, the same mark, and the
+     marks of one network as far apart as they go. */
+  function twins(state) {
+    const groups = new Map();
+    for (const [k, t] of Object.entries(state.cells)) {
+      if (t.t !== 'sink') continue;
+      const key = settingsOf(t);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(k);
+    }
+    const out = {}, taken = new Set();
+    for (const key of [...groups.keys()].sort()) {
+      const ks = groups.get(key);
+      if (ks.length < 2) continue;
+      const start = hash(key) % TOURS.length;
+      let best = -1, far = -1;
+      for (let j = 0; j < TOURS.length; j++) {
+        const i = (start + j) % TOURS.length;
+        if (taken.has(i)) continue;
+        let d = Infinity;
+        for (const t of taken) d = Math.min(d, unlike(TOURS[i], TOURS[t]));
+        if (d > far) { far = d; best = i; }
+        if (!taken.size) break;
+      }
+      taken.add(best);
+      for (const k of ks) out[k] = best;
+    }
+    return out;
+  }
+
+  // A tour as SVG: its points `step` apart, from (x, y) at its top left, drawn in `color` on a small tile.
+  function tourMark(i, x, y, color, paper, step = 6) {
+    const t = TOURS[i], pad = 3, size = 2 * step + 2 * pad;
+    const pts = t.points.map((n) => `${x + pad + (n % 3) * step},${y + pad + ((n / 3) | 0) * step}`).join(' ');
+    return `<g class="twin"><rect x="${x}" y="${y}" width="${size}" height="${size}" rx="3" fill="${esc(paper)}"/>` +
+      `<${t.closed ? 'polygon' : 'polyline'} points="${pts}" fill="none" stroke="${esc(color)}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></g>`;
+  }
+
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /* The layout as SVG text, from the state and its `network`. opts: {theme: {paper, text, ink, ret,
@@ -441,6 +520,7 @@
     }
     const front = !net.same && opts.layer === 'r' ? 'r' : 's';
     const h = CELL / 2, pw = 7;
+    const alike = twins(state);
 
     // One layer's tiles, in its colour; `selected` only on the layer in front. The layer behind is a
     // `ghost`: thin dashed centre lines and no pads, so it reads as a reference, not as pipe. A pipe on
@@ -488,6 +568,8 @@
           const s = h - 10;
           out.push(`<rect x="${cx - s}" y="${cy - s}" width="${2 * s}" height="${2 * s}" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="3"/>`);
           out.push(`<path d="M ${cx - s + 4} ${cy + 6} l 5 -12 l 5 12 l 5 -12 l 5 12 l 5 -12" fill="none" stroke="${esc(color)}" stroke-width="2"/>`);
+          // set up like other sinks: their shared mark, over the icon's top left corner
+          if (alike[k] !== undefined) out.push(tourMark(alike[k], cx - s - 8, cy - s - 8, th.text, th.paper));
         } else {
           for (const d of bits(tile.p)) out.push(arm(d));
           if (bits(tile.p).length > 1 && !hollow) out.push(`<circle cx="${cx}" cy="${cy}" r="${pw / 2}" fill="${esc(color)}"/>`);
@@ -747,7 +829,7 @@
   ];
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
-    blank, normalize, backdrop, side, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
+    blank, normalize, backdrop, side, SINK_SETTINGS, copySink, twins, TOURS, tourMark, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
     connect, erase, place, segmentAt, setSegmentLength, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, spread, curveNames, curveName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;

@@ -345,4 +345,36 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
     'drawn over an image, the drawing leaves out its paper');
 }
 
+// --- sinks set up alike ---------------------------------------------------------------------------
+{
+  // every tour visits the nine points once, a step to a neighbour (diagonals too) at a time
+  const near = (a, b) => Math.abs(((a / 3) | 0) - ((b / 3) | 0)) <= 1 && Math.abs((a % 3) - (b % 3)) <= 1 && a !== b;
+  const ok = P.TOURS.every((t) => [...t.points].sort().join() === '0,1,2,3,4,5,6,7,8'
+    && t.points.every((p, i) => i === 8 ? !t.closed || near(p, t.points[0]) : near(p, t.points[i + 1])));
+  eq([ok, P.TOURS.filter((t) => t.closed).length, new Set(P.TOURS.map((t) => t.points.join())).size], [true, 16, P.TOURS.length],
+    'the tours: each point once, 16 closed ones first, no two the same');
+  const sink = (x, s, extra = {}) => ({ t: 'sink', p: N, x, s, ...extra });
+  const st = { ...P.blank(), cells: { '0,0': sink(1, 1), '0,1': sink(1, 1), '0,2': sink(2, 1), '0,3': sink(2, 1, { v: 5 }),
+    '0,4': sink(2, 1, { v: 5 }), '0,5': sink(2, 1, { v: 5, k: 1 }) } };
+  const tw = P.twins(st);
+  eq(Object.keys(tw).sort(), ['0,0', '0,1', '0,3', '0,4'], 'only sinks with a twin are marked; a valve or an extra K tells them apart');
+  eq([tw['0,0'] === tw['0,1'], tw['0,3'] === tw['0,4'], tw['0,0'] !== tw['0,3']], [true, true, true], 'one mark a group, a group its own');
+  // the second group's mark shares as few steps with the first's as any tour does
+  const steps = (i) => P.TOURS[i].steps, apart = (a, b) => [...steps(a)].filter((e) => !steps(b).has(e)).length + [...steps(b)].filter((e) => !steps(a).has(e)).length;
+  eq(apart(tw['0,0'], tw['0,3']), Math.max(...P.TOURS.map((_, i) => (i === tw['0,0'] ? 0 : apart(tw['0,0'], i)))), 'marks as unlike as they go');
+  eq(P.twins(JSON.parse(JSON.stringify(st))), tw, 'the same settings, the same marks, each time');
+  // copying one sink's settings to another makes them alike, and takes what the first lacks away
+  P.copySink(st.cells['0,5'], st.cells['0,0']);
+  eq(st.cells['0,0'], sink(2, 1, { v: 5, k: 1 }), 'copied: exchanger, circulator, valve and extra K');
+  P.copySink(st.cells['0,2'], st.cells['0,0']);
+  eq(st.cells['0,0'], sink(2, 1), 'and a valve the source has none of is removed');
+  // marked on the drawing, over the sink's corner
+  const svg = P.draw(st, P.network(st), {});
+  eq((svg.match(/class="twin"/g) || []).length, Object.keys(P.twins(st)).length, 'each sink set up alike carries its mark');
+  // more groups than closed tours: open ones, still all different
+  const many = { ...P.blank(), cells: {} };
+  for (let i = 0; i < 20; i++) { many.cells[`0,${2 * i}`] = sink(i + 1, 1); many.cells[`1,${2 * i}`] = sink(i + 1, 1); }
+  const marks = Object.values(P.twins(many));
+  eq(new Set(marks).size, 20, '20 groups, 20 marks');
+}
 console.log(`pipenet: ${n} checks passed`);
