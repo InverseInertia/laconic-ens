@@ -271,10 +271,10 @@ def test_the_drawing_shows_the_sets_ticked_and_sinks_pick_curves_by_name(page):
     # a sink's exchanger is picked by the name the sheet gives it
     frame.locator("#sinks tbody tr").first.click()
     pick = frame.locator("#inspector select[aria-label='Exchanger curve']")
-    assert pick.locator("option").all_inner_texts() == ["HX_A", "HX_B"]
-    pick.select_option(label="HX_B")
+    assert pick.locator("option").all_inner_texts() == ["HBH060", "HBH009", "HBH006"]
+    pick.select_option(label="HBH009")
     page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[2;/)")
-    frame.locator("#sinks tbody tr").first.locator("td:nth-child(2):text-is('HX_B')").wait_for()
+    frame.locator("#sinks tbody tr").first.locator("td:nth-child(2):text-is('HBH009')").wait_for()
 
 
 def test_a_sink_takes_no_circulator_and_a_regulating_valve(page):

@@ -40,40 +40,82 @@ V@(D_h, ∀`) = 4 * ∀` / (pi * D_h^2)
 ~polyvec_4(x) = [1; x; x^2; x^3; x^4]
 
 ## Heat Exchanger Pressure Drop
-# Each exchanger's pressure drop is the quadratic through its points, fitted by least squares
-# when it is used. HX(∀`, k) is exchanger k's at the flow ∀`.
-sq(x) = x^2
-hx_rows(q) = hstack(ones(cols(q), 1), transpose(q), transpose(.sq(q)))
-hx_fit(k) = lstsq(hx_rows(row(HX_data, 2 * k - 1)), transpose(row(HX_data, 2 * k)))
-HX(∀`, k) = idx(transpose(hx_fit(k)) * polyvec_2(∀` * ('gal / 'min)^-1), 1) * 'psi
+# Each exchanger's pressure drop is a quadratic fitted to its data (a !regression of degree 2: through the
+# points when there are three). A fit holds only between the least and the greatest flow in its data
+# (interpolation, not extrapolation). HX_curve(∀`, k) is exchanger k's fit there, and 0 outside, for
+# plotting. HX(∀`, k), the one the solver uses, follows the fit inside and is a wall outside: from each end
+# of the data it rises (above the greatest flow) or falls (below the least) at WALL, so a flow past either
+# end is pushed back inside rather than taken. HX_C holds one row of coefficients per exchanger and HX_q its
+# least and greatest flow, in gal/min, both in the order of the !pluginvar exchangers: line below.
+WALL = 100 'psi / ('gal / 'min)
+q_span(data) = [min(row(data, 1)), max(row(data, 1))]
+clamp(q, lo, hi) = min([max([q, lo]), hi])
+hx_at(q, k) = idx(row(HX_C, k) * polyvec_2(q), 1) * 'psi
+hx_lo(k) = idx(row(HX_q, k), 1)
+hx_hi(k) = idx(row(HX_q, k), 2)
+HX_curve(∀`, k) = hx_at(∀` * ('gal / 'min)^-1, k) * heaviside(∀` * ('gal / 'min)^-1 - hx_lo(k)) * heaviside(hx_hi(k) - ∀` * ('gal / 'min)^-1)
+HX_c(q, qc, k) = hx_at(qc, k) + WALL * (q - qc) * 'gal / 'min
+HX(∀`, k) = HX_c(∀` * ('gal / 'min)^-1, clamp(∀` * ('gal / 'min)^-1, hx_lo(k), hx_hi(k)), k)
 
 # ---- Exchanger data: paste your own over the lines from here to the next ---- line --------------
-# HX_data holds two rows per exchanger, in order: its flows in gal/min, then its pressure drops in psi
-# at those flows, as the manufacturer's selection software gives them. Every row has the same number
-# of points. Then give each exchanger a name, its number (its place in HX_data), and list the names
-# on the !pluginvar line, so the plugin offers them by name. Plot them with the !plot line below.
-# The two below are made-up placeholders (dp = k Q^2), not real exchangers: replace them.
-HX_data = [5, 10, 15, 20, 25, 30, 35; 0.1875, 0.75, 1.6875, 3, 4.6875, 6.75, 9.1875; 15, 20, 25, 30, 35, 40, 45; 1.0125, 1.8, 2.8125, 4.05, 5.5125, 7.2, 9.1125]
-HX_A = 1
-HX_B = 2
-!pluginvar exchangers: HX_A, HX_B
-!plot HX(x, HX_A), HX(x, HX_B), x = 5 'gal / 'min .. 45 'gal / 'min
-  title: "Heat exchanger pressure drop"
+# Each exchanger's data is two rows: its flows in gal/min, then its pressure drops in psi at those flows,
+# as the manufacturer's selection software or design guide gives them (three points or more). Give each a
+# !regression of degree 2, add its row to HX_C and HX_q, give it a name and its number (its row), and list
+# the names on the !pluginvar line, so the plugin offers them by name. Plot them with the !plot lines below.
+# ClimateMaster Compact (HBH/V) water-source heat pumps, PSC blower, at 85 °F entering water (HBH-V small
+# design guide, 8-25-16: Performance Data, WPD). The guide gives three flows per temperature; the pressure
+# drops here are its ft of head over 2.31 ft/psi, which it gives to 0.1 ft rather than 0.1 psi. The largest
+# is first: a sink placed in the plugin takes exchanger 1 until another is picked.
+HXD_HBH060 = [7.5, 11.3, 15.0; 2.251, 5.108, 9.784]
+HXD_HBH009 = [1.1, 1.7, 2.3; 0.303, 0.8658, 1.905]
+HXD_HBH006 = [0.8, 1.1, 1.5; 0.2165, 0.3463, 0.6061]
+
+!regression F_HBH060
+  data: HXD_HBH060
+  degree: 2
+
+!regression F_HBH009
+  data: HXD_HBH009
+  degree: 2
+
+!regression F_HBH006
+  data: HXD_HBH006
+  degree: 2
+
+HX_C = vstack(F_HBH060, F_HBH009, F_HBH006)
+HX_q = vstack(q_span(HXD_HBH060), q_span(HXD_HBH009), q_span(HXD_HBH006))
+HBH060 = 1
+HBH009 = 2
+HBH006 = 3
+!pluginvar exchangers: HBH060, HBH009, HBH006
+!plot HX_curve(x, HBH060), x = 7 'gal / 'min .. 15.5 'gal / 'min
+  title: "HBH060 water pressure drop, 85 °F EWT"
+  points: HXD_HBH060, 'gal / 'min, 'psi
   yunit: 'psi
   xunit: 'gal / 'min
-  label 1: "HX_A"
-  label 2: "HX_B"
+  label 1: "HBH060"
+  label 2: "data"
+
+!plot HX_curve(x, HBH009), HX_curve(x, HBH006), x = 0.5 'gal / 'min .. 2.5 'gal / 'min
+  title: "HBH009 and HBH006 water pressure drop, 85 °F EWT"
+  points: hstack(HXD_HBH009, HXD_HBH006), 'gal / 'min, 'psi
+  yunit: 'psi
+  xunit: 'gal / 'min
+  label 1: "HBH009"
+  label 2: "HBH006"
+  label 3: "data"
 # ---- end of the exchanger data -----------------------------------------------------------------
 
 ## Grundfos Pump Curves
-# Raw data from online product information. Each curve is a pump of its own: the 43-100 F's and the
-# 26-99 FC's three speed settings, and the 15-42.
+# Raw data from online product information, flow in gal/min against head in ft. Each curve is a pump of
+# its own: the 43-100 F's and the 26-99 FC's three speed settings, the 15-42 and the C1016T.
 GRUND_43100A = transpose([21.4, 10.2; 2.3, 27.7; 0.7, 27.9; 5.45, 26.1; 3.9, 27.1; 10.1, 22; 27.6, 4.6; 7, 25.1; 14.6, 17.3; 18.15, 13.4; 23.36, 8.3; 25.5, 6.5; 31.76, 1.7; 29.6, 3.3; 11.7, 20.5; 19.8, 11.9; 13.2, 18.7; 16.55, 15.2; 8.6, 23.7])
 GRUND_43100B = transpose([37.6, 11.7; 3.96, 30; 1.24, 30.2; 9.14, 28.9; 6.8, 29.5; 18.5, 24.8; 44.7, 5.9; 12.4, 27.7; 27.2, 19.5; 32.54, 15.6; 39.95, 9.7; 42.8, 7.5; 49.7, 2; 47.15, 4; 20.8, 23.5; 35.2, 13.5; 24.1, 21.4; 29.95, 17.5; 16.7, 25.8])
 GRUND_43100C = transpose([42.1, 16.6; 4.24, 30.9; 0.6, 31.1; 11.2, 29.9; 8.1, 30.5; 63.6, 1.1; 55.8, 6.9; 15.14, 29.1; 27.7, 24.9; 33.6, 21.7; 46.9, 13.3; 51.04, 10.4; 61.46, 2.6; 59.7, 4; 20.4, 27.7; 37.5, 19.5; 23.35, 26.6; 30.8, 23.3; 17.9, 28.4])
 GRUND_2699A = transpose([17.7, 1.2; 8, 11.1; 13.3, 4.7; 6.53, 13.3; 5.35, 15.15; 9.5, 9.1; 3.95, 17.4; 15.54, 2.7; 1.85, 20.94; 2.9, 19.1; 11.44, 6.8; 0.55, 23.34])
 GRUND_2699B = transpose([15.3, 13; 22.57, 5.3; 12.8, 15.6; 10.93, 17.6; 18, 10.3; 8.7, 19.8; 24.4, 3.3; 3.17, 25.1; 6.53, 22.04; 20.7, 7.35; 0.5, 27.44])
 GRUND_2699C = transpose([30.33, 1.55; 20.2, 14.04; 28, 4.9; 17.55, 16.56; 14.4, 19.3; 22.8, 11.3; 11.55, 21.6; 8.6, 23.7; 5.65, 25.7; 3.35, 27.13; 25.43, 8.2; 0.66, 28.8])
+GRUND_C1016T = transpose([1.068, 2.18; 1.858, 1.35; 0.892, 2.32; 2.05, 1.1; 0.66, 2.52; 1.664, 1.6; 0.44, 2.74; 1.467, 1.78; 0.23, 3; 1.245, 2; 0.05, 3.28])
 GRUND_1542A = [4.64, 5.65, 6.8, 2.8, 3.5, 4.1, 5.13, 6.17, 2.04, 1.56, 1.14, 0.7, 0.23; 0.77, 0.44, 0.14, 1.55, 1.22, 0.98, 0.6, 0.3, 1.9, 2.15, 2.38, 2.62, 2.91]
 
 !regression G_43100A
@@ -104,20 +146,33 @@ GRUND_1542A = [4.64, 5.65, 6.8, 2.8, 3.5, 4.1, 5.13, 6.17, 2.04, 1.56, 1.14, 0.7
   data: GRUND_1542A
   degree: 4
 
-# The pumps by number, as pumps! picks them: one row of PUMP_C (a fit's coefficients) and one entry of
-# PUMP_max (the flow its curve is good to, past which it gives no head; 1000 gal/min for no limit) each. The plugin offers them by the
-# names on the !pluginvar pumps: line, in the same order.
-PUMP_C = vstack(G_43100A, G_43100B, G_43100C, G_2699A, G_2699B, G_2699C, G_1542)
-PUMP_max = [1000, 1000, 1000, 20.551, 1000, 1000, 10] * 'gal / 'min
-PUMP(∀`, n) = idx(row(PUMP_C, n) * polyvec_4(∀` * ('gal / 'min)^-1), 1) * 'ft * 'g_0 * ρ * heaviside(idx(PUMP_max, n) - ∀`)
-GRUND_43100A(∀`) = PUMP(∀`, 1)
-GRUND_43100B(∀`) = PUMP(∀`, 2)
-GRUND_43100C(∀`) = PUMP(∀`, 3)
-GRUND_2699A(∀`) = PUMP(∀`, 4)
-GRUND_2699B(∀`) = PUMP(∀`, 5)
-GRUND_2699C(∀`) = PUMP(∀`, 6)
-GRUND_1542A(∀`) = PUMP(∀`, 7)
-!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C, GRUND_2699A, GRUND_2699B, GRUND_2699C, GRUND_1542A
+!regression G_C1016T
+  data: GRUND_C1016T
+  degree: 4
+
+# The pumps by number, as pumps! picks them: one row of PUMP_C (a fit's coefficients) and one row of
+# PUMP_q (the least and the greatest flow in its data, in gal/min) each. A fit holds only between those
+# flows (interpolation, not extrapolation). PUMP_curve(∀`, n) is pump n's fit there, and no head outside,
+# for plotting. PUMP(∀`, n), the one the solver uses, follows the fit inside and is a wall outside, as HX
+# is: its head falls at WALL past the greatest flow and rises at WALL below the least, so the solver is
+# pushed back inside. The plugin offers the pumps by the names on the !pluginvar pumps: line, in order.
+PUMP_C = vstack(G_43100A, G_43100B, G_43100C, G_2699A, G_2699B, G_2699C, G_1542, G_C1016T)
+PUMP_q = vstack(q_span(GRUND_43100A), q_span(GRUND_43100B), q_span(GRUND_43100C), q_span(GRUND_2699A), q_span(GRUND_2699B), q_span(GRUND_2699C), q_span(GRUND_1542A), q_span(GRUND_C1016T))
+pump_lo(n) = idx(row(PUMP_q, n), 1)
+pump_hi(n) = idx(row(PUMP_q, n), 2)
+pump_at(q, n) = idx(row(PUMP_C, n) * polyvec_4(q), 1) * 'ft * 'g_0 * ρ
+PUMP_curve(∀`, n) = pump_at(∀` * ('gal / 'min)^-1, n) * heaviside(∀` * ('gal / 'min)^-1 - pump_lo(n)) * heaviside(pump_hi(n) - ∀` * ('gal / 'min)^-1)
+PUMP_c(q, qc, n) = pump_at(qc, n) - WALL * (q - qc) * 'gal / 'min
+PUMP(∀`, n) = PUMP_c(∀` * ('gal / 'min)^-1, clamp(∀` * ('gal / 'min)^-1, pump_lo(n), pump_hi(n)), n)
+GRUND_43100A(∀`) = PUMP_curve(∀`, 1)
+GRUND_43100B(∀`) = PUMP_curve(∀`, 2)
+GRUND_43100C(∀`) = PUMP_curve(∀`, 3)
+GRUND_2699A(∀`) = PUMP_curve(∀`, 4)
+GRUND_2699B(∀`) = PUMP_curve(∀`, 5)
+GRUND_2699C(∀`) = PUMP_curve(∀`, 6)
+GRUND_1542A(∀`) = PUMP_curve(∀`, 7)
+GRUND_C1016T(∀`) = PUMP_curve(∀`, 8)
+!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C, GRUND_2699A, GRUND_2699B, GRUND_2699C, GRUND_1542A, GRUND_C1016T
 # A spur with no circulator (pumps! 0) gets no head from one
 PUMP_sel(∀`, n) = heaviside(n - 0.5) * PUMP(∀`, max([n, 1]))
 
@@ -144,7 +199,16 @@ PUMP_sel(∀`, n) = heaviside(n - 0.5) * PUMP(∀`, max([n, 1]))
   label 3: "Speed 3"
   label 4: "raw data"
 
-!plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x),GRUND_2699A(x), GRUND_2699B(x), GRUND_2699C(x), GRUND_1542A(x), x = 0 'gal / 'min .. 60 'gal / ('min)
+!plot GRUND_C1016T(x), x = 0 'gal / 'min .. 2.5 'gal / ('min)
+  title: "Grundfos C1016T Pump Curve"
+  points: GRUND_C1016T, 'gal / 'min, 'ft_H2O
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
+  label 1: "fit"
+  label 2: "raw data"
+
+!plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x),GRUND_2699A(x), GRUND_2699B(x), GRUND_2699C(x), GRUND_1542A(x), GRUND_C1016T(x), x = 0 'gal / 'min .. 60 'gal / ('min)
   title: "Grundfos Pump Curves"
   yunit: 'psi
   xunit: 'gal / 'min
@@ -237,7 +301,7 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 !root ∀_des!
   equation: residual(∀_des!)
   autorun: on
-  #@ result {"hash":"d9f3e69b3772","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0012953032613255125],[0.0012845803639646644],[0.0012892805699231452],[0.001286603948546959],[0.001289578887295717],[0.001295752923737711],[0.0013056640590469427],[0.0013179310901469132]],"unit":"meter ** 3 / second"}],"nfev":18,"message":"The solution converged.","resid":1.25e-06}
+  #@ result {"hash":"831f7e9c4292","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0008378875569394949],[0.0008358452676800979],[0.0008367833576501388],[0.0008362652547693466],[0.0008368281486426847],[0.0008380404954045485],[0.0008399407323612278],[0.0008423008893579462]],"unit":"meter ** 3 / second"}],"nfev":34,"message":"The solution converged.","resid":2.59e-08}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min

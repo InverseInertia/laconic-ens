@@ -227,7 +227,7 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert sent[0]["unit"] == "gal/min"
 
 
-@pytest.mark.parametrize("method, first", [(1, 0.3804), (2, 0.1532), (3, 0.3886)])
+@pytest.mark.parametrize("method, first", [(1, 0.3804), (2, 0.1559), (3, 0.3913)])
 def test_each_fitting_loss_method_gives_the_segments_their_K(method, first):
     """Crane (L/D * f_T for steel), Hooper 2-K and Darby 3-K on the plugin's sheet, from its own tables."""
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
@@ -475,12 +475,12 @@ def test_the_plugins_sheet_solves_a_return_laid_out_on_its_own():
     assert all(abs(float(x)) < 1e-3 for x in re.findall(r"-?\d+\.?\d*(?:e-?\d+)?", residual.text.split("=", 1)[1].replace("psi", "")))
 
 
-def test_the_plugins_sheet_ships_no_manufacturers_exchanger_data():
-    """Its exchangers are made-up placeholders to paste real data over; the SWEP curves are not for
-    redistribution and must not come back."""
+def test_the_plugins_sheet_ships_only_published_exchanger_data():
+    """Its exchangers are ClimateMaster's, from a public design guide, to paste other data over; the SWEP
+    curves are not for redistribution and must not come back."""
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
     assert "SWEP" not in text
-    assert "HX_data = [5, 10, 15, 20, 25, 30, 35; 0.1875, 0.75" in text     # 0.0075 Q^2
+    assert "HXD_HBH060 = [7.5, 11.3, 15.0; 2.251, 5.108, 9.784]" in text     # 5.2, 11.8, 22.6 ft over 2.31
     assert "# ---- Exchanger data: paste your own over the lines from here" in text
 
 def test_a_line_that_defines_a_plugins_name_again_is_warned_and_named_to_the_plugin():
@@ -505,9 +505,30 @@ def test_a_pluginvar_line_can_send_a_list_of_names():
 def test_the_plugins_sheet_names_its_exchanger_and_pump_curves():
     text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
     sent = [v for r in evaluate(text).results if r.pluginvar for v in r.pluginvar.values if "names" in v]
-    assert sent == [{"name": "exchangers", "names": ["HX_A", "HX_B"]},
+    assert sent == [{"name": "exchangers", "names": ["HBH060", "HBH009", "HBH006"]},
                     {"name": "pumps", "names": ["GRUND_43100A", "GRUND_43100B", "GRUND_43100C", "GRUND_2699A", "GRUND_2699B",
-                                                "GRUND_2699C", "GRUND_1542A"]}]
+                                                "GRUND_2699C", "GRUND_1542A", "GRUND_C1016T"]}]
+
+
+def test_the_plugins_sheet_holds_each_curve_to_its_data_with_walls():
+    """A fit holds only between the least and the greatest flow in its data. Past either end the solver's
+    HX and PUMP carry on from the end of the fit at WALL (100 psi per gal/min), the way that pushes the
+    flow back inside; the curves plotted (HX_curve, GRUND_...) stop at the data."""
+    from laconic.parser import parse_expr
+    from laconic.sheet import evaluator_at
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    ev = evaluator_at(text, len(text.split("\n")))
+    psi = lambda src: ev.eval(parse_expr(src)).to("psi").magnitude
+    # the HBH060's three points, 7.5 to 15 gal/min, and a quadratic through them
+    assert [psi(f"HX({q}'gal/'min, HBH060)") for q in (7.5, 11.3, 15)] == pytest.approx([2.251, 5.108, 9.784], abs=1e-6)
+    assert psi("HX(16'gal/'min, HBH060)") == pytest.approx(9.784 + 100)       # above: the drop climbs
+    assert psi("HX(6.5'gal/'min, HBH060)") == pytest.approx(2.251 - 100)      # below: it falls
+    assert psi("HX_curve(16'gal/'min, HBH060)") == 0
+    # the C1016T, 0.05 to 2.05 gal/min: its head falls past the end and climbs below the start
+    end, start = psi("PUMP(2.05'gal/'min, 8)"), psi("PUMP(0.05'gal/'min, 8)")
+    assert psi("PUMP(3.05'gal/'min, 8)") == pytest.approx(end - 100)
+    assert psi("PUMP(0'gal/'min, 8)") == pytest.approx(start + 5)
+    assert psi("GRUND_C1016T(3'gal/'min)") == 0 and psi("GRUND_C1016T(1'gal/'min)") > 0
 
 
 def test_the_plugins_sheet_takes_regulating_valves_instead_of_or_beside_circulators():
