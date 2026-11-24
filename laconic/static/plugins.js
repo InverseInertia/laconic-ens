@@ -28,6 +28,9 @@
                      not there to recall
                      {type: "lens:recall", key}
      page -> plugin  {type: "lens:recalled", key, data}  the answer: what was kept, or null
+     plugin -> page  {type: "lens:print", svg, title, page: {w, h}, save}  print a page the plugin made, as SVG
+                     `page` mm wide and high (the printer's page size is set to it), or with `save`
+                     download it as `title`.svg. Shown as an image, so scripts in it do not run
 
    Pure functions, also run under Node (tests/test_plugins.js):
      blocks(rows)   the plugin blocks among the eval rows: [{key, line, name, state, outputs}]; `key`
@@ -42,7 +45,7 @@
    to /api/pluginupload); install(name), installFolder(files) and remove(name) do the work.
      folderFiles(list)  a picked folder's name and its own files, by file name (pure)
 
-   The page is the host: Plugins.init({text, edit, say, dialog, frames, title, auto, openSheet}) where
+   The page is the host: Plugins.init({text, edit, say, dialog, frames, title, auto, openSheet, print, download}) where
    `edit(text, edits)` makes server edits against `text` (false when the sheet has changed since). */
 (function (root) {
   'use strict';
@@ -51,7 +54,7 @@
   // digits, _ and ∞, then any of ` ! @ &. The server checks it again before it writes anything.
   const NAME = /^[\p{L}_∀][\p{L}\p{N}_∞∀]*[`!@&]*$/u;
   const MAX_SVG = 2000000;
-  const KEY = /^[\w.-]{1,100}$/, MAX_KEEP = 60000000;
+  const KEY = /^[\w.-]{1,100}$/, MAX_KEEP = 60000000, MAX_PRINT = 80000000;
 
   // The page's theme variables a plugin is given (index.html :root, theme.js): colours and fonts.
   const THEME = ['--paper', '--paper-deep', '--grid', '--text', '--text-soft', '--ink', '--on-ink', '--rule', '--err',
@@ -103,6 +106,14 @@
       if (data !== null && (typeof data !== 'string' || data.length > MAX_KEEP)) return null;
       return { type: 'lens:keep', key: msg.key, data };
     }
+    if (msg.type === 'lens:print') {
+      const svg = msg.svg, page = msg.page || {};
+      if (typeof svg !== 'string' || svg.length > MAX_PRINT || !/^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/.test(svg)) return null;
+      const mm = (x) => typeof x === 'number' && isFinite(x) && x >= 25 && x <= 20000;
+      if (!mm(page.w) || !mm(page.h)) return null;
+      const title = String(msg.title || 'plugin').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').trim().slice(0, 120) || 'plugin';
+      return { type: 'lens:print', svg, title, page: { w: page.w, h: page.h }, save: !!msg.save };
+    }
     if (msg.type === 'lens:recall') return typeof msg.key === 'string' && KEY.test(msg.key) ? { type: 'lens:recall', key: msg.key } : null;
     return null;
   }
@@ -112,6 +123,15 @@
     const pa = String(a).split('.').map((x) => parseInt(x, 10) || 0), pb = String(b).split('.').map((x) => parseInt(x, 10) || 0);
     for (let i = 0; i < Math.max(pa.length, pb.length); i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
     return false;
+  }
+
+  // The document a plugin's page prints from: the page size set to the picture's, and the picture shown as an
+  // image (so nothing in it runs), at its own size.
+  function printPage(svg, page, title) {
+    const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>@page { size: ${page.w}mm ${page.h}mm; margin: 0 }`
+      + ` html, body { margin: 0 } img { display: block; width: ${page.w}mm; height: ${page.h}mm }</style></head>`
+      + `<body><img alt="" src="${imageUrl(svg)}"></body></html>`;
   }
 
   const imageUrl = (svg) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -266,6 +286,10 @@
     else if (msg.type === 'lens:open-template') openTemplate(e.name);
     else if (msg.type === 'lens:preview') { e.preview = imageUrl(msg.svg); paint(e); }
     else if (msg.type === 'lens:write') write(e, msg);
+    else if (msg.type === 'lens:print') {
+      if (msg.save) host.download(`${msg.title}.svg`, msg.svg, 'image/svg+xml');
+      else host.print(printPage(msg.svg, msg.page, msg.title)).catch((err) => host.say(`Could not print: ${err.message}`));
+    }
     else if (msg.type === 'lens:keep') kept(`${e.name}/${msg.key}`, msg.data).catch((err) => host.say(`The ${e.name} plugin could not keep ${msg.key}: ${err.message}`));
     else if (msg.type === 'lens:recall') {
       const frame = e.frame;
@@ -464,7 +488,7 @@
     for (const box of document.querySelectorAll(`.plugin-box[data-key="${CSS.escape(e.key)}"]`)) fill(box, e, null);
   }
 
-  const api = { THEME, blocks, inputs, check, imageUrl, folderFiles, newer, init, after, build, open, reload, retheme, install, installFolder, remove, settings, openTemplate,
+  const api = { printPage, THEME, blocks, inputs, check, imageUrl, folderFiles, newer, init, after, build, open, reload, retheme, install, installFolder, remove, settings, openTemplate,
     get current() { return current; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plugins = api;

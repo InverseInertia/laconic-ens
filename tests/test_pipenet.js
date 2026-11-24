@@ -402,4 +402,27 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   const marks = Object.values(P.twins(many));
   eq(new Set(marks).size, 20, '20 groups, 20 marks');
 }
+// --- printing ------------------------------------------------------------------------------------
+{
+  const s = P.blank(); s.cells = P.example(); P.syncPads(s, 's');
+  const d = P.draw(s, P.network(s), { grid: false });
+  const rows = Array.from({ length: 80 }, (_, i) => [String(i + 1), '30', '4"', '12.5']);
+  const blocks = [{ title: 'Segments', head: ['#', 'L ft', 'Pipe', 'Q'], rows, align: ['l', 'r', 'l', 'r'] }, { title: 'Check', lines: ['One source, 8 sinks.'] }];
+  const page = P.printSheet({ title: 'Loop <1>', drawings: [{ svg: d, label: 'Supply' }], blocks, paper: { w: 431.8, h: 279.4 } });
+  eq([page.w, page.h], [431.8, 279.4], 'on paper: the page is the paper');
+  eq(page.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="431.8mm" height="279.4mm" viewBox="0 0 431.8 279.4"'), true, 'in millimetres');
+  eq([page.svg.includes('>Loop &lt;1&gt;<'), (page.svg.match(/\(continued\)/g) || []).length > 0], [true, true],
+    'the title, escaped; a table longer than the page goes on in another column');
+  const wide = (svg) => +/<svg x="[\d.]+" y="[\d.]+" width="([\d.]+)"/.exec(svg.slice(200))[1];
+  // two tall drawings: side by side, larger than one under the other
+  const tall = d.replace(/viewBox="0 0 ([\d.]+) ([\d.]+)"/, (_, w, h) => `viewBox="0 0 ${w} ${+h * 4}"`);
+  const two = P.printSheet({ drawings: [{ svg: tall, label: 'Supply' }, { svg: tall, label: 'Return' }], blocks: [], paper: { w: 914.4, h: 609.6 } });
+  const xs = [...two.svg.matchAll(/<svg x="([\d.]+)" y="([\d.]+)" width/g)].map((m) => [+m[1], +m[2]]);
+  eq([xs.length, xs[0][1] === xs[1][1], xs[1][0] > xs[0][0]], [2, true, true], 'two tall drawings go side by side');
+  // at a scale: the drawing at exactly that size, the page grown to hold it
+  const sc = P.printSheet({ drawings: [{ svg: d }], blocks: [], scale: 0.5 });
+  const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(d);
+  eq([Math.abs(wide(sc.svg) - +vb[1] * 0.5) < 0.02, sc.w > +vb[1] * 0.5], [true, true], 'at a scale, the drawing is that size and the page holds it');
+}
+
 console.log(`pipenet: ${n} checks passed`);

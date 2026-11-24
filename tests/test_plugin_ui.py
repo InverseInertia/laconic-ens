@@ -583,3 +583,33 @@ def test_spurs_against_the_end_of_their_data_are_named_ringed_and_bannered(page)
     assert frame.locator("#msgs li.err:has-text('runs against the end of its exchanger')").count() == n
     assert frame.locator("#canvas rect[stroke-dasharray='5 3']").count() == n
     assert frame.locator("#showSets label:has-text('at_wall')").count() == 0   # a warning, not a value to draw
+
+
+def test_the_drawing_prints_with_its_balloons_and_tables_on_any_paper_or_at_a_scale(page, tmp_path):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    frame.locator("#segments th:has-text('Q gal/min')").wait_for()
+    frame.locator("#printOpen").click()
+    frame.locator("#printPanel:not([hidden])").wait_for()
+    frame.locator("#prTitle").fill("Loop 1")
+    frame.locator("#prPaper").select_option("Tabloid (11×17)")                # landscape: 17 × 11 in
+    assert frame.locator("#prSize").inner_text().startswith("17.0 × 11.0 in")
+    with page.expect_download() as dl:
+        frame.locator("#prSave").click()
+    assert dl.value.suggested_filename == "Loop 1.svg"
+    svg = open(dl.value.path(), encoding="utf-8").read()
+    assert svg.startswith('<svg xmlns="http://www.w3.org/2000/svg" width="431.8mm" height="279.4mm"')
+    assert ">Loop 1<" in svg and ">Segments<" in svg and ">Sinks<" in svg and ">Network<" in svg
+    assert svg.count('rx="5"') >= 15 + 8                       # a balloon for each segment and sink
+    # Print: LENS prints it from its hidden frame, the page set to its size, the picture as an image
+    frame.locator("#prPrint").click()
+    page.wait_for_selector("iframe.printFrame")
+    doc = page.evaluate("document.querySelector('iframe.printFrame').srcdoc")
+    assert "size: 431.8mm 279.4mm" in doc and '<img alt="" src="data:image/svg+xml' in doc
+    # at a scale: 1 in on paper is 10 ft, a square is 10 ft, so 15 squares across are 15 in and more
+    frame.locator("#prPaper").select_option("scale")
+    frame.locator("#prScale").fill("10")
+    frame.locator("#prScale").press("Enter")
+    w = float(frame.locator("#prSize").inner_text().split(" × ")[0])
+    assert w > 15

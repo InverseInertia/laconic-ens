@@ -834,6 +834,107 @@
       el('span', { class: 'pair' }, input, el('button', { onclick: applyScale }, 'Scale'))));
   }
 
+  // ---- printing -----------------------------------------------------------------------------------
+  // The Print panel: the drawing (each side, if both), its balloons as On the drawing ticks them and the
+  // sidebar's tables, composed as one SVG page (P.printSheet) on a paper size or at a scale, which LENS
+  // prints (lens:print) or saves. The panel's choices last while the page is open; they are not the sheet's.
+  const pr = { paper: 'Tabloid (11×17)', orient: 'land', w: 11, h: 17, scale: 10 };
+  const PAPER_OPTS = [...P.PAPERS.map(([n]) => [n, n]), ['custom-in', 'Custom (inches)'], ['custom-mm', 'Custom (mm)'], ['scale', 'At a scale: the page fits the drawing']];
+  $('#prPaper').replaceChildren(...PAPER_OPTS.map(([v, t]) => el('option', { value: v }, t)));
+  function printForm() {
+    $('#prPaper').value = pr.paper;
+    $('#prCustom').hidden = !pr.paper.startsWith('custom');
+    $('#prOrientRow').hidden = pr.paper.startsWith('custom') || pr.paper === 'scale';
+    $('#prScaleRow').hidden = pr.paper !== 'scale';
+    $('#prScaleLabel').textContent = `1 in on paper is (${state.units.L})`;
+    $('#prOrient').value = pr.orient;
+    setNum($('#prW'), pr.w); setNum($('#prH'), pr.h); setNum($('#prScale'), pr.scale);
+    $('#prBothRow').hidden = state.ret !== 'separate';
+    $('#prBgRow').hidden = !(state.bg && bg.key === state.bg.key && bg.data);
+    const page = printPage();
+    $('#prSize').textContent = page ? `${(page.w / 25.4).toFixed(1)} × ${(page.h / 25.4).toFixed(1)} in (${Math.round(page.w)} × ${Math.round(page.h)} mm)` : '';
+  }
+  $('#printOpen').onclick = () => { if (!$('#prTitle').value) $('#prTitle').value = 'Pipe network'; printForm(); $('#printPanel').hidden = false; };
+  $('#prClose').onclick = () => { $('#printPanel').hidden = true; };
+  $('#printPanel').addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); $('#printPanel').hidden = true; } });
+  $('#prPaper').onchange = (e) => {
+    pr.paper = e.target.value;
+    if (pr.paper === 'custom-mm' && pr.w < 100) { pr.w = Math.round(pr.w * 25.4); pr.h = Math.round(pr.h * 25.4); }
+    if (pr.paper === 'custom-in' && pr.w >= 100) { pr.w = +(pr.w / 25.4).toFixed(2); pr.h = +(pr.h / 25.4).toFixed(2); }
+    printForm();
+  };
+  $('#prOrient').onchange = (e) => { pr.orient = e.target.value; printForm(); };
+  for (const [id, k] of [['#prW', 'w'], ['#prH', 'h'], ['#prScale', 'scale']]) $(id).onchange = (e) => { const x = positive(e.target.value); if (x) pr[k] = x; printForm(); };
+  for (const id of ['#prBoth', '#prBg', '#prGrid', '#prSeg', '#prSinks', '#prNet', '#prCheck', '#prFont']) $(id).onchange = () => printForm();
+
+  // A table of the sidebar's, as text: its head, its rows, and which columns are numbers (right aligned).
+  function tableOf(box, title) {
+    const t = box && !box.hidden && box.querySelector('table');
+    if (!t) return null;
+    const head = [...t.querySelectorAll('thead th')].map((x) => x.textContent.trim());
+    const trs = [...t.querySelectorAll('tbody tr')];
+    const rows = trs.map((tr) => [...tr.children].map((x) => x.textContent.trim()));
+    const first = trs[0] ? [...trs[0].children] : [];
+    const align = head.map((_, i) => (i === 0 || (first[i] && first[i].classList.contains('name')) ? 'l' : 'r'));
+    return { title, head, rows, align };
+  }
+  function printBlocks() {
+    const blocks = [];
+    if ($('#prSeg').checked) {
+      const two = !$('#rsegments').hidden;
+      for (const b of [tableOf($('#segments'), two ? 'Supply segments' : 'Segments'), two && tableOf($('#rsegments'), 'Return segments')]) if (b) blocks.push(b);
+    }
+    if ($('#prSinks').checked) { const b = tableOf($('#sinks'), 'Sinks'); if (b) blocks.push(b); }
+    if ($('#prNet').checked) {
+      const solver = P.SOLVERS.find(([n]) => n === state.solver);
+      const qu = state.q.u, held = state.hold === 'flow' ? `a total flow of ${P.fmt(state.q.v)} ${qu}` : `a pressure difference of ${P.fmt(state.dp.v)} ${state.dp.u.replace('_', ' ')}`;
+      blocks.push({ title: 'Network', lines: [
+        `Pipe: ${P.sizeName(state, state.nps)}${state.nps ? `, Sch ${state.sch}` : ''}. A grid square is ${P.fmt(state.cell)} ${state.units.L}.`,
+        `Return: ${state.ret === 'separate' ? 'laid out on its own' : 'the same as the supply'}.`,
+        `The main pump holds ${held}.`,
+        `Fitting losses: ${['', 'Crane TP-410', 'Hooper 2-K', 'Darby 3-K'][state.method]}. Solver: ${solver ? solver[1] : state.solver}.`] });
+    }
+    if ($('#prCheck').checked) {
+      const notes = [...$('#msgs').querySelectorAll('li')].map((li) => li.textContent.trim()).filter(Boolean);
+      if (notes.length) blocks.push({ title: 'Check', lines: notes });
+    }
+    return blocks;
+  }
+  // Each side's drawing in print colours (the drawing's own light defaults), with the background image under it.
+  function printDrawings() {
+    const layers = state.ret === 'separate' && $('#prBoth').checked ? ['s', 'r'] : [front()];
+    const withBg = !!(state.bg && bg.key === state.bg.key && bg.data) && $('#prBg').checked;
+    const box = (() => { const b = P.bounds(state, 1), g = withBg && P.backdrop(state); return g ? grow(b, g) : b; })();
+    return layers.map((L) => {
+      let svg = P.draw(state, net, { inputs, layer: L, grid: $('#prGrid').checked, bounds: box, effort: 400, key: 'svg',
+        walls: new Set(Object.keys(walls)), underlay: withBg, theme: { sans: 'sans-serif' } });
+      if (withBg) {
+        const g = state.bg, X = (g.x - box.c0) * P.CELL, Y = (g.y - box.r0) * P.CELL;
+        svg = svg.replace(/^(<svg\b[^>]*>)/, (head) => `${head}<rect width="100%" height="100%" fill="#ffffff"/>`
+          + `<image href="${bg.data}" x="${X}" y="${Y}" width="${g.w * P.CELL}" height="${g.w * g.ar * P.CELL}" opacity="${g.o}" preserveAspectRatio="none"/>`);
+      }
+      return { svg, label: layers.length > 1 ? (L === 'r' ? 'Return' : 'Supply') : '' };
+    });
+  }
+  function printPage() {
+    let paper = null, scale = null;
+    if (pr.paper === 'scale') scale = (25.4 / pr.scale) * (state.cell / P.CELL);      // mm on paper per drawing unit
+    else if (pr.paper.startsWith('custom')) { const k = pr.paper === 'custom-in' ? 25.4 : 1; paper = { w: pr.w * k, h: pr.h * k }; }
+    else { const [, a, b] = P.PAPERS.find(([n]) => n === pr.paper); paper = pr.orient === 'land' ? { w: b, h: a } : { w: a, h: b }; }
+    if (paper) return { w: paper.w, h: paper.h, paper };
+    // at a scale the page is as large as the drawing needs: lay it out once to find out
+    const sheet = P.printSheet({ title: $('#prTitle').value, drawings: printDrawings(), blocks: printBlocks(), scale, font: +$('#prFont').value });
+    return { w: sheet.w, h: sheet.h, scale, sheet };
+  }
+  function sendPrint(save) {
+    const page = printPage();
+    const sheet = page.sheet || P.printSheet({ title: $('#prTitle').value, drawings: printDrawings(), blocks: printBlocks(),
+      paper: page.paper, font: +$('#prFont').value });
+    post({ type: 'lens:print', svg: sheet.svg, title: $('#prTitle').value || 'Pipe network', page: { w: sheet.w, h: sheet.h }, save });
+  }
+  $('#prPrint').onclick = () => sendPrint(false);
+  $('#prSave').onclick = () => sendPrint(true);
+
   window.addEventListener('resize', () => refresh());   // the frame is sized when its dialog opens
   refresh();
   post({ type: 'lens:ready' });

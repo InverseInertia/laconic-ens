@@ -828,6 +828,138 @@
     return left;
   }
 
+  // ---- printing ---------------------------------------------------------------------------------
+  // Paper sizes in mm, portrait (width, height): the US sizes, the ARCH sizes drawings are plotted on, ISO A.
+  const PAPERS = [['Letter', 215.9, 279.4], ['Legal', 215.9, 355.6], ['Tabloid (11×17)', 279.4, 431.8], ['ARCH C (18×24)', 457.2, 609.6],
+    ['ARCH D (24×36)', 609.6, 914.4], ['ARCH E (36×48)', 914.4, 1219.2], ['A4', 210, 297], ['A3', 297, 420], ['A2', 420, 594], ['A1', 594, 841], ['A0', 841, 1189]];
+
+  /* A printed page as SVG, in millimetres: a title along the top, the drawings on the left and the
+     sidebar's blocks in columns on the right. opts:
+       title       the page's title
+       drawings    [{svg, label}]: drawings from draw(), stacked top to bottom (the supply and the return)
+       blocks      [{title, head: [..], rows: [[..]], align: ['l'|'r', ..]}] tables, or {title, lines: [..]} notes
+       paper       {w, h} in mm: everything fitted on it; or
+       scale       mm on paper per drawing unit (a grid square is CELL units): the drawings at that scale, the
+                   page as large as it needs to be
+       font        the sidebar's text height in mm (default 2.8)
+     Returns {svg, w, h}. A table longer than the page goes on in the next column, its head repeated. */
+  function printSheet(opts) {
+    const M = 10, GAP = 8, font = opts.font || 2.8, LH = font * 1.5, CH = font * 0.64, TITLE = 12;
+    const drawings = (opts.drawings || []).map((d) => {
+      const m = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(d.svg);
+      return { ...d, w: m ? +m[1] : 100, h: m ? +m[2] : 100 };
+    });
+    // the sidebar: each block as rows of cells with widths, then flowed into columns of the page's height
+    const blocks = (opts.blocks || []).map((b) => {
+      if (b.lines) {
+        const wrap = 64, lines = [];
+        for (const text of b.lines) {
+          let line = '';
+          for (const word of String(text).split(' ')) {
+            if ((line + ' ' + word).trim().length > wrap) { lines.push(line); line = word; } else line = (line + ' ' + word).trim();
+          }
+          lines.push(line);
+        }
+        return { title: b.title, notes: lines, w: Math.max(b.title.length, ...lines.map((l) => l.length)) * CH + 2 };
+      }
+      const cols = b.head.map((h, i) => Math.max(String(h).length, ...b.rows.map((r) => String(r[i] ?? '').length)) * CH + 2.5);
+      return { ...b, cols, w: Math.max(cols.reduce((a, x) => a + x, 0), b.title.length * CH * 1.1) };
+    });
+    const lines = (b) => (b.notes ? b.notes.length : b.rows.length + 1) + 1.6;   // its rows, and its title
+    const flow = (height) => {   // the blocks in columns no taller than `height`
+      const columns = [{ items: [], h: 0, w: 0 }];
+      for (const b of blocks) {
+        const all = b.notes || b.rows;
+        let start = 0;
+        while (start < all.length || (start === 0 && !all.length)) {
+          let col = columns[columns.length - 1];
+          const room = Math.floor((height - col.h) / LH - (b.notes ? 1.6 : 2.6));
+          if (room < 1 && col.items.length) { columns.push({ items: [], h: 0, w: 0 }); continue; }
+          const n = Math.max(1, Math.min(all.length - start, room));
+          col.items.push({ b, from: start, to: start + n, cont: start > 0 });
+          col.h += (n + (b.notes ? 1.6 : 2.6)) * LH;
+          col.w = Math.max(col.w, b.w);
+          start += n;
+          if (!all.length) break;
+        }
+      }
+      return columns.filter((c) => c.items.length);
+    };
+    // Two or more drawings go one under another, or side by side: whichever prints them larger (a tall
+    // layout, side by side). The size of the arrangement at a scale `sc`, labels and gaps included:
+    let W, H, columns, scale, panelW, across = false;
+    const label = LH * 1.4, n = drawings.length;
+    const size = (sc, side) => side
+      ? [drawings.reduce((a, d) => a + d.w * sc, 0) + (n - 1) * GAP, Math.max(0, ...drawings.map((d) => d.h * sc)) + label]
+      : [Math.max(0, ...drawings.map((d) => d.w * sc)), drawings.reduce((a, d) => a + d.h * sc, 0) + (n - 1) * GAP + n * label];
+    if (opts.scale) {
+      scale = opts.scale;
+      const [w1, h1] = size(scale, false), [w2, h2] = size(scale, true);
+      across = n > 1 && w2 * h2 < w1 * h1 * 0.9 ? true : n > 1 && h1 > 1.6 * w1;   // the more compact, or across for tall layouts
+      const [dw, dh] = across ? [w2, h2] : [w1, h1];
+      const avail = Math.max(dh, 180);
+      columns = flow(avail);
+      panelW = columns.reduce((a, c) => a + c.w + GAP, 0);
+      W = 2 * M + dw + (panelW ? GAP + panelW : 0);
+      H = 2 * M + TITLE + avail;
+    } else {
+      W = opts.paper.w; H = opts.paper.h;
+      const avail = H - 2 * M - TITLE;
+      columns = flow(avail);
+      panelW = columns.reduce((a, c) => a + c.w + GAP, 0);
+      const boxW = Math.max(W * 0.3, W - 2 * M - (panelW ? GAP + panelW : 0));
+      const fit = (side) => {   // the largest scale the arrangement fits the box at
+        const [w1, h1] = size(1, side), fixedW = side ? (n - 1) * GAP : 0, fixedH = side ? label : (n - 1) * GAP + n * label;
+        return Math.min((boxW - fixedW) / Math.max(1e-9, w1 - fixedW), (avail - fixedH) / Math.max(1e-9, h1 - fixedH));
+      };
+      const down = fit(false), side = n > 1 ? fit(true) : 0;
+      across = side > down;
+      scale = Math.max(down, side);
+    }
+    const f = (x) => +x.toFixed(2);
+    const out = [`<svg xmlns="http://www.w3.org/2000/svg" width="${f(W)}mm" height="${f(H)}mm" viewBox="0 0 ${f(W)} ${f(H)}" font-family="sans-serif">`,
+      `<rect width="${f(W)}" height="${f(H)}" fill="#ffffff"/>`,
+      `<text x="${M}" y="${M + 6}" font-size="6" font-weight="600" fill="#1b1b1b">${esc(opts.title || 'Pipe network')}</text>`,
+      `<line x1="${M}" y1="${M + TITLE - 3}" x2="${f(W - M)}" y2="${M + TITLE - 3}" stroke="#9fb4c8" stroke-width="0.3"/>`];
+    // the drawings, each its own picture, scaled into place with its label above
+    let y = M + TITLE, dx = M;
+    for (const d of drawings) {
+      if (d.label) out.push(`<text x="${f(dx)}" y="${f(y + LH)}" font-size="${f(font * 1.1)}" font-weight="600" fill="#1b1b1b">${esc(d.label)}</text>`);
+      out.push(d.svg.replace(/^<svg\b[^>]*?viewBox="([^"]*)"[^>]*>/, (_, vb) =>
+        `<svg x="${f(dx)}" y="${f(y + label)}" width="${f(d.w * scale)}" height="${f(d.h * scale)}" viewBox="${vb}" font-family="sans-serif">`));
+      if (across) dx += d.w * scale + GAP; else y += label + d.h * scale + GAP;
+    }
+    // the sidebar, column by column
+    let x = W - M - panelW + (panelW ? GAP : 0);
+    for (const col of columns) {
+      let cy = M + TITLE;
+      for (const it of col.items) {
+        const b = it.b;
+        out.push(`<text x="${f(x)}" y="${f(cy + LH)}" font-size="${f(font * 1.1)}" font-weight="600" fill="#1b1b1b">${esc(b.title + (it.cont ? ' (continued)' : ''))}</text>`);
+        cy += LH * 1.6;
+        if (b.notes) {
+          for (const l of b.notes.slice(it.from, it.to)) { out.push(`<text x="${f(x)}" y="${f(cy + LH * 0.8)}" font-size="${font}" fill="#1b1b1b">${esc(l)}</text>`); cy += LH; }
+          continue;
+        }
+        const cell = (row, bold) => {
+          let cx = x;
+          row.forEach((v, i) => {
+            const right = (b.align || [])[i] === 'r';
+            out.push(`<text x="${f(right ? cx + b.cols[i] - 1 : cx)}" y="${f(cy + LH * 0.8)}" font-size="${font}"${right ? ' text-anchor="end"' : ''}${bold ? ' font-weight="600"' : ''} fill="${bold ? '#5b7086' : '#1b1b1b'}">${esc(v ?? '')}</text>`);
+            cx += b.cols[i];
+          });
+          cy += LH;
+          out.push(`<line x1="${f(x)}" y1="${f(cy - LH * 0.05)}" x2="${f(x + b.w)}" y2="${f(cy - LH * 0.05)}" stroke="#e3eaf1" stroke-width="0.2"/>`);
+        };
+        cell(b.head, true);
+        for (const r of b.rows.slice(it.from, it.to)) cell(r, false);
+      }
+      x += col.w + GAP;
+    }
+    out.push('</svg>');
+    return { svg: out.join(''), w: W, h: H };
+  }
+
   // ---- editing --------------------------------------------------------------------------
   // Connect two neighbouring tiles, making pipe where there was none. A source or sink keeps one
   // side: the new one.
@@ -944,7 +1076,7 @@
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
     blank, normalize, backdrop, side, SINK_SETTINGS, copySink, twins, sinkKey, TOURS, tourMark, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
-    connect, erase, place, segmentAt, setSegmentLength, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, Q_UNITS, SOLVERS, bore, sizeName, layout, curveNames, curveName };
+    connect, erase, place, segmentAt, setSegmentLength, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, Q_UNITS, SOLVERS, PAPERS, printSheet, bore, sizeName, layout, curveNames, curveName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);

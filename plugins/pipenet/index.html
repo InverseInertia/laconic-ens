@@ -86,6 +86,10 @@
              border: 1px solid var(--rule); font-size: 12px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
   .key-row { display: grid; grid-template-columns: 18px auto; column-gap: 8px; align-items: center; padding: 2px 0; }
   .key-row .key-sinks { grid-column: 2; color: var(--text-soft); font-size: 11px; }
+  #printPanel { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0, 0, 0, .45); }
+  #printPanel[hidden] { display: none !important; }
+  .print-box { width: 340px; max-height: 92vh; overflow: auto; padding: 12px 14px; background: var(--paper-deep); border: 1px solid var(--ink);
+               box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
   #copyBanner > div { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--err); color: var(--paper);
                       font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
   #copyBanner span { flex: 1; }
@@ -159,6 +163,7 @@
     <button id="zoomIn" title="Zoom in (Ctrl+=)">+</button>
     <span class="hint" id="zoomLevel"></span>
   </div>
+  <div class="row-btns" style="margin-top: 6px"><button id="printOpen" title="Print the drawing with its balloons and the tables beside it, on any paper or at a scale, or save it as SVG">Print…</button></div>
   <p class="hint"><kbd>Ctrl</kbd> + wheel (or pinch) zooms at the pointer; drag with the middle button, or with <kbd>Space</kbd> held, to move around.</p>
   <h3>Background</h3>
   <div class="row-btns">
@@ -225,6 +230,29 @@
   <div id="sinks"></div>
   <p class="hint" id="about"></p>
 </aside>
+<div id="printPanel" hidden role="dialog" aria-labelledby="printHead">
+  <div class="print-box">
+    <h3 id="printHead">Print</h3>
+    <label class="f stack">Title <input id="prTitle" type="text"></label>
+    <label class="f stack">Paper <select id="prPaper"></select></label>
+    <div id="prCustom" class="pair" hidden><input id="prW" type="number" min="1" step="any" title="Width"><input id="prH" type="number" min="1" step="any" title="Height"></div>
+    <label class="f" id="prOrientRow">Orientation <select id="prOrient"><option value="land">Landscape</option><option value="port">Portrait</option></select></label>
+    <label class="f stack" id="prScaleRow" hidden><span id="prScaleLabel">1 in on paper is</span><input id="prScale" type="number" min="0" step="any"></label>
+    <label class="f">Table text <select id="prFont"><option value="2.2">Small</option><option value="2.8" selected>Medium</option><option value="3.6">Large</option></select></label>
+    <div class="checks">
+      <label id="prBothRow"><input type="checkbox" id="prBoth" checked> Both sides (supply and return)</label>
+      <label id="prBgRow"><input type="checkbox" id="prBg" checked> The background image</label>
+      <label><input type="checkbox" id="prGrid"> The grid</label>
+      <label><input type="checkbox" id="prSeg" checked> Segments</label>
+      <label><input type="checkbox" id="prSinks" checked> Sinks</label>
+      <label><input type="checkbox" id="prNet" checked> Network settings</label>
+      <label><input type="checkbox" id="prCheck" checked> Check</label>
+    </div>
+    <p class="hint">The balloons are those ticked under On the drawing. The page is vector: a PDF from the printer, or the SVG, scales without loss.</p>
+    <p class="hint" id="prSize"></p>
+    <div class="row-btns"><button id="prPrint">Print</button><button id="prSave">Save SVG</button><button id="prClose">Close</button></div>
+  </div>
+</div>
 <script src="pipenet.js"></script>
 <script src="app.js"></script>
 </body>

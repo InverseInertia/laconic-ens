@@ -2226,6 +2226,9 @@ Solvers.init({
 // A plugin writes into its own block without taking the focus from its frame, so `elsewhere`.
 Plugins.init({
   text: () => ed.value,
+  // a plugin's page, printed as the PDF export is (from a hidden frame), or saved as a file
+  print: (html) => printFrame(html),
+  download,
   edit: (base, edits) => Editing.applyEdits({...editor, elsewhere: () => true}, base, edits),
   say,
   dialog: $("#pluginDlg"),
