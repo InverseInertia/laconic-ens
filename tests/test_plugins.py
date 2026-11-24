@@ -223,7 +223,8 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
                                    "K_extra_r!", "exchangers!", "pumps!", "valves!", "fit_method!", "Δp_target"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar and "mag" in r.pluginvar.values[0]).pluginvar.values
-    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ"]
+    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ", "solver_state"]
+    assert sent[-1]["mag"] == 1            # the solver's state: up to date
     assert sent[0]["unit"] == "gal/min"
 
 
@@ -574,5 +575,6 @@ def test_the_plugins_sheet_takes_regulating_valves_instead_of_or_beside_circulat
     text = re.sub(r"\n  #@ result [^\n]*", "", text)
     ws = evaluate(solve_all(text, log=lambda m: None), plots=False)
     assert next(r for r in ws.results if r.solver).solver.current
-    sent = {v["name"]: [x[0] for x in v["mag"]] for r in ws.results if r.pluginvar for v in r.pluginvar.values if "mag" in v}
+    sent = {v["name"]: [x[0] for x in v["mag"]] for r in ws.results if r.pluginvar for v in r.pluginvar.values
+            if "mag" in v and isinstance(v["mag"], list)}
     assert sent["Δp_circ"] == [0] * n and all(dp > 0.5 for dp in sent["Δp_valve"])
