@@ -287,16 +287,6 @@
   #pluginDlg[open] { display: flex; flex-direction: column; }
   #pluginDlg .dlg-head { flex: none; gap: 8px; }
   #pluginDlg .dlg-head h2 { flex: 1; }
-  /* the sheet's solvers in one, in the plugin dialog's header (Solvers.summary): a click opens the log */
-  .solver-badge { display: inline-flex; align-items: center; gap: 6px; border-color: var(--rule); font-weight: 500; }
-  .solver-badge[hidden] { display: none; }
-  .solver-badge .s-sym { width: 1.1em; text-align: center; }
-  .solver-badge[data-state="ok"] .s-sym { color: var(--global); }
-  .solver-badge[data-state="warn"], .solver-badge[data-state="none"] { border-color: var(--text-soft); }
-  .solver-badge[data-state="fail"] { color: var(--err); border-color: var(--err); }
-  .solver-badge[data-state="run"] { border-color: var(--ink); }
-  .solver-badge[data-state="run"] .s-sym { display: inline-block; animation: spin 1.1s linear infinite; }
-  @media (prefers-reduced-motion: reduce) { .solver-badge[data-state="run"] .s-sym { animation: none; } }
   #pluginFrames { flex: 1; min-height: 0; display: flex; }
   .plugin-frame { flex: 1; border: 0; width: 100%; height: 100%; background: var(--paper); }
   .plugin-frame[hidden] { display: none; }
@@ -685,7 +675,7 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
 </dialog>
 
 <dialog id="pluginDlg" aria-labelledby="pluginTitle">
-  <div class="dlg-head"><h2 id="pluginTitle">Plugin</h2><button id="pluginSolver" class="solver-badge" hidden><span class="s-sym"></span><span class="s-text"></span></button><button id="pluginReload" title="Fetch the plugin again">Reload</button><button class="close">Close</button></div>
+  <div class="dlg-head"><h2 id="pluginTitle">Plugin</h2><button id="pluginReload" title="Fetch the plugin again">Reload</button><button class="close">Close</button></div>
   <div id="pluginFrames"></div>
 </dialog>
 
@@ -2232,19 +2222,7 @@ Solvers.init({
   edit: applyEdits,
   say,
   typeset,
-  changed: paintSolverBadge,
 });
-// The plugin dialog's header shows how the sheet's solvers stand, as a plugin's change re-solves them.
-function paintSolverBadge() {
-  const b = document.querySelector("#pluginSolver"), s = Solvers.summary();
-  b.hidden = !s;
-  if (!s) return;
-  b.dataset.state = s.cls;
-  b.title = s.title;
-  b.querySelector(".s-sym").textContent = s.sym;
-  b.querySelector(".s-text").textContent = s.text;
-  b.onclick = () => Solvers.openLog(s.row);
-}
 // A plugin writes into its own block without taking the focus from its frame, so `elsewhere`.
 Plugins.init({
   text: () => ed.value,

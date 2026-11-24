@@ -11,7 +11,7 @@ Q = A * Q_spur                                 the sheet calculates with them
 !pluginvar Q, Δp                               and sends these back to the plugin
 ```
 
-The block's row in the results shows the plugin's picture, with **Open** (the plugin in a large window) and **Reload** (fetch the plugin again). Close the window to get back to the sheet; the plugin keeps running, and its picture follows the sheet. When the sheet has solver blocks (`!root`, `!minimize`, `!maximize`), the window's header shows how they stand, so a change made in the plugin can be seen re-solving: up to date, out of date (re-solving, for a block with `autorun: on`), running with its time so far, not run yet, or failed. With several, it shows the one that matters most and how many are up to date. Click it for that block's log.
+The block's row in the results shows the plugin's picture, with **Open** (the plugin in a large window) and **Reload** (fetch the plugin again). Close the window to get back to the sheet; the plugin keeps running, and its picture follows the sheet.
 
 - **What the plugin writes is the sheet's.** Its `name = value` lines run like any assignment. They show in the results, export as math, and work in `lens --solve` and on a machine that has never fetched the plugin. You can read them, but the plugin rewrites them on its next change, so change the layout in the plugin.
 - **Don't define its names again.** A line below the block that defines one of the names the plugin writes replaces the plugin's value for the lines after it, so a change made in the plugin would not reach them. Such a line gets a warning in the results (shown even under `!hide`), and the plugin names it too.
