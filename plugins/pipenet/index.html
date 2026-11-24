@@ -78,6 +78,12 @@
   #solveBanner[data-state="-2"] > div { background: var(--err); color: var(--paper); }
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { #solveBanner .sym { animation: none; } }
+  /* the key to the marks of sinks set up alike: pinned to the bottom left of the grid as seen */
+  #keyHolder { position: sticky; left: 0; bottom: 0; height: 0; z-index: 2; }
+  #sinkKey { position: absolute; left: 8px; bottom: 8px; max-width: 420px; padding: 4px 8px; background: var(--paper-deep);
+             border: 1px solid var(--rule); font-size: 12px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+  .key-row { display: grid; grid-template-columns: 18px auto; column-gap: 8px; align-items: center; padding: 2px 0; }
+  .key-row .key-sinks { grid-column: 2; color: var(--text-soft); font-size: 11px; }
   #copyBanner > div { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--err); color: var(--paper);
                       font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
   #copyBanner span { flex: 1; }
@@ -195,6 +201,7 @@
     <button id="example">Start from an example</button></div>
   <img id="bg" alt="" hidden>
   <svg id="canvas"></svg>
+  <div id="keyHolder"><div id="sinkKey" hidden></div></div>
 </main>
 <aside class="right">
   <h3>Selected</h3>

@@ -117,7 +117,7 @@
   // ---- drawing ------------------------------------------------------------------------------
   // The grid only grows while the page is open, and when it grows up or to the left the view is
   // scrolled by as much, so the tiles stay under the pointer. A new layout from the sheet starts afresh.
-  let shownBounds = null;
+  let shownBounds = null, lastPlaced = {};
   function refresh(fresh = false) {
     net = P.network(state);
     if (selected && !cells()[selected]) selected = null;
@@ -131,7 +131,12 @@
     b.r1 = Math.max(b.r1, b.r0 + Math.ceil(main.clientHeight / side) - 1);
     shownBounds = b;
     const shown = !!(state.bg && bg.key === state.bg.key && bg.data);
-    const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front(), rounds: drag ? 40 : 600, underlay: shown });
+    // the balloons start from where they were, so the picture holds still while it is edited
+    const placed = {};
+    const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front(), effort: drag ? 30 : 300,
+      prev: lastPlaced, placed, key: 'html', underlay: shown });
+    lastPlaced = placed;
+    sinkKey();
     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
     canvas.replaceChildren(...[...doc.childNodes].map((n) => document.importNode(n, true)));
     for (const a of ['viewBox', 'font-family']) canvas.setAttribute(a, doc.getAttribute(a));
@@ -288,6 +293,20 @@
   // ---- tools and keys ----------------------------------------------------------------------
   for (const btn of document.querySelectorAll('[data-tool]')) btn.onclick = () => { tool = btn.dataset.tool; measure = null; copyFrom = null; refresh(); };
   $('#copyDone').onclick = () => endCopy();
+  // The key to the marks of sinks set up alike, pinned to the bottom left of the grid as it is seen, so
+  // it is in sight however the grid is scrolled (the row's picture draws it in its own corner instead).
+  function sinkKey() {
+    const box = $('#sinkKey'), key = net.errors.length ? [] : P.sinkKey(state, net, inputs);
+    box.hidden = !key.length;
+    if (!key.length) { box.replaceChildren(); return; }
+    const t = svgTheme();
+    box.replaceChildren(...key.map((e) => {
+      const mark = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">${P.tourMark(e.mark, 0, 0, t.text, t.paper)}</svg>`, 'image/svg+xml').documentElement;
+      return el('div', { class: 'key-row', title: e.sinks.join(', ') }, document.importNode(mark, true),
+        el('span', {}, e.text), el('span', { class: 'key-sinks' }, e.sinks.join(', ')));
+    }));
+  }
+
   // A banner over the grid while the sheet's values drawn here wait on its solver: from the solver's
   // state when the sheet sends it (solver_state), else from the values' own out-of-date flags.
   function solveBanner() {

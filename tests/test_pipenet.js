@@ -245,24 +245,39 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
 
 // --- balloons ------------------------------------------------------------------------------------
 {
-  const box = (x, y, extra = {}) => ({ x, y, px: x, py: y, w: 100, h: 30, ...extra });
-  const items = [box(0, 0), box(10, 5), box(20, 10), box(400, 400)];
+  // a balloon about a point (ax, ay), its usual spot just right of it
+  const box = (id, ax, ay, extra = {}) => ({ id, ax, ay, px: ax + 10, py: ay - 15, x: ax + 10, y: ay - 15, w: 100, h: 30, ...extra });
   const overlaps = (bs) => bs.some((a, i) => bs.some((b, j) => i < j && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h));
+  const off = (b) => Math.hypot(Math.max(b.x - b.ax, 0, b.ax - b.x - b.w), Math.max(b.y - b.ay, 0, b.ay - b.y - b.h));
+  const items = [box('a', 100, 100), box('b', 105, 102), box('c', 110, 104), box('d', 600, 600)];
   assert.ok(overlaps(items), 'three balloons on top of each other');
-  eq(P.spread(items, [], 1000, 1000), 0, 'are pushed apart');
-  eq(overlaps(items), false, 'until none overlap');
-  eq([items[3].x, items[3].y], [400, 400], 'one in the clear stays where it is');
-  const fixed = box(0, 0, { fixed: true }), moving = box(5, 5);
-  P.spread([fixed, moving], [], 1000, 1000);
-  eq([fixed.x, fixed.y], [0, 0], 'a fixed one (the legend) never moves');
-  const off = box(50, 50);
-  P.spread([off], [{ x: 40, y: 40, w: 30, h: 30 }], 1000, 1000);
-  assert.ok(off.x >= 73 || off.y >= 73 || off.x + off.w <= 37 || off.y + off.h <= 37, 'and one is pushed off a pipe number or pad');
+  eq(P.layout(items, [], [], 1000, 1000), 0, 'are placed apart');
+  eq(overlaps(items), false, 'none overlap');
+  eq([items[3].x, items[3].y], [610, 585], 'one in the clear stays at its usual spot');
+  eq(items.every((b) => off(b) <= 160), true, 'none further from its point than its furthest spot');
+  // a row of crowded balloons: each takes a free spot near its point, rather than the row sliding along
+  const row = Array.from({ length: 6 }, (_, i) => box(`r${i}`, 100 + i * 40, 300));
+  P.layout(row, [], [], 2000, 2000);
+  eq([overlaps(row), Math.max(...row.map(off)) <= 110], [false, true], 'a crowded row: apart, and each still near its point');
+  const fixed = box('legend', 0, 0, { fixed: true, ax: null }), moving = box('m', 15, 20);
+  P.layout([fixed, moving], [], [], 1000, 1000);
+  eq([fixed.x, fixed.y], [10, -15], 'a fixed one (the legend) never moves');
+  const pad = box('p', 50, 50);
+  P.layout([pad], [{ x: 55, y: 30, w: 40, h: 40 }], [], 1000, 1000);
+  assert.ok(pad.x >= 98 || pad.y >= 73 || pad.x + pad.w <= 52 || pad.y + pad.h <= 27, 'one is moved off a segment number or pad');
   n++;
-  const edge = box(990, 990);
-  P.spread([edge], [], 1000, 1000);
+  const edge = box('e', 990, 990);
+  P.layout([edge], [], [], 1000, 1000);
   assert.ok(edge.x + edge.w <= 1000 && edge.y + edge.h <= 1000, 'inside the picture');
   n++;
+  // the same balloons, the same picture; and given where they were, they stay there
+  const twice = () => { const bs = [box('a', 100, 100), box('b', 105, 102), box('c', 110, 104)]; P.layout(bs, [], [], 1000, 1000); return bs.map((b) => [b.x, b.y]); };
+  eq(twice(), twice(), 'the same layout comes out the same');
+  const again = [box('a', 100, 100), box('b', 105, 102), box('c', 110, 104)];
+  const before = again.map((b) => ({ ...b }));
+  P.layout(before, [], [], 1000, 1000);
+  P.layout(again, [], [], 1000, 1000, { prev: Object.fromEntries(before.map((b) => [b.id, { x: b.x, y: b.y }])) });
+  eq(again.map((b) => [b.x, b.y]), before.map((b) => [b.x, b.y]), 'drawn again with nothing changed, nothing moves');
 }
 {
   // the example's trunk is crowded: with values drawn, no two balloons overlap

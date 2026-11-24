@@ -525,3 +525,20 @@ def test_the_plugin_reads_the_solvers_state_from_the_sheet(page):
     show(page, never.replace("  equation: residual(∀_des!)", "  equation: residual(∀_des!) + nothing_here"))
     page.click(".plugin-box button:has-text('Open')")
     frame.locator("#solveBanner[data-state='-2']:has-text('has an error')").wait_for()
+
+
+def test_the_key_to_sinks_alike_stays_in_sight_and_their_balloons_leave_out_what_they_share(page):
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    frame.locator("#segments th:has-text('Q gal/min')").wait_for()
+    key = frame.locator("#sinkKey")
+    assert key.is_hidden()                                             # nothing shared is drawn yet
+    frame.locator("#showSets label:has-text('Exchanger curve') input").check()
+    key.wait_for(state="visible")
+    assert key.locator(".key-row").count() == 1 and "hx curve 1" in key.inner_text()   # the eight sinks are alike
+    assert "hx curve" not in frame.locator("#canvas").evaluate("s => s.textContent")        # not in their balloons
+    main = frame.locator("main").bounding_box()
+    frame.locator("main").evaluate("m => { m.scrollLeft = m.scrollWidth; m.scrollTop = m.scrollHeight; }")
+    box = key.bounding_box()
+    assert main["x"] <= box["x"] and box["y"] + box["height"] <= main["y"] + main["height"]   # still in sight
