@@ -67,6 +67,21 @@
   #bg { position: absolute; left: 0; top: 0; max-width: none; pointer-events: none; user-select: none; }
   body[data-tool="move"] #canvas { cursor: move; }
   body[data-tool="copy"] #canvas { cursor: copy; }
+  /* copying a sink's settings: a banner in the theme's warning colour (--err: orange on the blueprint)
+     pinned over the grid */
+  #copyBanner { position: sticky; top: 0; left: 0; height: 0; z-index: 3; }
+  #copyBanner > div { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--err); color: var(--paper);
+                      font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+  #copyBanner span { flex: 1; }
+  #copyBanner button { color: var(--paper); border-color: var(--paper); background: transparent; font-weight: 600; }
+  #copyBanner button:hover { background: var(--paper); color: var(--err); }
+  /* a sink's settings, and the switch for changing them on it alone or on every sink set up like it */
+  .sink-settings { margin: 6px 0; }
+  .sink-settings .apply { grid-template-columns: 1fr 1fr; margin-bottom: 4px; }
+  .sink-settings .apply button[aria-pressed="true"]:last-child { background: var(--err); border-color: var(--err); color: var(--paper); }
+  .sink-settings.all { outline: 2px solid var(--err); outline-offset: 4px; }
+  .sink-settings.all input, .sink-settings.all select { border-color: var(--err); }
+  .warn-all { color: var(--err); font-size: 12px; margin: 6px 0 0; }
   body[data-space] #canvas { cursor: grab; }
   body[data-panning] #canvas { cursor: grabbing; }
   input[type=range] { width: 100%; accent-color: var(--ink); padding: 0; border: 0; }
@@ -163,6 +178,7 @@
   <div id="showSets" class="checks"></div>
 </aside>
 <main>
+  <div id="copyBanner" hidden><div><span id="copyText"></span><button id="copyDone">Done (Esc)</button></div></div>
   <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick
     <em>Draw</em> and drag between them. Pipes join at tees; the sheet works out the flow in each branch.<br>
     <button id="example">Start from an example</button></div>

@@ -447,6 +447,10 @@ def test_a_sinks_settings_are_copied_to_others_and_sinks_alike_are_marked(page):
     # Copy settings to…, then click S2's tile
     frame.locator("#inspector button:has-text('Copy settings to')").click()
     frame.locator("#inspector p:has-text('Click sinks to give them S1')").wait_for()
+    banner = frame.locator("#copyBanner > div")
+    assert banner.is_visible() and "Copying S1's settings" in banner.inner_text()
+    assert banner.evaluate("d => getComputedStyle(d).backgroundColor") == \
+        frame.locator("body").evaluate("_ => { const d = document.createElement('div'); d.style.color = 'var(--err)'; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; }")
     state = json.loads(next(l for l in value(page).split("\n") if l.startswith("  #@ state "))[len("  #@ state "):])
     s2, (r0, c0) = frame.locator("body").evaluate(
         "(_, s) => { const P = PipeNet, st = P.normalize(s), b = P.bounds(st); return [P.network(st).sinks[1].key, [b.r0, b.c0]]; }", state)
@@ -458,7 +462,25 @@ def test_a_sinks_settings_are_copied_to_others_and_sinks_alike_are_marked(page):
     assert marks() == 8                                    # S1 and S2 alike, the other six alike
     page.keyboard.press("Escape")
     frame.locator("#inspector p:has-text('Set up like S2')").wait_for()
+    assert banner.is_hidden()
+    # the switch: a change to S1 alone, then to S1 and every sink set up like it (S2)
+    exch = lambda: frame.locator("#inspector label:has-text('Exchanger curve') input")
+    assert frame.locator("#inspector .apply button[aria-pressed=true]").inner_text() == "This sink"
+    exch().fill("3")
+    exch().press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[3; 2; 1;/)")
+    frame.locator("#sinks tbody tr").first.click()                      # S1 is like no other now: no switch
+    assert frame.locator("#inspector .apply").count() == 0
+    exch().fill("2")
+    exch().press("Enter")                                               # alike with S2 again
+    page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[2; 2; 1;/)")
+    frame.locator("#inspector .apply button:has-text('All 2 alike')").click()
+    frame.locator("#inspector .sink-settings.all").wait_for()
+    frame.locator("#inspector .warn-all:has-text('Changes go to 2 sinks')").wait_for()
+    exch().fill("3")
+    exch().press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.match(/  exchangers! = \\[3; 3; 1;/)")
     # To every sink
     frame.locator("#inspector button:has-text('Copy settings to')").click()
     frame.locator("#inspector button:has-text('To every sink')").click()
-    page.wait_for_function("document.querySelector('#src').value.includes('  exchangers! = [2; 2; 2; 2; 2; 2; 2; 2]')")
+    page.wait_for_function("document.querySelector('#src').value.includes('  exchangers! = [3; 3; 3; 3; 3; 3; 3; 3]')")

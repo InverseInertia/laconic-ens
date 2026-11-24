@@ -38,6 +38,8 @@
   let bg = { key: null, data: null, asked: null }, measure = null, pan = null, space = false;
   // Copy settings: the sink whose exchanger, circulator, valve and extra K the sinks clicked take.
   let copyFrom = null;
+  // A sink's settings changed in the inspector go to it alone, or to it and every sink set up like it.
+  let applyAll = false;
   const ZOOM_MIN = 0.1, ZOOM_MAX = 4;
 
   const post = (msg) => window.parent.postMessage(msg, '*');
@@ -150,6 +152,12 @@
     for (const btn of document.querySelectorAll('[data-layer]')) btn.setAttribute('aria-pressed', String(btn.dataset.layer === front()));
     document.body.dataset.layer = front();
     document.body.dataset.tool = tool;
+    // copying settings: an orange banner over the grid, so a click on a sink is not taken for anything else
+    const banner = $('#copyBanner');
+    banner.hidden = !(tool === 'copy' && state.cells[copyFrom]);
+    if (!banner.hidden) {
+      $('#copyText').textContent = `Copying ${sinkName(copyFrom)}'s settings (${describe(state.cells[copyFrom])}): every sink you click takes them.`;
+    }
     if (state.ret === 'separate') document.body.dataset.two = ''; else delete document.body.dataset.two;
     showSets();
     $('#method').value = String(state.method);
@@ -272,6 +280,7 @@
 
   // ---- tools and keys ----------------------------------------------------------------------
   for (const btn of document.querySelectorAll('[data-tool]')) btn.onclick = () => { tool = btn.dataset.tool; measure = null; copyFrom = null; refresh(); };
+  $('#copyDone').onclick = () => endCopy();
   function endCopy() { tool = 'select'; if (copyFrom && state.cells[copyFrom]) selected = copyFrom; copyFrom = null; refresh(); }
   P.PALETTE.forEach((item, i) => {
     const btn = document.createElement('button');
@@ -473,7 +482,7 @@
     } else if (t.t === 'pipe' || t.t === 'sink') {
       parts.push(field(`Length (${state.units.L})`, t.L, String(state.cell), (v) => edit(() => { const x = positive(v); if (x) t.L = x; else delete t.L; })));
     }
-    if (t.t === 'pipe' || t.t === 'sink') {
+    if (t.t === 'pipe') {
       parts.push(field('Extra K (a valve, from its datasheet)', t.k, '0', (v) => edit(() => { const x = parseFloat(v); if (isFinite(x) && x > 0) t.k = x; else delete t.k; })));
     }
     if (seg) {
@@ -493,16 +502,34 @@
     }
     if (t.t === 'sink' && pad) {
       parts.push(field('Name', pad.name, 'S' + ((net.sinks.findIndex((s) => s.key === selected) + 1) || ''), (v) => edit(() => { if (v.trim()) pad.name = v.trim().slice(0, 40); else delete pad.name; }), 'text'));
-      const names = P.curveNames(inputs);
-      parts.push(curvePick('Exchanger curve', names.exchangers, pad.x, (x) => { pad.x = x; }));
-      parts.push(curvePick('Circulator', names.pumps, pad.s, (x) => { pad.s = x; }, true));
-      parts.push(field('Regulating valve Cv (blank: none)', pad.v, 'none', (v) => edit(() => {
-        const x = parseFloat(v);
-        if (isFinite(x) && x > 0) pad.v = x; else delete pad.v;
-      })));
-      // the sinks set up the same way, and copying this one's settings to others
+      // Its settings: exchanger, circulator, valve, extra K. With sinks set up like it, a switch says
+      // whether a change goes to this sink alone or to all of them (outlined in orange while it does).
       const alike = P.twins(state), mine = alike[selected];
       const same = mine === undefined ? [] : Object.keys(alike).filter((k) => k !== selected && alike[k] === mine);
+      const all = applyAll && same.length > 0;
+      const each = (fn) => { for (const k of all ? [selected, ...same] : [selected]) fn(state.cells[k], cells()[k]); };
+      const group = el('div', { class: 'sink-settings' + (all ? ' all' : '') });
+      if (same.length) {
+        const sw = (on, label, title) => el('button', { 'aria-pressed': String(all === on), title,
+          onclick: () => { applyAll = on; inspector(); } }, label);
+        group.append(el('div', { class: 'tools apply', role: 'group', 'aria-label': 'Change' },
+          sw(false, 'This sink', 'A change here goes to this sink alone'),
+          sw(true, `All ${same.length + 1} alike`, `A change here goes to this sink and ${same.map(sinkName).join(', ')}`)));
+      }
+      const names = P.curveNames(inputs);
+      group.append(
+        curvePick('Exchanger curve', names.exchangers, pad.x, (x) => each((p) => { p.x = x; })),
+        curvePick('Circulator', names.pumps, pad.s, (x) => each((p) => { p.s = x; }), true),
+        field('Regulating valve Cv (blank: none)', pad.v, 'none', (v) => edit(() => {
+          const x = parseFloat(v);
+          each((p) => { if (isFinite(x) && x > 0) p.v = x; else delete p.v; });
+        })),
+        field('Extra K (a valve, from its datasheet)', t.k, '0', (v) => edit(() => {
+          const x = parseFloat(v);
+          each((p, u) => { if (isFinite(x) && x > 0) u.k = x; else delete u.k; });
+        })));
+      if (all) group.append(el('p', { class: 'warn-all' }, `Changes go to ${same.length + 1} sinks: this one and ${same.map(sinkName).join(', ')}.`));
+      parts.push(group);
       parts.push(el('p', { class: 'hint' }, same.length
         ? `Set up like ${same.map(sinkName).join(', ')} (the mark at their corner).`
         : 'Set up like no other sink.'));
