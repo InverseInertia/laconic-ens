@@ -15,7 +15,13 @@
    server endpoint returned for `text`, or says false when the sheet has changed since.
 
    Runs are remembered here by hash, not by line, so editing above a block does not lose track
-   of it. A run whose inputs change underneath it is stopped and its result discarded. */
+   of it. A run whose inputs change underneath it is stopped and its result discarded.
+
+   summary()  the sheet's solvers in one: {sym, cls, text, title, row} for the block that matters most
+              (a run going on, then a failure, then one out of date, then one never run, else all up
+              to date), or null when the sheet has none. `host.changed()`, if given, is called whenever
+              it may have changed (each repaint, which a run in progress does four times a second);
+              the plugin dialog's header shows it. openLog(row) opens a block's log. */
 const Solvers = (() => {
   const runs = new Map();   // hash -> {state, log, message, verified}; state: failed, interrupted, timeout, done
   const tried = new Set();  // hashes that Auto has already started once, so a failure never loops
@@ -81,6 +87,22 @@ const Solvers = (() => {
   function repaint() {
     for (const t of document.querySelectorAll(".solver-tools")) if (t._row) paint(t);
     if (logHash) fillLog();
+    if (host && host.changed) host.changed();
+  }
+
+  // ---- the sheet's solvers in one -------------------------------------------------------------------
+  const RANK = {run: 0, fail: 1, warn: 2, none: 3, ok: 4};
+  function summary() {
+    if (!rows.length) return null;
+    const all = rows.map((r) => ({r, st: status(r)}));
+    const top = all.reduce((a, b) => (RANK[b.st.cls] < RANK[a.st.cls] ? b : a));
+    const ok = all.filter((x) => x.st.cls === "ok").length, many = rows.length > 1;
+    const short = {run: top.st.text, fail: "Solver failed", warn: top.r.solver.autorun && !top.r.solver.tainted ? "Solver out of date: re-solving" : "Solver out of date",
+                   none: "Solver not run yet", ok: many ? "Solvers up to date" : "Solver up to date"}[top.st.cls];
+    const text = (top.st.cls === "run" ? "Solver " + short.charAt(0).toLowerCase() + short.slice(1) : short)
+      + (many && top.st.cls !== "ok" ? ` (${ok} of ${rows.length} up to date)` : "");
+    const title = `Line ${Rows.line(top.r)}, ${Rows.head(top.r)}: ${top.st.text}` + (top.r.solver.summary ? `\n${top.r.solver.summary}` : "") + "\nClick for its log";
+    return {sym: top.st.sym, cls: top.st.cls, text, title, row: top.r};
   }
 
   // ---- building the block -----------------------------------------------------------------------
@@ -277,7 +299,7 @@ const Solvers = (() => {
     fillLog();
   }
 
-  return {init, build, tools, after, interrupt, status, logText,
+  return {init, build, tools, after, interrupt, status, logText, summary, openLog,
           get active() { return active; }, get runs() { return runs; }};
 })();
 if (typeof module !== "undefined") module.exports = Solvers;

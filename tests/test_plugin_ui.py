@@ -484,3 +484,35 @@ def test_a_sinks_settings_are_copied_to_others_and_sinks_alike_are_marked(page):
     frame.locator("#inspector button:has-text('Copy settings to')").click()
     frame.locator("#inspector button:has-text('To every sink')").click()
     page.wait_for_function("document.querySelector('#src').value.includes('  exchangers! = [3; 3; 3; 3; 3; 3; 3; 3]')")
+
+
+def test_the_plugin_dialog_shows_how_the_sheets_solver_stands(page):
+    """The header of the plugin's dialog: up to date, then re-solving after a change made in the plugin,
+    then up to date again; a click opens the solver's log."""
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    show(page, original)
+    page.wait_for_selector(".plugin-box button:has-text('Open'):not([disabled])")
+    page.click(".plugin-box button:has-text('Open')")
+    frame = page.frame_locator("#pluginFrames .plugin-frame")
+    frame.locator("#segments tbody tr").first.wait_for()
+    badge = page.locator("#pluginSolver")
+    page.wait_for_function("document.querySelector('#pluginSolver').dataset.state === 'ok'")
+    assert badge.is_visible() and badge.inner_text().endswith("Solver up to date")
+    assert "hybr" in badge.get_attribute("title")
+    seen = page.evaluate("""() => { window.__states = new Set();
+        new MutationObserver(() => window.__states.add(document.querySelector('#pluginSolver').dataset.state))
+          .observe(document.querySelector('#pluginSolver'), {attributes: true, subtree: true, childList: true}); }""")
+    frame.locator("#dpv").fill("0.05")
+    frame.locator("#dpv").press("Enter")
+    page.wait_for_function("window.__states.has('run')", timeout=60000)
+    page.wait_for_function("document.querySelector('#pluginSolver').dataset.state === 'ok'", timeout=120000)
+    assert "Δp_target = 0.05 'psi" in value(page)
+    badge.click()
+    page.wait_for_selector("#solverLogDlg[open]")
+    assert "Status: Up to date" in page.locator("#solverLogText").inner_text()
+
+
+def test_a_sheet_with_no_solver_shows_no_solver_state(page):
+    show(page, SHEET)
+    opened(page)
+    assert page.locator("#pluginSolver").is_hidden()
