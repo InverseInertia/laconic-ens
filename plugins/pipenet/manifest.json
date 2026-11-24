@@ -1,7 +1,7 @@
 {
   "name": "pipenet",
   "title": "Pipe network",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Lay out a fluid loop on a grid: one source, any number of sinks, joined by straights, elbows, tees and crossovers in schedule pipe sizes, with the return the same as the supply or laid out on a side of its own. Writes each side's upstream matrix and segment lengths, bores and fitting counts into the sheet, for Crane, Hooper 2-K or Darby 3-K fitting losses, with a circulator, a regulating valve or both on each spur, and draws the sheet's flows and pressure drops on the pipes. Comes with the sheet that solves the loop.",
   "entry": "index.html",
   "files": [

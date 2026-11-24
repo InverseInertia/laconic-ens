@@ -47,7 +47,7 @@ KEY_NOTES = {
     "objective": "the expression to minimize or maximize",
     "constraint": "lhs <= rhs, >= or =",
     "bounds": "low .. high on an unknown; either end may be auto",
-    "method": "which scipy solver to use",
+    "method": "which scipy solver to use; or a name holding its number in the list (1 is the first)",
     "tol": "convergence tolerance passed to scipy",
     "maxiter": "iteration limit passed to scipy",
     "timeout": "seconds before a run is killed (default 300)",
@@ -108,6 +108,7 @@ class Block:
     timeout: float = DEFAULT_TIMEOUT
     autorun: bool = False
     status: str = None                          # the name its state is given to below it, if any
+    method_var: str = None                      # `method: name`: the name whose value numbers the method
     canon: list = field(default_factory=list)  # the lines that decide the answer, whitespace-normalised
     errors: dict = field(default_factory=dict)  # option line number -> message
     problem: str = ""                           # what is wrong with the block as a whole
@@ -302,7 +303,11 @@ def _apply_option(b, n, key, target, value, seen):
         lo, hi = _bounds(value)
         b.bounds.append((n, target, lo, hi))
     elif key == "method":
-        b.method = _choice(value, ROOT_METHODS if b.kind == "root" else MIN_METHODS, "method")
+        options = ROOT_METHODS if b.kind == "root" else MIN_METHODS
+        if value.strip().lower() not in {o.lower() for o in options} and is_name(value.strip()):
+            b.method_var = value.strip()   # a name: its value, when the block is run, numbers the method
+        else:
+            b.method = _choice(value, options, "method")
     elif key == "tol":
         b.tol = _number(value, "tol")
     elif key == "maxiter":
@@ -382,6 +387,8 @@ def digest(block, ev, unknowns):
     parts = {"v": RECORD_VERSION, "kind": block.kind, "unknowns": block.unknowns, "angle": ev.mode.angle,
              "lines": block.canon, "start": [_qdigest(ev.vars[u.key]) for u in unknowns],
              "vars": deps, "funcs": funcs, "units": units}
+    if block.method_var:   # the method its name picks: the line alone does not say which
+        parts["method"] = block.method
     if ev.mode.freq != "si":   # !freq changes what -> gives; left out by default so stored results stay valid
         parts["freq"] = ev.mode.freq
     blob = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()
@@ -419,6 +426,8 @@ class Problem:
         self.log = lambda msg: None
         self._resolve()
         self._bounds()
+        if block.method_var:
+            block.method = method_of(block, ev)
         self.method = self._choose_method()
         b = block
         self.eqs = [Eval(r) for r in b.equations]
@@ -751,6 +760,24 @@ class Problem:
             return self.ev.Q(float(o["mag"]), self.ev.ureg.parse_units(o["unit"]))
         except Exception:
             return None
+
+
+def method_of(block, ev):
+    """The method a `method: name` line picks: the value of `name`, a whole number, numbering the block's
+    methods from 1 in the order METHOD_NOTES lists them (a plugin can write the number; LENS has no text values)."""
+    options = ROOT_METHODS if block.kind == "root" else MIN_METHODS
+    listing = ", ".join(f"{i} {m}" for i, m in enumerate(options, 1))
+    key = ev.vkey(block.method_var)
+    if key not in ev.vars:
+        raise SolverError(f"method: {block.method_var} is not defined above the block. It numbers the method: {listing}")
+    q = ev.vars[key]
+    try:
+        x = float(q.to("dimensionless").magnitude) if hasattr(q, "to") else float(q)
+    except Exception:
+        raise SolverError(f"method: {block.method_var} is a number, the method's: {listing}") from None
+    if x != int(x) or not 1 <= x <= len(options):
+        raise SolverError(f"method: {block.method_var} is {x:g}, not one of the methods: {listing}")
+    return options[int(x) - 1]
 
 
 def prepare(block, ev, describe):

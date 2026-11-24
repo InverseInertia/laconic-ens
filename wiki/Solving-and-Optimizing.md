@@ -26,7 +26,7 @@ d = 1'm
 | `objective:` | what to minimize or maximize |
 | `constraint:` | `lhs <= rhs`, `>=` or `=`; several lines are allowed |
 | `bounds name:` | limits on one unknown. On a `!root` with a single unknown they bracket the root and select `brentq`, which needs a sign change between them |
-| `method:` | root: `hybr` (default), `lm` (also takes more equations than unknowns, as least squares), `broyden1`, `broyden2`, `krylov`, `brentq`. Optimization: `BFGS`, `L-BFGS-B`, `Nelder-Mead`, `Powell`, `TNC`, `SLSQP`, `trust-constr`, `COBYLA`. The default is `BFGS`, or `L-BFGS-B` with bounds, or `SLSQP` with constraints |
+| `method:` | root: `hybr` (default), `lm` (also takes more equations than unknowns, as least squares), `broyden1`, `broyden2`, `krylov`, `brentq`. Optimization: `BFGS`, `L-BFGS-B`, `Nelder-Mead`, `Powell`, `TNC`, `SLSQP`, `trust-constr`, `COBYLA`. The default is `BFGS`, or `L-BFGS-B` with bounds, or `SLSQP` with constraints. `method: name` instead takes the method from a variable holding its number in that list, from 1 (`1` is `hybr` for a root), so a plugin can choose it; which method it picks counts as an input, so changing it makes a stored result out of date |
 | `tol:` `maxiter:` | passed to scipy |
 | `timeout:` | seconds before a run is killed (default 300) |
 | `autorun:` | `on` re-solves automatically (see below); the Auto checkbox writes this line |

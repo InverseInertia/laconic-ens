@@ -65,7 +65,12 @@ Lays out a fluid loop for a sheet that solves it for equal pressure drops, so yo
 | `exchangers!`, `pumps!` | each sink's exchanger curve and circulator, by number (a circulator of 0 is none) |
 | `valves!` | each sink's regulating valve, as its Cv (0 for none) |
 | `fit_method!` | the fitting-loss method chosen: 1 Crane, 2 Hooper 2-K, 3 Darby 3-K |
-| `Δp_target` | the pressure difference the pump's controller holds (Network → Pump target Δp, in psi, kPa, Pa, bar or ft of water), which sets the loop's total flow |
+| `solver_method!` | how the sheet's solver finds the flows (Network → Solver), by its number among the `!root` methods: 1 `hybr` (the default, quick on a smooth network), 2 `lm` (steadier when spurs sit against the end of their exchanger's or pump's data), 3 `broyden1`, 4 `broyden2`, 5 `krylov`. The sheet's `!root` reads it with `method: solver_method!` |
+| `hold_flow!` | what the main pump's controller holds (Network → Pump holds): 1 the loop's total flow, its pressure difference following (the default); 0 its pressure difference, the flow following, as a pump run off a pressure sensor does |
+| `∀_target` | the total flow it holds (Network → Pump target flow, in gal/min, L/s, L/min or m³/h) |
+| `Δp_target` | the pressure difference it holds (Network → Pump target Δp, in psi, kPa, Pa, bar or ft of water) |
+
+Either way the solver finds the spur flows and the pump's pressure difference, `Δp_main`, together: with every path taking that pressure difference, and either the flows adding up to `∀_target` or `Δp_main` equal to `Δp_target`. The sheet sends back `∀_total` and `Δp_pump`, shown in the drawing's corner. Holding a flow, a pressure difference below zero means the circulators alone push more than the target: the plugin says so under **Check**.
 
 With these, `A * Q_spur` is the flow in every supply segment and `A_r * Q_spur` in every return segment, and each sink's path loses `transpose(A) * Δp_supply + transpose(A_r) * Δp_return` in its pipes, out and back.
 

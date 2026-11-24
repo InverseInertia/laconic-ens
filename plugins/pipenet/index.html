@@ -184,8 +184,13 @@
   <label class="f">Diameter unit <select id="unitD"><option>in</option><option>mm</option><option>ft</option><option>m</option></select></label>
   <label class="f stack">Return pipe <select id="ret" title="The same as the supply: the return runs beside the supply and matches it. Laid out on its own: draw it on the Return side">
     <option value="same">Same as supply</option><option value="separate">Laid out on its own</option></select></label>
-  <label class="f stack" title="The pressure difference the pump's controller holds (Δp_target): it sets the loop's total flow">Pump target Δp
+  <label class="f stack" title="What the main pump's controller holds (hold_flow!): the loop's total flow, its pressure difference following; or its pressure difference, the flow following">Pump holds
+    <select id="hold"><option value="flow">Total flow</option><option value="dp">Pressure difference</option></select></label>
+  <label class="f stack" id="qRow" title="The loop's total flow the main pump holds (∀_target): the sheet finds the pressure difference that gives it (Δp_main)">Pump target flow
+    <span class="pair"><input id="qv" type="number" min="0" step="any"><select id="qu"></select></span></label>
+  <label class="f stack" id="dpRow" title="The pressure difference the pump's controller holds (Δp_target): it sets the loop's total flow">Pump target Δp
     <span class="pair"><input id="dpv" type="number" min="0" step="any"><select id="dpu"></select></span></label>
+  <label class="f stack" title="How the sheet's solver finds the flows (solver_method!, which its !root's method line reads)">Solver <select id="solver"></select></label>
   <label class="f stack">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
     <option value="1">Crane</option><option value="2">Hooper 2-K</option><option value="3">Darby 3-K</option></select></label>
   <h3>On the drawing</h3>

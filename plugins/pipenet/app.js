@@ -174,6 +174,11 @@
     showSets();
     $('#method').value = String(state.method);
     setNum($('#dpv'), state.dp.v); $('#dpu').value = state.dp.u;
+    $('#hold').value = state.hold;
+    $('#solver').value = String(state.solver);
+    setNum($('#qv'), state.q.v); $('#qu').value = state.q.u;
+    $('#qRow').hidden = state.hold !== 'flow';
+    $('#dpRow').hidden = state.hold !== 'dp';
     messages(); inspector(); tables(); bgPanel();
     schedulePreview();
   }
@@ -424,6 +429,12 @@
   $('#dpu').replaceChildren(...P.DP_UNITS.map((u) => Object.assign(document.createElement('option'), { value: u, textContent: u.replace('_', ' ') })));
   $('#dpv').onchange = (e) => { const x = parseFloat(e.target.value); if (isFinite(x) && x >= 0) edit(() => { state.dp.v = x; }); else refresh(); };
   $('#dpu').onchange = (e) => edit(() => { state.dp.u = e.target.value; });
+  $('#hold').onchange = (e) => edit(() => { state.hold = e.target.value; });
+  $('#solver').replaceChildren(...P.SOLVERS.map(([n, name, what]) => Object.assign(document.createElement('option'), { value: String(n), textContent: name, title: what })));
+  $('#solver').onchange = (e) => edit(() => { state.solver = +e.target.value; });
+  $('#qu').replaceChildren(...P.Q_UNITS.map(([u]) => Object.assign(document.createElement('option'), { value: u, textContent: u })));
+  $('#qv').onchange = (e) => { const x = positive(e.target.value); if (x) edit(() => { state.q.v = x; }); else refresh(); };
+  $('#qu').onchange = (e) => edit(() => { state.q.u = e.target.value; });
   // On the drawing: a checkbox for each set of data the balloons can show, the plugin's own (segment
   // numbers, pipe sizes, lengths, bores, each sink's curves) and each of the sheet's !pluginvar values.
   const BUILT_IN = [['numbers', 'Segment numbers'], ['size', 'Pipe size'], ['L', 'Length'], ['D', 'D_h (bore)'],
@@ -588,7 +599,11 @@
     // A line of the sheet that defines one of the plugin's names again replaces what the plugin writes.
     const replaced = overridden.map((o) => ({ cls: 'err',
       msg: `${o.name} is set again on line ${o.line} of the sheet, which replaces the plugin's value: a change here does not reach the calculation. Delete that line.` }));
-    const list = [...replaced, ...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
+    // holding a flow, the pump's pressure difference is found: below zero, the circulators alone push more
+    const pump = inputs.find((v) => v.name === 'Δp_pump' && typeof v.mag === 'number');
+    const throttle = state.hold === 'flow' && pump && pump.mag < 0 && !pump.stale ? [{ cls: 'err',
+      msg: `The main pump's pressure difference comes out below zero (${P.fmt(pump.mag, pump.unit)}): the circulators alone push more than the target flow, so the pump would have to hold the flow back. Raise the target flow, or take circulators off spurs.` }] : [];
+    const list = [...replaced, ...throttle, ...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
     const ul = $('#msgs');
     if (!list.length) {
       const n = net.sinks.length, segs = net.s.order.length;

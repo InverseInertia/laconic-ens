@@ -248,8 +248,9 @@ VALVE(∀`, Cv) = heaviside(Cv - 1e-9) * SG_w * (∀` / ('gal / 'min) / max([Cv,
 #   exchangers!  the exchanger each spur ends at (HX above); pumps! its circulator (PUMP above, 0 for none);
 #   valves!      its regulating valve's Cv (VALVE above, 0 for none)
 #   fit_method!  how fittings become loss coefficients: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K
-#   Δp_target    the pressure difference the main pump holds (Network → Pump target Δp). The pump runs off pressure sensor
-#                data, so it ramps the flow down when spurs are shut off for maintenance: this sets the loop's total flow
+#   hold_flow!   what the main pump holds (Network → Pump holds): 1 the loop's total flow, ∀_target, its
+#                pressure difference following; 0 its pressure difference, Δp_target, the flow following.
+#                A pump run off pressure sensor data holds Δp, and ramps the flow down when spurs are shut off
 !plugin pipenet
   A = [1, 0, 0, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 0, 0; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 0, 0, 0, 1; 1, 1, 1, 1, 1, 1, 1, 1; 1, 1, 1, 1, 1, 1, 1, 0; 1, 1, 1, 1, 1, 1, 0, 0; 1, 1, 1, 1, 1, 0, 0, 0; 1, 1, 1, 1, 0, 0, 0, 0; 1, 1, 1, 0, 0, 0, 0, 0; 0, 1, 1, 0, 0, 0, 0, 0]
   L! = [30; 40; 20; 40; 50; 40; 50; 40; 20; 30; 30; 30; 30; 30; 10] * 'ft
@@ -265,8 +266,11 @@ VALVE(∀`, Cv) = heaviside(Cv - 1e-9) * SG_w * (∀` / ('gal / 'min) / max([Cv,
   pumps! = [1; 1; 1; 1; 1; 1; 1; 1]
   valves! = [0; 0; 0; 0; 0; 0; 0; 0]
   fit_method! = 1
+  solver_method! = 1
+  hold_flow! = 1
+  ∀_target = 110 * 'gal / 'min
   Δp_target = 0.02 'psi
-  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"ret":"separate","nps":"4","sch":"40","method":1,"dp":{"v":0.02,"u":"psi"},"show":{"numbers":true,"size":false,"L":false,"D":false,"hx":false,"pump":false,"hide":[]},"cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10,"nps":"2"},"2,19":{"t":"pipe","p":10,"nps":"2"},"2,20":{"t":"sink","p":8,"x":1,"s":1},"1,2":{"t":"pipe","p":5,"nps":"2"},"0,2":{"t":"pipe","p":6,"nps":"2"},"0,3":{"t":"pipe","p":10,"nps":"2"},"0,4":{"t":"sink","p":8,"x":1,"s":1},"3,5":{"t":"pipe","p":5,"nps":"2"},"4,5":{"t":"pipe","p":5,"nps":"2"},"5,5":{"t":"pipe","p":3,"nps":"2"},"5,6":{"t":"pipe","p":10,"nps":"2"},"5,7":{"t":"sink","p":8,"x":1,"s":1},"1,8":{"t":"pipe","p":5,"nps":"2"},"0,8":{"t":"pipe","p":6,"nps":"2"},"0,9":{"t":"pipe","p":10,"nps":"2"},"0,10":{"t":"sink","p":8,"x":1,"s":1},"3,11":{"t":"pipe","p":5,"nps":"2"},"4,11":{"t":"pipe","p":5,"nps":"2"},"5,11":{"t":"pipe","p":3,"nps":"2"},"5,12":{"t":"pipe","p":10,"nps":"2"},"5,13":{"t":"sink","p":8,"x":1,"s":1},"1,14":{"t":"pipe","p":5,"nps":"2"},"0,14":{"t":"pipe","p":6,"nps":"2"},"0,15":{"t":"pipe","p":10,"nps":"2"},"0,16":{"t":"sink","p":8,"x":1,"s":1},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5,"nps":"2"},"5,17":{"t":"pipe","p":3,"nps":"2"},"5,18":{"t":"pipe","p":10,"nps":"2"},"5,19":{"t":"sink","p":8,"x":1,"s":1},"3,18":{"t":"pipe","p":10,"nps":"2"},"3,19":{"t":"sink","p":8,"x":1,"s":1}},"rcells":{"2,0":{"t":"source","p":2},"2,20":{"t":"sink","p":8},"0,4":{"t":"sink","p":1},"5,7":{"t":"sink","p":1},"0,10":{"t":"sink","p":1},"5,13":{"t":"sink","p":1},"0,16":{"t":"sink","p":1},"5,19":{"t":"sink","p":2},"3,19":{"t":"sink","p":2},"3,20":{"t":"pipe","p":12},"4,20":{"t":"pipe","p":5},"5,20":{"t":"pipe","p":13},"6,20":{"t":"pipe","p":9},"6,19":{"t":"pipe","p":10},"6,18":{"t":"pipe","p":10},"6,17":{"t":"pipe","p":3},"5,17":{"t":"pipe","p":5},"4,17":{"t":"pipe","p":13},"3,17":{"t":"pipe","p":5},"2,19":{"t":"pipe","p":10},"2,18":{"t":"pipe","p":11},"2,16":{"t":"pipe","p":10},"2,15":{"t":"pipe","p":10},"-1,16":{"t":"pipe","p":14},"-1,10":{"t":"pipe","p":14},"-1,4":{"t":"pipe","p":6},"-1,5":{"t":"pipe","p":10},"-1,6":{"t":"pipe","p":10},"-1,7":{"t":"pipe","p":10},"-1,8":{"t":"pipe","p":10},"-1,9":{"t":"pipe","p":10},"-1,11":{"t":"pipe","p":10},"-1,12":{"t":"pipe","p":10},"-1,13":{"t":"pipe","p":10},"-1,14":{"t":"pipe","p":10},"-1,15":{"t":"pipe","p":10},"-1,17":{"t":"pipe","p":10},"-1,18":{"t":"pipe","p":12},"0,18":{"t":"pipe","p":5},"1,18":{"t":"pipe","p":5},"2,17":{"t":"pipe","p":14},"2,14":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,12":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,9":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,6":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,3":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":10},"2,1":{"t":"pipe","p":10},"4,7":{"t":"pipe","p":6},"4,13":{"t":"pipe","p":14},"4,8":{"t":"pipe","p":10},"4,9":{"t":"pipe","p":10},"4,10":{"t":"pipe","p":10},"4,11":{"t":"pipe","p":10},"4,12":{"t":"pipe","p":10},"4,14":{"t":"pipe","p":10},"4,15":{"t":"pipe","p":10},"4,16":{"t":"pipe","p":10}},"by":"1.4.2"}
+  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"ret":"separate","nps":"4","sch":"40","method":1,"dp":{"v":0.02,"u":"psi"},"show":{"numbers":true,"size":false,"L":false,"D":false,"hx":false,"pump":false,"hide":[]},"cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10,"nps":"2"},"2,19":{"t":"pipe","p":10,"nps":"2"},"2,20":{"t":"sink","p":8,"x":1,"s":1},"1,2":{"t":"pipe","p":5,"nps":"2"},"0,2":{"t":"pipe","p":6,"nps":"2"},"0,3":{"t":"pipe","p":10,"nps":"2"},"0,4":{"t":"sink","p":8,"x":1,"s":1},"3,5":{"t":"pipe","p":5,"nps":"2"},"4,5":{"t":"pipe","p":5,"nps":"2"},"5,5":{"t":"pipe","p":3,"nps":"2"},"5,6":{"t":"pipe","p":10,"nps":"2"},"5,7":{"t":"sink","p":8,"x":1,"s":1},"1,8":{"t":"pipe","p":5,"nps":"2"},"0,8":{"t":"pipe","p":6,"nps":"2"},"0,9":{"t":"pipe","p":10,"nps":"2"},"0,10":{"t":"sink","p":8,"x":1,"s":1},"3,11":{"t":"pipe","p":5,"nps":"2"},"4,11":{"t":"pipe","p":5,"nps":"2"},"5,11":{"t":"pipe","p":3,"nps":"2"},"5,12":{"t":"pipe","p":10,"nps":"2"},"5,13":{"t":"sink","p":8,"x":1,"s":1},"1,14":{"t":"pipe","p":5,"nps":"2"},"0,14":{"t":"pipe","p":6,"nps":"2"},"0,15":{"t":"pipe","p":10,"nps":"2"},"0,16":{"t":"sink","p":8,"x":1,"s":1},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5,"nps":"2"},"5,17":{"t":"pipe","p":3,"nps":"2"},"5,18":{"t":"pipe","p":10,"nps":"2"},"5,19":{"t":"sink","p":8,"x":1,"s":1},"3,18":{"t":"pipe","p":10,"nps":"2"},"3,19":{"t":"sink","p":8,"x":1,"s":1}},"rcells":{"2,0":{"t":"source","p":2},"2,20":{"t":"sink","p":8},"0,4":{"t":"sink","p":1},"5,7":{"t":"sink","p":1},"0,10":{"t":"sink","p":1},"5,13":{"t":"sink","p":1},"0,16":{"t":"sink","p":1},"5,19":{"t":"sink","p":2},"3,19":{"t":"sink","p":2},"3,20":{"t":"pipe","p":12},"4,20":{"t":"pipe","p":5},"5,20":{"t":"pipe","p":13},"6,20":{"t":"pipe","p":9},"6,19":{"t":"pipe","p":10},"6,18":{"t":"pipe","p":10},"6,17":{"t":"pipe","p":3},"5,17":{"t":"pipe","p":5},"4,17":{"t":"pipe","p":13},"3,17":{"t":"pipe","p":5},"2,19":{"t":"pipe","p":10},"2,18":{"t":"pipe","p":11},"2,16":{"t":"pipe","p":10},"2,15":{"t":"pipe","p":10},"-1,16":{"t":"pipe","p":14},"-1,10":{"t":"pipe","p":14},"-1,4":{"t":"pipe","p":6},"-1,5":{"t":"pipe","p":10},"-1,6":{"t":"pipe","p":10},"-1,7":{"t":"pipe","p":10},"-1,8":{"t":"pipe","p":10},"-1,9":{"t":"pipe","p":10},"-1,11":{"t":"pipe","p":10},"-1,12":{"t":"pipe","p":10},"-1,13":{"t":"pipe","p":10},"-1,14":{"t":"pipe","p":10},"-1,15":{"t":"pipe","p":10},"-1,17":{"t":"pipe","p":10},"-1,18":{"t":"pipe","p":12},"0,18":{"t":"pipe","p":5},"1,18":{"t":"pipe","p":5},"2,17":{"t":"pipe","p":14},"2,14":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,12":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,9":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,6":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,3":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":10},"2,1":{"t":"pipe","p":10},"4,7":{"t":"pipe","p":6},"4,13":{"t":"pipe","p":14},"4,8":{"t":"pipe","p":10},"4,9":{"t":"pipe","p":10},"4,10":{"t":"pipe","p":10},"4,11":{"t":"pipe","p":10},"4,12":{"t":"pipe","p":10},"4,14":{"t":"pipe","p":10},"4,15":{"t":"pipe","p":10},"4,16":{"t":"pipe","p":10}},"by":"1.4.2","hold":"flow","q":{"v":110,"u":"gal/min"},"solver":1}
 
 ## Fitting Losses
 # Each method's coefficients, one row per kind of fitting in N_fit!'s order: 90° elbow, tee run, tee branch.
@@ -302,17 +306,28 @@ Re_seg(∀`, D) = .Re(D, .V@(D, ∀`))
 Δp_return(∀_des!) = .ΔP_DW(ε_PVC, D_r!, A_r * ∀_des!, L_r!, ΣK(A_r * ∀_des!, N_fit_r!, D_r!, K_extra_r!))
 
 ## Pressure Drop Solver
-# The start: each spur in the middle of its exchanger's data, so none starts against a wall
-∀_des! = .hx_mid(exchangers!) * ('gal / 'min)
-# The pump's target pressure difference, Δp_target, comes from the plugin's block above.
-
-# root solver finds where all pressure drops across all paths are equal. The path to spur j runs out along the supply, through its exchanger and its regulating valve and back along the return, its circulator adding head: transpose(A) * Δp_supply and transpose(A_r) * Δp_return add up the segments each path passes through.
-residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_return(∀_des!) + .HX(∀_des!, exchangers!) + .VALVE(∀_des!, valves!) - .PUMP_sel(∀_des!, pumps!) - Δp_target
-!root ∀_des!
-  equation: residual(∀_des!)
+# The main pump holds either the loop's total flow (hold_flow! 1: ∀_target) or its pressure difference
+# (hold_flow! 0: Δp_target), as the plugin's Network → Pump holds sets. Either way the solver finds the spur
+# flows ∀_des! and the pump's pressure difference Δp_main together.
+# The start: each spur in the middle of its exchanger's data, so none starts against a wall, scaled to add up
+# to the target flow when the pump holds one; and the pressure difference a path needs, on average, at those flows
+∀_mid = .hx_mid(exchangers!) * ('gal / 'min)
+∀_des! = ∀_mid * (hold_flow! * ∀_target / sum(∀_mid) + 1 - hold_flow!)
+# What the path to each spur takes, less its circulator's head: out along the supply, through its exchanger and
+# its regulating valve and back along the return. transpose(A) * Δp_supply and transpose(A_r) * Δp_return add up
+# the segments each path passes through.
+path_dp(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_return(∀_des!) + .HX(∀_des!, exchangers!) + .VALVE(∀_des!, valves!) - .PUMP_sel(∀_des!, pumps!)
+Δp_main = hold_flow! * sum(path_dp(∀_des!)) / cols(A) + (1 - hold_flow!) * Δp_target
+# root solver finds the flows at which every path takes the pump's pressure difference, with the flows adding
+# up to the target (holding a flow) or that pressure difference the target (holding it)
+residual(∀_des!, Δp_main) = (path_dp(∀_des!) - Δp_main) / 'psi
+!root ∀_des!, Δp_main
+  equation: residual(∀_des!, Δp_main)
+  equation: hold_flow! * (sum(∀_des!) - ∀_target) / ('gal / 'min) + (1 - hold_flow!) * (Δp_main - Δp_target) / 'psi
+  method: solver_method!
   autorun: on
   status: solver_state
-  #@ result {"hash":"e0ef9283b429","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0008378875567920616],[0.000835845267889351],[0.0008367833576592761],[0.0008362652548745717],[0.000836828148642861],[0.000838040495222131],[0.0008399407321448343],[0.0008423008895804308]],"unit":"meter ** 3 / second"}],"nfev":19,"message":"The solution converged.","resid":4.32e-05}
+  #@ result {"hash":"0d12026367ea","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.000867391204062375],[0.0008652917166846526],[0.0008662525877852556],[0.000865721834192309],[0.0008663001513303419],[0.0008675452382911778],[0.0008694971064085907],[0.0008719217652452966]],"unit":"meter ** 3 / second"},{"mag":6220.46971965263,"unit":"pascal"}],"nfev":17,"message":"The solution converged.","resid":1.1e-08}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min
@@ -326,8 +341,12 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 Δp_valve = .VALVE(∀_des!, valves!) -> 'psi
 Δp_circ = .PUMP_sel(∀_des!, pumps!) -> 'psi
 # The residual from the pieces above, rather than running the pipes' pressure drops again
-Δp_residual = Δp_spur + Δp_hx + Δp_valve - Δp_circ - Δp_target -> 'psi
+Δp_residual = Δp_spur + Δp_hx + Δp_valve - Δp_circ - Δp_main -> 'psi
+# the loop's total flow and the main pump's pressure difference: one of them its target, the other found
+∀_total = sum(∀_des!) -> 'gal / 'min
+Δp_pump = Δp_main -> 'psi
 # Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
-# in _r) each return segment, and the piping's pressure drop on each spur's path, supply and return; and
-# how the solver stands (solver_state: 1 up to date, 0 out of date, -1 not run, -2 an error), for its banner
-!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, solver_state
+# in _r) each return segment, the piping's pressure drop on each spur's path, supply and return, the loop's
+# total flow and the pump's pressure difference; and how the solver stands (solver_state: 1 up to date,
+# 0 out of date, -1 not run, -2 an error), for its banner
+!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, ∀_total, Δp_pump, solver_state

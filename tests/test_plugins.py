@@ -220,10 +220,12 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert not [r for r in ws.results if r.kind == "error"]
     head = next(r for r in ws.results if r.plugin)
     assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "A_r", "L_r!", "D_r!", "N_fit_r!",
-                                   "K_extra_r!", "exchangers!", "pumps!", "valves!", "fit_method!", "Δp_target"]
+                                   "K_extra_r!", "exchangers!", "pumps!", "valves!", "fit_method!", "solver_method!", "hold_flow!", "∀_target",
+                                   "Δp_target"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar and "mag" in r.pluginvar.values[0]).pluginvar.values
-    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ", "solver_state"]
+    assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ",
+                                         "∀_total", "Δp_pump", "solver_state"]
     assert sent[-1]["mag"] == 1            # the solver's state: up to date
     assert sent[0]["unit"] == "gal/min"
 
@@ -571,7 +573,9 @@ def test_the_plugins_sheet_takes_regulating_valves_instead_of_or_beside_circulat
     n = len(re.search(r"\n  pumps! = \[([^\n]*)\]", text).group(1).split(";"))
     text = re.sub(r"\n  pumps! = \[[^\n]*", "\n  pumps! = [" + "; ".join(["0"] * n) + "]", text)
     text = re.sub(r"\n  valves! = \[[^\n]*", "\n  valves! = [" + "; ".join(["15"] * n) + "]", text)
-    text = re.sub(r"\n  Δp_target = [^\n]*", "\n  Δp_target = 12 'psi", text)
+    # (8 psi: within the HBH060's data, 7.5 to 15 gal/min; more would push every spur against its wall)
+    text = re.sub(r"\n  Δp_target = [^\n]*", "\n  Δp_target = 8 'psi", text)
+    text = text.replace("\n  hold_flow! = 1\n", "\n  hold_flow! = 0\n")      # the larger pump holds its pressure difference
     text = re.sub(r"\n  #@ result [^\n]*", "", text)
     ws = evaluate(solve_all(text, log=lambda m: None), plots=False)
     assert next(r for r in ws.results if r.solver).solver.current

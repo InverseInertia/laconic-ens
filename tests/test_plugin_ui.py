@@ -229,10 +229,23 @@ def test_the_pumps_target_pressure_difference_is_set_in_the_plugin(page):
     frame = opened(page)
     frame.locator("#example").click()
     page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 0.1 'psi\\n\")")
+    # by default the pump holds a total flow
+    assert "  hold_flow! = 1\n" in value(page) and frame.locator("#dpRow").is_hidden()
+    frame.locator("#qu").select_option("L/s")
+    frame.locator("#qv").fill("6.3")
+    frame.locator("#qv").press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.includes(\"  ∀_target = 6.3 * 'L / 's\\n\")")
+    # or its pressure difference
+    frame.locator("#hold").select_option("dp")
+    page.wait_for_function("document.querySelector('#src').value.includes('  hold_flow! = 0\\n')")
+    assert frame.locator("#qRow").is_hidden()
     frame.locator("#dpu").select_option("kPa")
     frame.locator("#dpv").fill("2.5")
     frame.locator("#dpv").press("Enter")
     page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 2.5 'kPa\\n\")")
+    # and the sheet's solver method, by its number
+    frame.locator("#solver").select_option(label="lm")
+    page.wait_for_function("document.querySelector('#src').value.includes('  solver_method! = 2\\n')")
 
 
 def test_a_target_set_again_in_the_sheet_is_named_and_the_plugins_reaches_the_solver(page):
@@ -240,8 +253,8 @@ def test_a_target_set_again_in_the_sheet_is_named_and_the_plugins_reaches_the_so
     the plugin's value, so the solver never saw a change. The plugin now names that line; without it,
     a change in the plugin makes the solver's inputs, and so its hash, change."""
     original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
-    old = original.replace("# The pump's target pressure difference, Δp_target, comes from the plugin's block above.\n",
-                           "Δp_target = 0.1 'psi\n")
+    old = original.replace("## Pressure Drop Solver\n", "Δp_target = 0.1 'psi\n## Pressure Drop Solver\n")
+    assert old != original
     show(page, old)
     frame = opened(page)
     frame.locator("#msgs li.err:has-text('Δp_target is set again on line')").wait_for()
@@ -251,8 +264,8 @@ def test_a_target_set_again_in_the_sheet_is_named_and_the_plugins_reaches_the_so
     frame.locator("#segments tbody tr").first.wait_for()
     page.wait_for_function("last.some((r) => r.solver)")
     before = page.evaluate("last.find((r) => r.solver).solver.hash")
-    frame.locator("#dpv").fill("0.5")
-    frame.locator("#dpv").press("Enter")
+    frame.locator("#qv").fill("120")
+    frame.locator("#qv").press("Enter")
     page.wait_for_function(f"last.some((r) => r.solver && r.solver.hash !== {before!r})")
 
 
@@ -304,10 +317,10 @@ def test_an_older_plugin_than_wrote_the_sheet_says_so_and_does_not_write(page):
     page.click(".plugin-box button:has-text('Open')")
     frame = page.frame_locator("#pluginFrames .plugin-frame")
     frame.locator("#segments tbody tr").first.wait_for()
-    frame.locator("#dpv").fill("0.5")
-    frame.locator("#dpv").press("Enter")
+    frame.locator("#qv").fill("120")
+    frame.locator("#qv").press("Enter")
     page.wait_for_timeout(1200)
-    assert "  Δp_target = 0.02 'psi" in value(page)          # not written
+    assert "  ∀_target = 110 * 'gal / 'min" in value(page)    # not written
     page.click("#pluginDlg .close")
     show(page, original)                                       # its own version: it writes, and stamps it
     import json
@@ -315,9 +328,9 @@ def test_an_older_plugin_than_wrote_the_sheet_says_so_and_does_not_write(page):
     version = json.loads((Path(__file__).parent.parent / "plugins/pipenet/manifest.json").read_text())["version"]
     page.wait_for_function(f"document.querySelector('.plugin-status')?.textContent.startsWith('Pipe network {version}')")
     page.click(".plugin-box button:has-text('Open')")
-    frame.locator("#dpv").fill("0.5")
-    frame.locator("#dpv").press("Enter")
-    page.wait_for_function("document.querySelector('#src').value.includes(\"  Δp_target = 0.5 'psi\")")
+    frame.locator("#qv").fill("120")
+    frame.locator("#qv").press("Enter")
+    page.wait_for_function("document.querySelector('#src').value.includes(\"  ∀_target = 120 * 'gal / 'min\")")
     assert f'"by":"{version}"' in value(page)
 
 
@@ -500,12 +513,12 @@ def test_the_plugin_says_when_its_values_wait_on_the_solver(page):
     frame.locator("body").evaluate("""() => { window.__shown = false;
         new MutationObserver(() => { if (!document.querySelector('#solveBanner').hidden) window.__shown = true; })
           .observe(document.querySelector('#solveBanner'), {attributes: true}); }""")
-    frame.locator("#dpv").fill("0.05")
-    frame.locator("#dpv").press("Enter")
+    frame.locator("#qv").fill("120")
+    frame.locator("#qv").press("Enter")
     banner.locator("> div").wait_for(state="visible", timeout=60000)
     assert "Waiting on the solver" in banner.inner_text()
     banner.wait_for(state="hidden", timeout=120000)                    # autorun has solved it
-    assert "Δp_target = 0.05 'psi" in value(page)
+    assert "∀_target = 120 * 'gal / 'min" in value(page)
 
 
 def test_the_plugin_reads_the_solvers_state_from_the_sheet(page):
@@ -522,7 +535,9 @@ def test_the_plugin_reads_the_solvers_state_from_the_sheet(page):
     frame.locator("#solveBanner:has-text('has not run on this layout yet')").wait_for()
     assert frame.locator("#showSets label:has-text('solver_state')").count() == 0
     page.click("#pluginDlg .close")
-    show(page, never.replace("  equation: residual(∀_des!)", "  equation: residual(∀_des!) + nothing_here"))
+    broken = never.replace("  equation: residual(∀_des!, Δp_main)", "  equation: residual(∀_des!, Δp_main) + nothing_here")
+    assert broken != never
+    show(page, broken)
     page.click(".plugin-box button:has-text('Open')")
     frame.locator("#solveBanner[data-state='-2']:has-text('has an error')").wait_for()
 

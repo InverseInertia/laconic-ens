@@ -36,13 +36,23 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   eq(a.A, [[1]], 'of one segment, the spur');
   eq(P.outputs(s, P.network(s)), { A: '[1]', 'L!': "[30] * 'ft", 'D_h!': "[4.026] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]',
     A_r: '[1]', 'L_r!': "[30] * 'ft", 'D_r!': "[4.026] * 'in", 'N_fit_r!': '[0, 0, 0]', 'K_extra_r!': '[0]',
-    'exchangers!': '[1]', 'pumps!': '[1]', 'valves!': '[0]', 'fit_method!': '1', Δp_target: "0.1 'psi" },
+    'exchangers!': '[1]', 'pumps!': '[1]', 'valves!': '[0]', 'fit_method!': '1', 'solver_method!': '1', 'hold_flow!': '1', '∀_target': "100 * 'gal / 'min", Δp_target: "0.1 'psi" },
     "three tiles of 10 ft of 4\" Sch 40; the return the same as the supply, as lines of its own");
   s.method = 3;
   eq(P.outputs(s, P.network(s))['fit_method!'], '3', 'the method chosen goes to the sheet');
   s.dp = { v: 25, u: 'kPa' };
   eq(P.outputs(s, P.network(s))['Δp_target'], "25 'kPa", "and the pump's target pressure difference");
   eq(P.normalize({ dp: { v: -1, u: 'atm' } }).dp, { v: 0.1, u: 'psi' }, 'a target that is not one falls back to 0.1 psi');
+  // what the pump holds: a total flow (the default) or its pressure difference
+  eq([P.blank().hold, P.outputs(s, P.network(s))['hold_flow!']], ['flow', '1'], 'the pump holds a total flow unless told otherwise');
+  s.q = { v: 6.3, u: 'L/s' };
+  eq(P.outputs(s, P.network(s))['∀_target'], "6.3 * 'L / 's", 'its target flow, in the unit given');
+  s.hold = 'dp';
+  eq(P.outputs(s, P.network(s))['hold_flow!'], '0', 'or it holds its pressure difference');
+  s.solver = 2;
+  eq(P.outputs(s, P.network(s))['solver_method!'], '2', "the sheet's solver method, by its number");
+  eq(P.normalize({ solver: 6 }).solver, 1, 'brentq (one unknown) is not offered: the default instead');
+  eq([P.normalize({ hold: 'x' }).hold, P.normalize({ q: { v: 0, u: 'furlong' } }).q], ['flow', { v: 100, u: 'gal/min' }], 'anything odd falls back');
 }
 
 // --- a tee: the trunk splits into two spurs ---------------------------------------------------------
@@ -204,7 +214,7 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   const bad = P.network(s);
   assert.ok(bad.errors.length && bad.errors.every((e) => e.layer === 'r' && e.msg.startsWith('Return: ')), "the return's errors say they are the return's");
   n++;
-  eq(P.outputs(s, bad), { 'fit_method!': '1', Δp_target: "0.1 'psi" },
+  eq(P.outputs(s, bad), { 'fit_method!': '1', 'solver_method!': '1', 'hold_flow!': '1', '∀_target': "100 * 'gal / 'min", Δp_target: "0.1 'psi" },
     'and while the return is broken only the settings are written: the method and the pump\'s target');
   // taking a pad away on one layer takes it off both
   P.onLayer(s, 'r', (v) => { delete v.cells['0,5']; });

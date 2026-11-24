@@ -21,7 +21,11 @@
  *        layer connects to them on its own side. A sink's name, exchanger and pump are kept on the
  *        supply layer's pad only (syncPads keeps the pads of the two layers in the same squares)
  *   method: how the sheet works out fitting losses: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K (METHODS)
- *   dp: the pressure difference the pump holds, {v, u} (u one of DP_UNITS), written as Δp_target
+ *   hold: what the main pump's controller holds, "flow" (the loop's total flow; its pressure difference
+ *        follows) or "dp" (its pressure difference; the flow follows), written as hold_flow! (1 or 0)
+ *   q: the total flow it holds, {v, u} (u one of Q_UNITS), written as ∀_target
+ *   dp: the pressure difference it holds, {v, u} (u one of DP_UNITS), written as Δp_target
+ *   solver: the sheet's !root method by its number there (SOLVERS), written as solver_method!
  *   show: what the drawing shows: {numbers, size, L, D, hx, pump, valve} each true or false (segment
  *        numbers; each segment's pipe size, length and bore; each sink's exchanger, circulator and valve), and
  *        `hide`, the names of the sheet's !pluginvar values left off it (any other is shown)
@@ -80,6 +84,12 @@
   const SCHEDULES = ['40', '80'];
   // The units the pump's target pressure difference (Δp_target) may be given in, as LENS spells them.
   const DP_UNITS = ['psi', 'kPa', 'Pa', 'bar', 'ft_H2O'];
+  // The sheet's !root methods its `method: solver_method!` line numbers (laconic/solver.py ROOT_METHODS), with
+  // what each is good at here; brentq, the sixth, takes one unknown, so it is not offered.
+  const SOLVERS = [[1, 'hybr', 'Powell hybrid: quick on a smooth network'], [2, 'lm', 'Levenberg-Marquardt: steadier with spurs against the end of their data'],
+    [3, 'broyden1', "Broyden's good method"], [4, 'broyden2', "Broyden's bad method"], [5, 'krylov', 'Newton-Krylov: very large networks']];
+  // ... and its target flow (∀_target): the name shown, and as LENS spells it
+  const Q_UNITS = [['gal/min', "'gal / 'min"], ['L/s', "'L / 's"], ['L/min', "'L / 'min"], ['m³/h', "'m^3 / 'hour"]];
   const PIPE_SIZES = [
     ['1/8', 0.269, 0.215], ['1/4', 0.364, 0.302], ['3/8', 0.493, 0.423], ['1/2', 0.622, 0.546],
     ['3/4', 0.824, 0.742], ['1', 1.049, 0.957], ['1-1/4', 1.380, 1.278], ['1-1/2', 1.610, 1.500],
@@ -115,7 +125,7 @@
   }
 
   function blank() {
-    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, nps: '4', sch: '40', ret: 'same', method: 1, dp: { v: 0.1, u: 'psi' },
+    return { v: 1, units: { L: 'ft', D: 'in' }, cell: 10, D: 4, nps: '4', sch: '40', ret: 'same', method: 1, solver: 1, hold: 'flow', q: { v: 100, u: 'gal/min' }, dp: { v: 0.1, u: 'psi' },
       show: { numbers: true, size: false, L: false, D: false, hx: false, pump: false, valve: false, hide: [] },
       cells: {}, rcells: {} };
   }
@@ -132,6 +142,10 @@
       cell: num(s.cell, b.cell), D: num(s.D, b.D), ret: s.ret === 'separate' ? 'separate' : 'same',
       nps: s.nps === null ? null : SIZE.has(s.nps) ? s.nps : b.nps, sch: SCHEDULES.includes(s.sch) ? s.sch : b.sch,
       method: [1, 2, 3].includes(s.method) ? s.method : b.method,
+      hold: s.hold === 'dp' ? 'dp' : 'flow',
+      solver: SOLVERS.some(([n]) => n === s.solver) ? s.solver : b.solver,
+      q: { v: s.q && typeof s.q.v === 'number' && isFinite(s.q.v) && s.q.v > 0 ? s.q.v : b.q.v,
+           u: s.q && Q_UNITS.some(([u]) => u === s.q.u) ? s.q.u : b.q.u },
       dp: { v: s.dp && typeof s.dp.v === 'number' && isFinite(s.dp.v) && s.dp.v >= 0 ? s.dp.v : b.dp.v,
             u: s.dp && DP_UNITS.includes(s.dp.u) ? s.dp.u : b.dp.u },
       show: Object.fromEntries(Object.entries(b.show).map(([k, d]) => [k, k === 'hide'
@@ -335,7 +349,8 @@
   // the settings that do not depend on it (the method, the pump's target) are written; the rest stay
   // as they were until it is fixed.
   function outputs(state, net) {
-    const settings = { 'fit_method!': String(state.method), Δp_target: `${num(state.dp.v)} '${state.dp.u}` };
+    const settings = { 'fit_method!': String(state.method), 'solver_method!': String(state.solver), 'hold_flow!': state.hold === 'flow' ? '1' : '0',
+      '∀_target': `${num(state.q.v)} * ${Q_UNITS.find(([u]) => u === state.q.u)[1]}`, Δp_target: `${num(state.dp.v)} '${state.dp.u}` };
     if (net.errors.length || !net.sinks.length) return settings;
     const lines = (a, A, names) => {
       const segs = a.order.map((id) => a.segments[id]);
@@ -926,7 +941,7 @@
 
   const api = { N, E, S, W, DIRS, OPP, NAMES, CELL, FITTINGS, METHODS, key, at, bits, step, rotate, shape,
     blank, normalize, backdrop, side, SINK_SETTINGS, copySink, twins, sinkKey, TOURS, tourMark, syncPads, network, onLayer, copySupply, analyze, outputs, placed, flatten, fmt, bounds, draw,
-    connect, erase, place, segmentAt, setSegmentLength, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, bore, sizeName, layout, curveNames, curveName };
+    connect, erase, place, segmentAt, setSegmentLength, PALETTE, example, RETURN_NAME, PIPE_SIZES, SCHEDULES, DP_UNITS, Q_UNITS, SOLVERS, bore, sizeName, layout, curveNames, curveName };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.PipeNet = api;
 })(typeof window !== 'undefined' ? window : globalThis);
