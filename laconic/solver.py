@@ -38,9 +38,9 @@ ROOT_METHODS = ("hybr", "lm", "broyden1", "broyden2", "krylov", "brentq")
 MIN_METHODS = ("BFGS", "Nelder-Mead", "Powell", "L-BFGS-B", "TNC", "SLSQP", "trust-constr", "COBYLA")
 WITH_BOUNDS = ("Nelder-Mead", "Powell", "L-BFGS-B", "TNC", "SLSQP", "trust-constr", "COBYLA")
 WITH_CONSTRAINTS = ("SLSQP", "trust-constr", "COBYLA")
-KEYS = {"root": ("equation", "bounds", "method", "tol", "maxiter", "timeout", "autorun"),
-        "minimize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun"),
-        "maximize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun")}
+KEYS = {"root": ("equation", "bounds", "method", "tol", "maxiter", "timeout", "autorun", "status"),
+        "minimize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun", "status"),
+        "maximize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun", "status")}
 # What the editor shows next to each option and method in its suggestions (see vocab.py).
 KEY_NOTES = {
     "equation": "lhs = rhs, or one expression that is zero",
@@ -52,6 +52,7 @@ KEY_NOTES = {
     "maxiter": "iteration limit passed to scipy",
     "timeout": "seconds before a run is killed (default 300)",
     "autorun": "on: solve again after the inputs change",
+    "status": "a name that holds the block's state below it: 1 up to date, 0 out of date, -1 never run, -2 an error",
 }
 METHOD_NOTES = {
     "hybr": "Powell hybrid (MINPACK). Default",
@@ -69,7 +70,9 @@ METHOD_NOTES = {
     "trust-constr": "interior point; bounds and constraints, many unknowns",
     "COBYLA": "no gradients; bounds and <= / >= constraints",
 }
-NOT_PARAMETERS = ("timeout", "autorun")   # how a run is supervised, not what it computes
+NOT_PARAMETERS = ("timeout", "autorun", "status")   # how a run is supervised or reported, not what it computes
+# The values of a block's `status:` name: what a line below (a !pluginvar, say) can read of it.
+STATUS_VALUES = {"valid": 1, "stale": 0, "none": -1, "error": -2}
 DEFAULT_TIMEOUT = 300.0
 RECORD_VERSION = 1
 LOG_TRACE_LINES = 120                      # evaluations written to the log before it goes quiet
@@ -104,6 +107,7 @@ class Block:
     maxiter: int = None
     timeout: float = DEFAULT_TIMEOUT
     autorun: bool = False
+    status: str = None                          # the name its state is given to below it, if any
     canon: list = field(default_factory=list)  # the lines that decide the answer, whitespace-normalised
     errors: dict = field(default_factory=dict)  # option line number -> message
     problem: str = ""                           # what is wrong with the block as a whole
@@ -282,7 +286,7 @@ def problem_rows(b, tex, name):
 
 
 def _apply_option(b, n, key, target, value, seen):
-    if key in ("objective", "method", "tol", "maxiter", "timeout", "autorun") and key in seen:
+    if key in ("objective", "method", "tol", "maxiter", "timeout", "autorun", "status") and key in seen:
         raise SolverError(f"{key} is given twice")
     seen.add(key)
     if key == "equation":
@@ -310,6 +314,11 @@ def _apply_option(b, n, key, target, value, seen):
         if w not in ("on", "off"):
             raise SolverError("autorun is on or off")
         b.autorun = w == "on"
+    elif key == "status":
+        name = value.strip()
+        if not is_name(name) or name in b.unknowns:
+            raise SolverError("status is a name of its own, not one of the unknowns: say `status: solved`")
+        b.status = name
 
 
 def _split_top(s):

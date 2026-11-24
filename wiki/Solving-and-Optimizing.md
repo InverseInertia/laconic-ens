@@ -30,6 +30,7 @@ d = 1'm
 | `tol:` `maxiter:` | passed to scipy |
 | `timeout:` | seconds before a run is killed (default 300) |
 | `autorun:` | `on` re-solves automatically (see below); the Auto checkbox writes this line |
+| `status:` | a name that holds the block's state for the lines below it: `1` up to date, `0` out of date (or built on out-of-date values from above), `-1` not run yet, `-2` the block has an error. It is never itself out of date, so a line can test it, or a plugin read it with `!pluginvar` |
 
 The solver works on plain numbers in the unit each unknown was started in, so `x = 1'm` and `x = 1000'mm` are the same problem at different scales. Start in the unit your answer is of a sensible size in.
 
@@ -47,7 +48,7 @@ Solvers can be slow, so evaluating a sheet **never runs one**. Under each block 
 
 ## Is the stored result current?
 
-The hash covers everything the block reads: its own lines (apart from `timeout:` and `autorun:`, comments and spacing), the starting values, every variable and user function its expressions reach, the units they use, and the trig angle mode, with numbers cut to 12 significant digits so another machine's rounding does not count. The status under the block is one of:
+The hash covers everything the block reads: its own lines (apart from `timeout:`, `autorun:` and `status:`, comments and spacing), the starting values, every variable and user function its expressions reach, the units they use, and the trig angle mode, with numbers cut to 12 significant digits so another machine's rounding does not count. The status under the block is one of:
 
 | Status | Meaning |
 |---|---|
@@ -56,6 +57,8 @@ The hash covers everything the block reads: its own lines (apart from `timeout:`
 | ○ Not run yet | no result. The unknowns hold their starting values |
 | ⟳ Running | a worker is solving |
 | ✕ Failed, ■ Interrupted | the last run did not store anything. Open the log |
+
+A run that fails or is interrupted stores nothing, so to the sheet (and to a `status:` name) the block stays out of date or not run; only the page and the log know it failed.
 
 Any line computed from an out-of-date block (and any plot) gets a ⚠ beside it, through variables and user functions alike, and a later block that reads an out-of-date unknown is flagged as built on stale values. Only a result that converged is ever stored. The exports print what the block solves, then the stored values, with a note above any block that is out of date.
 

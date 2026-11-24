@@ -301,8 +301,14 @@ def _run_solver(i, raw, handle, ev, fmt, used):
     """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here
     (that is solvesession.py's): the stored result is compared by hash with the block's current
     inputs and, fitting or not, its values are what the unknowns hold below (a result that no
-    longer fits is marked out of date, as is everything computed from it)."""
+    longer fits is marked out of date, as is everything computed from it). A `status: name` line gives
+    `name` the block's state below it (solver.STATUS_VALUES), itself never out of date."""
     members, block = handle.members, solver.parse_block(handle)
+
+    def report(state):
+        if block.status:
+            q = ev.Q(solver.STATUS_VALUES[state], "dimensionless")
+            ev.symbols.define(block.status, q, text=fmt.plain(q), stale=False)
     owned = {}
     for l in members:
         msg = block.errors.get(l.n)
@@ -310,6 +316,7 @@ def _run_solver(i, raw, handle, ev, fmt, used):
 
     def fail(msg):
         ev.symbols.mark_stale(ev.vkey(n) for n in block.unknowns)   # what reads them below is not trustworthy either
+        report("error")
         return LineResult(i, raw, "error", error=msg, block=handle), owned
 
     if block.problem:
@@ -332,6 +339,7 @@ def _run_solver(i, raw, handle, ev, fmt, used):
     held = qs if qs is not None else [ev.vars[u.key] for u in prob.unknowns]
     for u, q in zip(prob.unknowns, held):     # below the block, an unknown holds what the block says
         ev.symbols.define(u.key, q, text=fmt.plain(q), stale=status != "valid" or taint)
+    report("stale" if status == "valid" and taint else status)
     values = [_value(u.name, fmt.var(u.key), fmt.quantity(ev.vars[u.key])) for u in prob.unknowns]
     plain = [f"{u.key} = {fmt.plain(ev.vars[u.key])}" for u in prob.unknowns]
     obj = prob.stored_objective(stored) if qs is not None else None

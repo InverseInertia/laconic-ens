@@ -506,3 +506,22 @@ def test_the_plugin_says_when_its_values_wait_on_the_solver(page):
     assert "Waiting on the solver" in banner.inner_text()
     banner.wait_for(state="hidden", timeout=120000)                    # autorun has solved it
     assert "Δp_target = 0.05 'psi" in value(page)
+
+
+def test_the_plugin_reads_the_solvers_state_from_the_sheet(page):
+    """The plugin's sheet sends `solver_state` (its !root's `status:` line): a solver never run, or a block
+    in error, has a banner of its own; the state is not offered as a value to draw."""
+    import re
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    assert "  status: solver_state\n" in original and original.rstrip().endswith(", solver_state")
+    never = re.sub(r"\n  #@ result [^\n]*", "", original).replace("  autorun: on\n", "")
+    show(page, never)
+    page.wait_for_selector(".plugin-box button:has-text('Open'):not([disabled])")
+    page.click(".plugin-box button:has-text('Open')")
+    frame = page.frame_locator("#pluginFrames .plugin-frame")
+    frame.locator("#solveBanner:has-text('has not run on this layout yet')").wait_for()
+    assert frame.locator("#showSets label:has-text('solver_state')").count() == 0
+    page.click("#pluginDlg .close")
+    show(page, never.replace("  equation: residual(∀_des!)", "  equation: residual(∀_des!) + nothing_here"))
+    page.click(".plugin-box button:has-text('Open')")
+    frame.locator("#solveBanner[data-state='-2']:has-text('has an error')").wait_for()

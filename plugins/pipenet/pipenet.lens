@@ -311,6 +311,7 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 !root ∀_des!
   equation: residual(∀_des!)
   autorun: on
+  status: solver_state
   #@ result {"hash":"e0ef9283b429","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0008378875567920616],[0.000835845267889351],[0.0008367833576592761],[0.0008362652548745717],[0.000836828148642861],[0.000838040495222131],[0.0008399407321448343],[0.0008423008895804308]],"unit":"meter ** 3 / second"}],"nfev":19,"message":"The solution converged.","resid":4.32e-05}
 ## Output
 !short
@@ -327,5 +328,6 @@ residual(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_
 # The residual from the pieces above, rather than running the pipes' pressure drops again
 Δp_residual = Δp_spur + Δp_hx + Δp_valve - Δp_circ - Δp_target -> 'psi
 # Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
-# in _r) each return segment, and the piping's pressure drop on each spur's path, supply and return
-!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ
+# in _r) each return segment, and the piping's pressure drop on each spur's path, supply and return; and
+# how the solver stands (solver_state: 1 up to date, 0 out of date, -1 not run, -2 an error), for its banner
+!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, solver_state

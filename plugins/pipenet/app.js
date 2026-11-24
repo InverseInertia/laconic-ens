@@ -18,6 +18,9 @@
   const canvas = $('#canvas');
 
   let state = P.blank(), net = P.network(state), inputs = [], overridden = [];
+  // The sheet's solver, from its block's `status: solver_state` sent with !pluginvar: 1 up to date,
+  // 0 out of date, -1 not run, -2 an error in the block. null when the sheet does not send it.
+  let solverState = null;
   let tool = 'draw', selected = null, theme = {}, layer = 's';
 
   // The layer in front: the return only while it is laid out on its own.
@@ -84,6 +87,9 @@
     if (!m || m.type !== 'lens:update') return;
     if (m.theme) applyTheme(m.theme);
     inputs = Array.isArray(m.inputs) ? m.inputs : [];
+    const st = inputs.find((v) => v.name === 'solver_state' && !Array.isArray(v.names));
+    solverState = st && typeof st.mag === 'number' ? Math.round(st.mag) : null;
+    inputs = inputs.filter((v) => v !== st);   // a state, not a value to draw
     overridden = Array.isArray(m.overridden) ? m.overridden : [];
     // The state the sheet holds, unless this page has a change of its own on the way or in hand.
     if ('state' in m && !writeTimer && !drag) {
@@ -153,9 +159,7 @@
     document.body.dataset.layer = front();
     document.body.dataset.tool = tool;
     // copying settings: an orange banner over the grid, so a click on a sink is not taken for anything else
-    // the sheet's values out of date (each !pluginvar value says so, when it rests on a solver that has
-    // not run since a change): drawn as they are, with a banner until the solver catches up
-    $('#solveBanner').hidden = !inputs.some((v) => v.stale);
+    solveBanner();
     const banner = $('#copyBanner');
     banner.hidden = !(tool === 'copy' && state.cells[copyFrom]);
     if (!banner.hidden) {
@@ -284,6 +288,21 @@
   // ---- tools and keys ----------------------------------------------------------------------
   for (const btn of document.querySelectorAll('[data-tool]')) btn.onclick = () => { tool = btn.dataset.tool; measure = null; copyFrom = null; refresh(); };
   $('#copyDone').onclick = () => endCopy();
+  // A banner over the grid while the sheet's values drawn here wait on its solver: from the solver's
+  // state when the sheet sends it (solver_state), else from the values' own out-of-date flags.
+  function solveBanner() {
+    const say = solverState === null ? (inputs.some((v) => v.stale) ? 0 : 1) : solverState;
+    const text = {
+      0: "Waiting on the solver: the sheet's values drawn here are from before the last change, until it solves this layout. If it cannot, its row in the sheet says why.",
+      [-1]: "The sheet's solver has not run on this layout yet: the values drawn here are its starting values. Run it from its row in the sheet, or turn on its Auto.",
+      [-2]: "The sheet's solver block has an error, so the values drawn here are not solved: its row in the sheet says what.",
+    }[say];
+    const box = $('#solveBanner');
+    box.hidden = !text;
+    box.dataset.state = String(say);
+    if (text) $('#solveText').textContent = text;
+  }
+
   function endCopy() { tool = 'select'; if (copyFrom && state.cells[copyFrom]) selected = copyFrom; copyFrom = null; refresh(); }
   P.PALETTE.forEach((item, i) => {
     const btn = document.createElement('button');
