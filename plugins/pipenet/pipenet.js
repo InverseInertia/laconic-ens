@@ -539,7 +539,8 @@
      behind it, as the far side of a circuit board is), selected: a tile key on that layer, grid: draw
      the grid (the editor) or not (the preview), inputs: the !pluginvar values, effort: how hard `layout`
      works at the balloons (less while the mouse drags), prev: where they were last time (id -> {x, y}),
-     placed: an object to fill with where they are now, key: "html" when the page shows the key to the
+     placed: an object to fill with where they are now, walls: a Set of the sinks whose spur runs against an
+     end of its data (ringed in the warning colour), key: "html" when the page shows the key to the
      sinks set up alike itself (else it is drawn in the picture's bottom left corner), underlay: leave out
      the paper, so the background image the page puts behind the drawing shows through}. */
   function draw(state, net, opts = {}) {
@@ -605,6 +606,8 @@
           const s = h - 10;
           out.push(`<rect x="${cx - s}" y="${cy - s}" width="${2 * s}" height="${2 * s}" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="3"/>`);
           out.push(`<path d="M ${cx - s + 4} ${cy + 6} l 5 -12 l 5 12 l 5 -12 l 5 12 l 5 -12" fill="none" stroke="${esc(color)}" stroke-width="2"/>`);
+          // a spur against the end of its data (opts.walls): a dashed ring in the warning colour
+          if (opts.walls && opts.walls.has(k)) out.push(`<rect x="${cx - s - 5}" y="${cy - s - 5}" width="${2 * s + 10}" height="${2 * s + 10}" rx="4" fill="none" stroke="${esc(th.err)}" stroke-width="2.5" stroke-dasharray="5 3"/>`);
           // set up like other sinks: their shared mark, over the icon's top left corner
           if (alike[k] !== undefined) out.push(tourMark(alike[k], cx - s - 8, cy - s - 8, th.text, th.paper));
         } else {

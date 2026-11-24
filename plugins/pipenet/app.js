@@ -21,6 +21,9 @@
   // The sheet's solver, from its block's `status: solver_state` sent with !pluginvar: 1 up to date,
   // 0 out of date, -1 not run, -2 an error in the block. null when the sheet does not send it.
   let solverState = null;
+  // The spurs against an end of their exchanger's or circulator's data (the sheet's at_wall!, one per sink:
+  // 1 the exchanger's, 2 the circulator's, 3 both): {sink key: code}. Empty when the sheet does not send it.
+  let walls = {}, wallCodes = [];
   let tool = 'draw', selected = null, theme = {}, layer = 's';
 
   // The layer in front: the return only while it is laid out on its own.
@@ -90,6 +93,9 @@
     const st = inputs.find((v) => v.name === 'solver_state' && !Array.isArray(v.names));
     solverState = st && typeof st.mag === 'number' ? Math.round(st.mag) : null;
     inputs = inputs.filter((v) => v !== st);   // a state, not a value to draw
+    const wl = inputs.find((v) => v.name === 'at_wall!' && Array.isArray(v.mag));
+    inputs = inputs.filter((v) => v !== wl);   // a warning, not a value to draw
+    wallCodes = wl && !wl.stale ? wl.mag.flat() : [];   // matched to the sinks when drawn, by their order
     overridden = Array.isArray(m.overridden) ? m.overridden : [];
     // The state the sheet holds, unless this page has a change of its own on the way or in hand.
     if ('state' in m && !writeTimer && !drag) {
@@ -121,6 +127,9 @@
   function refresh(fresh = false) {
     net = P.network(state);
     if (selected && !cells()[selected]) selected = null;
+    walls = {};
+    if (!net.errors.length && wallCodes.length === net.sinks.length)
+      net.sinks.forEach((sk, j) => { if (wallCodes[j] > 0.5) walls[sk.key] = Math.round(wallCodes[j]); });
     if (tool === 'copy' && !(state.cells[copyFrom] && state.cells[copyFrom].t === 'sink')) { tool = 'select'; copyFrom = null; }
     const old = fresh ? null : shownBounds;
     const want = extent();
@@ -134,7 +143,7 @@
     // the balloons start from where they were, so the picture holds still while it is edited
     const placed = {};
     const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front(), effort: drag ? 30 : 300,
-      prev: lastPlaced, placed, key: 'html', underlay: shown });
+      prev: lastPlaced, placed, key: 'html', underlay: shown, walls: new Set(Object.keys(walls)) });
     lastPlaced = placed;
     sinkKey();
     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
@@ -165,6 +174,7 @@
     document.body.dataset.tool = tool;
     // copying settings: an orange banner over the grid, so a click on a sink is not taken for anything else
     solveBanner();
+    wallBanner();
     const banner = $('#copyBanner');
     banner.hidden = !(tool === 'copy' && state.cells[copyFrom]);
     if (!banner.hidden) {
@@ -310,6 +320,18 @@
       return el('div', { class: 'key-row', title: e.sinks.join(', ') }, document.importNode(mark, true),
         el('span', {}, e.text), el('span', { class: 'key-sinks' }, e.sinks.join(', ')));
     }));
+  }
+
+  // What a spur against a wall is against, in words.
+  const against = (code) => (code === 3 ? "its exchanger's and its circulator's" : code === 2 ? "its circulator's" : "its exchanger's");
+  // A banner over the grid, in the warning colour, naming the spurs whose flows are where the solver's walls
+  // hold them rather than on their curves (the sheet's at_wall!).
+  function wallBanner() {
+    const keys = Object.keys(walls).filter((k) => state.cells[k]), box = $('#wallBanner');
+    box.hidden = !keys.length;
+    if (!keys.length) return;
+    $('#wallText').textContent = `${keys.map(sinkName).join(', ')} ${keys.length > 1 ? 'run' : 'runs'} against the end of `
+      + `${keys.length > 1 ? 'their' : 'its'} data: the flow there is where the solver's wall holds it, not what the curve says. See Check.`;
   }
 
   // A banner over the grid while the sheet's values drawn here wait on its solver: from the solver's
@@ -603,7 +625,10 @@
     const pump = inputs.find((v) => v.name === 'Δp_pump' && typeof v.mag === 'number');
     const throttle = state.hold === 'flow' && pump && pump.mag < 0 && !pump.stale ? [{ cls: 'err',
       msg: `The main pump's pressure difference comes out below zero (${P.fmt(pump.mag, pump.unit)}): the circulators alone push more than the target flow, so the pump would have to hold the flow back. Raise the target flow, or take circulators off spurs.` }] : [];
-    const list = [...replaced, ...throttle, ...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
+    const walled = Object.entries(walls).filter(([k]) => state.cells[k]).map(([k, code]) => ({ cls: 'err', key: k, layer: 's',
+      msg: `${sinkName(k)} runs against the end of ${against(code)} data: its flow is where the solver's wall holds it, not on the curve. `
+        + `Its circulator, its exchanger, a balancing valve or the main pump's target needs to change to bring it inside.` }));
+    const list = [...replaced, ...throttle, ...walled, ...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
     const ul = $('#msgs');
     if (!list.length) {
       const n = net.sinks.length, segs = net.s.order.length;

@@ -70,6 +70,8 @@
   /* banners pinned over the grid (a holder of no height, so the grid does not move): copying a sink's
      settings, in the theme's warning colour (--err: orange on the blueprint), and waiting on the solver */
   #banners { position: sticky; top: 0; left: 0; height: 0; z-index: 3; }
+  #wallBanner > div { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--err); color: var(--paper);
+                      font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
   #solveBanner > div { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--ink); color: var(--on-ink);
                        font-weight: 500; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
   #solveBanner .sym { display: inline-block; animation: spin 1.1s linear infinite; }
@@ -199,6 +201,7 @@
 <main>
   <div id="banners">
     <div id="copyBanner" hidden><div><span id="copyText"></span><button id="copyDone">Done (Esc)</button></div></div>
+    <div id="wallBanner" hidden><div><span class="sym">⚠</span><span id="wallText"></span></div></div>
     <div id="solveBanner" hidden><div><span class="sym">⟳</span><span id="solveText"></span></div></div>
   </div>
   <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick

@@ -345,8 +345,14 @@ residual(∀_des!, Δp_main) = (path_dp(∀_des!) - Δp_main) / 'psi
 # the loop's total flow and the main pump's pressure difference: one of them its target, the other found
 ∀_total = sum(∀_des!) -> 'gal / 'min
 Δp_pump = Δp_main -> 'psi
+# Each spur against an end of its exchanger's or its circulator's data, where only the solver's walls hold
+# it, so its flow is the wall's, not the curve's: 0 neither, 1 the exchanger's, 2 the circulator's, 3 both
+past(q, lo, hi) = heaviside(lo - q - 1e-6) + heaviside(q - hi - 1e-6)
+hx_past(q, k) = past(q, hx_lo(k), hx_hi(k))
+pump_past(q, n) = heaviside(n - 0.5) * past(q, pump_lo(max([n, 1])), pump_hi(max([n, 1])))
+at_wall! = .hx_past(∀_des! / ('gal / 'min), exchangers!) + 2 * .pump_past(∀_des! / ('gal / 'min), pumps!)
 # Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
 # in _r) each return segment, the piping's pressure drop on each spur's path, supply and return, the loop's
-# total flow and the pump's pressure difference; and how the solver stands (solver_state: 1 up to date,
+# total flow and the pump's pressure difference, the spurs against a wall (at_wall!); and how the solver stands (solver_state: 1 up to date,
 # 0 out of date, -1 not run, -2 an error), for its banner
-!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, ∀_total, Δp_pump, solver_state
+!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, ∀_total, Δp_pump, at_wall!, solver_state

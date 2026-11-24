@@ -557,3 +557,29 @@ def test_the_key_to_sinks_alike_stays_in_sight_and_their_balloons_leave_out_what
     frame.locator("main").evaluate("m => { m.scrollLeft = m.scrollWidth; m.scrollTop = m.scrollHeight; }")
     box = key.bounding_box()
     assert main["x"] <= box["x"] and box["y"] + box["height"] <= main["y"] + main["height"]   # still in sight
+
+
+def test_spurs_against_the_end_of_their_data_are_named_ringed_and_bannered(page):
+    """The sheet's at_wall!: every sink on the smallest exchanger (HBH006, 0.8 to 1.5 gal/min) while the
+    pump holds 110 gal/min puts every spur past its data, where only the solver's walls hold it."""
+    import json
+    import re
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    m = re.search(r"\n  #@ state (\{[^\n]*\})", original)
+    st = json.loads(m.group(1))
+    for t in st["cells"].values():
+        if t["t"] == "sink":
+            t["x"] = 3
+    n = len(re.search(r"\n  exchangers! = \[([^\n]*)\]", original).group(1).split(";"))
+    text = original[:m.start(1)] + json.dumps(st, ensure_ascii=False) + original[m.end(1):]
+    text = re.sub(r"\n  exchangers! = \[[^\n]*", "\n  exchangers! = [" + "; ".join(["3"] * n) + "]", text)
+    show(page, text)
+    page.wait_for_selector(".plugin-box button:has-text('Open'):not([disabled])")
+    page.click(".plugin-box button:has-text('Open')")
+    frame = page.frame_locator("#pluginFrames .plugin-frame")
+    banner = frame.locator("#wallBanner > div")
+    banner.wait_for(state="visible", timeout=120000)                   # once the solver has run
+    assert "run against the end of their data" in banner.inner_text()
+    assert frame.locator("#msgs li.err:has-text('runs against the end of its exchanger')").count() == n
+    assert frame.locator("#canvas rect[stroke-dasharray='5 3']").count() == n
+    assert frame.locator("#showSets label:has-text('at_wall')").count() == 0   # a warning, not a value to draw

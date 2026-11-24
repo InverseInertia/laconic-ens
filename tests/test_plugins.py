@@ -225,7 +225,7 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar and "mag" in r.pluginvar.values[0]).pluginvar.values
     assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ",
-                                         "∀_total", "Δp_pump", "solver_state"]
+                                         "∀_total", "Δp_pump", "at_wall!", "solver_state"]
     assert sent[-1]["mag"] == 1            # the solver's state: up to date
     assert sent[0]["unit"] == "gal/min"
 
