@@ -153,6 +153,9 @@
     document.body.dataset.layer = front();
     document.body.dataset.tool = tool;
     // copying settings: an orange banner over the grid, so a click on a sink is not taken for anything else
+    // the sheet's values out of date (each !pluginvar value says so, when it rests on a solver that has
+    // not run since a change): drawn as they are, with a banner until the solver catches up
+    $('#solveBanner').hidden = !inputs.some((v) => v.stale);
     const banner = $('#copyBanner');
     banner.hidden = !(tool === 'copy' && state.cells[copyFrom]);
     if (!banner.hidden) {

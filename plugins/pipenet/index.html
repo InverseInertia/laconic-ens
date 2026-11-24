@@ -67,9 +67,14 @@
   #bg { position: absolute; left: 0; top: 0; max-width: none; pointer-events: none; user-select: none; }
   body[data-tool="move"] #canvas { cursor: move; }
   body[data-tool="copy"] #canvas { cursor: copy; }
-  /* copying a sink's settings: a banner in the theme's warning colour (--err: orange on the blueprint)
-     pinned over the grid */
-  #copyBanner { position: sticky; top: 0; left: 0; height: 0; z-index: 3; }
+  /* banners pinned over the grid (a holder of no height, so the grid does not move): copying a sink's
+     settings, in the theme's warning colour (--err: orange on the blueprint), and waiting on the solver */
+  #banners { position: sticky; top: 0; left: 0; height: 0; z-index: 3; }
+  #solveBanner > div { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--ink); color: var(--on-ink);
+                       font-weight: 500; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+  #solveBanner .sym { display: inline-block; animation: spin 1.1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #solveBanner .sym { animation: none; } }
   #copyBanner > div { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--err); color: var(--paper);
                       font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
   #copyBanner span { flex: 1; }
@@ -178,7 +183,10 @@
   <div id="showSets" class="checks"></div>
 </aside>
 <main>
-  <div id="copyBanner" hidden><div><span id="copyText"></span><button id="copyDone">Done (Esc)</button></div></div>
+  <div id="banners">
+    <div id="copyBanner" hidden><div><span id="copyText"></span><button id="copyDone">Done (Esc)</button></div></div>
+    <div id="solveBanner" hidden><div><span class="sym">⟳</span><span>Waiting on the solver: the sheet's values drawn here are from before the last change, until it solves this layout. If it cannot, its row in the sheet says why.</span></div></div>
+  </div>
   <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick
     <em>Draw</em> and drag between them. Pipes join at tees; the sheet works out the flow in each branch.<br>
     <button id="example">Start from an example</button></div>

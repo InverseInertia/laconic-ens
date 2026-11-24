@@ -484,3 +484,25 @@ def test_a_sinks_settings_are_copied_to_others_and_sinks_alike_are_marked(page):
     frame.locator("#inspector button:has-text('Copy settings to')").click()
     frame.locator("#inspector button:has-text('To every sink')").click()
     page.wait_for_function("document.querySelector('#src').value.includes('  exchangers! = [3; 3; 3; 3; 3; 3; 3; 3]')")
+
+
+def test_the_plugin_says_when_its_values_wait_on_the_solver(page):
+    """Every !pluginvar value says when it rests on a solver out of date: the plugin puts a banner over the
+    grid from a change until the sheet's solver has run on it."""
+    original = page.evaluate("fetch('/api/plugins/pipenet/template').then((r) => r.text())")
+    show(page, original)
+    page.wait_for_selector(".plugin-box button:has-text('Open'):not([disabled])")
+    page.click(".plugin-box button:has-text('Open')")
+    frame = page.frame_locator("#pluginFrames .plugin-frame")
+    frame.locator("#segments tbody tr").first.wait_for()
+    banner = frame.locator("#solveBanner")
+    assert banner.is_hidden()                                          # solved as it comes
+    frame.locator("body").evaluate("""() => { window.__shown = false;
+        new MutationObserver(() => { if (!document.querySelector('#solveBanner').hidden) window.__shown = true; })
+          .observe(document.querySelector('#solveBanner'), {attributes: true}); }""")
+    frame.locator("#dpv").fill("0.05")
+    frame.locator("#dpv").press("Enter")
+    banner.locator("> div").wait_for(state="visible", timeout=60000)
+    assert "Waiting on the solver" in banner.inner_text()
+    banner.wait_for(state="hidden", timeout=120000)                    # autorun has solved it
+    assert "Δp_target = 0.05 'psi" in value(page)
