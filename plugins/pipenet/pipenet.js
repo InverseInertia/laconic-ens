@@ -682,7 +682,13 @@
         if (!s.tiles.length || s.row === undefined) continue;
         const mine = s.tiles.length > 1 ? s.tiles.slice(0, -1) : s.tiles;   // not the tee or sink it ends at
         const mid = mine[Math.floor((mine.length - 1) / 2)];
-        const [r, c] = at(mid), cx = x(c) + h, cy = y(r) + h;
+        const [r, c] = at(mid);
+        let cx = x(c) + h, cy = y(r) + h;
+        // a segment of one tile that holds an element: its number at the tile's upstream edge, clear of the symbol
+        if (cells[mid] && cells[mid].e && s.from) {
+          const [fr, fc] = at(s.from);
+          cx += Math.sign(fc - c) * h * 0.95; cy += Math.sign(fr - r) * h * 0.95;
+        }
         const lines = [];
         if (show.size) lines.push({ text: s.nps ? `${s.nps}" Sch ${state.sch}` : `bore ${fmt(s.D, state.units.D)}` });
         if (show.L) lines.push({ text: `L ${fmt(s.L, state.units.L)}` });
