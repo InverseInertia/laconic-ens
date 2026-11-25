@@ -637,3 +637,32 @@ def test_a_straight_pipe_takes_a_resistance_or_an_in_line_pump(page):
     frame.locator("#inspector select[aria-label='In the pipe']").select_option("pump")
     page.wait_for_function("/\\n  el_pump! = \\[[^\\n]*1/.test(document.querySelector('#src').value) && !/\\n  el_hx! = \\[[^\\n]*1/.test(document.querySelector('#src').value)")
     assert frame.locator("#canvas circle[r='14']").count() == 1
+
+
+def test_a_sheet_run_during_a_plugin_write_does_not_undo_it(page):
+    """A run of the sheet that ends while the plugin's write is still on its way to the sheet carries the
+    sheet's old state: it must not reach the plugin and undo what it just did (here, for a moment, the return
+    laid out on its own going back to the supply's copy). The write is held at the server to open the gap."""
+    import time
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    page.wait_for_function("document.querySelector('#src').value.includes('#@ state')")
+    frame.locator("#segments th:has-text('Q gal/min')").wait_for()
+    held = []
+    def slow(route):
+        held.append(1)
+        time.sleep(1.5)
+        route.continue_()
+    page.route("**/api/pluginwrite", slow)
+    frame.locator("body").evaluate("""() => { window.__log = []; const t0 = performance.now();
+        window.addEventListener('message', (ev) => { const m = ev.data; if (m && m.type === 'lens:update')
+          window.__log.push([Math.round(performance.now() - t0), 'state' in m ? (m.state ? m.state.ret : null) : '-']); }); }""")
+    frame.locator("#ret").select_option("separate")
+    page.wait_for_function("1", timeout=1000)
+    page.evaluate("document.querySelector('#src').dispatchEvent(new Event('input'))")   # the sheet runs meanwhile
+    page.wait_for_timeout(900)
+    assert held and frame.locator("#ret").input_value() == "separate"
+    assert frame.locator("#canvas g.back").count() == 1
+    page.wait_for_function("document.querySelector('#src').value.includes('\"ret\":\"separate\"')")
+    assert frame.locator("#ret").input_value() == "separate"

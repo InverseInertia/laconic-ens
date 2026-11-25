@@ -42,6 +42,9 @@
   }
   let past = [], future = [];
   let drag = null, writeTimer = 0, previewTimer = 0, heard = false, zoom = 1;
+  // How many writes this page has sent: an update LENS made before it had seen the latest (its `writes`
+  // count behind this) crossed that write on the way, and its state is the sheet's from before it.
+  let posted = 0;
   // The background's picture, as a data: URL, for the key it was recalled or placed under
   // (data null: LENS has nothing under that key in this browser). `measure`: the two points of a scale.
   let bg = { key: null, data: null, asked: null }, measure = null, pan = null, space = false;
@@ -68,6 +71,7 @@
     clearTimeout(writeTimer);
     writeTimer = setTimeout(() => {
       writeTimer = 0;
+      posted += 1;
       post({ type: 'lens:write', state, outputs: P.outputs(state, net) });
     }, 250);
   }
@@ -104,7 +108,8 @@
     elCodes = { s: es && !es.stale ? es.mag.flat() : [], r: er && !er.stale ? er.mag.flat() : [] };
     overridden = Array.isArray(m.overridden) ? m.overridden : [];
     // The state the sheet holds, unless this page has a change of its own on the way or in hand.
-    if ('state' in m && !writeTimer && !drag) {
+    const behind = typeof m.writes === 'number' && m.writes < posted;
+    if ('state' in m && !writeTimer && !drag && !behind) {
       const next = P.normalize(m.state);
       if (JSON.stringify(next) !== JSON.stringify(state)) {
         if (heard) { past.push(JSON.stringify(state)); future = []; }

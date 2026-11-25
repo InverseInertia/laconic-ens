@@ -9,7 +9,10 @@
                      {type: "lens:update", state, inputs, outputs, theme}
                      `state` is what the plugin last saved in its block's `#@ state` line, and is
                      left out when the sheet has not been run since the plugin's last write (so a
-                     late answer cannot undo what the plugin just did); `inputs` are the values of
+                     late answer cannot undo what the plugin just did); `writes` is how many of the
+                     plugin's lens:write messages LENS had finished with (applied or refused) when it
+                     made this update: one behind the plugin's own count was made before LENS saw its
+                     latest write, the two crossing on the way, so its state is not the plugin's to take; `inputs` are the values of
                      every `!pluginvar` line, [{name, unit, shape, mag}]; `outputs` the names its
                      block's lines define; `overridden` [{name, line}] the lines outside its block that
                      define one of them again, replacing the plugin's value; `theme` the page's THEME
@@ -221,8 +224,10 @@
       const was = stale(e);
       e.state = b.state;
       if (stale(e) !== was) paint(e);
-      const update = { inputs: vals, outputs: b.outputs, overridden: b.overridden };
-      if (startedAt > e.wroteAt) update.state = b.state;   // older rows than its last write: keep its own
+      const update = { inputs: vals, outputs: b.outputs, overridden: b.overridden, writes: e.handled || 0 };
+      // The sheet's state goes to the plugin only from rows newer than its last write, and never while a write
+      // is on its way (sent, not yet in the sheet): those rows hold the state from before, and would undo it.
+      if (!e.writing && startedAt > e.wroteAt) update.state = b.state;
       e.last = update;
       send(e);
       checkSheet(e);
@@ -258,12 +263,29 @@
   }
 
   async function write(e, msg) {
+    try {
+      await writeHandled(e, msg);
+    } finally {
+      e.handled = (e.handled || 0) + 1;   // finished with, applied or refused: updates from now on say so
+    }
+  }
+
+  async function writeHandled(e, msg) {
     const by = stale(e);
     if (by) {
       host.say(`This sheet was last written by ${e.manifest.title} ${by}, newer than the ${e.manifest.version} installed here: update the plugin before changing it`);
       return;
     }
     if (msg.state && e.manifest && e.manifest.version) msg.state = { ...msg.state, by: e.manifest.version };
+    e.writing = (e.writing || 0) + 1;
+    try {
+      await writeOnce(e, msg);
+    } finally {
+      e.writing -= 1;
+    }
+  }
+
+  async function writeOnce(e, msg) {
     for (let tries = 0; tries < 3; tries++) {
       const text = host.text();
       let res;
