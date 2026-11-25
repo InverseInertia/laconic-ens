@@ -368,12 +368,78 @@ def _digest_value(ev, key):
         return ["symbolic", sympy.srepr(v)]
 
 
-def digest(block, ev, unknowns):
+# The sketch (fingerprint below): a few weighted sums of every input value, compared within a tolerance.
+SKETCH_K = 4            # sums: one real change cannot be hidden from all of them
+SKETCH_TOL = 1e-11      # per value: two runs of the same inputs agree to about ten significant figures
+
+
+def _numbers(ev, q):
+    """A quantity's numbers, real parts then imaginary, or None when it has none (a symbol with no value)."""
+    if is_symbolic(q):
+        return None
+    m = np.asarray(q.magnitude)
+    return np.concatenate([m.real.ravel(), m.imag.ravel()]).astype(float) if np.iscomplexobj(m) else m.astype(float).ravel()
+
+
+def _sketch(x):
+    """SKETCH_K weighted sums of sign(x) * (log2|x| + 1100) (0 for x = 0), with weights from integer arithmetic
+    (the same on every machine) between 0.5 and 1.5 in size and of either sign. A relative change in any one
+    value moves a sum by its size, however large or small the value; a sign or a zero moves it by 25 or more."""
+    x = np.asarray(x, dtype=float)
+    with np.errstate(divide="ignore"):
+        u = np.where(x == 0, 0.0, np.sign(x) * (np.log2(np.abs(np.where(x == 0, 1.0, x))) + 1100.0))
+    u = np.where(np.isfinite(u), u, 4000.0 * np.sign(np.nan_to_num(x, nan=1.0)))   # ∞ and NaN: their own places
+    i = np.arange(x.size, dtype=np.uint64)
+    out = []
+    with np.errstate(over="ignore"):
+        for j in range(SKETCH_K):
+            z = i * np.uint64(0x9E3779B97F4A7C15) + np.uint64((j + 1) * 0xBF58476D1CE4E5B9 % 2**64)
+            z ^= z >> np.uint64(31)
+            z *= np.uint64(0x94D049BB133111EB)
+            z ^= z >> np.uint64(29)
+            w = (0.5 + (z >> np.uint64(11)).astype(float) / 2.0**53) * np.where(z & np.uint64(1), -1.0, 1.0)
+            out.append(float(np.dot(w, u)))
+    return out
+
+
+def fingerprint(block, ev, unknowns):
+    """What a stored result is checked against: {"hash", "shape", "sketch", "n"}. `hash` covers everything the
+    solver reads (the block's own lines, the starting values, every variable and function they reach, the units
+    they use), exactly; `shape` the same but the values' numbers, and `sketch` those numbers (_sketch), so a
+    stored result whose inputs differ only in their last digits, as values a library computes can from one
+    machine to another, is still current (see `current`). `n` is how many numbers the sketch is of."""
+    h, struct, nums = digest(block, ev, unknowns, parts_out=True)
+    x = np.concatenate(nums) if nums else np.zeros(0)
+    shape = hashlib.sha256(json.dumps(struct, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:12]
+    return {"hash": h, "shape": shape, "sketch": _sketch(x), "n": int(x.size)}
+
+
+def current(stored, fp):
+    """Whether a stored result belongs to the inputs `fp` (fingerprint): its hash is theirs, or (a record with a
+    sketch) its shape is theirs and its sketch agrees within SKETCH_TOL a number. A record from before sketches
+    is checked by its hash alone."""
+    if not isinstance(stored, dict):
+        return False
+    if stored.get("hash") == fp["hash"]:
+        return True
+    sk = stored.get("sketch")
+    if stored.get("shape") != fp["shape"] or not isinstance(sk, list) or len(sk) != len(fp["sketch"]):
+        return False
+    tol = SKETCH_TOL * max(1, fp["n"])
+    try:
+        return all(abs(float(a) - b) <= tol for a, b in zip(sk, fp["sketch"]))
+    except (TypeError, ValueError):
+        return False
+
+
+def digest(block, ev, unknowns, parts_out=False):
     """A short hash of everything the solver reads: the block's own lines, the starting values,
-    every variable and function they reach, the units they use. The stored result is current
-    exactly when its hash equals this."""
+    every variable and function they reach, the units they use (see `fingerprint` and `current` for how
+    a stored result is checked against it). With `parts_out`, also the same without the values' numbers,
+    and the numbers, in a fixed order."""
     own = {u.key for u in unknowns}
     deps, funcs, units = {}, {}, {}
+    sdeps, nums = {}, []
     for kind, key, extra in ev.symbols.reach(block.nodes()):
         if kind == "var" and key in ev.vars and key not in own:
             deps[key] = _digest_value(ev, key)
@@ -392,7 +458,28 @@ def digest(block, ev, unknowns):
     if ev.mode.freq != "si":   # !freq changes what -> gives; left out by default so stored results stay valid
         parts["freq"] = ev.mode.freq
     blob = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(blob).hexdigest()[:12]
+    h = hashlib.sha256(blob).hexdigest()[:12]
+    if not parts_out:
+        return h
+    # the same, each value by its units and shape only, and its numbers apart (a symbol with no number, by its text)
+    def bare(key, q, digested):
+        n = _numbers(ev, q) if not is_symbolic(q) else None
+        if n is None and is_symbolic(q):
+            from . import symbolic
+            try:
+                q = symbolic.numeric(ev, key, q, ev.vars)
+                n = _numbers(ev, q)
+            except Exception:
+                return digested
+        if n is None:
+            return digested
+        nums.append(n)
+        return [str(q.units), list(np.shape(q.magnitude))]
+    for key in sorted(deps):
+        sdeps[key] = bare(key, ev.vars[key], deps[key])
+    sstart = [bare(u.key, ev.vars[u.key], parts["start"][i]) for i, u in enumerate(unknowns)]
+    struct = {**parts, "vars": sdeps, "start": sstart}
+    return h, struct, nums
 
 
 # ---- the problem: unknowns, evaluation, the scipy calls ------------------------------------
@@ -779,7 +866,8 @@ class Problem:
             seg = np.asarray(x[u.off:u.off + u.size], dtype=float)
             values.append({"mag": float(seg[0]) if u.shape == () else seg.reshape(u.shape).tolist(),
                            "unit": str(u.units)})
-        rec = {"hash": digest(self.block, self.ev, self.unknowns), "kind": self.kind, "method": self.method,
+        fp = self.fingerprint()
+        rec = {"hash": fp["hash"], "shape": fp["shape"], "sketch": fp["sketch"], "kind": self.kind, "method": self.method,
                "scipy": scipy.__version__, "values": values, "nfev": self.nfev, "message": message}
         if self.kind == "root" or self.cons:
             rec["resid"] = float(f"{resid:.3g}")
@@ -789,6 +877,9 @@ class Problem:
 
     def digest(self):
         return digest(self.block, self.ev, self.unknowns)
+
+    def fingerprint(self):
+        return fingerprint(self.block, self.ev, self.unknowns)
 
     def stored_quantities(self, record):
         """The stored values as quantities, or None if they no longer fit these unknowns."""

@@ -325,12 +325,13 @@ def _run_solver(i, raw, handle, ev, fmt, used):
         used |= refs(node).units
     try:
         prob = solver.prepare(block, ev, describe)
-        h = prob.digest()
+        fp = prob.fingerprint()
+        h = fp["hash"]
     except Exception as e:
         return fail(describe(e))
     stored = block.stored
     qs = prob.stored_quantities(stored) if stored is not None else None
-    status = "none" if qs is None else ("valid" if stored.get("hash") == h else "stale")
+    status = "none" if qs is None else ("valid" if solver.current(stored, fp) else "stale")
     try:
         prob.probe()   # also when the stored result is current: the line's notes come from this run
     except Exception as e:
