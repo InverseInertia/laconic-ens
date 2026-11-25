@@ -421,6 +421,7 @@ class Problem:
         self.kind = block.kind
         self.unknowns, self.eqs, self.cons, self.obj = [], [], [], None
         self.nfev = 0
+        self._fast = None   # the compiled equations once checked (numeric.py): None not tried, False not usable
         self._quiet = False
         self._probed = False
         self.log = lambda msg: None
@@ -580,22 +581,79 @@ class Problem:
                 return
             self.log(f"  eval {self.nfev:>4}  {what} = {value:.6e}   at {self.where(x)}")
 
-    def residual(self, x):
+    # -- the fast path: the equations compiled to plain numbers once their units are checked (numeric.py)
+    def _compile(self, x):
+        """Compile every expression and check each against the usual evaluation at `x` (just done, so
+        each knows its units). False when any cannot be compiled or does not give the same numbers."""
+        from . import numeric
+        from .evaluator import _offset
+        try:
+            scale = {}
+            for u in self.unknowns:
+                one = self.ev.Q(1.0, u.units)
+                if _offset(one, self.ev.ureg):
+                    return False
+                scale[u.key] = float(one.to_base_units().magnitude)
+            fns = {}
+            for e in self.eqs + self.cons + ([self.obj] if self.obj is not None else []):
+                one = self.ev.Q(1.0, e.units)
+                if e.units is None or _offset(one, self.ev.ureg):
+                    return False
+                fns[id(e)] = (numeric.compile(e.rel.node, self.ev, [u.key for u in self.unknowns]), float(one.to_base_units().magnitude))
+            self._scale = scale
+            self._fns = fns
+            for e in self.eqs + self.cons + ([self.obj] if self.obj is not None else []):
+                want = self._vec(e, x)   # the usual way (the unknowns are already at x)
+                got = self._fast_vec(e, x)
+                if got is None or got.shape != want.shape or not np.allclose(got, want, rtol=1e-9, atol=1e-12 * max(1.0, float(np.max(np.abs(want))) if want.size else 1.0)):
+                    return False
+            return True
+        except Exception:
+            return False
+
+    def _fast_vec(self, e, x):
+        """e at x on the fast path, in e's units; None when it fails there (the usual way then says why)."""
+        env = {}
+        for u in self.unknowns:
+            seg = np.asarray(x[u.off:u.off + u.size], dtype=float) * self._scale[u.key]
+            env[u.key] = float(seg[0]) if u.shape == () else seg.reshape(u.shape)
+        fn, sc = self._fns[id(e)]
+        try:
+            with np.errstate(all="ignore"):
+                v = np.asarray(fn(env), dtype=float).ravel() / sc
+        except Exception:
+            return None
+        return v if np.all(np.isfinite(v)) else None
+
+    def _values(self, e, x):
+        """e at x: on the fast path once it has been checked, else (and wherever it fails) the usual way."""
+        if self._fast is None:
+            self.set_x(x)
+            v = self._vec(e, x)
+            if all(q.units is not None for q in self.eqs + self.cons + ([self.obj] if self.obj is not None else [])):
+                self._fast = self._compile(x)
+                self.set_x(x)
+            return v
+        if self._fast:
+            v = self._fast_vec(e, x)
+            if v is not None:
+                return v
         self.set_x(x)
-        f = np.concatenate([self._vec(e, x) for e in self.eqs])
+        return self._vec(e, x)
+
+    def residual(self, x):
+        f = np.concatenate([self._values(e, x) for e in self.eqs])
         self._trace("max|F|", float(np.max(np.abs(f))) if f.size else 0.0, x)
         return f
 
     def objective(self, x):
-        self.set_x(x)
-        v = float(self._vec(self.obj, x)[0])
+        v = float(self._values(self.obj, x)[0])
         self._trace("objective", v, x)
         return v
 
     def constraint_fun(self, e):
         def g(x):
-            self.set_x(x)
-            return self._vec(e, x)
+            return self._values(e, x)
         return g
 
     def violation(self, x):

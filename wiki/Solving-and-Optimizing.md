@@ -32,6 +32,8 @@ d = 1'm
 | `autorun:` | `on` re-solves automatically (see below); the Auto checkbox writes this line |
 | `status:` | a name that holds the block's state for the lines below it: `1` up to date, `0` out of date (or built on out-of-date values from above), `-1` not run yet, `-2` the block has an error. It is never itself out of date, so a line can test it, or a plugin read it with `!pluginvar` |
 
+**Speed.** A solver evaluates its equations hundreds of times with only the unknowns changing. The first evaluation checks every unit, as any line of the sheet is checked; after that the equations run compiled to plain numbers in SI units (`laconic/numeric.py`), which is many times quicker. The compiled answer is checked against the first, and a block whose equations use something it does not do (an offset unit such as `'degC`, text, complex numbers) or whose answers would differ is solved the usual way throughout, so the speed never changes an answer. Element-by-element functions (`.f(...)`, see [Matrices](Matrices#elementwise-functions)) are quickest written with `maximum`, `clip`, `pick` and the like rather than `max([..])` or `idx`.
+
 The solver works on plain numbers in the unit each unknown was started in, so `x = 1'm` and `x = 1000'mm` are the same problem at different scales. Start in the unit your answer is of a sensible size in.
 
 The block is checked as you edit: an undefined name, a unit mismatch or the wrong number of equations is reported on the line, before anything runs. Rename (F2) changes names inside blocks like anywhere else.
