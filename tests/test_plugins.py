@@ -260,11 +260,20 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "el_hx!", "el_pump!", "A_r", "L_r!", "D_r!", "N_fit_r!",
                                    "K_extra_r!", "el_hx_r!", "el_pump_r!", "exchangers!", "pumps!", "valves!", "fit_method!", "solver_method!", "hold_flow!", "∀_target",
                                    "Δp_target"]
-    assert next(r for r in ws.results if r.solver).solver.current
+    # It ships solved: a stored answer that satisfies its equations here. (Whether the stored result counts
+    # as current depends on its inputs' hash, and values a library computes, CoolProp's or a fit's last
+    # digits, can differ from one machine to another; the answer itself does not.)
+    solver = next(r for r in ws.results if r.solver).solver
+    assert solver.record is not None and solver.status in ("valid", "stale")
+    residual = next(r for r in ws.results if r.text.startswith("Δp_residual = "))
+    import re
+    assert all(abs(float(x)) < 1e-6 for x in re.findall(r"-?\d+\.?\d*(?:e-?\d+)?", residual.text.split("=", 1)[1].replace("psi", "")))
+    total = next(r for r in ws.results if r.text.startswith("∀_total = "))
+    assert total.text == "∀_total = 110 gal/min"
     sent = next(r for r in ws.results if r.pluginvar and "mag" in r.pluginvar.values[0]).pluginvar.values
     assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ",
                                          "∀_total", "Δp_pump", "at_wall!", "el_wall!", "el_wall_r!", "solver_state"]
-    assert sent[-1]["mag"] == 1            # the solver's state: up to date
+    assert sent[-1]["mag"] in (0, 1)       # the solver's state: solved, current here or not (see above)
     assert sent[0]["unit"] == "gal/min"
 
 
