@@ -10,6 +10,44 @@ from laconic.exports import element
 from laconic.sheet import evaluate, run
 
 
+
+class Client:
+    """The few calls these tests make of the server, over HTTP to the one conftest's `server` runs in this
+    process (so what a test sets in the environment reaches it), with the standard library only: the
+    project does not depend on an HTTP client package, as starlette's TestClient would need."""
+
+    class Response:
+        def __init__(self, status, headers, body):
+            self.status_code, self.headers, self.content = status, {k.lower(): v for k, v in headers.items()}, body
+            self.text = body.decode("utf-8", "replace")
+
+        def json(self):
+            return json.loads(self.text)
+
+    def __init__(self, base):
+        self.base = base
+
+    def _go(self, method, path, json_body=None):
+        import urllib.error
+        import urllib.request
+        data = None if json_body is None else json.dumps(json_body).encode()
+        rq = urllib.request.Request(self.base + path, data=data, method=method,
+                                    headers={"content-type": "application/json"} if data is not None else {})
+        try:
+            with urllib.request.urlopen(rq) as r:
+                return self.Response(r.status, dict(r.headers), r.read())
+        except urllib.error.HTTPError as e:
+            return self.Response(e.code, dict(e.headers), e.read())
+
+    def get(self, path):
+        return self._go("GET", path)
+
+    def post(self, path, json=None):
+        return self._go("POST", path, {} if json is None else json)
+
+    def delete(self, path):
+        return self._go("DELETE", path)
+
 def kinds(text):
     return [(r.kind, r.error) for r in run(text)]
 
@@ -273,11 +311,9 @@ def test_the_plugins_sheet_keeps_its_data_in_sections_and_its_calculation_outsid
     assert not names & {"HXD_HBH060", "HX_C", "HX_q", "HBH060", "PUMP_C", "PUMP_q", "GRUND_43100A", "GRUND_C1016T"}
 
 
-def test_a_plugins_sheet_is_offered_with_the_examples_and_checked(cfg, monkeypatch):
-    from fastapi.testclient import TestClient
-    from laconic.server import app
+def test_a_plugins_sheet_is_offered_with_the_examples_and_checked(cfg, monkeypatch, server):
     monkeypatch.setenv("LENS_PLUGIN_SOURCE", str(plugins.CHECKOUT))
-    c = TestClient(app)
+    c = Client(server)
     assert {"name": "pipenet", "title": "Pipe network", "plugin": "pipenet"} in c.get("/api/examples").json()
     assert c.get("/api/plugins/pipenet").json()["template"] is True
     text = c.get("/api/plugins/pipenet/template").text
@@ -291,12 +327,10 @@ def test_a_plugins_sheet_is_offered_with_the_examples_and_checked(cfg, monkeypat
 # ---- the endpoints -------------------------------------------------------------------------
 
 @pytest.fixture()
-def client(cfg, monkeypatch):
-    from fastapi.testclient import TestClient
-    from laconic.server import app
+def client(cfg, monkeypatch, server):
     make(cfg / "src")
     monkeypatch.setenv("LENS_PLUGIN_SOURCE", str(cfg / "src"))
-    return TestClient(app)
+    return Client(server)
 
 
 def test_the_manifest_endpoint(client):
@@ -394,11 +428,9 @@ def test_the_index_of_this_checkouts_plugins_matches_their_manifests():
         assert {k: m[k] for k in ("name", "title", "version", "description")} == p
 
 
-def test_the_settings_endpoints(remote):
-    from fastapi.testclient import TestClient
+def test_the_settings_endpoints(remote, server):
     from laconic import settings
-    from laconic.server import app
-    c = TestClient(app)
+    c = Client(server)
     assert c.get("/api/plugins").json() == {"auto": True, "folder": None, "installed": []}
     assert c.get("/api/pluginindex").json()["plugins"][0]["name"] == "demo"
     settings.save_prefs({"autoPlugins": False})
@@ -453,11 +485,9 @@ def test_the_command_line_installs_a_plugin_folder(remote, cfg, capsys, monkeypa
         main()
 
 
-def test_the_upload_endpoint(remote):
+def test_the_upload_endpoint(remote, server):
     import base64
-    from fastapi.testclient import TestClient
-    from laconic.server import app
-    c = TestClient(app)
+    c = Client(server)
     b64 = lambda s: base64.b64encode(s.encode()).decode()
     files = {"manifest.json": b64(json.dumps({"title": "Up", "entry": "index.html", "files": ["index.html"]})), "index.html": b64("<p>")}
     assert c.post("/api/pluginupload", json={"name": "up", "files": files}).json() == {"ok": True, "name": "up", "title": "Up", "version": ""}
@@ -475,10 +505,8 @@ def test_a_folder_source_takes_no_installs(cfg, monkeypatch):
         plugins.install_folder(make(cfg / "mine", name="other"))
 
 
-def test_the_fonts_may_be_borrowed_by_a_sandboxed_plugin_frame():
-    from fastapi.testclient import TestClient
-    from laconic.server import app
-    c = TestClient(app)
+def test_the_fonts_may_be_borrowed_by_a_sandboxed_plugin_frame(server):
+    c = Client(server)
     assert c.get("/static/fonts/ibm-plex-sans-latin-400-normal.woff2").headers["access-control-allow-origin"] == "*"
     assert "access-control-allow-origin" not in c.get("/static/rows.js").headers
 
