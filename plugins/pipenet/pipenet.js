@@ -32,6 +32,9 @@
  *   nps, sch: the network's pipe, a nominal size (PIPE_SIZES) or null for a diameter D of its own, and
  *        its schedule, "40" or "80"
  *   tile: {t: "pipe"|"source"|"sink", p: sides, L?: length of this tile, nps?: its pipe size, d?: or diameter,
+ *        e?: an element in the pipe (a straight one): {k: "hx", n} a resistance, the sheet's pressure-drop curve n
+ *        (a fluid cooler, a strainer), or {k: "pump", n} an in-line pump, its pump curve n. A segment ends at an
+ *        element and the next starts there, carrying it, so each segment has at most one,
  *          k?: extra loss coefficient K on this tile (a valve, from its datasheet), name?,
  *          x?: its exchanger curve, s?: its circulator, each by number (the sheet's lists name them; a
  *          circulator of 0 is none), v?: its regulating valve's Cv (none when absent)}
@@ -159,6 +162,7 @@
         const p = (t.p | 0) & 15;
         const tile = { t: t.t, p };
         if (num(t.L, 0)) tile.L = t.L;
+        if (t.t === 'pipe' && t.e && ['hx', 'pump'].includes(t.e.k) && Number.isInteger(t.e.n) && t.e.n >= 1) tile.e = { k: t.e.k, n: t.e.n };
         if (typeof t.nps === 'string' && SIZE.has(t.nps)) tile.nps = t.nps;
         else if (num(t.d, 0)) tile.d = t.d;
         if (typeof t.k === 'number' && isFinite(t.k) && t.k >= 0) tile.k = t.k;
@@ -287,6 +291,14 @@
         if (sh === 'sink') { seg.sink = k; return; }
         if (sh === 'source') { fail(k, 'The pipe runs back into the source'); return; }
         if (sh === 'stub') { fail(k, 'Dead end: this pipe connects on one side only'); return; }
+        // an element in a straight pipe: the segment ends here, and the next, carrying it, goes straight on
+        if (sh === 'straight' && tile.e) {
+          seg.ends = k;
+          const next = newSeg(seg.id, k, OPP[into], null);
+          next.el = tile.e;
+          walk(next, k, OPP[into]);
+          return;
+        }
         if (sh === 'straight' || sh === 'cross') { from = k; out = OPP[into]; continue; }
         if (sh === 'elbow') { from = k; out = bits(tile.p).find((d) => d !== into); seg.n[ELBOW] += 1; continue; }
         // a tee: the segment ends, and one starts down each other side
@@ -352,19 +364,23 @@
     const settings = { 'fit_method!': String(state.method), 'solver_method!': String(state.solver), 'hold_flow!': state.hold === 'flow' ? '1' : '0',
       '∀_target': `${num(state.q.v)} * ${Q_UNITS.find(([u]) => u === state.q.u)[1]}`, Δp_target: `${num(state.dp.v)} '${state.dp.u}` };
     if (net.errors.length || !net.sinks.length) return settings;
-    const lines = (a, A, names) => {
+    const lines = (a, A, names, own = true) => {
       const segs = a.order.map((id) => a.segments[id]);
+      // the elements in its pipes (own: a return the same as the supply has none of the supply's)
+      const el = (kind) => column(segs.map((s) => (own && s.el && s.el.k === kind ? s.el.n : 0)));
       return {
         [names[0]]: '[' + A.map((r) => r.join(', ')).join('; ') + ']',
         [names[1]]: `${column(segs.map((s) => s.L))} * '${state.units.L}`,
         [names[2]]: `${column(segs.map((s) => s.D))} * '${state.units.D}`,
         [names[3]]: '[' + segs.map((s) => s.n.map(num).join(', ')).join('; ') + ']',
         [names[4]]: column(segs.map((s) => s.K)),
+        [names[5]]: el('hx'),
+        [names[6]]: el('pump'),
       };
     };
     return {
-      ...lines(net.s, net.s.A, ['A', 'L!', 'D_h!', 'N_fit!', 'K_extra!']),
-      ...lines(net.r, net.Ar, ['A_r', 'L_r!', 'D_r!', 'N_fit_r!', 'K_extra_r!']),
+      ...lines(net.s, net.s.A, ['A', 'L!', 'D_h!', 'N_fit!', 'K_extra!', 'el_hx!', 'el_pump!']),
+      ...lines(net.r, net.Ar, ['A_r', 'L_r!', 'D_r!', 'N_fit_r!', 'K_extra_r!', 'el_hx_r!', 'el_pump_r!'], !net.same),
       'exchangers!': column(net.sinks.map((s) => s.x)),
       'pumps!': column(net.sinks.map((s) => s.s)),
       'valves!': column(net.sinks.map((s) => s.v)),
@@ -540,7 +556,8 @@
      the grid (the editor) or not (the preview), inputs: the !pluginvar values, effort: how hard `layout`
      works at the balloons (less while the mouse drags), prev: where they were last time (id -> {x, y}),
      placed: an object to fill with where they are now, walls: a Set of the sinks whose spur runs against an
-     end of its data (ringed in the warning colour), key: "html" when the page shows the key to the
+     end of its data (ringed in the warning colour), elWalls: a Set of the element tiles (in the layer in front)
+     whose element runs against an end of its data (ringed too), key: "html" when the page shows the key to the
      sinks set up alike itself (else it is drawn in the picture's bottom left corner), underlay: leave out
      the paper, so the background image the page puts behind the drawing shows through}. */
   function draw(state, net, opts = {}) {
@@ -610,6 +627,24 @@
           if (opts.walls && opts.walls.has(k)) out.push(`<rect x="${cx - s - 5}" y="${cy - s - 5}" width="${2 * s + 10}" height="${2 * s + 10}" rx="4" fill="none" stroke="${esc(th.err)}" stroke-width="2.5" stroke-dasharray="5 3"/>`);
           // set up like other sinks: their shared mark, over the icon's top left corner
           if (alike[k] !== undefined) out.push(tourMark(alike[k], cx - s - 8, cy - s - 8, th.text, th.paper));
+        } else if (tile.e && sh === 'straight') {
+          // an element in the pipe: a resistance's box with a zigzag across it, or an in-line pump's circle
+          // with a triangle the way the water goes (back towards the source on the return)
+          for (const d of bits(tile.p)) out.push(arm(d));
+          const segHere = a.segments.find((x) => x.from === k && x.el);
+          const along = segHere ? (layer === 'r' ? OPP[segHere.out] : segHere.out) : bits(tile.p)[0];
+          const px = DC[along], py = DR[along];
+          if (opts.elWalls && opts.elWalls.has(k)) out.push(`<rect x="${cx - 19}" y="${cy - 19}" width="38" height="38" rx="4" fill="none" stroke="${esc(th.err)}" stroke-width="2.5" stroke-dasharray="5 3"/>`);
+          if (tile.e.k === 'pump') {
+            const tr = 9, qx = -py, qy = px;
+            out.push(`<circle cx="${cx}" cy="${cy}" r="14" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="2.5"/>`);
+            out.push(`<path d="M ${cx + px * tr} ${cy + py * tr} L ${cx - px * tr * 0.6 + qx * tr * 0.8} ${cy - py * tr * 0.6 + qy * tr * 0.8} L ${cx - px * tr * 0.6 - qx * tr * 0.8} ${cy - py * tr * 0.6 - qy * tr * 0.8} Z" fill="${esc(color)}"/>`);
+          } else {
+            const w = px ? 30 : 18, hh = px ? 18 : 30;
+            out.push(`<rect x="${cx - w / 2}" y="${cy - hh / 2}" width="${w}" height="${hh}" fill="${esc(th.paper)}" stroke="${esc(color)}" stroke-width="2.5"/>`);
+            out.push(px ? `<path d="M ${cx - 11} ${cy} l 4 -6 l 5 12 l 5 -12 l 5 12 l 3 -6" fill="none" stroke="${esc(color)}" stroke-width="1.8"/>`
+                        : `<path d="M ${cx} ${cy - 11} l -6 4 l 12 5 l -12 5 l 12 5 l -6 3" fill="none" stroke="${esc(color)}" stroke-width="1.8"/>`);
+          }
         } else {
           for (const d of bits(tile.p)) out.push(arm(d));
           if (bits(tile.p).length > 1 && !hollow) out.push(`<circle cx="${cx}" cy="${cy}" r="${pw / 2}" fill="${esc(color)}"/>`);
@@ -652,6 +687,8 @@
         if (show.size) lines.push({ text: s.nps ? `${s.nps}" Sch ${state.sch}` : `bore ${fmt(s.D, state.units.D)}` });
         if (show.L) lines.push({ text: `L ${fmt(s.L, state.units.L)}` });
         if (show.D) lines.push({ text: `D_h ${fmt(s.D, state.units.D)}` });
+        if (s.el && s.el.k === 'hx' && show.hx) lines.push({ text: `in-line ${curveName(names.exchangers, s.el.n)}` });
+        if (s.el && s.el.k === 'pump' && show.pump) lines.push({ text: `in-line pump ${curveName(names.pumps, s.el.n)}` });
         for (const v of own) lines.push({ text: `${v.name} ${fmt(v.values[s.row], v.unit)}`, soft: v.stale });
         if (lines.length) {
           const vertical = !(cells[mid].p & (E | W));

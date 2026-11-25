@@ -219,13 +219,13 @@ def test_the_pipenet_plugins_own_sheet_reads_and_is_solved():
     ws = evaluate(text)
     assert not [r for r in ws.results if r.kind == "error"]
     head = next(r for r in ws.results if r.plugin)
-    assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "A_r", "L_r!", "D_r!", "N_fit_r!",
-                                   "K_extra_r!", "exchangers!", "pumps!", "valves!", "fit_method!", "solver_method!", "hold_flow!", "∀_target",
+    assert head.plugin.outputs == ["A", "L!", "D_h!", "N_fit!", "K_extra!", "el_hx!", "el_pump!", "A_r", "L_r!", "D_r!", "N_fit_r!",
+                                   "K_extra_r!", "el_hx_r!", "el_pump_r!", "exchangers!", "pumps!", "valves!", "fit_method!", "solver_method!", "hold_flow!", "∀_target",
                                    "Δp_target"]
     assert next(r for r in ws.results if r.solver).solver.current
     sent = next(r for r in ws.results if r.pluginvar and "mag" in r.pluginvar.values[0]).pluginvar.values
     assert [v["name"] for v in sent] == ["∀!", "ΣK_seg", "Δp_paths", "∀_r!", "ΣK_r", "Δp_r", "Δp_spur", "Δp_valve", "Δp_circ",
-                                         "∀_total", "Δp_pump", "at_wall!", "solver_state"]
+                                         "∀_total", "Δp_pump", "at_wall!", "el_wall!", "el_wall_r!", "solver_state"]
     assert sent[-1]["mag"] == 1            # the solver's state: up to date
     assert sent[0]["unit"] == "gal/min"
 
@@ -582,3 +582,23 @@ def test_the_plugins_sheet_takes_regulating_valves_instead_of_or_beside_circulat
     sent = {v["name"]: [x[0] for x in v["mag"]] for r in ws.results if r.pluginvar for v in r.pluginvar.values
             if "mag" in v and isinstance(v["mag"], list)}
     assert sent["Δp_circ"] == [0] * n and all(dp > 0.5 for dp in sent["Δp_valve"])
+
+
+def test_the_plugins_sheet_takes_in_line_resistances_and_pumps_on_any_segment():
+    """el_hx! and el_pump!: a resistance on a segment takes pressure from the path through it, an in-line
+    pump adds it; with the pump holding a total flow, the others take up what the one spur loses or gains."""
+    import re
+    from laconic.solvesession import solve
+    text = re.sub(r"\n  #@ result [^\n]*", "", (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8"))
+    n = len(re.search(r"\n  el_hx! = \[([^\n]*)\]", text).group(1).split(";"))
+    line = next(i for i, l in enumerate(text.split("\n"), 1) if l.startswith("!root"))
+
+    def flows(name, first):
+        t = re.sub(r"\n  " + re.escape(name) + r" = \[[^\n]*", "\n  " + name + " = [" + "; ".join([first] + ["0"] * (n - 1)) + "]", text)
+        rec = solve(t, line, log=lambda *a: None)
+        assert rec["ok"], rec["message"]
+        return [x[0] * 15850.32 for x in rec["record"]["values"][0]["mag"]]
+    plain, resisted, pumped = flows("el_hx!", "0"), flows("el_hx!", "1"), flows("el_pump!", "1")
+    assert resisted[0] < plain[0] - 1 and all(r > p for r, p in zip(resisted[1:], plain[1:]))
+    assert pumped[0] > plain[0] + 0.5
+    assert sum(plain) == pytest.approx(110, rel=1e-6) and sum(resisted) == pytest.approx(110, rel=1e-6)

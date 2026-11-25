@@ -613,3 +613,27 @@ def test_the_drawing_prints_with_its_balloons_and_tables_on_any_paper_or_at_a_sc
     frame.locator("#prScale").press("Enter")
     w = float(frame.locator("#prSize").inner_text().split(" × ")[0])
     assert w > 15
+
+
+def test_a_straight_pipe_takes_a_resistance_or_an_in_line_pump(page):
+    import json
+    show(page, SHEET)
+    frame = opened(page)
+    frame.locator("#example").click()
+    frame.locator("#segments th:has-text('Q gal/min')").wait_for()
+    state = json.loads(next(l for l in value(page).split("\n") if l.startswith("  #@ state "))[len("  #@ state "):])
+    k, (r0, c0) = frame.locator("body").evaluate("""(_, s) => { const P = PipeNet, st = P.normalize(s), b = P.bounds(st);
+        const k = Object.keys(st.cells).find((k) => P.shape(st.cells[k]) === 'straight'); return [k, [b.r0, b.c0]]; }""", state)
+    r, c = map(int, k.split(","))
+    frame.locator("button[data-tool=select]").click()
+    frame.locator("main").evaluate(f"m => {{ m.scrollLeft = {(c - c0) * 56 - 100}; m.scrollTop = {(r - r0) * 56 - 100}; }}")
+    box = frame.locator("#canvas").bounding_box()
+    page.mouse.click(box["x"] + (c - c0 + 0.5) * 56, box["y"] + (r - r0 + 0.5) * 56)
+    kind = frame.locator("#inspector select[aria-label='In the pipe']")
+    kind.select_option("hx")
+    page.wait_for_function("/\\n  el_hx! = \\[[^\\n]*1/.test(document.querySelector('#src').value)")
+    assert frame.locator("#canvas rect[width='30'][height='18'], #canvas rect[width='18'][height='30']").count() == 1
+    assert frame.locator("#inspector label:has-text('Pressure-drop curve')").count() == 1
+    frame.locator("#inspector select[aria-label='In the pipe']").select_option("pump")
+    page.wait_for_function("/\\n  el_pump! = \\[[^\\n]*1/.test(document.querySelector('#src').value) && !/\\n  el_hx! = \\[[^\\n]*1/.test(document.querySelector('#src').value)")
+    assert frame.locator("#canvas circle[r='14']").count() == 1

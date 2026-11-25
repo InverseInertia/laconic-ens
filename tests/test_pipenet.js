@@ -34,8 +34,8 @@ eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink f
   const a = P.analyze(s);
   eq(a.errors, [], 'a straight run from the source to a sink is a network');
   eq(a.A, [[1]], 'of one segment, the spur');
-  eq(P.outputs(s, P.network(s)), { A: '[1]', 'L!': "[30] * 'ft", 'D_h!': "[4.026] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]',
-    A_r: '[1]', 'L_r!': "[30] * 'ft", 'D_r!': "[4.026] * 'in", 'N_fit_r!': '[0, 0, 0]', 'K_extra_r!': '[0]',
+  eq(P.outputs(s, P.network(s)), { A: '[1]', 'L!': "[30] * 'ft", 'D_h!': "[4.026] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]', 'el_hx!': '[0]', 'el_pump!': '[0]',
+    A_r: '[1]', 'L_r!': "[30] * 'ft", 'D_r!': "[4.026] * 'in", 'N_fit_r!': '[0, 0, 0]', 'K_extra_r!': '[0]', 'el_hx_r!': '[0]', 'el_pump_r!': '[0]',
     'exchangers!': '[1]', 'pumps!': '[1]', 'valves!': '[0]', 'fit_method!': '1', 'solver_method!': '1', 'hold_flow!': '1', '∀_target': "100 * 'gal / 'min", Δp_target: "0.1 'psi" },
     "three tiles of 10 ft of 4\" Sch 40; the return the same as the supply, as lines of its own");
   s.method = 3;
@@ -423,6 +423,29 @@ eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1
   const sc = P.printSheet({ drawings: [{ svg: d }], blocks: [], scale: 0.5 });
   const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(d);
   eq([Math.abs(wide(sc.svg) - +vb[1] * 0.5) < 0.02, sc.w > +vb[1] * 0.5], [true, true], 'at a scale, the drawing is that size and the page holds it');
+}
+
+// --- elements in the pipes ---------------------------------------------------------------------------
+{
+  // a run of five tiles to a sink, with a fluid cooler (a resistance, curve 2) in the third
+  const s = net([row(0, 0, 5)], '0,0', ['0,5']);
+  s.cells['0,3'].e = { k: 'hx', n: 2 };
+  const t = P.normalize(s), nt = P.network(t);
+  eq([nt.errors, nt.s.order.length], [[], 2], 'an element ends its segment and starts the next: two segments');
+  const o = P.outputs(t, nt);
+  eq([o['el_hx!'], o['el_pump!'], o['el_hx_r!']], ['[2; 0]', '[0; 0]', '[0; 0]'],
+    'the spur (numbered first) carries the cooler; the return, the same as the supply, has none of its own');
+  eq(o['A'], '[1; 1]', 'both segments carry the one sink');
+  eq(P.normalize({ cells: { '0,0': { t: 'pipe', p: E | W, e: { k: 'valve', n: 1 } }, '0,1': { t: 'pipe', p: E | W, e: { k: 'pump', n: 0 } } } }).cells,
+    { '0,0': { t: 'pipe', p: E | W }, '0,1': { t: 'pipe', p: E | W } }, 'an element of no known kind, or no curve, is dropped');
+  // laid out on its own, the return keeps its own elements: an in-line pump on it
+  t.ret = 'separate'; P.copySupply(t); delete t.rcells['0,3'].e; t.rcells['0,2'].e = { k: 'pump', n: 3 };
+  const o2 = P.outputs(t, P.network(t));
+  eq([o2['el_hx!'], o2['el_pump_r!']], ['[2; 0]', '[3; 0]'], 'each side its own elements');
+  // drawn: a box for the resistance, a circle for the pump, ringed when against the end of its data
+  const svg = P.draw(t, P.network(t), { layer: 's', elWalls: new Set(['0,3']) });
+  eq([svg.includes('stroke-dasharray="5 3"'), /<rect x="[\d.]+" y="[\d.]+" width="30" height="18"/.test(svg)], [true, true], 'the cooler, ringed');
+  eq(/<circle cx="[\d.]+" cy="[\d.]+" r="14"/.test(P.draw(t, P.network(t), { layer: 'r' })), true, 'the pump, on the return');
 }
 
 console.log(`pipenet: ${n} checks passed`);

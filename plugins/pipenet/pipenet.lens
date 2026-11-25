@@ -242,8 +242,10 @@ VALVE(∀`, Cv) = heaviside(Cv - 1e-9) * SG_w * (∀` / ('gal / 'min) / maximum(
 #   L!, D_h!     each segment's length and inside diameter (from its pipe size and schedule)
 #   N_fit!       each segment's fittings, one column per kind: 90° elbows, tees passed straight through (runs), tees' branches
 #   K_extra!     each segment's extra loss coefficients (valves and the like, from their datasheets)
+#   el_hx!, el_pump!  each segment's element: an in-line resistance (a fluid cooler) by its curve's number among
+#                the exchangers' (HX), an in-line pump by its number among the pumps' (PUMP); 0 for none
 # and the return's, the same for its own segments: A_r, L_r!, D_r!, N_fit_r!, K_extra_r!. A_r's columns are
-# the same sinks in the same order. With the return the same as the supply (the plugin's Return pipe), they
+# the same sinks in the same order, and el_hx_r!, el_pump_r! the return's elements. With the return the same as the supply (the plugin's Return pipe), they
 # are copies of the supply's; laid out on its own, the return is drawn on its own side of the grid.
 #   exchangers!  the exchanger each spur ends at (HX above); pumps! its circulator (PUMP above, 0 for none);
 #   valves!      its regulating valve's Cv (VALVE above, 0 for none)
@@ -257,11 +259,15 @@ VALVE(∀`, Cv) = heaviside(Cv - 1e-9) * SG_w * (∀` / ('gal / 'min) / maximum(
   D_h! = [2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026] * 'in
   N_fit! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 0, 0, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 0, 1]
   K_extra! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_hx! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_pump! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
   A_r = [1, 0, 0, 0, 0, 0, 0, 0; 0, 0, 0, 0, 0, 0, 0, 1; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 1, 0, 0, 0; 1, 1, 1, 1, 1, 1, 1, 1; 1, 0, 0, 1, 0, 1, 0, 1; 0, 0, 0, 1, 0, 1, 0, 1; 0, 0, 0, 0, 0, 1, 0, 1; 0, 1, 1, 0, 1, 0, 1, 0; 0, 1, 1, 0, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 1, 0]
   L_r! = [20; 70; 10; 10; 30; 10; 70; 10; 170; 10; 50; 60; 20; 60; 40] * 'ft
   D_r! = [4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026] * 'in
   N_fit_r! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 0, 0, 1; 1, 1, 0; 0, 0, 1; 1, 1, 0; 0, 0, 1; 0, 0, 0; 0, 1, 0; 1, 0, 1; 0, 1, 0; 0, 0, 1; 2, 1, 0; 0, 0, 1]
   K_extra_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_hx_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_pump_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
   exchangers! = [1; 1; 1; 1; 1; 1; 1; 1]
   pumps! = [1; 1; 1; 1; 1; 1; 1; 1]
   valves! = [0; 0; 0; 0; 0; 0; 0; 0]
@@ -301,9 +307,14 @@ Re_seg(∀`, D) = .Re(D, .V@(D, ∀`))
 ΣK_Re(Re_s, N, D, K_x) = idx(w_fit, 1) * K_Crane(N, D) + idx(w_fit, 2) * K_Hooper(N, D, Re_s) + idx(w_fit, 3) * K_Darby(N, D, Re_s) + K_x
 ΣK(∀`, N, D, K_x) = ΣK_Re(Re_seg(∀`, D), N, D, K_x)
 
-# Each segment's pressure drop, on the supply and on the return, for the flows ∀_des! to the spurs.
-Δp_supply(∀_des!) = .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK(A * ∀_des!, N_fit!, D_h!, K_extra!))
-Δp_return(∀_des!) = .ΔP_DW(ε_PVC, D_r!, A_r * ∀_des!, L_r!, ΣK(A_r * ∀_des!, N_fit_r!, D_r!, K_extra_r!))
+# The elements in the pipes, from the plugin's in-line tiles: on each segment, a resistance (a fluid cooler, a
+# strainer) by its number among the pressure-drop curves above (HX; el_hx!, 0 for none), and an in-line pump
+# by its number among the pump curves (PUMP; el_pump!, 0 for none). A resistance takes pressure, a pump adds it.
+HX_sel(∀`, k) = heaviside(k - 0.5) * HX(∀`, maximum(k, 1))
+# Each segment's pressure drop, on the supply and on the return, for the flows ∀_des! to the spurs: its pipe
+# and fittings, and its element.
+Δp_supply(∀_des!) = .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK(A * ∀_des!, N_fit!, D_h!, K_extra!)) + .HX_sel(A * ∀_des!, el_hx!) - .PUMP_sel(A * ∀_des!, el_pump!)
+Δp_return(∀_des!) = .ΔP_DW(ε_PVC, D_r!, A_r * ∀_des!, L_r!, ΣK(A_r * ∀_des!, N_fit_r!, D_r!, K_extra_r!)) + .HX_sel(A_r * ∀_des!, el_hx_r!) - .PUMP_sel(A_r * ∀_des!, el_pump_r!)
 
 ## Pressure Drop Solver
 # The main pump holds either the loop's total flow (hold_flow! 1: ∀_target) or its pressure difference
@@ -327,7 +338,7 @@ residual(∀_des!, Δp_main) = (path_dp(∀_des!) - Δp_main) / 'psi
   method: solver_method!
   autorun: on
   status: solver_state
-  #@ result {"hash":"1c1e22ece4e4","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.0008673912040623751],[0.0008652917166846526],[0.0008662525877852556],[0.0008657218341923088],[0.000866300151330342],[0.0008675452382911779],[0.0008694971064085907],[0.0008719217652452967]],"unit":"meter ** 3 / second"},{"mag":6220.469719652607,"unit":"pascal"}],"nfev":17,"message":"The solution converged.","resid":1.1e-08}
+  #@ result {"hash":"b5afde49e62a","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.000867391204062375],[0.0008652917166846526],[0.0008662525877852556],[0.0008657218341923088],[0.0008663001513303418],[0.0008675452382911779],[0.0008694971064085907],[0.0008719217652452968]],"unit":"meter ** 3 / second"},{"mag":6220.469719652593,"unit":"pascal"}],"nfev":17,"message":"The solution converged.","resid":1.1e-08}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min
@@ -351,8 +362,13 @@ past(q, lo, hi) = heaviside(lo - q - 1e-6) + heaviside(q - hi - 1e-6)
 hx_past(q, k) = past(q, hx_lo(k), hx_hi(k))
 pump_past(q, n) = heaviside(n - 0.5) * past(q, pump_lo(maximum(n, 1)), pump_hi(maximum(n, 1)))
 at_wall! = .hx_past(∀_des! / ('gal / 'min), exchangers!) + 2 * .pump_past(∀_des! / ('gal / 'min), pumps!)
+# and each segment's element against an end of its data, on the supply and on the return: 1 a resistance, 2 a pump
+el_past(q, h, n) = heaviside(h - 0.5) * hx_past(q, maximum(h, 1)) + 2 * pump_past(q, n)
+el_wall! = .el_past(A * ∀_des! / ('gal / 'min), el_hx!, el_pump!)
+el_wall_r! = .el_past(A_r * ∀_des! / ('gal / 'min), el_hx_r!, el_pump_r!)
 # Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
 # in _r) each return segment, the piping's pressure drop on each spur's path, supply and return, the loop's
-# total flow and the pump's pressure difference, the spurs against a wall (at_wall!); and how the solver stands (solver_state: 1 up to date,
+# total flow and the pump's pressure difference, the spurs and elements against a wall (at_wall!, el_wall!,
+# el_wall_r!); and how the solver stands (solver_state: 1 up to date,
 # 0 out of date, -1 not run, -2 an error), for its banner
-!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, ∀_total, Δp_pump, at_wall!, solver_state
+!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, ∀_total, Δp_pump, at_wall!, el_wall!, el_wall_r!, solver_state

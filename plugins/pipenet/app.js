@@ -24,6 +24,9 @@
   // The spurs against an end of their exchanger's or circulator's data (the sheet's at_wall!, one per sink:
   // 1 the exchanger's, 2 the circulator's, 3 both): {sink key: code}. Empty when the sheet does not send it.
   let walls = {}, wallCodes = [];
+  // The elements against an end of their data (the sheet's el_wall!, el_wall_r!, one per segment): codes by
+  // segment, and {tile key: code} for the layer in front once matched to the drawing.
+  let elCodes = { s: [], r: [] }, elWalls = {};
   let tool = 'draw', selected = null, theme = {}, layer = 's';
 
   // The layer in front: the return only while it is laid out on its own.
@@ -96,6 +99,9 @@
     const wl = inputs.find((v) => v.name === 'at_wall!' && Array.isArray(v.mag));
     inputs = inputs.filter((v) => v !== wl);   // a warning, not a value to draw
     wallCodes = wl && !wl.stale ? wl.mag.flat() : [];   // matched to the sinks when drawn, by their order
+    const es = inputs.find((v) => v.name === 'el_wall!' && Array.isArray(v.mag)), er = inputs.find((v) => v.name === 'el_wall_r!' && Array.isArray(v.mag));
+    inputs = inputs.filter((v) => v !== es && v !== er);
+    elCodes = { s: es && !es.stale ? es.mag.flat() : [], r: er && !er.stale ? er.mag.flat() : [] };
     overridden = Array.isArray(m.overridden) ? m.overridden : [];
     // The state the sheet holds, unless this page has a change of its own on the way or in hand.
     if ('state' in m && !writeTimer && !drag) {
@@ -130,6 +136,12 @@
     walls = {};
     if (!net.errors.length && wallCodes.length === net.sinks.length)
       net.sinks.forEach((sk, j) => { if (wallCodes[j] > 0.5) walls[sk.key] = Math.round(wallCodes[j]); });
+    elWalls = {};
+    for (const L of state.ret === 'separate' ? ['s', 'r'] : ['s']) {
+      const a = L === 'r' ? net.r : net.s, codes = elCodes[L];
+      if (net.errors.length || codes.length !== a.order.length) continue;
+      a.order.forEach((id, i) => { const sg = a.segments[id]; if (sg.el && codes[i] > 0.5) elWalls[`${L}:${sg.from}`] = Math.round(codes[i]); });
+    }
     if (tool === 'copy' && !(state.cells[copyFrom] && state.cells[copyFrom].t === 'sink')) { tool = 'select'; copyFrom = null; }
     const old = fresh ? null : shownBounds;
     const want = extent();
@@ -143,7 +155,8 @@
     // the balloons start from where they were, so the picture holds still while it is edited
     const placed = {};
     const svg = P.draw(state, net, { theme: svgTheme(), selected, inputs, bounds: b, layer: front(), effort: drag ? 30 : 300,
-      prev: lastPlaced, placed, key: 'html', underlay: shown, walls: new Set(Object.keys(walls)) });
+      prev: lastPlaced, placed, key: 'html', underlay: shown, walls: new Set(Object.keys(walls)),
+      elWalls: new Set(Object.keys(elWalls).filter((x) => x.startsWith(front() + ':')).map((x) => x.slice(2))) });
     lastPlaced = placed;
     sinkKey();
     const doc = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
@@ -326,12 +339,18 @@
   const against = (code) => (code === 3 ? "its exchanger's and its circulator's" : code === 2 ? "its circulator's" : "its exchanger's");
   // A banner over the grid, in the warning colour, naming the spurs whose flows are where the solver's walls
   // hold them rather than on their curves (the sheet's at_wall!).
+  // An element by where it is: "the in-line pump at (3, 20) on the return".
+  const elName = (lk) => {
+    const [L, k] = [lk.slice(0, 1), lk.slice(2)], t = (L === 'r' ? state.rcells : state.cells)[k];
+    return `the in-line ${t && t.e && t.e.k === 'pump' ? 'pump' : 'resistance'} at (${k.replace(',', ', ')})${state.ret === 'separate' ? (L === 'r' ? ' on the return' : ' on the supply') : ''}`;
+  };
   function wallBanner() {
-    const keys = Object.keys(walls).filter((k) => state.cells[k]), box = $('#wallBanner');
-    box.hidden = !keys.length;
-    if (!keys.length) return;
-    $('#wallText').textContent = `${keys.map(sinkName).join(', ')} ${keys.length > 1 ? 'run' : 'runs'} against the end of `
-      + `${keys.length > 1 ? 'their' : 'its'} data: the flow there is where the solver's wall holds it, not what the curve says. See Check.`;
+    const keys = Object.keys(walls).filter((k) => state.cells[k]), els = Object.keys(elWalls), box = $('#wallBanner');
+    const names = [...keys.map(sinkName), ...els.map(elName)];
+    box.hidden = !names.length;
+    if (!names.length) return;
+    $('#wallText').textContent = `${names.join(', ')} ${names.length > 1 ? 'run' : 'runs'} against the end of `
+      + `${names.length > 1 ? 'their' : 'its'} data: the flow there is where the solver's wall holds it, not what the curve says. See Check.`;
   }
 
   // A banner over the grid while the sheet's values drawn here wait on its solver: from the solver's
@@ -556,6 +575,15 @@
     } else if (t.t === 'pipe' || t.t === 'sink') {
       parts.push(field(`Length (${state.units.L})`, t.L, String(state.cell), (v) => edit(() => { const x = positive(v); if (x) t.L = x; else delete t.L; })));
     }
+    if (t.t === 'pipe' && P.shape(t) === 'straight') {
+      // an element in the pipe: a resistance (a fluid cooler) or an in-line pump, by its curve
+      const names = P.curveNames(inputs), kind = el('select', { 'aria-label': 'In the pipe' });
+      kind.append(el('option', { value: '' }, 'Pipe only'), el('option', { value: 'hx' }, 'A resistance (a fluid cooler)'), el('option', { value: 'pump' }, 'An in-line pump'));
+      kind.value = t.e ? t.e.k : '';
+      kind.onchange = () => edit(() => { if (kind.value) t.e = { k: kind.value, n: (t.e && t.e.n) || 1 }; else delete t.e; });
+      parts.push(el('label', { class: 'f stack' }, 'In the pipe', kind));
+      if (t.e) parts.push(curvePick(t.e.k === 'pump' ? 'Pump curve' : 'Pressure-drop curve', t.e.k === 'pump' ? names.pumps : names.exchangers, t.e.n, (x) => { t.e.n = x; }));
+    }
     if (t.t === 'pipe') {
       parts.push(field('Extra K (a valve, from its datasheet)', t.k, '0', (v) => edit(() => { const x = parseFloat(v); if (isFinite(x) && x > 0) t.k = x; else delete t.k; })));
     }
@@ -628,7 +656,9 @@
     const walled = Object.entries(walls).filter(([k]) => state.cells[k]).map(([k, code]) => ({ cls: 'err', key: k, layer: 's',
       msg: `${sinkName(k)} runs against the end of ${against(code)} data: its flow is where the solver's wall holds it, not on the curve. `
         + `Its circulator, its exchanger, a balancing valve or the main pump's target needs to change to bring it inside.` }));
-    const list = [...replaced, ...throttle, ...walled, ...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
+    const elWalled = Object.keys(elWalls).map((lk) => ({ cls: 'err', key: lk.slice(2), layer: lk.slice(0, 1),
+      msg: `${elName(lk).replace(/^the/, 'The')} runs against the end of its data: the flow through it is where the solver's wall holds it, not on its curve.` }));
+    const list = [...replaced, ...throttle, ...walled, ...elWalled, ...net.errors.map((e) => ({ ...e, cls: 'err' })), ...net.warnings.map((w) => ({ ...w, cls: 'warn' }))];
     const ul = $('#msgs');
     if (!list.length) {
       const n = net.sinks.length, segs = net.s.order.length;
