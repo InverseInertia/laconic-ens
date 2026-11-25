@@ -148,6 +148,7 @@ The editor keeps its own lexer (`Editing.tokens`, `isTok`) and definition and bl
 | `GET /api/plugins/{name}?fresh=` | a plugin's manifest (title, version, the page's address), fetched first if need be (`fresh`: again); `{ok: false, error}` when it cannot be had, with `notInstalled: true` when it is not kept and automatic downloads are off |
 | `GET /plugins/{name}/{file}` | one file of a fetched plugin, only those its manifest lists, under `plugins.CSP` |
 | `POST /api/pluginwrite` | edits that write what a plugin sent (`state`, and `outputs` as `{name: expression}`) into its block on `line`; `{ok: false, error}` for a bad line or name |
+| `POST /api/new` | the New sheet button: open another window on a blank sheet (`/?sheet=&new`); `{ok: false, path}` when this server opens no windows, and the page opens that path itself |
 | `GET /api/hello`, `POST /api/window` | how another launch recognizes a running LENS and hands it the window (`instance.py`) |
 
 Endpoints that change the text return `{"ok": true, "edits": [{"from", "to", "insert"}, ...]}`: edits against the text in the request, not overlapping, with offsets in UTF-16 code units as JavaScript counts them. The page makes them only if its text is still the one it sent.

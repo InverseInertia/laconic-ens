@@ -283,6 +283,20 @@ def test_a_handed_over_launch_without_a_sheet_opens_an_empty_window(tmp_path):
     assert server.get_opened("") == {}
 
 
+def test_new_sheet_opens_a_blank_window_on_no_file(tmp_path):
+    """The New sheet button (#186): a window on this server, with no sheet and the ?new flag."""
+    opened = []
+    sheets.start(tmp_path / "start.lens")
+    sheets.serve(opened.append)
+    assert server.new_window() == {"ok": True}
+    assert opened == ["/?sheet=&new"]
+    assert server.get_opened("") == {}
+
+
+def test_new_sheet_on_a_server_that_opens_no_windows_leaves_it_to_the_page():
+    assert server.new_window() == {"ok": False, "path": "/?sheet=&new"}
+
+
 def test_a_server_that_opens_no_windows_says_so():
     with pytest.raises(server.HTTPException):
         server.open_window(server.WindowBody())
