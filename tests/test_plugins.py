@@ -639,3 +639,20 @@ def test_the_plugins_sheet_takes_in_line_resistances_and_pumps_on_any_segment():
     assert resisted[0] < plain[0] - 1 and all(r > p for r, p in zip(resisted[1:], plain[1:]))
     assert pumped[0] > plain[0] + 0.5
     assert sum(plain) == pytest.approx(110, rel=1e-6) and sum(resisted) == pytest.approx(110, rel=1e-6)
+
+
+def test_the_plugins_sheet_stays_solved_on_another_machine(monkeypatch):
+    """Another machine: every input's last digits differ (here by up to 3e-13, more than two least-squares
+    solvers' fits do), so the exact hash does not match; the record's sketch still finds it current."""
+    import re
+    import numpy as np
+    from laconic import solver
+    text = (plugins.CHECKOUT / "pipenet" / "pipenet.lens").read_text(encoding="utf-8")
+    assert '"sketch":[' in text
+    elsewhere = re.sub(r'(#@ result \{"hash":")[0-9a-f]+', r"\g<1>000000000000", text)
+    numbers, rng = solver._numbers, np.random.default_rng(7)
+    def noisy(ev, q):
+        x = numbers(ev, q)
+        return None if x is None else x * (1 + rng.uniform(-3e-13, 3e-13, x.shape))
+    monkeypatch.setattr(solver, "_numbers", noisy)
+    assert next(r for r in evaluate(elsewhere).results if r.solver).solver.status == "valid"

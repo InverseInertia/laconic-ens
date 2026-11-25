@@ -50,7 +50,7 @@ Solvers can be slow, so evaluating a sheet **never runs one**. Under each block 
 
 ## Is the stored result current?
 
-The hash covers everything the block reads: its own lines (apart from `timeout:`, `autorun:` and `status:`, comments and spacing), the starting values, every variable and user function its expressions reach, the units they use, and the trig angle mode, with numbers cut to 12 significant digits so another machine's rounding does not count. The status under the block is one of:
+The hash covers everything the block reads: its own lines (apart from `timeout:`, `autorun:` and `status:`, comments and spacing), the starting values, every variable and user function its expressions reach, the units they use, and the trig angle mode. Its numbers are compared within a tolerance rather than exactly: the stored result keeps a short sketch of every input number (a few weighted sums of their logarithms, so each counts by its relative size, whatever its scale), and a sheet whose inputs agree with it to about ten significant figures still finds it current. Values a library works out, a curve fit's coefficients or a fluid property from CoolProp, can differ in their last digits from one computer to another; those differences pass, and any real change, a sign or a zero, a different size, or an edit to the block, does not. A result stored before sketches is compared exactly, as it was. The status under the block is one of:
 
 | Status | Meaning |
 |---|---|

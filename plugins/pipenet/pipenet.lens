@@ -338,7 +338,7 @@ residual(∀_des!, Δp_main) = (path_dp(∀_des!) - Δp_main) / 'psi
   method: solver_method!
   autorun: on
   status: solver_state
-  #@ result {"hash":"b5afde49e62a","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.000867391204062375],[0.0008652917166846526],[0.0008662525877852556],[0.0008657218341923088],[0.0008663001513303418],[0.0008675452382911779],[0.0008694971064085907],[0.0008719217652452968]],"unit":"meter ** 3 / second"},{"mag":6220.469719652593,"unit":"pascal"}],"nfev":17,"message":"The solution converged.","resid":1.1e-08}
+  #@ result {"hash":"b5afde49e62a","shape":"21f9140cf198","sketch":[-17437.528623874223,9400.477771424656,-24939.732704255137,-12078.398357253463],"kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.000867391204062375],[0.0008652917166846526],[0.0008662525877852556],[0.0008657218341923088],[0.0008663001513303418],[0.0008675452382911779],[0.0008694971064085907],[0.0008719217652452968]],"unit":"meter ** 3 / second"},{"mag":6220.469719652593,"unit":"pascal"}],"nfev":17,"message":"The solution converged.","resid":1.1e-08}
 ## Output
 !short
 ∀! = A * ∀_des! -> 'gal / 'min

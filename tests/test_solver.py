@@ -450,3 +450,30 @@ def test_a_method_line_can_name_a_variable_that_numbers_the_method():
     assert "not one of the methods: 1 hybr, 2 lm" in errors(base.replace("m = 2", "m = 9"))[0]
     assert "not defined above the block" in errors(base.replace("m = 2\n", ""))[0]
     assert solvesession.solve("x = 1\n!root x\n  equation: x^2 = 2\n  method: lm\n", 2, log=lambda *a: None)["record"]["method"] == "lm"
+
+
+def test_a_stored_result_stays_current_through_last_digit_noise_but_not_a_real_change():
+    """The record keeps a sketch of its inputs' numbers (solver.fingerprint) beside the exact hash: inputs that
+    differ only in their last digits, as a library's answer can from one machine to another, still find it
+    current; any real change, a sign, a zero, a size or a line of the block, makes it out of date."""
+    import re
+    from laconic import blockedit, solvesession
+    from laconic.sheet import evaluate, solver_blocks
+    base = "a = 1.2345678901250002\nk = [2; 3; 0.5]\nx = 1\n!root x\n  equation: x^2 = a * sum(k)\n"
+    rec = solvesession.solve(base, 4, log=lambda *a: None)
+    assert {"hash", "shape", "sketch"} <= set(rec["record"])
+    solved = blockedit.apply(base, solvesession.store(base, rec["record"])[0])
+    status = lambda t: next(r for r in evaluate(t).results if r.solver).solver.status
+    assert status(solved) == "valid"
+    noisy = solved.replace("a = 1.2345678901250002", "a = 1.2345678901249998")      # rounds the other way at 12 digits
+    assert solver_blocks(noisy)[0].solver.hash != rec["record"]["hash"]            # the exact hash says changed
+    assert status(noisy) == "valid"                                                # the sketch says the same
+    for changed in (solved.replace("a = 1.2345678901250002", "a = 1.2345679"),     # the 8th figure
+                    solved.replace("[2; 3; 0.5]", "[2; -3; 0.5]"),               # a sign
+                    solved.replace("[2; 3; 0.5]", "[2; 3; 0]"),                  # a zero
+                    solved.replace("[2; 3; 0.5]", "[2; 3; 0.5; 0]"),             # a size
+                    solved.replace("x^2 = a * sum(k)", "x^2 = a * sum(k) + 0")):  # a line of the block
+        assert status(changed) == "stale", changed
+    # a record from before sketches is checked by its hash alone
+    old = re.sub(r',"shape":"[0-9a-f]+","sketch":\[[^\]]*\]', "", solved)
+    assert '"sketch"' not in old and status(old) == "valid" and status(old.replace("1.2345678901250002", "1.2345678901249998")) == "stale"

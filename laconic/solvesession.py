@@ -55,14 +55,15 @@ def solve(text, line, units=(), log=print, mode="run"):
     ev = evaluator_at(text, line, units)
     try:
         prob = solver.prepare(b, ev, describe)
-        h = prob.digest()
+        fp = prob.fingerprint()
+        h = fp["hash"]
         prob.probe()
     except Exception as e:
         return _failed(describe(e))
     out = prob.solve(log)
     out["hash"] = h
     if mode == "verify" and out["record"] is not None:
-        out["verify"] = _verify(b.stored, h, out["record"])
+        out["verify"] = _verify(b.stored, fp, out["record"])
     return out
 
 
@@ -70,9 +71,9 @@ def _failed(message):
     return {"ok": False, "message": message, "record": None}
 
 
-def _verify(stored, h, record):
-    """How a fresh answer compares with the stored one: only a current stored result is compared."""
-    if stored is None or stored.get("hash") != h:
+def _verify(stored, fp, record):
+    """How a fresh answer compares with the stored one: only a current stored result (solver.current) is compared."""
+    if stored is None or not solver.current(stored, fp):
         return {"same": None, "diff": None, "note": "There is no current stored result to compare with. Run it first."}
     same, diff = solver.compare(stored, record)
     return {"same": same, "diff": diff, "note": ""}
