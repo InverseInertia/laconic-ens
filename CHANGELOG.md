@@ -9,6 +9,8 @@ renames **Unreleased** to the tag's heading and starts a new, empty **Unreleased
 
 ## Unreleased
 
+## [v0.6.0](https://github.com/InverseInertia/laconic-ens/releases/tag/v0.6.0) (2026-11-25)
+
 ### New
 - **New sheet button**: the button left of Open opens a blank worksheet in a window of its own, with no file to save to yet, leaving the sheet you were working on where it was. (#186)
 - **Inline math in comments**: in a comment or heading, text between backticks is typeset as math in the line, as a calculation is shown before it is worked out: `` # the force `F = m*a` `` shows F = m·a. Backticked text that is not an expression shows in the code font instead, and a single backtick stays as typed. The LaTeX, Markdown and PDF exports keep it (as `$...$` in LaTeX and Markdown), Math keys work between the backticks, and Rename renames names there too. (#174)
