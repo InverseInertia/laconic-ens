@@ -34,6 +34,22 @@ def _settle(m):
     return m
 
 
+class _NoLanes(Exception):
+    """A function body that cannot run on whole vectors at once (vector mode, `_elementwise`): it is
+    called once per element instead, as before. Never seen outside the evaluator."""
+
+
+# Built-ins that act element by element on an array exactly as on each of its elements, so a `.f(...)`
+# body may call them in vector mode. Anything else (a reduction such as max or sum, a matrix function,
+# indexing) sends the call back to one per element.
+LANE_SAFE = frozenset({"abs", "arg", "atan", "acos", "asin", "ceil", "conj", "cos", "exp", "floor", "heav", "heaviside", "step",
+                       "im", "ln", "log10", "re", "sin", "sqrt", "tan",
+                       "maximum", "minimum", "clip", "sign", "where", "pick"})
+# Built-ins whose first argument is a table read element by element (pick): in vector mode it may be a
+# matrix from the sheet, which no other name in a vectorized body may be.
+LANE_TABLE = frozenset({"pick"})
+
+
 class EvalError(Exception):
     pass
 
@@ -155,6 +171,11 @@ class Evaluator:
         self.mode = SheetMode()  # what the ! commands above the current line set; changed only by commands.py
         self.notes = []        # warnings for the line being run; sheet.py clears them per line and shows them
         self._calls = []       # the user functions being evaluated, innermost last, to name in a note
+        # Vector mode: a `.f(...)` call runs f's body once on whole vectors when it can (see _elementwise).
+        self.lanes = True       # False: always one call per element (to compare, and for tests)
+        self._lanes = None      # while a body runs in vector mode: the vectors' shape
+        self._lane_params = []  # the parameter names of the user functions running in vector mode, innermost last
+        self._no_lanes = set()  # functions found unable to run on vectors: not tried again
         self.nan_hint = None   # why the value being computed may be NaN; read by check_finite
 
     @property
@@ -242,6 +263,10 @@ class Evaluator:
         for k in (n.name, key):
             if k in scope:
                 v = scope[k]
+                # in vector mode the only vectors a body may use are its own parameters (the lanes): a
+                # matrix from the sheet means something else element by element, so that runs per element
+                if self._lanes is not None and _ndim(v) and not (self._lane_params and k in self._lane_params[-1]):
+                    raise _NoLanes()
                 if is_symbolic(v):   # what it stands for here: its symbols must have values
                     from . import symbolic
                     return symbolic.numeric(self, n.name, v, scope)
@@ -305,6 +330,8 @@ class Evaluator:
         if op == "*":
             return self.mul(a, b)
         if op == "/":
+            if self._lanes is not None and _ndim(b) >= 1:   # vector mode: element by element
+                return self._shape_guard(lambda: a / b, a, b, "/")
             if _ndim(b) >= 1:
                 raise EvalError("Cannot divide by a matrix. Use solve(A, b) or inv(A)")
             ratio = self._typed_ratio(n, a, b)
@@ -334,7 +361,10 @@ class Evaluator:
             raise EvalError(f"Shape mismatch for {op}: {np.shape(a.magnitude)} vs {np.shape(b.magnitude)}") from None
 
     def mul(self, a, b):
-        """`*` is matrix multiplication when both sides are arrays, else scaling."""
+        """`*` is matrix multiplication when both sides are arrays, else scaling. In vector mode both
+        sides are lanes of the same elements, so it multiplies them element by element."""
+        if self._lanes is not None and _ndim(a) >= 1 and _ndim(b) >= 1:
+            return self._shape_guard(lambda: a * b, a, b, "*")
         if _ndim(a) >= 1 and _ndim(b) >= 1:
             try:
                 return self.Q(np.matmul(a.magnitude, b.magnitude), a.units * b.units)
@@ -351,7 +381,7 @@ class Evaluator:
                 raise EvalError("A complex exponent needs a dimensionless scalar base")
             return self.Q(complex(a.to("dimensionless").magnitude) ** complex(b.to("dimensionless").magnitude))
         n = float(b.to("dimensionless").magnitude)
-        if _ndim(a) == 2:
+        if _ndim(a) == 2 and self._lanes is None:
             if n != int(n):
                 raise EvalError("Matrix powers must be integers")
             n = int(n)
@@ -366,6 +396,8 @@ class Evaluator:
             return self._as_numpy(a) ** n
 
     def ev_Matrix(self, n, scope):
+        if self._lanes is not None:
+            raise _NoLanes()
         return self.matrix([[self.eval(e, scope) for e in row] for row in n.rows])
 
     def matrix(self, rows):
@@ -422,7 +454,21 @@ class Evaluator:
         return out * factor
 
     def ev_Call(self, n, scope):
+        if self._lanes is not None and n.func in LANE_TABLE and n.args and self.fkey(n.func) not in self.funcs:
+            saved, self._lanes = self._lanes, None   # the table is whole, not a lane
+            try:
+                table = self.eval(n.args[0], scope)
+            finally:
+                self._lanes = saved
+            args = [table] + [a.value if isinstance(a, Str) else self.eval(a, scope) for a in n.args[1:]]
+            return self._call(n, args)
         args = [a.value if isinstance(a, Str) else self.eval(a, scope) for a in n.args]
+        if self._lanes is not None:
+            # in vector mode a `.g(...)` inside is already element by element; a built-in must be one
+            # that acts element by element itself
+            if self.fkey(n.func) not in self.funcs and n.func not in LANE_SAFE:
+                raise _NoLanes()
+            return self._call(n, args)
         if n.elementwise:
             return self._elementwise(n, args)
         return self._call(n, args)
@@ -440,6 +486,9 @@ class Evaluator:
             raise EvalError(f"{name} needs its matrices to be the same size, got "
                             + " and ".join("×".join(map(str, sh)) for sh in shapes))
         shape = shapes[0]
+        fast = self._lane_call(n, args, shape)
+        if fast is not None:
+            return fast
         out = []
         for idx in np.ndindex(shape):
             r = self._call(n, [self.Q(_array(a.magnitude)[idx], a.units) if _ndim(a) else a for a in args])
@@ -453,6 +502,39 @@ class Evaluator:
             raise EvalError(f"{name} gives results whose units do not match each other") from None
         return self.Q(_array(mags).reshape(shape), units)
 
+    def _lane_call(self, n, args, shape):
+        """`.f(A, B)` with f's body run once on the whole of A and B (vector mode): the same numbers as
+        one call per element, many times faster. None when f cannot run that way (see _NoLanes), or
+        fails doing so (then one call per element gives the error as it always has)."""
+        fkey = self.fkey(n.func)
+        if not self.lanes or fkey not in self.funcs or fkey in self._no_lanes or self._lanes is not None:
+            return None
+        if any(isinstance(a, str) or is_complex(a) for a in args):
+            return None
+        self._lanes = shape
+        mark = len(self.notes)
+        try:
+            r = self._call(n, args)
+        except _NoLanes:
+            self._no_lanes.add(fkey)
+            del self.notes[mark:]
+            return None
+        except Exception:
+            del self.notes[mark:]
+            return None
+        finally:
+            self._lanes = None
+        if isinstance(r, str) or is_complex(r):
+            del self.notes[mark:]
+            return None
+        m = np.asarray(r.magnitude, dtype=float)
+        if m.shape == ():
+            m = np.full(shape, float(m))   # a body that does not depend on its lanes: the same for each
+        if m.shape != shape:
+            del self.notes[mark:]
+            return None
+        return self.Q(m, r.units)
+
     def _call(self, n, args):
         """f(*args), f a user function or a built-in."""
         fkey = self.fkey(n.func)
@@ -463,10 +545,14 @@ class Evaluator:
             if len(args) != len(params):
                 raise EvalError(f"{n.func} takes {len(params)} argument(s), got {len(args)}")
             self._calls.append(n.func)
+            if self._lanes is not None:
+                self._lane_params.append(set(params))
             try:
                 return self.eval(body, {**self.vars, **dict(zip(params, args))})
             finally:
                 self._calls.pop()
+                if self._lanes is not None:
+                    self._lane_params.pop()
         fn = FUNCTIONS.get(n.func)
         if fn is None:
             if n.func in self.mode.cleared_funcs:
@@ -771,6 +857,52 @@ class Evaluator:
     def fn_min(self, A): return self._reduce(np.min, self._real(A, "min"))
     @builtin("max(A)")
     def fn_max(self, A): return self._reduce(np.max, self._real(A, "max"))
+
+    # ---- element by element (numpy's), so `.f(...)` bodies can run on whole vectors ------------------
+    def _alike(self, a, b, fname):
+        """b's magnitude in a's unit, refused when they cannot be compared."""
+        try:
+            return np.asarray(b.to(a.units).magnitude)
+        except pint.errors.DimensionalityError:
+            raise EvalError(f"{fname} needs its values in units that compare: {a.units:~P} and {b.units:~P}") from None
+
+    @builtin("maximum(a, b)", args=2)
+    def fn_maximum(self, a, b):
+        """The larger of a and b, element by element (max(A) is the largest in A)."""
+        return self._shape_guard(lambda: self.Q(np.maximum(self._real(a, "maximum").magnitude, self._alike(a, b, "maximum")), a.units), a, b, "maximum")
+    @builtin("minimum(a, b)", args=2)
+    def fn_minimum(self, a, b):
+        """The smaller of a and b, element by element (min(A) is the smallest in A)."""
+        return self._shape_guard(lambda: self.Q(np.minimum(self._real(a, "minimum").magnitude, self._alike(a, b, "minimum")), a.units), a, b, "minimum")
+    @builtin("clip(x, lo, hi)", args=3)
+    def fn_clip(self, x, lo, hi):
+        """x held between lo and hi, element by element."""
+        return self._shape_guard(lambda: self.Q(np.clip(self._real(x, "clip").magnitude, self._alike(x, lo, "clip"), self._alike(x, hi, "clip")), x.units), x, lo, "clip")
+    @builtin("sign(x)")
+    def fn_sign(self, x):
+        """-1, 0 or 1 by the sign of x, element by element; its unit does not matter."""
+        return self.Q(np.sign(self._real(x, "sign").magnitude))
+    @builtin("where(c, a, b)", args=3)
+    def fn_where(self, c, a, b):
+        """a where c is not zero, else b, element by element."""
+        cond = np.asarray(self._dimless(c, "where")) != 0
+        return self._shape_guard(lambda: self.Q(np.where(cond, a.magnitude, self._alike(a, b, "where")), a.units), a, b, "where")
+    @builtin("pick(M, i, j)", args=3)
+    def fn_pick(self, M, i, j):
+        """M's element in row i and column j, counting from 1, element by element: with i a vector,
+        one element of M for each element of i (a table looked up by number)."""
+        m = _array(M.magnitude)
+        if m.ndim != 2:
+            raise EvalError("pick needs a matrix to pick from")
+        def index(k, size, what):
+            v = np.asarray(self._dimless(k, "pick"), dtype=float)
+            if np.any(v != np.round(v)) or np.any(v < 1) or np.any(v > size):
+                raise EvalError(f"pick: the {what} is a whole number from 1 to {size}")
+            return v.astype(int) - 1
+        try:
+            return self.Q(m[index(i, m.shape[0], "row"), index(j, m.shape[1], "column")], M.units)
+        except IndexError:
+            raise EvalError(f"pick: the rows and columns asked for are not the same size") from None
 
     @builtin('props("D", "T", T, "P", p, "Water")')
     def fn_props(self, out, *args):

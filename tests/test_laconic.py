@@ -46,6 +46,44 @@ def test_matrix_solve_units():
     assert "8.333" in res[-1].latex
 
 
+def test_elementwise_calls_run_on_whole_vectors_and_give_what_one_call_per_element_gives():
+    """`.f(...)` runs f's body once on whole vectors when every step of it acts element by element (vector
+    mode), else once per element as before: the same numbers either way."""
+    import numpy as np
+    from laconic.parser import parse_expr
+    from laconic.sheet import evaluator_at
+    sheet = """M = [10, 20, 30; 40, 50, 60]
+x = [0.5; 1.5; 2.5] * 'm
+k = [2; 1; 2]
+g(q, n) = (pick(M, n, 1) + q / 'm * pick(M, n, 3)) * 'Pa + sqrt(abs(q) * 1 'm) * 1 'Pa / 'm
+h(q) = 2 * q^2 / (1 'm) + clip(q, 1 'm, 2 'm) * heaviside(q - 1 'm)
+w(q) = max([q / 'm, 2]) * 'm
+mm(q) = q * M
+"""
+    ev = evaluator_at(sheet, len(sheet.split("\n")))
+    for expr in (".g(x, k)", ".h(x)", ".w(x)"):
+        node, got = parse_expr(expr), {}
+        for lanes in (True, False):
+            ev.lanes, ev._no_lanes = lanes, set()
+            got[lanes] = ev.eval(node)
+        assert np.allclose(got[True].to(got[False].units).magnitude, got[False].magnitude, rtol=1e-12), expr
+    ev.lanes = True
+    ev.eval(parse_expr(".w(x)"))
+    assert "w" in ev._no_lanes                              # max([...]) reduces: one call per element
+    assert last(sheet + ".mm(x)").error == ".mm needs mm to give one number for each element"   # a sheet matrix: as before
+
+
+def test_element_by_element_builtins():
+    assert last("pick([10, 20, 30; 40, 50, 60], [1; 2; 1], 2)").text.endswith("[[20]\n [50]\n [20]]")
+    assert last("pick([1, 2; 3, 4], 3, 1)").error == "pick: the row is a whole number from 1 to 2"
+    assert last("maximum([1; 5] * 'm, 3 'm)").text.endswith("[[3]\n [5]] m")
+    assert last("minimum([1; 5] * 'm, 300 'cm)").text.endswith("[[1]\n [3]] m")
+    assert last("clip([1; 5; 9], 2, 6)").text.endswith("[[2]\n [5]\n [6]]")
+    assert last("sign([-2; 0; 3] * 's)").text.endswith("[[-1]\n [0]\n [1]]")
+    assert last("where([1; 0], [1; 2] * 'm, 50 'cm)").text.endswith("[[1]\n [0.5]] m")
+    assert "compare" in last("maximum(1 'm, 2 's)").error
+
+
 def test_matmul_vs_elementwise():
     assert "3 \\\\ 7" in last("[1,2;3,4]*[1;1]").latex
     assert "1 & 4" in last("[1,2;3,4] .* [1,2;3,4]").latex

@@ -48,7 +48,7 @@ u& = 3                         bar over a variable
 
 ## Functions
 
-`sqrt abs floor ceil sin cos tan asin acos atan exp ln log10`, the [complex](Complex-Numbers) `re im conj arg`, and `heaviside` (aliases `step`, `heav`: 0 below zero, 1 at zero and above), plus the [matrix functions](Matrices) and [`props` and `haprops`](Material-Properties).
+`sqrt abs floor ceil sin cos tan asin acos atan exp ln log10`, the [complex](Complex-Numbers) `re im conj arg`, `heaviside` (aliases `step`, `heav`: 0 below zero, 1 at zero and above), the element-by-element `maximum minimum clip where sign pick` ([Matrices](Matrices#elementwise-functions)), plus the [matrix functions](Matrices) and [`props` and `haprops`](Material-Properties).
 
 Trig functions read a bare number as radians unless `!trigdeg` is active; `asin`, `acos` and `atan` return in the current angle unit.
 
