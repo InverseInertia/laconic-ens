@@ -1,0 +1,374 @@
+## Pipe network
+# A hydronic loop solved for the flows that give every path from the pump to a load the same pressure drop.
+# The `!plugin pipenet` block below lays the loop out: open it (Open, under its row) to change the pipes,
+# and the sheet follows. The solver re-runs on its own (autorun) when the network changes.
+# This is the plugin's own sheet. The plugin warns when a line of it is changed or missing; open the
+# original again from the plugin (Check → Open the original sheet) or from the examples.
+
+# The fluid, pipe, exchanger and pump data down to Pipe Network still run, but their results are hidden
+# (!hide ... !show). Delete the !hide line to see them.
+!hide
+## Physical properties of loop fluid
+
+T_water = 90'degF
+ρ = props("D", "T", T_water, "P", 1'atm, "Water")
+μ = props("V", "T", T_water, "P", 1'atm, "Water")
+
+Re(D_h, V@) = (ρ * abs(V@) * D_h) / μ
+
+## Pipe Properties
+
+ε_PVC = 0.002 'mm
+
+## Major Losses via Niazkhar formulation for the Darcy Friction Factor.
+# The best closed form approximation for the Moody Chart currently known. Its three iterates are
+# a = -2 log10(ε/3.7D + 4.5547/Re^0.8784), b = -2 log10(ε/3.7D + 2.15 a/Re) and c the same from b,
+# and f_D = (a - (b - a)^2 / (c - 2 b + a))^-2. Each is worked out once and passed on, so a friction
+# factor takes three logarithms.
+nz_next(ε_D, Re, a) = -2 * log10(ε_D / 3.7 + 2.15 * a / Re)
+nz_f(a, b, c) = (a - (b - a)^2 / (c - 2 * b + a))^(-2)
+nz_ab(ε_D, Re, a, b) = nz_f(a, b, nz_next(ε_D, Re, b))
+nz_a(ε_D, Re, a) = nz_ab(ε_D, Re, a, nz_next(ε_D, Re, a))
+f_D_Niazkhar(ε_D, Re) = nz_a(ε_D, Re, -2 * log10(ε_D / 3.7 + 4.5547 / Re^0.8784))
+
+# Darcy-Weisbach pressure drop for a flow ∀` in a pipe, through its velocity, worked out once. It takes the
+# flow's sign (V |V| rather than V^2, and Re from |V|), so a solver's step through a backward flow gives a
+# backward pressure drop to come back from rather than a number that is not one.
+V@(D_h, ∀`) = 4 * ∀` / (pi * D_h^2)
+ΔP_V(ε, D_h, V@, L, ΣK) = (f_D_Niazkhar(ε / D_h, Re(D_h, V@)) * L / D_h + ΣK) * ρ * V@ * abs(V@) / 2
+ΔP_DW(ε, D_h, ∀`, L, ΣK) = ΔP_V(ε, D_h, V@(D_h, ∀`), L, ΣK)
+
+~polyvec_2(x) = [1; x; x^2]
+~polyvec_4(x) = [1; x; x^2; x^3; x^4]
+
+## Heat Exchanger Pressure Drop
+# Each exchanger's pressure drop is a quadratic fitted to its data (a !regression of degree 2: through the
+# points when there are three). A fit holds only between the least and the greatest flow in its data
+# (interpolation, not extrapolation). HX_curve(∀`, k) is exchanger k's fit there, and 0 outside, for
+# plotting. HX(∀`, k), the one the solver uses, follows the fit inside and is a wall outside: from each end
+# of the data it rises (above the greatest flow) or falls (below the least) at WALL, so a flow past either
+# end is pushed back inside rather than taken. HX_C holds one row of coefficients per exchanger and HX_q its
+# least and greatest flow, in gal/min, both in the order of the !pluginvar exchangers: line below.
+WALL = 100 'psi / ('gal / 'min)
+q_span(data) = [min(row(data, 1)), max(row(data, 1))]
+clamp(q, lo, hi) = clip(q, lo, hi)
+hx_at(q, k) = (pick(HX_C, k, 1) + q * (pick(HX_C, k, 2) + q * pick(HX_C, k, 3))) * 'psi
+hx_lo(k) = pick(HX_q, k, 1)
+hx_hi(k) = pick(HX_q, k, 2)
+HX_curve(∀`, k) = hx_at(∀` * ('gal / 'min)^-1, k) * heaviside(∀` * ('gal / 'min)^-1 - hx_lo(k)) * heaviside(hx_hi(k) - ∀` * ('gal / 'min)^-1)
+HX_c(q, qc, k) = hx_at(qc, k) + WALL * (q - qc) * 'gal / 'min
+HX(∀`, k) = HX_c(∀` * ('gal / 'min)^-1, clamp(∀` * ('gal / 'min)^-1, hx_lo(k), hx_hi(k)), k)
+# the middle of exchanger k's data, in gal/min: where the solver starts that exchanger's spur
+hx_mid(k) = (hx_lo(k) + hx_hi(k)) / 2
+
+# ---- Exchanger data: paste your own over the lines from here to the next ---- line --------------
+# Each exchanger's data is two rows: its flows in gal/min, then its pressure drops in psi at those flows,
+# as the manufacturer's selection software or design guide gives them (three points or more). Give each a
+# !regression of degree 2, add its row to HX_C and HX_q, give it a name and its number (its row), and list
+# the names on the !pluginvar line, so the plugin offers them by name. Plot them with the !plot lines below.
+# ClimateMaster Compact (HBH/V) water-source heat pumps, PSC blower, at 85 °F entering water (HBH-V small
+# design guide, 8-25-16: Performance Data, WPD). The guide gives three flows per temperature; the pressure
+# drops here are its ft of head over 2.31 ft/psi, which it gives to 0.1 ft rather than 0.1 psi. The largest
+# is first: a sink placed in the plugin takes exchanger 1 until another is picked.
+HXD_HBH060 = [7.5, 11.3, 15.0; 2.251, 5.108, 9.784]
+HXD_HBH009 = [1.1, 1.7, 2.3; 0.303, 0.8658, 1.905]
+HXD_HBH006 = [0.8, 1.1, 1.5; 0.2165, 0.3463, 0.6061]
+
+!regression F_HBH060
+  data: HXD_HBH060
+  degree: 2
+
+!regression F_HBH009
+  data: HXD_HBH009
+  degree: 2
+
+!regression F_HBH006
+  data: HXD_HBH006
+  degree: 2
+
+HX_C = vstack(F_HBH060, F_HBH009, F_HBH006)
+HX_q = vstack(q_span(HXD_HBH060), q_span(HXD_HBH009), q_span(HXD_HBH006))
+HBH060 = 1
+HBH009 = 2
+HBH006 = 3
+!pluginvar exchangers: HBH060, HBH009, HBH006
+!plot HX_curve(x, HBH060), x = 7 'gal / 'min .. 15.5 'gal / 'min
+  title: "HBH060 water pressure drop, 85 °F EWT"
+  points: HXD_HBH060, 'gal / 'min, 'psi
+  yunit: 'psi
+  xunit: 'gal / 'min
+  label 1: "HBH060"
+  label 2: "data"
+
+!plot HX_curve(x, HBH009), HX_curve(x, HBH006), x = 0.5 'gal / 'min .. 2.5 'gal / 'min
+  title: "HBH009 and HBH006 water pressure drop, 85 °F EWT"
+  points: hstack(HXD_HBH009, HXD_HBH006), 'gal / 'min, 'psi
+  yunit: 'psi
+  xunit: 'gal / 'min
+  label 1: "HBH009"
+  label 2: "HBH006"
+  label 3: "data"
+# ---- end of the exchanger data -----------------------------------------------------------------
+
+## Pump Curves
+# The pumps by number, as pumps! picks them: one row of PUMP_C (a fit's coefficients) and one row of
+# PUMP_q (the least and the greatest flow in its data, in gal/min) each, from the pump data below. A fit
+# holds only between those flows (interpolation, not extrapolation). PUMP_curve(∀`, n) is pump n's fit
+# there, and no head outside, for plotting. PUMP(∀`, n), the one the solver uses, follows the fit inside
+# and is a wall outside, as HX is: its head falls at WALL past the greatest flow and rises at WALL below
+# the least, so the solver is pushed back inside.
+pump_lo(n) = pick(PUMP_q, n, 1)
+pump_hi(n) = pick(PUMP_q, n, 2)
+pump_at(q, n) = (pick(PUMP_C, n, 1) + q * (pick(PUMP_C, n, 2) + q * (pick(PUMP_C, n, 3) + q * (pick(PUMP_C, n, 4) + q * pick(PUMP_C, n, 5))))) * 'ft * 'g_0 * ρ
+PUMP_curve(∀`, n) = pump_at(∀` * ('gal / 'min)^-1, n) * heaviside(∀` * ('gal / 'min)^-1 - pump_lo(n)) * heaviside(pump_hi(n) - ∀` * ('gal / 'min)^-1)
+PUMP_c(q, qc, n) = pump_at(qc, n) - WALL * (q - qc) * 'gal / 'min
+PUMP(∀`, n) = PUMP_c(∀` * ('gal / 'min)^-1, clamp(∀` * ('gal / 'min)^-1, pump_lo(n), pump_hi(n)), n)
+# A spur with no circulator (pumps! 0) gets no head from one
+PUMP_sel(∀`, n) = heaviside(n - 0.5) * PUMP(∀`, maximum(n, 1))
+
+# ---- Pump data: paste your own over the lines from here to the next ---- line -------------------
+# Each pump's data is two rows: its flows in gal/min, then its heads in ft. Give each a !regression of
+# degree 4, its rows of PUMP_C and PUMP_q, a curve by name, and list the names on the !pluginvar line,
+# so the plugin offers them by name.
+# Grundfos circulators, from their public product information. Each curve is a pump of its own: the
+# 43-100 F's and the 26-99 FC's three speed settings, the 15-42 and the C1016T.
+GRUND_43100A = transpose([21.4, 10.2; 2.3, 27.7; 0.7, 27.9; 5.45, 26.1; 3.9, 27.1; 10.1, 22; 27.6, 4.6; 7, 25.1; 14.6, 17.3; 18.15, 13.4; 23.36, 8.3; 25.5, 6.5; 31.76, 1.7; 29.6, 3.3; 11.7, 20.5; 19.8, 11.9; 13.2, 18.7; 16.55, 15.2; 8.6, 23.7])
+GRUND_43100B = transpose([37.6, 11.7; 3.96, 30; 1.24, 30.2; 9.14, 28.9; 6.8, 29.5; 18.5, 24.8; 44.7, 5.9; 12.4, 27.7; 27.2, 19.5; 32.54, 15.6; 39.95, 9.7; 42.8, 7.5; 49.7, 2; 47.15, 4; 20.8, 23.5; 35.2, 13.5; 24.1, 21.4; 29.95, 17.5; 16.7, 25.8])
+GRUND_43100C = transpose([42.1, 16.6; 4.24, 30.9; 0.6, 31.1; 11.2, 29.9; 8.1, 30.5; 63.6, 1.1; 55.8, 6.9; 15.14, 29.1; 27.7, 24.9; 33.6, 21.7; 46.9, 13.3; 51.04, 10.4; 61.46, 2.6; 59.7, 4; 20.4, 27.7; 37.5, 19.5; 23.35, 26.6; 30.8, 23.3; 17.9, 28.4])
+GRUND_2699A = transpose([17.7, 1.2; 8, 11.1; 13.3, 4.7; 6.53, 13.3; 5.35, 15.15; 9.5, 9.1; 3.95, 17.4; 15.54, 2.7; 1.85, 20.94; 2.9, 19.1; 11.44, 6.8; 0.55, 23.34])
+GRUND_2699B = transpose([15.3, 13; 22.57, 5.3; 12.8, 15.6; 10.93, 17.6; 18, 10.3; 8.7, 19.8; 24.4, 3.3; 3.17, 25.1; 6.53, 22.04; 20.7, 7.35; 0.5, 27.44])
+GRUND_2699C = transpose([30.33, 1.55; 20.2, 14.04; 28, 4.9; 17.55, 16.56; 14.4, 19.3; 22.8, 11.3; 11.55, 21.6; 8.6, 23.7; 5.65, 25.7; 3.35, 27.13; 25.43, 8.2; 0.66, 28.8])
+GRUND_C1016T = transpose([1.068, 2.18; 1.858, 1.35; 0.892, 2.32; 2.05, 1.1; 0.66, 2.52; 1.664, 1.6; 0.44, 2.74; 1.467, 1.78; 0.23, 3; 1.245, 2; 0.05, 3.28])
+GRUND_1542A = [4.64, 5.65, 6.8, 2.8, 3.5, 4.1, 5.13, 6.17, 2.04, 1.56, 1.14, 0.7, 0.23; 0.77, 0.44, 0.14, 1.55, 1.22, 0.98, 0.6, 0.3, 1.9, 2.15, 2.38, 2.62, 2.91]
+
+!regression G_43100A
+  data: GRUND_43100A
+  degree: 4
+
+!regression G_43100B
+  data: GRUND_43100B
+  degree: 4
+
+!regression G_43100C
+  data: GRUND_43100C
+  degree: 4
+
+!regression G_2699A
+  data: GRUND_2699A
+  degree: 4
+
+!regression G_2699B
+  data: GRUND_2699B
+  degree: 4
+
+!regression G_2699C
+  data: GRUND_2699C
+  degree: 4
+
+!regression G_1542
+  data: GRUND_1542A
+  degree: 4
+
+!regression G_C1016T
+  data: GRUND_C1016T
+  degree: 4
+
+PUMP_C = vstack(G_43100A, G_43100B, G_43100C, G_2699A, G_2699B, G_2699C, G_1542, G_C1016T)
+PUMP_q = vstack(q_span(GRUND_43100A), q_span(GRUND_43100B), q_span(GRUND_43100C), q_span(GRUND_2699A), q_span(GRUND_2699B), q_span(GRUND_2699C), q_span(GRUND_1542A), q_span(GRUND_C1016T))
+GRUND_43100A(∀`) = PUMP_curve(∀`, 1)
+GRUND_43100B(∀`) = PUMP_curve(∀`, 2)
+GRUND_43100C(∀`) = PUMP_curve(∀`, 3)
+GRUND_2699A(∀`) = PUMP_curve(∀`, 4)
+GRUND_2699B(∀`) = PUMP_curve(∀`, 5)
+GRUND_2699C(∀`) = PUMP_curve(∀`, 6)
+GRUND_1542A(∀`) = PUMP_curve(∀`, 7)
+GRUND_C1016T(∀`) = PUMP_curve(∀`, 8)
+!pluginvar pumps: GRUND_43100A, GRUND_43100B, GRUND_43100C, GRUND_2699A, GRUND_2699B, GRUND_2699C, GRUND_1542A, GRUND_C1016T
+
+!plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x), x = 0 'gal / 'min .. 60 'gal / ('min)
+  title: "Grundfos 43-100 F Pump Curves"
+  points: hstack(GRUND_43100A, GRUND_43100B, GRUND_43100C), 'gal / 'min, 'ft_H2O
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
+  label 1: "Speed 1"
+  label 2: "Speed 2"
+  label 3: "Speed 3"
+  label 4: "raw data"
+
+!plot GRUND_2699A(x), GRUND_2699B(x), GRUND_2699C(x), x = 0 'gal / 'min .. 35 'gal / ('min)
+  title: "Grundfos 26-99 FC Pump Curves"
+  points: hstack(GRUND_2699A, GRUND_2699B, GRUND_2699C), 'gal / 'min, 'ft_H2O
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
+  label 1: "Speed 1"
+  label 2: "Speed 2"
+  label 3: "Speed 3"
+  label 4: "raw data"
+
+!plot GRUND_C1016T(x), x = 0 'gal / 'min .. 2.5 'gal / ('min)
+  title: "Grundfos C1016T Pump Curve"
+  points: GRUND_C1016T, 'gal / 'min, 'ft_H2O
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
+  label 1: "fit"
+  label 2: "raw data"
+
+!plot GRUND_43100A(x), GRUND_43100B(x), GRUND_43100C(x),GRUND_2699A(x), GRUND_2699B(x), GRUND_2699C(x), GRUND_1542A(x), GRUND_C1016T(x), x = 0 'gal / 'min .. 60 'gal / ('min)
+  title: "Grundfos Pump Curves"
+  yunit: 'psi
+  xunit: 'gal / 'min
+  ylim: 0 'psi .. auto
+
+# ---- end of the pump data ---------------------------------------------------------------------
+
+## Regulating Valves
+# A regulating (balancing) valve on a spur, set to a flow coefficient Cv (gal/min at 1 psi of water at 60 °F),
+# takes dp = SG (Q / Cv)^2 psi. valves! gives each spur's Cv, 0 for a spur with none. A spur can have a
+# valve, a circulator, both or neither.
+# specific gravity: Cv is defined for water at 60 °F (999.0 kg/m³)
+SG_w = ρ / (999.0 'kg / 'm^3)
+VALVE(∀`, Cv) = heaviside(Cv - 1e-9) * SG_w * (∀` / ('gal / 'min) / maximum(Cv, 1e-9))^2 * 'psi
+
+!show
+## Pipe Network
+# Open the plugin under this block to lay the loop out on a grid: one source (the pump), a sink for each
+# load, and the supply and return pipes between them. It writes the lines below, one entry per segment
+# (the pipe between two junctions: the spurs to the sinks first, then the rest from the source outwards)
+# or per sink. The supply's are:
+#   A            the upstream matrix: one row per segment, one column per sink (spur), 1 where the segment carries that spur's water
+#   L!, D_h!     each segment's length and inside diameter (from its pipe size and schedule)
+#   N_fit!       each segment's fittings, one column per kind: 90° elbows, tees passed straight through (runs), tees' branches
+#   K_extra!     each segment's extra loss coefficients (valves and the like, from their datasheets)
+#   el_hx!, el_pump!  each segment's element: an in-line resistance (a fluid cooler) by its curve's number among
+#                the exchangers' (HX), an in-line pump by its number among the pumps' (PUMP); 0 for none
+# and the return's, the same for its own segments: A_r, L_r!, D_r!, N_fit_r!, K_extra_r!. A_r's columns are
+# the same sinks in the same order, and el_hx_r!, el_pump_r! the return's elements. With the return the same as the supply (the plugin's Return pipe), they
+# are copies of the supply's; laid out on its own, the return is drawn on its own side of the grid.
+#   exchangers!  the exchanger each spur ends at (HX above); pumps! its circulator (PUMP above, 0 for none);
+#   valves!      its regulating valve's Cv (VALVE above, 0 for none)
+#   fit_method!  how fittings become loss coefficients: 1 Crane TP-410, 2 Hooper 2-K, 3 Darby 3-K
+#   hold_flow!   what the main pump holds (Network → Pump holds): 1 the loop's total flow, ∀_target, its
+#                pressure difference following; 0 its pressure difference, Δp_target, the flow following.
+#                A pump run off pressure sensor data holds Δp, and ramps the flow down when spurs are shut off
+!plugin pipenet
+  A = [1, 0, 0, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 0, 0; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 0, 0, 0, 1; 1, 1, 1, 1, 1, 1, 1, 1; 1, 1, 1, 1, 1, 1, 1, 0; 1, 1, 1, 1, 1, 1, 0, 0; 1, 1, 1, 1, 1, 0, 0, 0; 1, 1, 1, 1, 0, 0, 0, 0; 1, 1, 1, 0, 0, 0, 0, 0; 0, 1, 1, 0, 0, 0, 0, 0]
+  L! = [30; 40; 20; 40; 50; 40; 50; 40; 20; 30; 30; 30; 30; 30; 10] * 'ft
+  D_h! = [2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 2.067; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026] * 'in
+  N_fit! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 1, 0, 1; 0, 0, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 1, 0; 0, 0, 1]
+  K_extra! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_hx! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_pump! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  A_r = [1, 0, 0, 0, 0, 0, 0, 0; 0, 0, 0, 0, 0, 0, 0, 1; 0, 0, 0, 0, 0, 1, 0, 0; 0, 0, 0, 1, 0, 0, 0, 0; 0, 0, 1, 0, 0, 0, 0, 0; 0, 1, 0, 0, 0, 0, 0, 0; 0, 0, 0, 0, 0, 0, 1, 0; 0, 0, 0, 0, 1, 0, 0, 0; 1, 1, 1, 1, 1, 1, 1, 1; 1, 0, 0, 1, 0, 1, 0, 1; 0, 0, 0, 1, 0, 1, 0, 1; 0, 0, 0, 0, 0, 1, 0, 1; 0, 1, 1, 0, 1, 0, 1, 0; 0, 1, 1, 0, 0, 0, 0, 0; 0, 0, 0, 0, 1, 0, 1, 0]
+  L_r! = [20; 70; 10; 10; 30; 10; 70; 10; 170; 10; 50; 60; 20; 60; 40] * 'ft
+  D_r! = [4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026; 4.026] * 'in
+  N_fit_r! = [0, 1, 0; 1, 1, 0; 0, 0, 1; 0, 0, 1; 1, 1, 0; 0, 0, 1; 1, 1, 0; 0, 0, 1; 0, 0, 0; 0, 1, 0; 1, 0, 1; 0, 1, 0; 0, 0, 1; 2, 1, 0; 0, 0, 1]
+  K_extra_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_hx_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  el_pump_r! = [0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0; 0]
+  exchangers! = [1; 1; 1; 1; 1; 1; 1; 1]
+  pumps! = [1; 1; 1; 1; 1; 1; 1; 1]
+  valves! = [0; 0; 0; 0; 0; 0; 0; 0]
+  fit_method! = 1
+  solver_method! = 1
+  hold_flow! = 1
+  ∀_target = 110 * 'gal / 'min
+  Δp_target = 0.02 'psi
+  #@ state {"v":1,"units":{"L":"ft","D":"in"},"cell":10,"D":4,"ret":"separate","nps":"4","sch":"40","method":1,"dp":{"v":0.02,"u":"psi"},"show":{"numbers":true,"size":false,"L":false,"D":false,"hx":false,"pump":false,"hide":[]},"cells":{"2,0":{"t":"source","p":2},"2,1":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":11},"2,3":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":14},"2,6":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":11},"2,9":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":14},"2,12":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,14":{"t":"pipe","p":11},"2,15":{"t":"pipe","p":10},"2,16":{"t":"pipe","p":10},"2,17":{"t":"pipe","p":14},"2,18":{"t":"pipe","p":10,"nps":"2"},"2,19":{"t":"pipe","p":10,"nps":"2"},"2,20":{"t":"sink","p":8,"x":1,"s":1},"1,2":{"t":"pipe","p":5,"nps":"2"},"0,2":{"t":"pipe","p":6,"nps":"2"},"0,3":{"t":"pipe","p":10,"nps":"2"},"0,4":{"t":"sink","p":8,"x":1,"s":1},"3,5":{"t":"pipe","p":5,"nps":"2"},"4,5":{"t":"pipe","p":5,"nps":"2"},"5,5":{"t":"pipe","p":3,"nps":"2"},"5,6":{"t":"pipe","p":10,"nps":"2"},"5,7":{"t":"sink","p":8,"x":1,"s":1},"1,8":{"t":"pipe","p":5,"nps":"2"},"0,8":{"t":"pipe","p":6,"nps":"2"},"0,9":{"t":"pipe","p":10,"nps":"2"},"0,10":{"t":"sink","p":8,"x":1,"s":1},"3,11":{"t":"pipe","p":5,"nps":"2"},"4,11":{"t":"pipe","p":5,"nps":"2"},"5,11":{"t":"pipe","p":3,"nps":"2"},"5,12":{"t":"pipe","p":10,"nps":"2"},"5,13":{"t":"sink","p":8,"x":1,"s":1},"1,14":{"t":"pipe","p":5,"nps":"2"},"0,14":{"t":"pipe","p":6,"nps":"2"},"0,15":{"t":"pipe","p":10,"nps":"2"},"0,16":{"t":"sink","p":8,"x":1,"s":1},"3,17":{"t":"pipe","p":7},"4,17":{"t":"pipe","p":5,"nps":"2"},"5,17":{"t":"pipe","p":3,"nps":"2"},"5,18":{"t":"pipe","p":10,"nps":"2"},"5,19":{"t":"sink","p":8,"x":1,"s":1},"3,18":{"t":"pipe","p":10,"nps":"2"},"3,19":{"t":"sink","p":8,"x":1,"s":1}},"rcells":{"2,0":{"t":"source","p":2},"2,20":{"t":"sink","p":8},"0,4":{"t":"sink","p":1},"5,7":{"t":"sink","p":1},"0,10":{"t":"sink","p":1},"5,13":{"t":"sink","p":1},"0,16":{"t":"sink","p":1},"5,19":{"t":"sink","p":2},"3,19":{"t":"sink","p":2},"3,20":{"t":"pipe","p":12},"4,20":{"t":"pipe","p":5},"5,20":{"t":"pipe","p":13},"6,20":{"t":"pipe","p":9},"6,19":{"t":"pipe","p":10},"6,18":{"t":"pipe","p":10},"6,17":{"t":"pipe","p":3},"5,17":{"t":"pipe","p":5},"4,17":{"t":"pipe","p":13},"3,17":{"t":"pipe","p":5},"2,19":{"t":"pipe","p":10},"2,18":{"t":"pipe","p":11},"2,16":{"t":"pipe","p":10},"2,15":{"t":"pipe","p":10},"-1,16":{"t":"pipe","p":14},"-1,10":{"t":"pipe","p":14},"-1,4":{"t":"pipe","p":6},"-1,5":{"t":"pipe","p":10},"-1,6":{"t":"pipe","p":10},"-1,7":{"t":"pipe","p":10},"-1,8":{"t":"pipe","p":10},"-1,9":{"t":"pipe","p":10},"-1,11":{"t":"pipe","p":10},"-1,12":{"t":"pipe","p":10},"-1,13":{"t":"pipe","p":10},"-1,14":{"t":"pipe","p":10},"-1,15":{"t":"pipe","p":10},"-1,17":{"t":"pipe","p":10},"-1,18":{"t":"pipe","p":12},"0,18":{"t":"pipe","p":5},"1,18":{"t":"pipe","p":5},"2,17":{"t":"pipe","p":14},"2,14":{"t":"pipe","p":10},"2,13":{"t":"pipe","p":10},"2,12":{"t":"pipe","p":10},"2,11":{"t":"pipe","p":10},"2,10":{"t":"pipe","p":10},"2,9":{"t":"pipe","p":10},"2,8":{"t":"pipe","p":10},"2,7":{"t":"pipe","p":10},"2,6":{"t":"pipe","p":10},"2,5":{"t":"pipe","p":10},"2,4":{"t":"pipe","p":10},"2,3":{"t":"pipe","p":10},"2,2":{"t":"pipe","p":10},"2,1":{"t":"pipe","p":10},"4,7":{"t":"pipe","p":6},"4,13":{"t":"pipe","p":14},"4,8":{"t":"pipe","p":10},"4,9":{"t":"pipe","p":10},"4,10":{"t":"pipe","p":10},"4,11":{"t":"pipe","p":10},"4,12":{"t":"pipe","p":10},"4,14":{"t":"pipe","p":10},"4,15":{"t":"pipe","p":10},"4,16":{"t":"pipe","p":10}},"by":"1.4.2","hold":"flow","q":{"v":110,"u":"gal/min"},"solver":1}
+
+## Fitting Losses
+# Each method's coefficients, one row per kind of fitting in N_fit!'s order: 90° elbow, tee run, tee branch.
+# The values are for standard threaded fittings (r/D = 1); edit them to suit yours. Choose the method in the
+# plugin (Network → Fitting losses), which writes fit_method! above.
+
+# Crane TP-410: K = (L/D) * f_T. Column: L/D. f_T is the fully turbulent friction factor of clean commercial
+# steel, the pipe Crane's L/D values were measured in, whatever the pipe here is made of.
+FIT_Crane = [30; 20; 60]
+ε_Crane = 0.046 'mm
+f_T(d_h) = (log10(ε_Crane / (3.7 * d_h)))^-2 * 0.25
+
+# Hooper 2-K: K = K_1 / Re + K_∞ * (1 + 1 / D), with D in inches. Columns: K_1, K_∞.
+FIT_Hooper = [800, 0.40; 200, 0.10; 500, 0.70]
+hooper_D(d) = 1 + 'in / d
+
+# Darby 3-K: K = K_1 / Re + K_i * (1 + K_d / D^0.3), with D in inches. Columns: K_1, K_i, K_d.
+FIT_Darby = [800, 0.14, 4; 200, 0.091, 4; 500, 0.274, 4]
+darby_D(d) = (d / 'in)^-0.3
+
+# Each segment's ΣK, for segments with fittings N, extra K K_x and diameters D carrying flows ∀`, by the
+# method chosen. The supply and the return each call it with their own. The Reynolds numbers are worked out once.
+w_fit = row(identity(3), fit_method!)
+K_Crane(N, D) = (N * FIT_Crane) .* .f_T(D)
+K_Hooper(N, D, Re_s) = (N * col(FIT_Hooper, 1)) ./ Re_s + (N * col(FIT_Hooper, 2)) .* .hooper_D(D)
+K_Darby(N, D, Re_s) = (N * col(FIT_Darby, 1)) ./ Re_s + (N * col(FIT_Darby, 2)) + (N * (col(FIT_Darby, 2) .* col(FIT_Darby, 3))) .* .darby_D(D)
+Re_seg(∀`, D) = .Re(D, .V@(D, ∀`))
+ΣK_Re(Re_s, N, D, K_x) = idx(w_fit, 1) * K_Crane(N, D) + idx(w_fit, 2) * K_Hooper(N, D, Re_s) + idx(w_fit, 3) * K_Darby(N, D, Re_s) + K_x
+ΣK(∀`, N, D, K_x) = ΣK_Re(Re_seg(∀`, D), N, D, K_x)
+
+# The elements in the pipes, from the plugin's in-line tiles: on each segment, a resistance (a fluid cooler, a
+# strainer) by its number among the pressure-drop curves above (HX; el_hx!, 0 for none), and an in-line pump
+# by its number among the pump curves (PUMP; el_pump!, 0 for none). A resistance takes pressure, a pump adds it.
+HX_sel(∀`, k) = heaviside(k - 0.5) * HX(∀`, maximum(k, 1))
+# Each segment's pressure drop, on the supply and on the return, for the flows ∀_des! to the spurs: its pipe
+# and fittings, and its element.
+Δp_supply(∀_des!) = .ΔP_DW(ε_PVC, D_h!, A * ∀_des!, L!, ΣK(A * ∀_des!, N_fit!, D_h!, K_extra!)) + .HX_sel(A * ∀_des!, el_hx!) - .PUMP_sel(A * ∀_des!, el_pump!)
+Δp_return(∀_des!) = .ΔP_DW(ε_PVC, D_r!, A_r * ∀_des!, L_r!, ΣK(A_r * ∀_des!, N_fit_r!, D_r!, K_extra_r!)) + .HX_sel(A_r * ∀_des!, el_hx_r!) - .PUMP_sel(A_r * ∀_des!, el_pump_r!)
+
+## Pressure Drop Solver
+# The main pump holds either the loop's total flow (hold_flow! 1: ∀_target) or its pressure difference
+# (hold_flow! 0: Δp_target), as the plugin's Network → Pump holds sets. Either way the solver finds the spur
+# flows ∀_des! and the pump's pressure difference Δp_main together.
+# The start: each spur in the middle of its exchanger's data, so none starts against a wall, scaled to add up
+# to the target flow when the pump holds one; and the pressure difference a path needs, on average, at those flows
+∀_mid = .hx_mid(exchangers!) * ('gal / 'min)
+∀_des! = ∀_mid * (hold_flow! * ∀_target / sum(∀_mid) + 1 - hold_flow!)
+# What the path to each spur takes, less its circulator's head: out along the supply, through its exchanger and
+# its regulating valve and back along the return. transpose(A) * Δp_supply and transpose(A_r) * Δp_return add up
+# the segments each path passes through.
+path_dp(∀_des!) = transpose(A) * Δp_supply(∀_des!) + transpose(A_r) * Δp_return(∀_des!) + .HX(∀_des!, exchangers!) + .VALVE(∀_des!, valves!) - .PUMP_sel(∀_des!, pumps!)
+Δp_main = hold_flow! * sum(path_dp(∀_des!)) / cols(A) + (1 - hold_flow!) * Δp_target
+# root solver finds the flows at which every path takes the pump's pressure difference, with the flows adding
+# up to the target (holding a flow) or that pressure difference the target (holding it)
+residual(∀_des!, Δp_main) = (path_dp(∀_des!) - Δp_main) / 'psi
+!root ∀_des!, Δp_main
+  equation: residual(∀_des!, Δp_main)
+  equation: hold_flow! * (sum(∀_des!) - ∀_target) / ('gal / 'min) + (1 - hold_flow!) * (Δp_main - Δp_target) / 'psi
+  method: solver_method!
+  autorun: on
+  status: solver_state
+  #@ result {"hash":"b5afde49e62a","kind":"root","method":"hybr","scipy":"1.18.1","values":[{"mag":[[0.000867391204062375],[0.0008652917166846526],[0.0008662525877852556],[0.0008657218341923088],[0.0008663001513303418],[0.0008675452382911779],[0.0008694971064085907],[0.0008719217652452968]],"unit":"meter ** 3 / second"},{"mag":6220.469719652593,"unit":"pascal"}],"nfev":17,"message":"The solution converged.","resid":1.1e-08}
+## Output
+!short
+∀! = A * ∀_des! -> 'gal / 'min
+∀_r! = A_r * ∀_des! -> 'gal / 'min
+ΣK_seg = ΣK(∀!, N_fit!, D_h!, K_extra!)
+ΣK_r = ΣK(∀_r!, N_fit_r!, D_r!, K_extra_r!)
+Δp_paths = Δp_supply(∀_des!) -> 'psi
+Δp_r = Δp_return(∀_des!) -> 'psi
+Δp_spur = transpose(A) * Δp_paths + transpose(A_r) * Δp_r -> 'psi
+Δp_hx = .HX(∀_des!, exchangers!) -> 'psi
+Δp_valve = .VALVE(∀_des!, valves!) -> 'psi
+Δp_circ = .PUMP_sel(∀_des!, pumps!) -> 'psi
+# The residual from the pieces above, rather than running the pipes' pressure drops again
+Δp_residual = Δp_spur + Δp_hx + Δp_valve - Δp_circ - Δp_main -> 'psi
+# the loop's total flow and the main pump's pressure difference: one of them its target, the other found
+∀_total = sum(∀_des!) -> 'gal / 'min
+Δp_pump = Δp_main -> 'psi
+# Each spur against an end of its exchanger's or its circulator's data, where only the solver's walls hold
+# it, so its flow is the wall's, not the curve's: 0 neither, 1 the exchanger's, 2 the circulator's, 3 both
+past(q, lo, hi) = heaviside(lo - q - 1e-6) + heaviside(q - hi - 1e-6)
+hx_past(q, k) = past(q, hx_lo(k), hx_hi(k))
+pump_past(q, n) = heaviside(n - 0.5) * past(q, pump_lo(maximum(n, 1)), pump_hi(maximum(n, 1)))
+at_wall! = .hx_past(∀_des! / ('gal / 'min), exchangers!) + 2 * .pump_past(∀_des! / ('gal / 'min), pumps!)
+# and each segment's element against an end of its data, on the supply and on the return: 1 a resistance, 2 a pump
+el_past(q, h, n) = heaviside(h - 0.5) * hx_past(q, maximum(h, 1)) + 2 * pump_past(q, n)
+el_wall! = .el_past(A * ∀_des! / ('gal / 'min), el_hx!, el_pump!)
+el_wall_r! = .el_past(A_r * ∀_des! / ('gal / 'min), el_hx_r!, el_pump_r!)
+# Back to the drawing: flow, loss coefficient and pressure drop in each supply segment and (the names ending
+# in _r) each return segment, the piping's pressure drop on each spur's path, supply and return, the loop's
+# total flow and the pump's pressure difference, the spurs and elements against a wall (at_wall!, el_wall!,
+# el_wall_r!); and how the solver stands (solver_state: 1 up to date,
+# 0 out of date, -1 not run, -2 an error), for its banner
+!pluginvar ∀!, ΣK_seg, Δp_paths, ∀_r!, ΣK_r, Δp_r, Δp_spur, Δp_valve, Δp_circ, ∀_total, Δp_pump, at_wall!, el_wall!, el_wall_r!, solver_state

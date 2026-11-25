@@ -67,7 +67,10 @@
     {"text": "!loop i = 1 .. 3\n  S = S + i\nT = S", "line": 3, "block": null},
     {"text": "!slider x = 2'm\n  range: 0'm .. 10'm\n  scale: log", "line": 3, "block": {"kind": "slider", "unknowns": ["x"]}},
     {"text": "!slider ~v_0 = 2\n  step: 0.5", "line": 2, "block": {"kind": "slider", "unknowns": ["~v_0"]}},
-    {"text": "!slider x = 2\n  range: 0 .. 3\ny = x", "line": 3, "block": null}
+    {"text": "!slider x = 2\n  range: 0 .. 3\ny = x", "line": 3, "block": null},
+    {"text": "!plugin pipenet\n  A = [1; 1]\n  #@ state {\"v\":1}", "line": 3, "block": {"kind": "plugin", "unknowns": []}},
+    {"text": "!plugin pipenet\n  A = [1; 1]", "line": 2, "block": {"kind": "plugin", "unknowns": []}},
+    {"text": "!pluginvar Q\n  y = 2", "line": 2, "block": null}
   ],
   "names_at": [
     {"text": "σ_max = 3", "caret": 2, "name": "σ_max"},

@@ -413,3 +413,40 @@ def test_hide_hides_a_solver_block_only_while_its_result_is_current():
     assert [r.hidden for r in rows(text)] == [False, True, False, True, True]
     done = rows(solved(text))
     assert done[2].solver.current and done[2].hidden and done[5].hidden
+
+
+def test_a_status_line_gives_a_name_the_blocks_state():
+    """`status: name` holds 1 up to date, 0 out of date, -1 not run, -2 an error, for the lines below; it is
+    not an input, so adding it leaves the block's hash (and a stored result) as it was."""
+    from laconic import blockedit, solvesession
+    from laconic.sheet import evaluate, solver_blocks
+    last = lambda t: evaluate(t).results[-1].text
+    base = "a = 2\nx = 1\n!root x\n  equation: x^2 = a\n  status: ok\ny = ok\n"
+    assert last(base) == "y = -1"
+    rec = solvesession.solve(base, 3, log=lambda *a: None)
+    solved = blockedit.apply(base, solvesession.store(base, rec["record"])[0])
+    assert last(solved) == "y = 1"
+    assert last(solved.replace("a = 2", "a = 3")) == "y = 0"
+    assert last("x = 1\n!root x\n  equation: x^2 = nothing_here\n  status: ok\ny = ok\n") == "y = -2"
+    plain = "x = 1\n!root x\n  equation: x^2 = 2\n"
+    assert solver_blocks(plain)[0].solver.hash == solver_blocks(plain + "  status: s\n")[0].solver.hash
+    bad = evaluate("x = 1\n!root x\n  equation: x^2 = 2\n  status: x\n").results
+    assert any("status is a name of its own" in (r.error or "") for r in bad)
+
+
+def test_a_method_line_can_name_a_variable_that_numbers_the_method():
+    """LENS has no text values, so a plugin picks a solver's method by number: `method: m` takes the value of
+    m, 1 the first of the block's methods. Which method it picks is part of the hash, so changing m makes a
+    stored result out of date."""
+    from laconic import blockedit, solvesession
+    from laconic.sheet import evaluate
+    base = "m = 2\nx = 1\n!root x\n  equation: x^2 = 2\n  method: m\n  status: st\ny = st\n"
+    rec = solvesession.solve(base, 3, log=lambda *a: None)
+    assert rec["record"]["method"] == "lm"
+    solved = blockedit.apply(base, solvesession.store(base, rec["record"])[0])
+    assert evaluate(solved).results[-1].text == "y = 1"
+    assert evaluate(solved.replace("m = 2", "m = 1")).results[-1].text == "y = 0"
+    errors = lambda t: [r.error for r in evaluate(t).results if r.kind == "error"]
+    assert "not one of the methods: 1 hybr, 2 lm" in errors(base.replace("m = 2", "m = 9"))[0]
+    assert "not defined above the block" in errors(base.replace("m = 2\n", ""))[0]
+    assert solvesession.solve("x = 1\n!root x\n  equation: x^2 = 2\n  method: lm\n", 2, log=lambda *a: None)["record"]["method"] == "lm"

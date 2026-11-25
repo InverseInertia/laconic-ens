@@ -250,6 +250,9 @@ _FREQ_HELP = ("What frequencies are. Below <code>!freq hz</code> or <code>!freq 
               "<code>3000'rpm -&gt; 'Hz</code> is 50 Hz. A result in plain 1/s, such as <code>sqrt(k/m)</code>, "
               "is shown in Hz after <code>hz</code> and in rad/s after <code>rad</code>. <code>si</code>, the "
               "default, makes Hz, rad/s and 1/s the same unit")
+_PLUGIN_HELP = ("<code>!plugin pipenet</code> opens a plugin, a page of its own (fetched the first time a sheet "
+                "asks for it) that writes the indented <code>name = value</code> lines under it. "
+                "<code>!pluginvar Q, Δp</code> sends those variables, as they are on that line, back to the plugins")
 _RPN_HELP = ("Below <code>!rpn</code>, expressions are typed in reverse Polish: values first, then the "
              "operator or function, separated by spaces: <code>F = m a *</code>, <code>3'm 4'm +</code>, "
              "<code>f(x) = x 2 ^ 1 +</code>, <code>x sqrt</code>. A function that takes a varying number of "
@@ -307,6 +310,10 @@ COMMANDS = (
             "a variable set with a slider in the results: !slider x = 2'm, then range: 0'm .. 10'm"),
     Command("loop", Statement("A loop reads `!loop i = 1 .. n`: the index, then the first and last values"),
             "run the indented lines once for each i: !loop i = 1 .. n"),
+    Command("plugin", Statement("A plugin block reads `!plugin name`, e.g. `!plugin pipenet`"),
+            "open a plugin, which writes the indented lines under it: !plugin pipenet", help=_PLUGIN_HELP),
+    Command("pluginvar", Statement("!pluginvar reads `!pluginvar a, b`: the variables to send to the plugins"),
+            "send variables to the sheet's plugins: !pluginvar Q, Δp", help=_PLUGIN_HELP),
 )
 BY_NAME = {c.name: c for c in COMMANDS}
 _ALIASES = {"mordaunt": "adnauseum"}

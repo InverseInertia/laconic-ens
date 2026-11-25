@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipe network</title>
+<!-- LENS's own fonts, from the server the plugin is served by; the page sends its colours (lens:theme). -->
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<style>
+  /* LENS blueprint until the page sends its theme: the same variables as LENS's own :root. */
+  :root {
+    --paper: #00386b; --paper-deep: #0b4274; --grid: #0a4d88; --text: #c2deff; --text-soft: #94b2d0;
+    --ink: #348fff; --on-ink: #00386b; --rule: #1f6fc4; --err: #ff8f00; --global: #7ee0c3; --symbol: #00e5ff;
+    --hit: rgba(194, 222, 255, .08); --hl: #348fff; --on-hl: #00386b;
+    --mono: "OCR-A", "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  html { scrollbar-color: var(--rule) var(--paper-deep); }
+  body { background: var(--paper); color: var(--text); font: 400 13px/1.4 var(--sans); display: grid;
+         grid-template-columns: 200px minmax(0, 1fr) 340px; grid-template-rows: minmax(0, 1fr); }
+  @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: auto minmax(300px, 1fr) auto; } }
+  aside { padding: 10px; overflow: auto; background: var(--paper-deep); border-right: 1px solid var(--rule); }
+  aside.right { border-right: 0; border-left: 1px solid var(--rule); }
+  h3 { font: 600 12px var(--sans); text-transform: uppercase; letter-spacing: .06em; color: var(--text); margin: 14px 0 6px; }
+  h3:first-child { margin-top: 0; }
+  /* Buttons, lists and fields as LENS draws them: outlined in ink, filled with it when pressed. */
+  button { font: 500 13px var(--sans); color: var(--text); background: transparent; border: 1px solid var(--ink);
+           border-radius: 0; padding: 3px 8px; cursor: pointer; }
+  button:hover:not(:disabled), button[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+  button:disabled { opacity: .45; cursor: default; }
+  select { font: 500 13px var(--sans); color: var(--text); background: var(--paper-deep); border: 1px solid var(--ink); border-radius: 0; padding: 2px 4px; cursor: pointer; }
+  input { font: 400 13px var(--mono); color: var(--text); background: transparent; border: 1px solid var(--rule); border-radius: 0; padding: 2px 4px; }
+  input:focus { border-color: var(--ink); outline: none; }
+  input::placeholder { color: var(--text-soft); opacity: .7; }
+  input[type=checkbox] { accent-color: var(--ink); width: 15px; height: 15px; margin: 0; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  kbd { font: 400 12px var(--mono); border: 1px solid var(--ink); padding: 0 4px; }
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  body[data-layer="r"] #canvas { cursor: cell; }
+  .layers button[data-layer="r"][aria-pressed="true"] { background: var(--symbol); border-color: var(--symbol); color: var(--paper); }
+  .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .palette button { padding: 2px; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; }
+  .palette button svg { width: 100%; height: 100%; }
+  .key span[class^="k-"]:not(.k-back-row) { display: inline-block; width: 22px; height: 0; vertical-align: middle; margin-right: 3px; }
+  .k-solid { border-top: 5px solid var(--ink); }
+  .k-hollow { height: 5px !important; border: 1.5px solid var(--rule); }
+  .k-dash { border-top: 2px dashed var(--ink); }
+  body:not([data-two]) .k-back-row { display: none; }
+  .checks label { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
+  .checks .sub { color: var(--text-soft); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; margin: 8px 0 2px; }
+  .row-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+  label.f { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 6px; margin: 4px 0; }
+  label.f input, label.f select { width: 100%; }
+  /* A field whose control needs the room (a list of long choices, a value with its unit): its name
+     above, the control the full width of the panel below. */
+  label.f.stack { grid-template-columns: 1fr; gap: 2px; margin: 6px 0; }
+  .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(76px, auto); gap: 4px; }
+  .pair input, .pair select { width: 100%; }
+  label.c { display: flex; align-items: center; gap: 6px; margin: 6px 0; cursor: pointer; }
+  .hint { color: var(--text-soft); font-size: 12px; margin: 6px 0; }
+  main { overflow: auto; position: relative; }
+  #canvas { display: block; position: relative; touch-action: none; user-select: none; cursor: crosshair; }
+  /* the background image, under the drawing (which leaves out its paper while one is shown) */
+  #bg { position: absolute; left: 0; top: 0; max-width: none; pointer-events: none; user-select: none; }
+  body[data-tool="move"] #canvas { cursor: move; }
+  body[data-tool="copy"] #canvas { cursor: copy; }
+  /* banners pinned over the grid (a holder of no height, so the grid does not move): copying a sink's
+     settings, in the theme's warning colour (--err: orange on the blueprint), and waiting on the solver */
+  #banners { position: sticky; top: 0; left: 0; height: 0; z-index: 3; }
+  #wallBanner > div { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--err); color: var(--paper);
+                      font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+  #solveBanner > div { display: flex; align-items: center; gap: 8px; padding: 5px 10px; background: var(--ink); color: var(--on-ink);
+                       font-weight: 500; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+  #solveBanner .sym { display: inline-block; animation: spin 1.1s linear infinite; }
+  /* not run, or an error: nothing is on its way, so no spinner, and an error in the warning colour */
+  #solveBanner:not([data-state="0"]) .sym { display: none; }
+  #solveBanner[data-state="-2"] > div { background: var(--err); color: var(--paper); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #solveBanner .sym { animation: none; } }
+  /* the key to the marks of sinks set up alike: pinned to the bottom left of the grid as seen */
+  #keyHolder { position: sticky; left: 0; bottom: 0; height: 0; z-index: 2; }
+  #sinkKey { position: absolute; left: 8px; bottom: 8px; max-width: 420px; padding: 4px 8px; background: var(--paper-deep);
+             border: 1px solid var(--rule); font-size: 12px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+  .key-row { display: grid; grid-template-columns: 18px auto; column-gap: 8px; align-items: center; padding: 2px 0; }
+  .key-row .key-sinks { grid-column: 2; color: var(--text-soft); font-size: 11px; }
+  #printPanel { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(0, 0, 0, .45); }
+  #printPanel[hidden] { display: none !important; }
+  .print-box { width: 340px; max-height: 92vh; overflow: auto; padding: 12px 14px; background: var(--paper-deep); border: 1px solid var(--ink);
+               box-shadow: 0 6px 24px rgba(0, 0, 0, .45); }
+  #copyBanner > div { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--err); color: var(--paper);
+                      font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); }
+  #copyBanner span { flex: 1; }
+  #copyBanner button { color: var(--paper); border-color: var(--paper); background: transparent; font-weight: 600; }
+  #copyBanner button:hover { background: var(--paper); color: var(--err); }
+  /* a sink's settings, and the switch for changing them on it alone or on every sink set up like it */
+  .sink-settings { margin: 6px 0; }
+  .sink-settings .apply { grid-template-columns: 1fr 1fr; margin-bottom: 4px; }
+  .sink-settings .apply button[aria-pressed="true"]:last-child { background: var(--err); border-color: var(--err); color: var(--paper); }
+  .sink-settings.all { outline: 2px solid var(--err); outline-offset: 4px; }
+  .sink-settings.all input, .sink-settings.all select { border-color: var(--err); }
+  .warn-all { color: var(--err); font-size: 12px; margin: 6px 0 0; }
+  body[data-space] #canvas { cursor: grab; }
+  body[data-panning] #canvas { cursor: grabbing; }
+  input[type=range] { width: 100%; accent-color: var(--ink); padding: 0; border: 0; }
+  #empty { position: absolute; z-index: 1; left: 24px; top: 20px; max-width: 420px; pointer-events: none; color: var(--text-soft); }
+  #empty strong { color: var(--text); }
+  #empty button { pointer-events: auto; margin-top: 8px; }
+  .msgs { list-style: none; margin: 0; padding: 0; }
+  .msgs li { padding: 3px 0; cursor: pointer; }
+  .msgs li.err { color: var(--err); }
+  .msgs li.warn { color: var(--text-soft); }
+  #drift { margin: 8px 0 0; padding: 6px 8px; border: 1px solid var(--err); color: var(--text); font-size: 12px; }
+  #drift strong { color: var(--err); font-weight: 600; }
+  #drift code { font: 400 12px var(--mono); }
+  #drift button { margin-top: 6px; }
+  #segments, #sinks { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th { color: var(--text-soft); font-weight: 500; }
+  th, td { text-align: right; padding: 2px 4px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  td { font-family: var(--mono); }
+  th:first-child, td:first-child, td.name { text-align: left; font-family: var(--sans); }
+  tbody tr:hover td { background: var(--hit); }
+  tr.sel td { background: var(--grid); }
+  tbody tr { cursor: pointer; }
+  .stale { opacity: .6; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; }
+  .kv span:nth-child(odd) { color: var(--text-soft); }
+</style>
+</head>
+<body>
+<aside>
+  <h3>Tools</h3>
+  <div class="tools">
+    <button data-tool="draw" title="Drag from tile to tile to lay pipe; the shapes follow">Draw</button>
+    <button data-tool="select" title="Click a tile to see and change it">Select</button>
+    <button data-tool="erase" title="Click or drag to take tiles away">Erase</button>
+  </div>
+  <div id="sides" hidden>
+    <h3>Side</h3>
+    <div class="tools layers">
+      <button data-layer="s" title="Lay out the supply (F switches)">Supply</button>
+      <button data-layer="r" title="Lay out the return (F switches)">Return</button>
+    </div>
+    <p class="hint">The other side is drawn dashed behind. The source and the sinks are on both.</p>
+  </div>
+  <h3>Shapes</h3>
+  <div class="palette" id="palette"></div>
+  <p class="hint">Pick a shape and click squares to put it down; click a tile of the same shape to turn it. <kbd>R</kbd> turns the selected tile, <kbd>Del</kbd> removes it.</p>
+  <h3>Edit</h3>
+  <div class="row-btns">
+    <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="redo" title="Redo (Ctrl+Y)">Redo</button>
+    <button id="clear" title="Remove every tile">Clear</button>
+  </div>
+  <h3>View</h3>
+  <div class="row-btns">
+    <button id="zoomOut" title="Zoom out (Ctrl+−)">−</button>
+    <button id="zoom100" title="Actual size (Ctrl+0)">1:1</button>
+    <button id="zoomFit" title="Fit the layout and the background image in the window">Fit</button>
+    <button id="zoomIn" title="Zoom in (Ctrl+=)">+</button>
+    <span class="hint" id="zoomLevel"></span>
+  </div>
+  <div class="row-btns" style="margin-top: 6px"><button id="printOpen" title="Print the drawing with its balloons and the tables beside it, on any paper or at a scale, or save it as SVG">Print…</button></div>
+  <p class="hint"><kbd>Ctrl</kbd> + wheel (or pinch) zooms at the pointer; drag with the middle button, or with <kbd>Space</kbd> held, to move around.</p>
+  <h3>Background</h3>
+  <div class="row-btns">
+    <button id="bgPlace">Place image…</button>
+    <button id="bgRemove" title="Take the picture away (the pipes stay)">Remove</button>
+  </div>
+  <input id="bgFile" type="file" accept="image/*" hidden>
+  <div id="bgEdit" hidden>
+    <div class="tools" style="grid-template-columns: 1fr 1fr; margin-top: 6px">
+      <button data-tool="move" title="Drag the picture to line it up with the grid">Move</button>
+      <button data-tool="measure" title="Click two points a known distance apart, then give the distance">Scale</button>
+    </div>
+    <div id="bgMeasure"></div>
+    <label class="f"><span id="bgWUnit">Width</span> <input id="bgW" type="number" min="0" step="any" title="How wide the picture is on the grid, in the square length's unit"></label>
+    <label class="f">Opacity <input id="bgO" type="range" min="5" max="100" step="5"></label>
+  </div>
+  <p class="hint" id="bgNote"></p>
+  <p class="hint key"><span class="k-solid"></span> pipe in use &nbsp; <span class="k-hollow"></span> not connected<span class="k-back-row"> &nbsp; <span class="k-dash"></span> the other side</span></p>
+  <h3>Network</h3>
+  <label class="f">Length unit <select id="unitL"><option>ft</option><option>m</option><option>in</option><option>mm</option></select></label>
+  <label class="f">Square length <input id="cell" type="number" min="0" step="any"></label>
+  <label class="f stack">Pipe size <select id="size" title="Nominal pipe size: each segment's D_h is its inside diameter in the schedule below. A segment can take another size (Select a tile)"></select></label>
+  <label class="f">Schedule <select id="sch"><option value="40">Sch 40</option><option value="80">Sch 80</option></select></label>
+  <label class="f" id="diaRow">Bore <input id="dia" type="number" min="0" step="any"></label>
+  <label class="f">Diameter unit <select id="unitD"><option>in</option><option>mm</option><option>ft</option><option>m</option></select></label>
+  <label class="f stack">Return pipe <select id="ret" title="The same as the supply: the return runs beside the supply and matches it. Laid out on its own: draw it on the Return side">
+    <option value="same">Same as supply</option><option value="separate">Laid out on its own</option></select></label>
+  <label class="f stack" title="What the main pump's controller holds (hold_flow!): the loop's total flow, its pressure difference following; or its pressure difference, the flow following">Pump holds
+    <select id="hold"><option value="flow">Total flow</option><option value="dp">Pressure difference</option></select></label>
+  <label class="f stack" id="qRow" title="The loop's total flow the main pump holds (∀_target): the sheet finds the pressure difference that gives it (Δp_main)">Pump target flow
+    <span class="pair"><input id="qv" type="number" min="0" step="any"><select id="qu"></select></span></label>
+  <label class="f stack" id="dpRow" title="The pressure difference the pump's controller holds (Δp_target): it sets the loop's total flow">Pump target Δp
+    <span class="pair"><input id="dpv" type="number" min="0" step="any"><select id="dpu"></select></span></label>
+  <label class="f stack" title="How the sheet's solver finds the flows (solver_method!, which its !root's method line reads)">Solver <select id="solver"></select></label>
+  <label class="f stack">Fitting losses <select id="method" title="How the sheet turns the fittings counted on each segment into K (fit_method!): Crane TP-410 (L/D times f_T), Hooper 2-K or Darby 3-K. Each method's coefficients are a table in the sheet">
+    <option value="1">Crane</option><option value="2">Hooper 2-K</option><option value="3">Darby 3-K</option></select></label>
+  <h3>On the drawing</h3>
+  <div id="showSets" class="checks"></div>
+</aside>
+<main>
+  <div id="banners">
+    <div id="copyBanner" hidden><div><span id="copyText"></span><button id="copyDone">Done (Esc)</button></div></div>
+    <div id="wallBanner" hidden><div><span class="sym">⚠</span><span id="wallText"></span></div></div>
+    <div id="solveBanner" hidden><div><span class="sym">⟳</span><span id="solveText"></span></div></div>
+  </div>
+  <div id="empty"><strong>Lay out the loop.</strong> Put down a source (the pump) and a sink for each load, then pick
+    <em>Draw</em> and drag between them. Pipes join at tees; the sheet works out the flow in each branch.<br>
+    <button id="example">Start from an example</button></div>
+  <img id="bg" alt="" hidden>
+  <svg id="canvas"></svg>
+  <div id="keyHolder"><div id="sinkKey" hidden></div></div>
+</main>
+<aside class="right">
+  <h3>Selected</h3>
+  <div id="inspector"><p class="hint">Click a tile with Select (or click without dragging while drawing).</p></div>
+  <h3>Check</h3>
+  <ul class="msgs" id="msgs"></ul>
+  <div id="drift" hidden></div>
+  <h3 id="segHead">Segments</h3>
+  <div id="segments"></div>
+  <h3 id="retHead" hidden>Return segments</h3>
+  <div id="rsegments" hidden></div>
+  <h3>Sinks</h3>
+  <div id="sinks"></div>
+  <p class="hint" id="about"></p>
+</aside>
+<div id="printPanel" hidden role="dialog" aria-labelledby="printHead">
+  <div class="print-box">
+    <h3 id="printHead">Print</h3>
+    <label class="f stack">Title <input id="prTitle" type="text"></label>
+    <label class="f stack">Paper <select id="prPaper"></select></label>
+    <div id="prCustom" class="pair" hidden><input id="prW" type="number" min="1" step="any" title="Width"><input id="prH" type="number" min="1" step="any" title="Height"></div>
+    <label class="f" id="prOrientRow">Orientation <select id="prOrient"><option value="land">Landscape</option><option value="port">Portrait</option></select></label>
+    <label class="f stack" id="prScaleRow" hidden><span id="prScaleLabel">1 in on paper is</span><input id="prScale" type="number" min="0" step="any"></label>
+    <label class="f">Table text <select id="prFont"><option value="2.2">Small</option><option value="2.8" selected>Medium</option><option value="3.6">Large</option></select></label>
+    <div class="checks">
+      <label id="prBothRow"><input type="checkbox" id="prBoth" checked> Both sides (supply and return)</label>
+      <label id="prBgRow"><input type="checkbox" id="prBg" checked> The background image</label>
+      <label><input type="checkbox" id="prGrid"> The grid</label>
+      <label><input type="checkbox" id="prSeg" checked> Segments</label>
+      <label><input type="checkbox" id="prSinks" checked> Sinks</label>
+      <label><input type="checkbox" id="prNet" checked> Network settings</label>
+      <label><input type="checkbox" id="prCheck" checked> Check</label>
+    </div>
+    <p class="hint">The balloons are those ticked under On the drawing. The page is vector: a PDF from the printer, or the SVG, scales without loss.</p>
+    <p class="hint" id="prSize"></p>
+    <div class="row-btns"><button id="prPrint">Print</button><button id="prSave">Save SVG</button><button id="prClose">Close</button></div>
+  </div>
+</div>
+<script src="pipenet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

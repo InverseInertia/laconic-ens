@@ -1,6 +1,7 @@
 """Runs a whole worksheet top to bottom. Each line either produces a result or
 an error; an error never stops later lines (lines that depend on a failed
 variable fail on their own with 'x is not defined')."""
+import json
 import math
 import re
 from dataclasses import dataclass, field
@@ -12,16 +13,17 @@ from .blockedit import newline
 from .evaluator import EvalError, Evaluator, is_symbolic
 from .functions import FUNCTIONS
 from .latex import Fmt, Printer, name_latex
-from .lineresult import LineResult, LoopPayload, PlotPayload, RegressionPayload, SliderPayload, SolverPayload
+from .lineresult import (LineResult, LoopPayload, PlotPayload, PluginPayload, PluginVarPayload, RegressionPayload,
+                         SliderPayload, SolverPayload)
 from .nodes import Assign, Call, Convert, ExprStmt, FuncDef, Name, Neg, Num, UnitDef, is_literal, refs
 from .si import reduce_si
 from .parser import ParseError, parse_expr, parse_line
 from .plotopts import PlotError, parse_option, parse_plot
 from .plotspec import Builder
-from .sheettext import inline_spans, scan
+from .sheettext import inline_spans, is_name, scan
 from .symbols import FUNCTION, ScopeError, SymbolTable
 from .plotsvg import render_svg
-from . import adnauseum, commands, loop, regression, rpn, slider, solver, symsolve
+from . import adnauseum, commands, loop, plugins, regression, rpn, slider, solver, symsolve
 from .commands import CommandError
 from .regression import RegressionError
 from .solver import SolverError
@@ -80,8 +82,9 @@ def evaluate(text, siunitx=False, global_units=None, until=None, plots=True):
 
 def evaluator_at(text, line, global_units=None):
     """The evaluator as line `line` finds it: every line above has run, none from `line` on.
-    What a solve session builds its problem on, so a run sees what the block sees on screen."""
-    ev = _run(text, global_units=global_units, until=line - 1)[1]
+    What a solve session builds its problem on, so a run sees what the block sees on screen. Plots
+    above it are not drawn: a plot defines nothing, and drawing them was most of a solve's time."""
+    ev = _run(text, global_units=global_units, until=line - 1, plots=False)[1]
     ev.symbols.line = line
     ev.notes.clear()
     return ev
@@ -99,6 +102,7 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         if l.kind == "unitdef":
             defs[l.n] = _define_unit(l.n, l.text, l.text.strip(), ev, fmt, here, used)
     results, owned = [], {}   # `owned`: option lines of a plot, handled when the plot ran
+    written = {}              # a name a plugin block's lines define -> that block's header result
     for l in sheet.lines:
         if until is not None and l.n > until:
             break
@@ -122,6 +126,14 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         elif l.kind == "loop":
             r, owned = _run_loop(i, raw, sheet.block(i), ev, fmt, used)
             results.append(r)
+        elif l.kind == "plugin":
+            results.append(_run_plugin(i, raw, sheet.block(i)))
+            if results[-1].plugin:
+                written.update(dict.fromkeys((n.lstrip("~") for n in results[-1].plugin.outputs), results[-1]))
+        elif l.kind == "pluginline":
+            results.append(_run_plugin_line(l, ev, fmt, used))
+        elif l.kind == "pluginvar":
+            results.append(_run_pluginvar(i, raw, s, ev))
         elif l.kind == "blank":
             results.append(LineResult(i, raw, "blank"))
         elif l.kind == "meta":
@@ -136,8 +148,9 @@ def _run(text, siunitx=False, global_units=None, until=None, plots=True):
         else:
             results.append(_run_line(i, raw, s, ev, fmt, used))
         _add_notes(results[-1], ev.notes)
+        replaces = _replaces_plugin(l, results[-1], written)
         # Hidden: run under !hide and still under it after (so !hide and !show themselves show).
-        results[-1].hidden = hiding and ev.mode.hidden and _hideable(results[-1])
+        results[-1].hidden = hiding and ev.mode.hidden and _hideable(results[-1]) and not replaces
     for r, l in zip(results, sheet.lines):
         r.symbols = _symbols(ev.symbols, l)
     ws = Worksheet(text, results, ev.symbols)
@@ -288,8 +301,14 @@ def _run_solver(i, raw, handle, ev, fmt, used):
     """A `!root`, `!minimize` or `!maximize` line with its option lines. Nothing is solved here
     (that is solvesession.py's): the stored result is compared by hash with the block's current
     inputs and, fitting or not, its values are what the unknowns hold below (a result that no
-    longer fits is marked out of date, as is everything computed from it)."""
+    longer fits is marked out of date, as is everything computed from it). A `status: name` line gives
+    `name` the block's state below it (solver.STATUS_VALUES), itself never out of date."""
     members, block = handle.members, solver.parse_block(handle)
+
+    def report(state):
+        if block.status:
+            q = ev.Q(solver.STATUS_VALUES[state], "dimensionless")
+            ev.symbols.define(block.status, q, text=fmt.plain(q), stale=False)
     owned = {}
     for l in members:
         msg = block.errors.get(l.n)
@@ -297,6 +316,7 @@ def _run_solver(i, raw, handle, ev, fmt, used):
 
     def fail(msg):
         ev.symbols.mark_stale(ev.vkey(n) for n in block.unknowns)   # what reads them below is not trustworthy either
+        report("error")
         return LineResult(i, raw, "error", error=msg, block=handle), owned
 
     if block.problem:
@@ -319,6 +339,7 @@ def _run_solver(i, raw, handle, ev, fmt, used):
     held = qs if qs is not None else [ev.vars[u.key] for u in prob.unknowns]
     for u, q in zip(prob.unknowns, held):     # below the block, an unknown holds what the block says
         ev.symbols.define(u.key, q, text=fmt.plain(q), stale=status != "valid" or taint)
+    report("stale" if status == "valid" and taint else status)
     values = [_value(u.name, fmt.var(u.key), fmt.quantity(ev.vars[u.key])) for u in prob.unknowns]
     plain = [f"{u.key} = {fmt.plain(ev.vars[u.key])}" for u in prob.unknowns]
     obj = prob.stored_objective(stored) if qs is not None else None
@@ -431,6 +452,129 @@ def _run_loop(i, raw, handle, ev, fmt, used):
                       payload=LoopPayload(code, values, done.passes)), owned
 
 
+def _run_plugin(i, raw, handle):
+    """A `!plugin name` line. The plugin itself runs in the page (plugins.py serves it); the sheet
+    only reads which plugin it is, the state it last saved and the names its lines define. Those
+    lines run below as ordinary assignments (`_run_plugin_line`), so a sheet works the same
+    without the plugin: on another machine, offline, from the command line."""
+    name = handle.args.strip()
+    if not name:
+        return LineResult(i, raw, "error", error="A plugin block reads `!plugin name`, e.g. `!plugin pipenet`",
+                          block=handle)
+    if not plugins.valid_name(name):
+        return LineResult(i, raw, "error", block=handle,
+                          error=f"'{name}' is not a plugin name: lower-case letters, digits, - and _, starting with a letter")
+    state, warning = None, ""
+    for l in handle.members:
+        if l.state is not None:
+            try:
+                state = json.loads(l.state)
+            except ValueError:
+                warning = "The plugin's #@ state line could not be read; the plugin starts empty"
+            if not isinstance(state, dict):
+                state = None
+    outputs = [l.definition.name for l in handle.members if l.definition]
+    text = f"plugin {name}" + (f": defines {', '.join(outputs)}" if outputs else "")
+    return LineResult(i, raw, "plugin", text=text, block=handle, warning=warning,
+                      payload=PluginPayload(name, state, outputs))
+
+
+def _replaces_plugin(l, r, written):
+    """A line outside a plugin block that defines a name the block's lines define replaces the plugin's
+    value below it, which is easy to miss (a sheet made before the plugin wrote that name, say): the
+    line is warned and never hidden, and the block's payload lists it, so the plugin can say so too."""
+    d = l.definition
+    if l.kind == "pluginline" or d is None or d.kind not in ("assign", "funcdef") or r.kind == "error":
+        return False
+    head = written.get(d.name.lstrip("~"))
+    if head is None:
+        return False
+    plugin = head.plugin
+    plugin.overridden.append({"name": d.name.lstrip("~"), "line": l.n})
+    note = (f"{d.name.lstrip('~')} is written by the {plugin.name} plugin (line {head.n}), and this line replaces its "
+            f"value below here, so a change made in the plugin does not reach the lines below. Delete this line to use the plugin's")
+    r.warning = ". ".join(filter(None, [r.warning, note]))
+    return True
+
+
+def _run_plugin_line(l, ev, fmt, used):
+    """A line a `!plugin` block owns: a `name = value` line the plugin wrote, run as an assignment;
+    its `#@ state` line, which shows nothing; or a comment."""
+    s = l.text.strip()
+    if l.state is not None:
+        return LineResult(l.n, l.text, "pluginline")
+    if l.comment:
+        return LineResult(l.n, l.text, "comment", text=s.lstrip("#").strip())
+    if l.definition is None:
+        return LineResult(l.n, l.text, "error",
+                          error="A plugin block holds the `name = value` lines its plugin writes, and its #@ state line")
+    return _run_line(l.n, l.text, s, ev, fmt, used)
+
+
+_NAMES_RE = re.compile(r"([^\W\d]\w*)\s*:\s*(.*)\Z")
+
+
+def _run_pluginvar(i, raw, s, ev):
+    """`!pluginvar a, b`: the values of `a` and `b` here, for the page to send to the sheet's
+    plugins (a pipe network shows the flows the sheet worked out on its drawing).
+
+    `!pluginvar list: f, g, h` sends a list of names instead, in order, under the name `list`: what
+    a number in the sheet picks (`exchangers: HX_A, HX_B` names exchanger curves 1 and 2),
+    so a plugin can show the names. Each must be a variable or function defined here."""
+    rest = s[len("!pluginvar"):].strip()
+    m = _NAMES_RE.match(rest)
+    if m:
+        listed = [n.strip() for n in m.group(2).split(",")] if m.group(2).strip() else []
+        if not listed or not all(is_name(n) for n in listed):
+            return LineResult(i, raw, "error", error=f"!pluginvar {m.group(1)}: reads `!pluginvar {m.group(1)}: a, b`: names, in order")
+        unknown = [n for n in listed if ev.vkey(n) not in ev.vars and ev.fkey(n) not in ev.funcs]
+        if unknown:
+            return LineResult(i, raw, "error", error=f"'{unknown[0]}' is not defined")
+        return LineResult(i, raw, "pluginvar", text=f"Sent to the plugins: {m.group(1)}, the names {', '.join(listed)}",
+                          payload=PluginVarPayload([{"name": m.group(1), "names": [n.lstrip("~") for n in listed]}]))
+    names = [n.strip() for n in rest.split(",")] if rest else []
+    if not names or not all(is_name(n) for n in names):
+        return LineResult(i, raw, "error", error="!pluginvar reads `!pluginvar a, b`: the variables to send to the plugins")
+    values, nodes = [], []
+    try:
+        for n in names:
+            node = parse_expr(n)
+            nodes.append(node)
+            values.append(_plugin_value(n, ev.eval(node)))
+    except Exception as e:
+        return LineResult(i, raw, "error", error=describe(e))
+    text = "Sent to the plugins: " + ", ".join(names)
+    return LineResult(i, raw, "pluginvar", text=text, stale=ev.symbols.tainted(nodes),
+                      payload=PluginVarPayload(values))
+
+
+def _plugin_value(name, q):
+    """One `!pluginvar` value as the page sends it to a plugin: {name, unit, shape, mag}."""
+    if is_symbolic(q) or not isinstance(q, pint.Quantity):
+        raise EvalError(f"{name} is not a number, so it cannot be sent to a plugin")
+    mag = q.magnitude
+    try:
+        import numpy as np
+        arr = np.asarray(mag)
+        if np.iscomplexobj(arr):
+            if np.any(np.imag(arr) != 0):
+                raise EvalError(f"{name} is complex; a plugin takes real numbers only")
+            arr = np.real(arr)
+        arr = arr.astype(float)
+    except (TypeError, ValueError):
+        raise EvalError(f"{name} is not a number, so it cannot be sent to a plugin") from None
+    data = _finite(arr.tolist())   # NaN and ±inf are not JSON; they go as null
+    unit = "" if q.dimensionless and str(q.units) == "dimensionless" else f"{q.units:~P}"
+    return {"name": name, "unit": unit, "shape": list(arr.shape), "mag": data}
+
+
+def _finite(x):
+    """`x`, a number or nested lists of them, with each number that is not finite made None."""
+    if isinstance(x, list):
+        return [_finite(v) for v in x]
+    return x if isinstance(x, (int, float)) and math.isfinite(x) else None
+
+
 def _loop_code(top, printer, depth):
     """The block as steps, one row each, starting with `&` for an aligned environment: each loop
     as `for i = 1, ..., n`, each step under it indented, an assignment as `S <- S + i^2`."""
@@ -483,7 +627,7 @@ def solver_blocks(text, global_units=None):
             if b.kind == "solver" and b.command not in ("regression", "symsolve", "slider")]
     if not ends:
         return []
-    ws = evaluate(text, global_units=global_units, until=max(ends))
+    ws = evaluate(text, global_units=global_units, until=max(ends), plots=False)   # a plot defines nothing
     return [r for r in ws.results if r.solver]
 
 

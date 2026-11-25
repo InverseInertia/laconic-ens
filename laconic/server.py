@@ -20,7 +20,7 @@ from . import changelog, evaluate as evaluate_sheet, snippet
 from .exports import export as export_sheet
 from .sheet import block_at
 from .sheettext import scan
-from . import settings, unittags, updates
+from . import plugins, settings, unittags, updates
 from .blockedit import to_json
 from ._version import label as version_label
 from .commands import help_rows
@@ -109,6 +109,13 @@ class SolveEditBody(BaseModel):
     autorun: bool
 
 
+class PluginWriteBody(BaseModel):
+    text: str
+    line: int                          # the `!plugin` line, 1-based
+    state: dict | None = None          # what the plugin keeps in its `#@ state` line
+    outputs: dict[str, str] = {}       # name -> expression, for its `name = value` lines, in order
+
+
 class TextBody(BaseModel):
     text: str
 
@@ -154,6 +161,10 @@ class _Static(StaticFiles):
         response = FileResponse(full_path, status_code=status_code, stat_result=stat_result)
         response.headers["etag"] = '"%s-%s"' % (version_label(), response.headers["etag"].strip('"'))
         response.headers["cache-control"] = "no-cache"
+        if str(full_path).endswith((".woff2", ".ttf")):
+            # A plugin's sandboxed frame has no origin of its own ("null"), so the fonts it borrows
+            # from LENS (static/fonts/fonts.css) are cross-origin requests. Fonts are public.
+            response.headers["access-control-allow-origin"] = "*"
         del response.headers["last-modified"]
         if self.is_not_modified(response.headers, Headers(scope=scope)):
             return NotModifiedResponse(response.headers)
@@ -380,6 +391,121 @@ def solve_edit(body: SolveEditBody):
         return {"ok": False, "error": str(e)}
 
 
+@app.get("/api/plugins")
+def plugin_list():
+    """The plugins kept here, whether a sheet may fetch one it asks for, and the source folder
+    when plugins are read from one (then nothing is fetched, kept or removed)."""
+    src = plugins.source()
+    return {"auto": plugins.auto(), "folder": str(src) if isinstance(src, Path) else None,
+            "installed": plugins.installed()}
+
+
+@app.get("/api/pluginindex")
+def plugin_index():
+    """The plugins the source offers (its index.json), or `{ok: false, error}` offline."""
+    try:
+        return {"ok": True, "plugins": plugins.available()}
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+
+
+class PluginUploadBody(BaseModel):
+    name: str | None = None            # the folder's name, used when the manifest names none
+    files: dict[str, str]              # file name -> its bytes, base64
+
+
+@app.post("/api/pluginupload")
+def plugin_upload(body: PluginUploadBody):
+    """Install a plugin from a folder the user picked in Settings (its files, sent by the page)."""
+    import base64
+    try:
+        files = {k: base64.b64decode(v, validate=True) for k, v in body.files.items()}
+        m = plugins.install_files(files, name=body.name)
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    except ValueError:
+        return {"ok": False, "error": "The folder's files could not be read"}
+    return {"ok": True, "name": m.get("name") or body.name, "title": m.get("title", ""), "version": m.get("version", "")}
+
+
+@app.post("/api/plugins/{name}/install")
+def plugin_install(name: str):
+    """Fetch a plugin because the user asked (Settings, or a block's Install): fetched again if kept,
+    and whether or not automatic downloads are on."""
+    try:
+        m = plugins.fetch(name, fresh=True, asked=True)
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "name": name, "title": m.get("title", name), "version": m.get("version", "")}
+
+
+@app.delete("/api/plugins/{name}")
+def plugin_remove(name: str):
+    try:
+        plugins.remove(name)
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True}
+
+
+@app.get("/api/plugins/{name}")
+def plugin_manifest(name: str, fresh: bool = False):
+    """A plugin's manifest, fetched (once, or again with `fresh`) from where plugins come from
+    (plugins.source). `{ok: false, error}` when it cannot be had: offline, or no such plugin, or
+    (`notInstalled: true`) not kept here while automatic downloads are off."""
+    try:
+        m = plugins.fetch(name, fresh=fresh)
+    except plugins.NotInstalled as e:
+        return {"ok": False, "error": str(e), "notInstalled": True}
+    except plugins.PluginError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "name": name, "title": m.get("title", name), "version": m.get("version", ""),
+            "url": f"/plugins/{name}/{m.get('entry', 'index.html')}", "template": bool(m.get("template"))}
+
+
+class PluginCheckBody(BaseModel):
+    text: str
+
+
+@app.get("/api/plugins/{name}/template", response_class=PlainTextResponse)
+def plugin_template(name: str):
+    """The sheet a plugin ships (its manifest's `template`), if it has been fetched."""
+    t = plugins.template(name)
+    if t is None:
+        raise HTTPException(404, f"The plugin '{name}' has no sheet of its own here")
+    return t[1]
+
+
+@app.post("/api/plugins/{name}/check")
+def plugin_check(name: str, body: PluginCheckBody):
+    """Which lines of the plugin's own sheet `text` has changed or lost (plugins.differences)."""
+    t = plugins.template(name)
+    if t is None:
+        return {"ok": False, "error": f"The plugin '{name}' has no sheet of its own here"}
+    return {"ok": True, **plugins.differences(body.text, t[1])}
+
+
+@app.get("/plugins/{name}/{path}")
+def plugin_file(name: str, path: str):
+    """One file of a fetched plugin, sandboxed by its headers (plugins.CSP)."""
+    try:
+        data, kind = plugins.file(name, path)
+    except plugins.PluginError as e:
+        raise HTTPException(404, str(e))
+    return Response(data, media_type=kind, headers={"content-security-policy": plugins.CSP,
+                                                     "cache-control": "no-cache", "x-content-type-options": "nosniff"})
+
+
+@app.post("/api/pluginwrite")
+def plugin_write(body: PluginWriteBody):
+    """Edits that write what a plugin sent (its state and its `name = value` lines) into its block."""
+    try:
+        e = plugins.edits(body.text, body.line, body.state, body.outputs)
+    except plugins.PluginError as err:
+        return {"ok": False, "error": str(err)}
+    return {"ok": True, "edits": to_json(body.text, e)}
+
+
 @app.get("/api/settings")
 def get_settings():
     return settings.load()
@@ -473,7 +599,10 @@ def _example_title(path):
 
 @app.get("/api/examples")
 def list_examples():
-    return [{"name": p.stem, "title": _example_title(p)} for p in sorted(EXAMPLES.glob("*.lens"))]
+    """The examples shipped with the program, then the sheets of the plugins kept here (`plugin`: its
+    name; the page fetches it from /api/plugins/{name}/template)."""
+    return ([{"name": p.stem, "title": _example_title(p)} for p in sorted(EXAMPLES.glob("*.lens"))]
+            + [{"name": t["name"], "title": t["title"], "plugin": t["name"]} for t in plugins.templates()])
 
 
 @app.get("/api/examples/{name}")

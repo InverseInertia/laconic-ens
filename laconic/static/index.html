@@ -282,6 +282,28 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .solver-tools[data-state="run"] .s-sym { animation: none; } }
   #solverLogDlg { width: min(900px, 96vw); }
+  /* A plugin's frame (plugins.js): the dialog keeps every frame, and shows one. */
+  #pluginDlg { width: 96vw; max-width: 96vw; height: 92vh; max-height: 92vh; }
+  #pluginDlg[open] { display: flex; flex-direction: column; }
+  #pluginDlg .dlg-head { flex: none; gap: 8px; }
+  #pluginDlg .dlg-head h2 { flex: 1; }
+  #pluginFrames { flex: 1; min-height: 0; display: flex; }
+  .plugin-frame { flex: 1; border: 0; width: 100%; height: 100%; background: var(--paper); }
+  .plugin-frame[hidden] { display: none; }
+  .plugin-box { padding: 4px 0; }
+  .plugin-preview { display: block; max-width: 100%; max-height: 420px; cursor: zoom-in; margin: 2px 0 6px; }
+  .plugin-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .plugin-tools button { padding: 1px 8px; font-size: calc(12.5px * var(--fs)); border-color: var(--rule); color: var(--text-soft); }
+  .plugin-tools button:hover:not(:disabled) { color: var(--on-ink); border-color: var(--ink); }
+  .plugin-tools button:disabled { opacity: .45; cursor: default; }
+  .plugin-status { font: 400 calc(12.5px * var(--fs)) var(--sans); color: var(--text-soft); }
+  .plugin-status.err { color: var(--err); }
+  #pluginSettings h4 { margin: 12px 0 4px; font: 600 13px var(--sans); }
+  .plugin-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+  .plugin-about { flex: 1; font: 400 13.5px/1.4 var(--sans); }
+  .plugin-meta { color: var(--text-soft); font-size: 12.5px; }
+  .plugin-desc { color: var(--text-soft); font-size: 12.5px; }
+  #pluginSettings input { font: 400 13px var(--mono); padding: 2px 6px; color: var(--text); background: transparent; border: 1px solid var(--rule); }
   #solverLogDlg .dlg-body { max-height: 70vh; padding: 0; }
   #solverLogText { margin: 0; padding: 10px 16px; font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 68vh; overflow: auto; }
   .row.meta .body { font: 400 calc(12px * var(--fs))/1.4 var(--sans); color: var(--text-soft); font-style: italic; border-top: 1px dashed var(--rule); padding: 4px 0 0; margin-top: 6px; }
@@ -653,6 +675,11 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
   <div class="dlg-foot"><button id="solverLogCopy">Copy</button><span class="spacer"></span></div>
 </dialog>
 
+<dialog id="pluginDlg" aria-labelledby="pluginTitle">
+  <div class="dlg-head"><h2 id="pluginTitle">Plugin</h2><button id="pluginReload" title="Fetch the plugin again">Reload</button><button class="close">Close</button></div>
+  <div id="pluginFrames"></div>
+</dialog>
+
 <dialog id="alertDlg" aria-labelledby="alertTitle" role="alertdialog">
   <div class="dlg-head"><h2 id="alertTitle"></h2></div>
   <div class="dlg-body"><p class="note" id="alertMsg"></p></div>
@@ -707,6 +734,12 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
       <h3>Updates</h3>
       <p class="note">When LENS starts, it asks GitHub whether a newer release is out, and if there is one shows a small button beside the version that updates LENS. Kept on this machine. Help &rarr; Check for updates asks again at any time, even with this off.</p>
       <label class="set-check"><input type="checkbox" id="checkUpdates" checked> Check for a new release when LENS starts</label>
+    </section>
+    <section class="set-sec" id="pluginSec">
+      <h3>Plugins</h3>
+      <p class="note">A sheet's <code>!plugin</code> block opens a plugin, downloaded from the LENS repository on GitHub the first time a sheet asks for it and kept on this machine. Plugins run in a sandbox that can only write their own block. Turn automatic downloads off to install plugins only from here (or the block's Install button). Kept on this machine.</p>
+      <label class="set-check"><input type="checkbox" id="autoPlugins" checked> Download a plugin when a sheet asks for it</label>
+      <div id="pluginSettings"></div>
     </section>
     <section class="set-sec">
       <h3>Extended characters</h3>
@@ -766,6 +799,7 @@ acc = a                   <i>every symbol has a value now: 5 m/s&sup2;</i></pre>
 <script src="/static/paste.js"></script>
 <script src="/static/plotview.js"></script>
 <script src="/static/solverview.js"></script>
+<script src="/static/plugins.js"></script>
 <script src="/static/autocomplete.js"></script>
 <script src="/static/unitbrowser.js"></script>
 <script src="/static/theme.js"></script>
@@ -862,6 +896,16 @@ src.addEventListener("beforeinput", (ev) => {
   }
 });
 src.addEventListener("input", sync);
+// Copy and Cut take the sheet's text, not the view's: no row breaks a matrix is shown with, and the
+// lines a fold hides rather than its placeholder, so what is copied pastes back as the same sheet.
+for (const kind of ["copy", "cut"]) src.addEventListener(kind, (ev) => {
+  if (lay.identity || !ev.clipboardData) return;
+  const from = ed.selectionStart, to = ed.selectionEnd;
+  if (from === to) return;
+  ev.preventDefault();
+  ev.clipboardData.setData("text/plain", model.slice(from, to));
+  if (kind === "cut") commit({from, to, insert: ""}, [from, from], false);
+});
 function undo(redo) {
   const cur = {text: model, sel: [ed.selectionStart, ed.selectionEnd]};
   const s = redo ? undoStack.redo(cur) : undoStack.undo(cur);
@@ -985,6 +1029,7 @@ const BODY = {
   plot: (el, b, r) => el.append(plotBody(r)),
   solver: (el, b, r) => el.append(Solvers.build(r)),
   slider: (el, b, r) => { typeset(el, b.tex, b.rows); el.append(sliderBody(r)); },
+  plugin: (el, b, r) => el.append(Plugins.build(r, last)),
   snippet: (el, b, r) => {
     const pre = document.createElement("pre"); pre.textContent = b.text; el.append(pre);
     if (b.solver) el.append(Solvers.tools(r));
@@ -1087,11 +1132,12 @@ function replaceRows(rows) {
 
 // `onMath`, if given, is called once the math is on the page, before the plots are drawn.
 async function evaluate(onMath) {
-  const mine = ++seq, text = ed.value;
+  const mine = ++seq, text = ed.value, at = performance.now();
   // Plots come back pending: the math shows at once, and the plots are drawn after it.
   const res = await post("/api/eval", {plots: false});
   if (mine !== seq) return;
   render(await res.json()); tableText = text; acRetry();
+  Plugins.after(last, at);   // the plugins' frames get the sheet's values (plugins.js)
   if (typeof onMath === "function") onMath();
   await drawPlots(mine, text);
 }
@@ -2067,6 +2113,7 @@ function applyTheme() {
   for (const [k, v] of Object.entries(Theme.cssVars(theme))) root.style.setProperty(k, v);
   root.dataset.bg = theme.bg;
   if (ac) acPaint();
+  Plugins.retheme();   // plugins.js: the plugins' frames follow
   if ((seizure || theme.jeb) && !eggFrame) eggFrame = requestAnimationFrame(eggTick);
 }
 // Easter egg ("herobrine"): #jeb colors cycle (theme.js), and importing "seizure" flashes random colors
@@ -2144,6 +2191,7 @@ Api.text("/static/logo.svg").then((t) => {
 async function openSettings(section, control) {
   seizure = false;
   syncThemeForm(); buildGreek();
+  Plugins.settings($("#pluginSettings"));
   $("#settingsDlg").showModal();
   const sec = section && $(section);
   if (sec) {
@@ -2183,6 +2231,28 @@ Solvers.init({
   say,
   typeset,
 });
+// A plugin writes into its own block without taking the focus from its frame, so `elsewhere`.
+Plugins.init({
+  text: () => ed.value,
+  // a plugin's page, printed as the PDF export is (from a hidden frame), or saved as a file
+  print: (html) => printFrame(html),
+  download,
+  edit: (base, edits) => Editing.applyEdits({...editor, elsewhere: () => true}, base, edits),
+  say,
+  dialog: $("#pluginDlg"),
+  frames: $("#pluginFrames"),
+  title: $("#pluginTitle"),
+  auto: $("#autoPlugins"),
+  // a plugin's own sheet opens as an example does
+  openSheet: (text, name) => {
+    if (ed.value.trim() && !confirm(`Replace the current sheet with the ${name} plugin's sheet?`)) return;
+    load(text, name);
+    for (const d of document.querySelectorAll("dialog[open]")) d.close();
+  },
+});
+$("#autoPlugins").checked = store.get("autoPlugins", true) !== false;
+$("#autoPlugins").onchange = (ev) => store.set("autoPlugins", ev.target.checked);
+$("#pluginReload").onclick = () => { if (Plugins.current) Plugins.reload(Plugins.current); };
 $("#solverLogCopy").onclick = () => copyText($("#solverLogText").textContent, "Copied the log");
 // A run belongs to this page: when it goes away the worker should not keep computing for nobody.
 addEventListener("pagehide", () => {
@@ -2202,11 +2272,11 @@ Api.json("/api/examples").then((list) => {
     b.textContent = "Open"; b.setAttribute("aria-label", `Open example ${ex.title}`);
     b.onclick = async () => {
       if (ed.value.trim() && !confirm(`Replace the current sheet with the example "${ex.title}"?`)) return;
-      const text = await Api.text(`/api/examples/${ex.name}`);
+      const text = await Api.text(ex.plugin ? `/api/plugins/${ex.plugin}/template` : `/api/examples/${ex.name}`);
       load(text, ex.name);
       $("#helpDlg").close();
     };
-    li.append(b, `${ex.title} (${ex.name}.lens)`);
+    li.append(b, ex.plugin ? `${ex.title} (the ${ex.plugin} plugin's sheet)` : `${ex.title} (${ex.name}.lens)`);
     $("#exampleList").append(li);
   }
   $("#exampleBox").hidden = !list.length;

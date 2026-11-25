@@ -25,6 +25,16 @@ D = .f(A, 1)          a single number goes to every call: [2, 5; 10, 17]
 
 Every matrix argument must be the same size, and the function must give one number for each element, in units that agree with each other. The arguments must be numbers: a symbol, or text, is refused.
 
+**Fast when it can be.** A user function whose every step acts element by element (arithmetic on its parameters, single numbers from the sheet, the element-by-element built-ins below, and other such functions) is run once on the whole matrices rather than once per element: the same numbers, often 20 to 50 times sooner, which is what makes a solver over many elements quick. A step that is not element by element sends it back to one call per element, with the same answer: a matrix from the sheet used inside the function, a matrix written in it, or a function that works on a whole matrix, such as `max([a, b])` (the largest in a list) or `idx`/`row`. To keep a function fast, use the element-by-element forms:
+
+| Function | Element by element |
+|---|---|
+| `maximum(a, b)`, `minimum(a, b)` | the larger, the smaller (where `max([a, b])` is the largest of a list) |
+| `clip(x, lo, hi)` | x held between lo and hi |
+| `where(c, a, b)` | a where c is not zero, else b |
+| `sign(x)` | -1, 0 or 1 |
+| `pick(M, i, j)` | M's element in row i, column j, from 1: a table looked up by number, i and j vectors or numbers. M may be a matrix from the sheet |
+
 ## Functions
 
 | Function | Result |

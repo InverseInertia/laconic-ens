@@ -1,0 +1,451 @@
+// Run with: node tests/test_pipenet.js
+// The pipenet plugin's model (plugins/pipenet/pipenet.js): tile shapes, the walk from the source,
+// the upstream matrix and segment vectors it writes into the sheet, and the editing helpers.
+const assert = require('assert');
+const P = require('../plugins/pipenet/pipenet.js');
+let n = 0;
+const eq = (a, b, label) => { assert.deepStrictEqual(a, b, label); n++; };
+const { N, E, S, W } = P;
+
+// A state from strokes: each a list of tiles to join, then sources and sinks by tile.
+function net(strokes, source, sinks, extra = {}) {
+  const s = Object.assign(P.blank(), extra);
+  for (const ks of strokes) for (let i = 1; i < ks.length; i++) assert.ok(P.connect(s, ks[i - 1], ks[i]), `${ks[i - 1]} to ${ks[i]}`);
+  if (source) P.place(s, source, { t: 'source', p: 0, auto: true });
+  for (const k of sinks || []) P.place(s, k, { t: 'sink', p: 0, auto: true });
+  return s;
+}
+const row = (r, c0, c1) => { const out = []; for (let c = c0; c <= c1; c++) out.push(`${r},${c}`); return out; };
+const col = (c, r0, r1) => { const out = []; for (let r = r0; r <= r1; r++) out.push(`${r},${c}`); return out; };
+
+// --- shapes -----------------------------------------------------------------------------------
+eq([N | S, E | W, N | E, N | E | S, N | E | S | W, W].map((p) => P.shape({ t: 'pipe', p })),
+  ['straight', 'straight', 'elbow', 'tee', 'cross', 'stub'], 'a pipe takes its shape from its sides');
+eq(P.rotate(N | E), E | S, 'turning goes clockwise');
+eq(P.rotate(P.rotate(P.rotate(P.rotate(N | E | S)))), N | E | S, 'four turns are none');
+eq(P.PALETTE.filter((t) => t.t === 'pipe').map((t) => P.shape(t)),
+  ['straight', 'straight', 'elbow', 'elbow', 'elbow', 'elbow', 'tee', 'tee', 'tee', 'tee', 'cross'],
+  'the palette has every pipe shape in every orientation');
+eq(P.PALETTE.filter((t) => t.t !== 'pipe').length, 8, 'and a source and a sink facing each way');
+
+// --- one pipe, one sink -------------------------------------------------------------------------
+{
+  const s = net([row(0, 0, 3)], '0,0', ['0,3']);
+  const a = P.analyze(s);
+  eq(a.errors, [], 'a straight run from the source to a sink is a network');
+  eq(a.A, [[1]], 'of one segment, the spur');
+  eq(P.outputs(s, P.network(s)), { A: '[1]', 'L!': "[30] * 'ft", 'D_h!': "[4.026] * 'in", 'N_fit!': '[0, 0, 0]', 'K_extra!': '[0]', 'el_hx!': '[0]', 'el_pump!': '[0]',
+    A_r: '[1]', 'L_r!': "[30] * 'ft", 'D_r!': "[4.026] * 'in", 'N_fit_r!': '[0, 0, 0]', 'K_extra_r!': '[0]', 'el_hx_r!': '[0]', 'el_pump_r!': '[0]',
+    'exchangers!': '[1]', 'pumps!': '[1]', 'valves!': '[0]', 'fit_method!': '1', 'solver_method!': '1', 'hold_flow!': '1', '∀_target': "100 * 'gal / 'min", Δp_target: "0.1 'psi" },
+    "three tiles of 10 ft of 4\" Sch 40; the return the same as the supply, as lines of its own");
+  s.method = 3;
+  eq(P.outputs(s, P.network(s))['fit_method!'], '3', 'the method chosen goes to the sheet');
+  s.dp = { v: 25, u: 'kPa' };
+  eq(P.outputs(s, P.network(s))['Δp_target'], "25 'kPa", "and the pump's target pressure difference");
+  eq(P.normalize({ dp: { v: -1, u: 'atm' } }).dp, { v: 0.1, u: 'psi' }, 'a target that is not one falls back to 0.1 psi');
+  // what the pump holds: a total flow (the default) or its pressure difference
+  eq([P.blank().hold, P.outputs(s, P.network(s))['hold_flow!']], ['flow', '1'], 'the pump holds a total flow unless told otherwise');
+  s.q = { v: 6.3, u: 'L/s' };
+  eq(P.outputs(s, P.network(s))['∀_target'], "6.3 * 'L / 's", 'its target flow, in the unit given');
+  s.hold = 'dp';
+  eq(P.outputs(s, P.network(s))['hold_flow!'], '0', 'or it holds its pressure difference');
+  s.solver = 2;
+  eq(P.outputs(s, P.network(s))['solver_method!'], '2', "the sheet's solver method, by its number");
+  eq(P.normalize({ solver: 6 }).solver, 1, 'brentq (one unknown) is not offered: the default instead');
+  eq([P.normalize({ hold: 'x' }).hold, P.normalize({ q: { v: 0, u: 'furlong' } }).q], ['flow', { v: 100, u: 'gal/min' }], 'anything odd falls back');
+}
+
+// --- a tee: the trunk splits into two spurs ---------------------------------------------------------
+{
+  // source 0,0 -> tee at 0,3 -> on to the sink at 0,5; branch down to the sink at 3,3, with an elbow
+  const s = net([row(0, 0, 5), col(3, 0, 2), ['2,3', '2,4'], col(4, 2, 3)], '0,0', ['0,5', '3,4'], { ret: false });
+  const a = P.analyze(s);
+  eq(a.errors, [], 'a tee splits the flow');
+  eq(a.sinks.map((x) => x.key), ['0,5', '3,4'], 'sinks are numbered straight on first');
+  eq(a.order.map((id) => a.segments[id].tiles), [['0,4', '0,5'], ['1,3', '2,3', '2,4', '3,4'], ['0,1', '0,2', '0,3']],
+    'segments: the spurs in the order of their sinks, then the trunk');
+  eq(a.A, [[1, 0], [0, 1], [1, 1]], 'the upstream matrix: the identity, then the trunk that carries both');
+  const o = P.outputs(s, P.network(s));
+  eq(o['L!'], "[20; 40; 30] * 'ft", 'lengths by tile');
+  eq(o['A_r'], o['A'], 'the return is the supply again');
+  eq(o['N_fit!'], '[0, 1, 0; 2, 0, 1; 0, 0, 0]', 'fittings counted by kind: elbows, tee runs, tee branches (two elbows on the branch)');
+}
+
+// --- a tee entered through its stem: both ways out are branches ------------------------------------------
+{
+  const s = net([col(1, 0, 2), row(2, 0, 2)], '0,1', ['2,0', '2,2'], { ret: false });
+  const a = P.analyze(s);
+  eq(a.errors, [], 'a bullhead tee');
+  eq(P.outputs(s, P.network(s))['N_fit!'], '[0, 0, 1; 0, 0, 1; 0, 0, 0]', 'both ways out of a bullhead tee are branches');
+}
+
+// --- a crossover lets two pipes pass without joining ----------------------------------------------------------
+{
+  // the source feeds east along row 1, and a branch from it loops up and over to cross row 1 going south
+  const s = net([row(1, 0, 4), ['1,1', '0,1'], row(0, 1, 3), col(3, 0, 3)], '1,0', ['1,4', '3,3'], { ret: false });
+  eq(P.shape(s.cells['1,3']), 'cross', 'drawing across a straight makes a crossover');
+  const a = P.analyze(s);
+  eq(a.errors, [], 'the crossing pipes do not meet');
+  eq(a.sinks.length, 2, 'both sinks are reached');
+  eq(a.A, [[1, 0], [0, 1], [1, 1]], 'and the crossover joins nothing');
+}
+
+// --- what is wrong with a layout ---------------------------------------------------------------------
+eq(P.analyze(P.blank()).errors.map((e) => e.msg), ['Place a source (the pump) to start the network'], 'no source');
+{
+  const s = net([row(0, 0, 2)], '0,0', []);
+  eq(P.analyze(s).errors.map((e) => [e.key, /Dead end/.test(e.msg)]), [['0,2', true]], 'a dead end');
+  const t = net([row(0, 0, 2)], '0,0', ['0,2']);
+  delete t.cells['0,1'];
+  t.cells['0,1'] = { t: 'pipe', p: N | S };
+  eq(P.analyze(t).errors.map((e) => [e.key, /stops here/.test(e.msg)]), [['0,0', true]], 'a pipe leading into a tile with no opening');
+}
+{
+  // a ring: from the source east, then around back into the trunk
+  const s = net([row(0, 0, 3), col(3, 0, 2), row(2, 1, 3), col(1, 0, 2)], '0,0', []);
+  assert.ok(P.analyze(s).errors.some((e) => /loops/.test(e.msg)), 'a loop is refused');
+  n++;
+}
+{
+  const s = net([row(0, 0, 2), row(3, 0, 2)], '0,0', ['0,2']);
+  const a = P.analyze(s);
+  eq(a.errors, [], 'tiles off the network are no error');
+  eq(a.warnings.map((w) => [w.key, w.keys, w.msg]), [['3,0', ['3,0', '3,1', '3,2'], '3 tiles are not connected to the source, so they are left out']],
+    'but they are pointed out, in one warning');
+  s.cells['5,5'] = { t: 'source', p: E };
+  eq(P.analyze(s).errors.length, 2, 'two sources are refused');
+}
+eq(P.analyze(net([row(0, 0, 2), col(2, 0, 2)], '0,0', [])).errors.some((e) => /Dead end/.test(e.msg)), true, 'no sink: a dead end');
+
+// --- per-tile settings --------------------------------------------------------------------------
+{
+  const s = net([row(0, 0, 3)], '0,0', ['0,3'], { units: { L: 'm', D: 'mm' }, cell: 2.5, D: 50 });
+  s.cells['0,1'].L = 120; s.cells['0,2'].k = 340; s.cells['0,1'].d = 80; s.cells['0,3'].x = 2; s.cells['0,3'].s = 3;
+  const o = P.outputs(s, P.network(s));
+  eq([o['L!'], o['D_h!'], o['K_extra!'], o['exchangers!'], o['pumps!']],
+    ["[125] * 'm", "[80] * 'mm", '[340]', '[2]', '[3]'], 'a tile can set its length, extra K and the diameter; a sink its curve and speed');
+}
+
+// --- reading a state ----------------------------------------------------------------------------
+eq(P.normalize(null), P.blank(), 'nothing is an empty layout');
+eq(P.normalize({ show: { size: true, numbers: 'yes', hide: ['Q', 3] } }).show,
+  { numbers: true, size: true, L: false, D: false, hx: false, pump: false, valve: false, hide: ['Q'] }, 'what the drawing shows, cleaned');
+eq(P.normalize({ cells: { '0,0': { t: 'pipe', p: 99 }, 'x': { t: 'pipe', p: 1 }, '1,1': { t: 'pump', p: 1 } }, cell: -3, units: { L: 'parsec' } }),
+  { ...P.blank(), cells: { '0,0': { t: 'pipe', p: 3 } } }, 'odd tiles and settings are dropped');
+eq(P.normalize({ ret: true }).ret, 'same', 'a return that matches the supply, the old way of saying so');
+eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'A' } } }).rcells, { '0,0': { t: 'sink', p: 0 } }, 'a pad is on both layers');
+eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, name: 'AHU-1' } } }).cells['0,0'], { t: 'sink', p: 8, name: 'AHU-1', x: 1, s: 1 },
+  'a sink gets its curve and speed');
+
+// --- editing ------------------------------------------------------------------------------------
+{
+  const s = net([row(0, 0, 2)], null, []);
+  eq(P.connect(s, '0,0', '1,1'), false, 'only neighbours connect');
+  P.erase(s, '0,1');
+  eq(s.cells, {}, 'erasing a tile takes its sides off its neighbours, and a pipe left with none goes');
+  P.place(s, '0,0', { t: 'source', p: E });
+  P.place(s, '4,4', { t: 'source', p: E });
+  eq(Object.keys(s.cells), ['4,4'], 'there is one source: placing it again moves it');
+}
+
+// --- the sheet's values on the drawing ------------------------------------------------------------
+{
+  const s = net([row(0, 0, 5), col(3, 0, 2), ['2,3', '2,4'], col(4, 2, 3)], '0,0', ['0,5', '3,4']);
+  const a = P.analyze(s);
+  const v = (name, shape, mag) => ({ name, unit: 'u', shape, mag });
+  const nt = P.network(s);
+  const p = P.placed([v('Q', [3, 1], [[1], [2], [3]]), v('dp', [2, 1], [[4], [5]]), v('t', [], 7), v('M', [2, 2], [[1, 2], [3, 4]]),
+    v('w', [1, 3], [[1, 2, 3]]), v('Q_r!', [3, 1], [[1], [2], [3]])], nt);
+  eq([p.segments.map((x) => x.name), p.rsegments.map((x) => x.name), p.sinks.map((x) => x.name), p.legend.map((x) => x.name), p.unplaced],
+    [['Q', 'w'], ['Q_r!'], ['dp'], ['t'], ['M']],
+    'one per segment on the segments (a name ending in _r on the return\'s), one per sink on the sinks, one number in the legend');
+  const svg = P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1.234], [2], [3]])] });
+  assert.ok(svg.startsWith('<svg') && svg.includes('Q 1.23 u') && svg.endsWith('</svg>'), 'the picture shows the values');
+  assert.ok(!P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1], [2], [3]])], grid: false }).includes('<line x1="0"'), 'the preview has no grid');
+  s.show.hide = ['Q'];
+  assert.ok(!P.draw(s, nt, { inputs: [v('Q', [3, 1], [[1.234], [2], [3]])] }).includes('1.23'), 'or not, when its box is unticked');
+  s.show = { ...s.show, hide: [], size: true, L: true, D: true, hx: true, pump: true, numbers: false };
+  s.cells['0,5'].x = 2; s.cells['0,5'].s = 2;
+  const all = P.draw(s, P.network(s), { inputs: [v('Q', [3, 1], [[1.234], [2], [3]]),
+    { name: 'exchangers', names: ['HX_A', 'HX_B'] }, { name: 'pumps', names: ['GRUND_A', 'GRUND_B'] }] });
+  for (const t of ['4" Sch 40', 'L 20 ft', 'D_h 4.03 in', 'hx HX_B', 'pump GRUND_B', 'hx HX_A'])
+    assert.ok(all.includes(t.replace('"', '&quot;')), `the drawing can show ${t}`);
+  assert.ok(!/<circle[^>]*r="10"/.test(all), 'and the segment numbers can be left off');
+  eq(P.curveName(null, 2), 'curve 2', 'a curve the sheet does not name goes by its number');
+  eq(P.placed([{ name: 'exchangers', names: ['a'] }], nt).unplaced, [], 'a list of names is not a value to draw');
+  n += 2;
+  const lone = P.normalize({ cells: { '0,0': { t: 'sink', p: W, name: '<b>' } } });
+  assert.ok(!P.draw(lone, P.network(lone)).includes('<b>'), 'text is escaped');
+  n += 4;
+}
+eq([P.fmt(1234.5, 'Pa'), P.fmt(0.000012), P.fmt(null), P.fmt(0)], ['1230 Pa', '1.20e-5', '–', '0'], 'values to three figures');
+
+{
+  const s = P.blank(); s.cells = P.example();
+  const a = P.analyze(s);
+  eq([a.errors, a.sinks.length, a.order.length], [[], 8, 15], 'the example: eight sinks, fifteen segments');
+  eq(P.normalize({ method: 7 }).method, 1, 'an unknown method is Crane');
+}
+// --- the return laid out on its own (two layers) -----------------------------------------------------
+{
+  // supply: source 0,0 east to a tee at 0,3, on to sink 0,5 and down to sink 2,3
+  const s = net([row(0, 0, 5), col(3, 0, 2)], '0,0', ['0,5', '2,3']);
+  s.ret = 'separate';
+  P.copySupply(s);
+  eq(P.network(s).errors, [], 'the return starts as a copy of the supply');
+  // the return leaves the pump's other side and reaches the two sinks another way: a reverse return
+  P.onLayer(s, 'r', (v) => { for (const k of Object.keys(v.cells)) if (v.cells[k].t === 'pipe') delete v.cells[k]; });
+  // down from the pump, along row 4, up through a tee at 3,3 to sink 2,3 (straight on) and round to 0,5
+  const strokes = [['0,0', '1,0', '2,0', '3,0', '4,0', '4,1', '4,2', '4,3', '3,3', '2,3'], ['3,3', '3,4', '3,5', '2,5', '1,5', '0,5']];
+  for (const ks of strokes) for (let i = 1; i < ks.length; i++) P.onLayer(s, 'r', (v) => P.connect(v, ks[i - 1], ks[i]));
+  eq([s.rcells['0,0'].p, s.cells['0,0'].p], [S, E], "a pad connects on each layer's own side");
+  const nt = P.network(s);
+  eq(nt.errors, [], 'the return is walked as a tree of its own');
+  eq(nt.sinks.map((k) => k.key), ['0,5', '2,3'], 'the sinks are numbered on the supply');
+  eq(nt.r.sinks.map((k) => k.key), ['2,3', '0,5'], 'the return reaches them in its own order');
+  const o = P.outputs(s, nt);
+  eq([o.A, o.A_r], ['[1, 0; 0, 1; 1, 1]', '[0, 1; 1, 0; 1, 1]'], "so the return's matrix has its columns put in the supply's order");
+  eq([o['L!'], o['L_r!'], o['N_fit_r!']], ["[20; 20; 30] * 'ft", "[10; 50; 80] * 'ft", '[0, 1, 0; 1, 0, 1; 2, 0, 0]'],
+    'each layer has its own lengths and fittings');
+  // a return pipe taken away: the supply keeps its own, and the return no longer reaches 0,5
+  const supplyBefore = JSON.stringify(s.cells);
+  P.onLayer(s, 'r', (v) => P.erase(v, '1,5'));
+  eq(JSON.stringify(s.cells), supplyBefore, 'erasing a pipe on the return leaves the supply alone');
+  const bad = P.network(s);
+  assert.ok(bad.errors.length && bad.errors.every((e) => e.layer === 'r' && e.msg.startsWith('Return: ')), "the return's errors say they are the return's");
+  n++;
+  eq(P.outputs(s, bad), { 'fit_method!': '1', 'solver_method!': '1', 'hold_flow!': '1', '∀_target': "100 * 'gal / 'min", Δp_target: "0.1 'psi" },
+    'and while the return is broken only the settings are written: the method and the pump\'s target');
+  // taking a pad away on one layer takes it off both
+  P.onLayer(s, 'r', (v) => { delete v.cells['0,5']; });
+  eq([!!s.cells['0,5'], !!s.rcells['0,5']], [false, false], 'a pad taken away on one layer goes from both');
+  const drawn = P.draw(s, P.network(s), { layer: 'r' });
+  const back = drawn.slice(drawn.indexOf('<g class="back"'), drawn.indexOf('</g>'));
+  assert.ok(back.includes('stroke-dasharray="6 4"') && !back.includes('<circle') && !back.includes('<rect'),
+    'the layer behind is a dashed ghost of its pipes, without its pads');
+  n++;
+}
+
+{
+  // the return cut off before a sink: it is still on the return layer, but nothing reaches it
+  const s = net([row(0, 0, 5), col(3, 0, 2)], '0,0', ['0,5', '2,3']);
+  s.ret = 'separate';
+  P.copySupply(s);
+  P.onLayer(s, 'r', (v) => P.erase(v, '1,3'));
+  eq(P.network(s).errors.map((e) => [e.key, e.layer, e.msg]), [['2,3', 'r', 'Return: S2 has no return pipe']], 'a sink the return does not reach');
+}
+
+// --- pipe sizes --------------------------------------------------------------------------------
+{
+  eq(P.PIPE_SIZES.length, 23, 'schedule pipe from 1/8" to 24"');
+  const s = net([row(0, 0, 3)], '0,0', ['0,3']);
+  eq(P.outputs(s, P.network(s))['D_h!'], "[4.026] * 'in", "4\" Sch 40's bore, by default");
+  s.sch = '80';
+  eq(P.outputs(s, P.network(s))['D_h!'], "[3.826] * 'in", "or Sch 80's");
+  s.units.D = 'mm';
+  eq(P.outputs(s, P.network(s))['D_h!'], "[97.1804] * 'mm", 'in the unit chosen');
+  s.cells['0,1'].nps = '1-1/2';
+  eq(P.outputs(s, P.network(s))['D_h!'], "[38.1] * 'mm", "a segment's first pipe tile can name its own size");
+  s.nps = null; delete s.cells['0,1'].nps; s.D = 52.5;
+  eq(P.outputs(s, P.network(s))['D_h!'], "[52.5] * 'mm", 'or a bore of its own');
+  eq([P.sizeName(s, '2'), P.sizeName(s, null)], ['2" Sch 80', 'custom'], 'sizes by name');
+  eq(P.normalize({ nps: '7', sch: '160', cells: { '0,0': { t: 'pipe', p: 3, nps: 'x' } } }).cells['0,0'], { t: 'pipe', p: 3 },
+    'an unknown size is dropped');
+}
+
+// --- balloons ------------------------------------------------------------------------------------
+{
+  // a balloon about a point (ax, ay), its usual spot just right of it
+  const box = (id, ax, ay, extra = {}) => ({ id, ax, ay, px: ax + 10, py: ay - 15, x: ax + 10, y: ay - 15, w: 100, h: 30, ...extra });
+  const overlaps = (bs) => bs.some((a, i) => bs.some((b, j) => i < j && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h));
+  const off = (b) => Math.hypot(Math.max(b.x - b.ax, 0, b.ax - b.x - b.w), Math.max(b.y - b.ay, 0, b.ay - b.y - b.h));
+  const items = [box('a', 100, 100), box('b', 105, 102), box('c', 110, 104), box('d', 600, 600)];
+  assert.ok(overlaps(items), 'three balloons on top of each other');
+  eq(P.layout(items, [], [], 1000, 1000), 0, 'are placed apart');
+  eq(overlaps(items), false, 'none overlap');
+  eq([items[3].x, items[3].y], [610, 585], 'one in the clear stays at its usual spot');
+  eq(items.every((b) => off(b) <= 160), true, 'none further from its point than its furthest spot');
+  // a row of crowded balloons: each takes a free spot near its point, rather than the row sliding along
+  const row = Array.from({ length: 6 }, (_, i) => box(`r${i}`, 100 + i * 40, 300));
+  P.layout(row, [], [], 2000, 2000);
+  eq([overlaps(row), Math.max(...row.map(off)) <= 110], [false, true], 'a crowded row: apart, and each still near its point');
+  const fixed = box('legend', 0, 0, { fixed: true, ax: null }), moving = box('m', 15, 20);
+  P.layout([fixed, moving], [], [], 1000, 1000);
+  eq([fixed.x, fixed.y], [10, -15], 'a fixed one (the legend) never moves');
+  const pad = box('p', 50, 50);
+  P.layout([pad], [{ x: 55, y: 30, w: 40, h: 40 }], [], 1000, 1000);
+  assert.ok(pad.x >= 98 || pad.y >= 73 || pad.x + pad.w <= 52 || pad.y + pad.h <= 27, 'one is moved off a segment number or pad');
+  n++;
+  const edge = box('e', 990, 990);
+  P.layout([edge], [], [], 1000, 1000);
+  assert.ok(edge.x + edge.w <= 1000 && edge.y + edge.h <= 1000, 'inside the picture');
+  n++;
+  // the same balloons, the same picture; and given where they were, they stay there
+  const twice = () => { const bs = [box('a', 100, 100), box('b', 105, 102), box('c', 110, 104)]; P.layout(bs, [], [], 1000, 1000); return bs.map((b) => [b.x, b.y]); };
+  eq(twice(), twice(), 'the same layout comes out the same');
+  const again = [box('a', 100, 100), box('b', 105, 102), box('c', 110, 104)];
+  const before = again.map((b) => ({ ...b }));
+  P.layout(before, [], [], 1000, 1000);
+  P.layout(again, [], [], 1000, 1000, { prev: Object.fromEntries(before.map((b) => [b.id, { x: b.x, y: b.y }])) });
+  eq(again.map((b) => [b.x, b.y]), before.map((b) => [b.x, b.y]), 'drawn again with nothing changed, nothing moves');
+}
+{
+  // the example's trunk is crowded: with values drawn, no two balloons overlap
+  const s = P.blank(); s.cells = P.example(); P.syncPads(s, 's');
+  const nt = P.network(s);
+  const v = (name, k) => ({ name, unit: 'gal/min', shape: [k, 1], mag: Array.from({ length: k }, (_, i) => [100 + i]) });
+  const svg = P.draw(s, nt, { inputs: [v('∀!', 15), v('ΣK_seg', 15), v('Δp_paths', 15), v('Δp_spur', 8)] });
+  const rects = [...svg.matchAll(/<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.]+)" height="([\d.]+)" rx="5"/g)].map((m) => m.slice(1).map(Number));
+  eq(rects.length, 15 + 8, 'a balloon for each segment and sink');
+  const hit = rects.some((a, i) => rects.some((b, j) => i < j && a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]));
+  eq(hit, false, 'none of them overlap');
+  assert.ok(svg.includes('r="2.5"'), 'and one moved off its place keeps a leader line to it');
+  n++;
+}
+{
+  // a pipe the source does not reach is hollow: an outline in the rule colour with paper inside
+  const s = net([row(0, 0, 2), row(3, 0, 2)], '0,0', ['0,2']);
+  const svg = P.draw(s, P.network(s), { theme: { rule: '#123456', paper: '#fedcba' } });
+  assert.ok(/stroke="#123456" stroke-width="7"[^>]*\/><line[^>]*stroke="#fedcba" stroke-width="3"/.test(svg), 'a pipe off the network is drawn hollow');
+  n++;
+}
+
+// --- circulators and regulating valves ----------------------------------------------------------
+{
+  const s = net([row(0, 0, 5), col(3, 0, 2)], '0,0', ['0,5', '2,3']);
+  s.cells['0,5'].s = 0; s.cells['0,5'].v = 12.5;     // a valve and no circulator
+  s.cells['2,3'].s = 2; s.cells['2,3'].v = 8;        // both
+  const o = P.outputs(s, P.network(s));
+  eq([o['pumps!'], o['valves!']], ['[0; 2]', '[12.5; 8]'], "each sink's circulator (0: none) and valve Cv (0: none)");
+  eq(P.normalize({ cells: { '0,0': { t: 'sink', p: 8, s: 0, v: 4 }, '0,1': { t: 'sink', p: 8, s: -2, v: -1 } } }).cells,
+    { '0,0': { t: 'sink', p: 8, x: 1, s: 0, v: 4 }, '0,1': { t: 'sink', p: 8, x: 1, s: 1 } }, 'a circulator of 0 is kept; a bad valve is none');
+  eq([P.curveName(['P1'], 0), P.curveName(['P1'], 1)], ['none', 'P1'], 'circulator 0 is none');
+  s.show = { ...s.show, valve: true, numbers: false };
+  const svg = P.draw(s, P.network(s), {});
+  assert.ok(svg.includes('valve Cv 12.5') && svg.includes('valve Cv 8'), 'the drawing can show the valves');
+  s.cells['2,3'].v = 0; delete s.cells['2,3'].v;
+  assert.ok(P.draw(s, P.network(s), {}).includes('no valve'), 'and a sink without one');
+  n += 2;
+}
+
+// --- a segment's length, set as a whole ----------------------------------------------------------
+{
+  // source 0,0 -> tee 0,3 -> sink 0,5; branch 1,3 .. 2,3 sink
+  const s = net([row(0, 0, 5), col(3, 0, 2)], '0,0', ['0,5', '2,3'], { ret: 'same' });
+  let nt = P.network(s);
+  const trunk = nt.s.segments[0];                    // 0,1 0,2 0,3: 30 ft of squares
+  eq(trunk.L, 30, 'a segment is as long as its squares');
+  eq(P.setSegmentLength(s.cells, trunk, 300, s.cell), true, 'set as a whole');
+  nt = P.network(s);
+  eq(Number(nt.s.segments[0].L.toFixed(9)), 300, 'it is that long');
+  eq(P.outputs(s, nt)['L!'].split('; ').slice(-1)[0], "300] * 'ft", 'and the sheet says so');
+  eq(nt.s.segments.slice(1).map((x) => x.L), [20, 20], 'the others are not touched');
+  P.setSegmentLength(s.cells, nt.s.segments[0], null, s.cell);
+  eq(P.network(s).s.segments[0].L, 30, 'blank: back to its squares');
+}
+{
+  // a crossover keeps its length: the rest of the segment makes up the difference
+  const s = net([row(1, 0, 4), ['1,1', '0,1'], row(0, 1, 3), col(3, 0, 3)], '1,0', ['1,4', '3,3'], { ret: 'same' });
+  const nt = P.network(s);
+  const crossing = nt.s.segments.find((x) => x.tiles.includes('1,3') && x.tiles.includes('2,3'));
+  eq(P.setSegmentLength(s.cells, crossing, 100, s.cell), true, 'a segment through a crossover');
+  eq(s.cells['1,3'].L, undefined, "the crossover's own length is left alone");
+  eq(Number(P.network(s).s.segments.find((x) => x.tiles.includes('2,3')).L.toFixed(9)), 100, 'and the segment is 100 long');
+  eq(P.setSegmentLength(s.cells, crossing, 5, s.cell), false, 'shorter than its crossover: refused');
+}
+
+// --- the background image ------------------------------------------------------------------------
+{
+  const g = { key: 'img-ab-1', name: 'plan.png', x: -1.5, y: 2.25, w: 10, ar: 0.5, o: 0.4 };
+  eq(P.normalize({ bg: g }).bg, g, 'a background image is kept as the sheet holds it');
+  eq(P.normalize({ bg: { key: 'img-ab-1', x: 'a', w: -1, o: 7 } }).bg, { key: 'img-ab-1', name: 'image', x: 0, y: 0, w: 20, ar: 1, o: 1 },
+    'odd numbers in it are replaced');
+  eq(P.normalize({ bg: { key: '../etc', w: 5 } }).bg, undefined, 'a key that is not a plain name: no image');
+  eq(P.normalize({}).bg, undefined, 'none unless placed');
+  eq(P.backdrop({ bg: g }), { r0: 2, c0: -2, r1: 7, c1: 8 }, 'the squares it covers, partly covered ones included');
+  eq(P.backdrop(P.blank()), null, 'none without an image');
+  const s = net([row(0, 0, 3)], '0,0', ['0,3']), nt = P.network(s);
+  const svg = (o) => P.draw(s, nt, { theme: { paper: '#123456' }, ...o });
+  eq([svg({}).includes('fill="#123456"/>'), svg({ underlay: true }).includes('<rect width')], [true, false],
+    'drawn over an image, the drawing leaves out its paper');
+}
+
+// --- sinks set up alike ---------------------------------------------------------------------------
+{
+  // every tour visits the nine points once, a step to a neighbour (diagonals too) at a time
+  const near = (a, b) => Math.abs(((a / 3) | 0) - ((b / 3) | 0)) <= 1 && Math.abs((a % 3) - (b % 3)) <= 1 && a !== b;
+  const ok = P.TOURS.every((t) => [...t.points].sort().join() === '0,1,2,3,4,5,6,7,8'
+    && t.points.every((p, i) => i === 8 ? !t.closed || near(p, t.points[0]) : near(p, t.points[i + 1])));
+  eq([ok, P.TOURS.filter((t) => t.closed).length, new Set(P.TOURS.map((t) => t.points.join())).size], [true, 16, P.TOURS.length],
+    'the tours: each point once, 16 closed ones first, no two the same');
+  const sink = (x, s, extra = {}) => ({ t: 'sink', p: N, x, s, ...extra });
+  const st = { ...P.blank(), cells: { '0,0': sink(1, 1), '0,1': sink(1, 1), '0,2': sink(2, 1), '0,3': sink(2, 1, { v: 5 }),
+    '0,4': sink(2, 1, { v: 5 }), '0,5': sink(2, 1, { v: 5, k: 1 }) } };
+  const tw = P.twins(st);
+  eq(Object.keys(tw).sort(), ['0,0', '0,1', '0,3', '0,4'], 'only sinks with a twin are marked; a valve or an extra K tells them apart');
+  eq([tw['0,0'] === tw['0,1'], tw['0,3'] === tw['0,4'], tw['0,0'] !== tw['0,3']], [true, true, true], 'one mark a group, a group its own');
+  // the second group's mark shares as few steps with the first's as any tour does
+  const steps = (i) => P.TOURS[i].steps, apart = (a, b) => [...steps(a)].filter((e) => !steps(b).has(e)).length + [...steps(b)].filter((e) => !steps(a).has(e)).length;
+  eq(apart(tw['0,0'], tw['0,3']), Math.max(...P.TOURS.map((_, i) => (i === tw['0,0'] ? 0 : apart(tw['0,0'], i)))), 'marks as unlike as they go');
+  eq(P.twins(JSON.parse(JSON.stringify(st))), tw, 'the same settings, the same marks, each time');
+  // copying one sink's settings to another makes them alike, and takes what the first lacks away
+  P.copySink(st.cells['0,5'], st.cells['0,0']);
+  eq(st.cells['0,0'], sink(2, 1, { v: 5, k: 1 }), 'copied: exchanger, circulator, valve and extra K');
+  P.copySink(st.cells['0,2'], st.cells['0,0']);
+  eq(st.cells['0,0'], sink(2, 1), 'and a valve the source has none of is removed');
+  // marked on the drawing, over the sink's corner
+  const svg = P.draw(st, P.network(st), {});
+  eq((svg.match(/class="twin"/g) || []).length, Object.keys(P.twins(st)).length, 'each sink set up alike carries its mark');
+  // more groups than closed tours: open ones, still all different
+  const many = { ...P.blank(), cells: {} };
+  for (let i = 0; i < 20; i++) { many.cells[`0,${2 * i}`] = sink(i + 1, 1); many.cells[`1,${2 * i}`] = sink(i + 1, 1); }
+  const marks = Object.values(P.twins(many));
+  eq(new Set(marks).size, 20, '20 groups, 20 marks');
+}
+// --- printing ------------------------------------------------------------------------------------
+{
+  const s = P.blank(); s.cells = P.example(); P.syncPads(s, 's');
+  const d = P.draw(s, P.network(s), { grid: false });
+  const rows = Array.from({ length: 80 }, (_, i) => [String(i + 1), '30', '4"', '12.5']);
+  const blocks = [{ title: 'Segments', head: ['#', 'L ft', 'Pipe', 'Q'], rows, align: ['l', 'r', 'l', 'r'] }, { title: 'Check', lines: ['One source, 8 sinks.'] }];
+  const page = P.printSheet({ title: 'Loop <1>', drawings: [{ svg: d, label: 'Supply' }], blocks, paper: { w: 431.8, h: 279.4 } });
+  eq([page.w, page.h], [431.8, 279.4], 'on paper: the page is the paper');
+  eq(page.svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" width="431.8mm" height="279.4mm" viewBox="0 0 431.8 279.4"'), true, 'in millimetres');
+  eq([page.svg.includes('>Loop &lt;1&gt;<'), (page.svg.match(/\(continued\)/g) || []).length > 0], [true, true],
+    'the title, escaped; a table longer than the page goes on in another column');
+  const wide = (svg) => +/<svg x="[\d.]+" y="[\d.]+" width="([\d.]+)"/.exec(svg.slice(200))[1];
+  // two tall drawings: side by side, larger than one under the other
+  const tall = d.replace(/viewBox="0 0 ([\d.]+) ([\d.]+)"/, (_, w, h) => `viewBox="0 0 ${w} ${+h * 4}"`);
+  const two = P.printSheet({ drawings: [{ svg: tall, label: 'Supply' }, { svg: tall, label: 'Return' }], blocks: [], paper: { w: 914.4, h: 609.6 } });
+  const xs = [...two.svg.matchAll(/<svg x="([\d.]+)" y="([\d.]+)" width/g)].map((m) => [+m[1], +m[2]]);
+  eq([xs.length, xs[0][1] === xs[1][1], xs[1][0] > xs[0][0]], [2, true, true], 'two tall drawings go side by side');
+  // at a scale: the drawing at exactly that size, the page grown to hold it
+  const sc = P.printSheet({ drawings: [{ svg: d }], blocks: [], scale: 0.5 });
+  const vb = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(d);
+  eq([Math.abs(wide(sc.svg) - +vb[1] * 0.5) < 0.02, sc.w > +vb[1] * 0.5], [true, true], 'at a scale, the drawing is that size and the page holds it');
+}
+
+// --- elements in the pipes ---------------------------------------------------------------------------
+{
+  // a run of five tiles to a sink, with a fluid cooler (a resistance, curve 2) in the third
+  const s = net([row(0, 0, 5)], '0,0', ['0,5']);
+  s.cells['0,3'].e = { k: 'hx', n: 2 };
+  const t = P.normalize(s), nt = P.network(t);
+  eq([nt.errors, nt.s.order.length], [[], 2], 'an element ends its segment and starts the next: two segments');
+  const o = P.outputs(t, nt);
+  eq([o['el_hx!'], o['el_pump!'], o['el_hx_r!']], ['[2; 0]', '[0; 0]', '[0; 0]'],
+    'the spur (numbered first) carries the cooler; the return, the same as the supply, has none of its own');
+  eq(o['A'], '[1; 1]', 'both segments carry the one sink');
+  eq(P.normalize({ cells: { '0,0': { t: 'pipe', p: E | W, e: { k: 'valve', n: 1 } }, '0,1': { t: 'pipe', p: E | W, e: { k: 'pump', n: 0 } } } }).cells,
+    { '0,0': { t: 'pipe', p: E | W }, '0,1': { t: 'pipe', p: E | W } }, 'an element of no known kind, or no curve, is dropped');
+  // laid out on its own, the return keeps its own elements: an in-line pump on it
+  t.ret = 'separate'; P.copySupply(t); delete t.rcells['0,3'].e; t.rcells['0,2'].e = { k: 'pump', n: 3 };
+  const o2 = P.outputs(t, P.network(t));
+  eq([o2['el_hx!'], o2['el_pump_r!']], ['[2; 0]', '[3; 0]'], 'each side its own elements');
+  // drawn: a box for the resistance, a circle for the pump, ringed when against the end of its data
+  const svg = P.draw(t, P.network(t), { layer: 's', elWalls: new Set(['0,3']) });
+  eq([svg.includes('stroke-dasharray="5 3"'), /<rect x="[\d.]+" y="[\d.]+" width="30" height="18"/.test(svg)], [true, true], 'the cooler, ringed');
+  eq(/<circle cx="[\d.]+" cy="[\d.]+" r="14"/.test(P.draw(t, P.network(t), { layer: 'r' })), true, 'the pump, on the return');
+}
+
+console.log(`pipenet: ${n} checks passed`);

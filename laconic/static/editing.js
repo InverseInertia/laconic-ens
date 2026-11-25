@@ -106,18 +106,20 @@
 
   // ---- blocks --------------------------------------------------------------
   // A block header (laconic/sheettext.py): `!plot ...` or a solver's `!root x, y` (also `!minimize`,
-  // `!maximize`, `!regression`, `!symsolve`, and `!slider x = 2'm`, which reads as one), or
-  // `!loop i = 1 .. n`, at any indent since loops nest.
-  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, a plot or a loop
+  // `!maximize`, `!regression`, `!symsolve`, and `!slider x = 2'm`, which reads as one), `!plugin name`,
+  // or `!loop i = 1 .. n`, at any indent since loops nest.
+  // headerOf(line) -> {kind, unknowns} or null, where kind is the command, a plot, a plugin or a loop
   // names no unknowns, and a slider the one name it sets.
   const PLOT_HEAD = /^[ \t]*!plot[ \t]+\S/;
   const SOLVER_HEAD = /^[ \t]*!(root|minimize|maximize|regression|symsolve|slider)(?:[ \t]+(.*?))?[ \t]*$/;
   const SLIDER_NAME = /^(~?[^\s=~$]+?)\s*=(?!=)/;
   const LOOP_HEAD = /^[ \t]*!loop(?:[ \t].*)?$/;
+  const PLUGIN_HEAD = /^[ \t]*!plugin(?:[ \t]+\S.*)?[ \t]*$/;
   const PLOT_OPT = /^[ \t]+[A-Za-z]\w*(?:[ \t]+\d+)?[ \t]*:/;
   function headerOf(line) {
     if (PLOT_HEAD.test(line)) return { kind: 'plot', unknowns: [] };
     if (LOOP_HEAD.test(line)) return { kind: 'loop', unknowns: [] };
+    if (PLUGIN_HEAD.test(line)) return { kind: 'plugin', unknowns: [] };
     const m = SOLVER_HEAD.exec(line);
     if (m && m[1] === 'slider') {
       const d = SLIDER_NAME.exec(m[2] || '');
@@ -126,7 +128,7 @@
     return m ? { kind: m[1], unknowns: (m[2] || '').split(',').map((x) => x.trim()).filter(Boolean) } : null;
   }
   // The block that the line starting at `ls` belongs to, as headerOf gives it, or null. A plot owns
-  // the `key: value` lines indented under it; a solver block or a loop every indented, non-blank line
+  // the `key: value` lines indented under it; a solver block, a plugin or a loop every indented, non-blank line
   // (a loop inside a loop counts as its outer loop's). The line
   // being typed counts while it could still become one: only its indent, or the start of a key.
   function blockAt(t, ls) {

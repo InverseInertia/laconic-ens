@@ -38,20 +38,21 @@ ROOT_METHODS = ("hybr", "lm", "broyden1", "broyden2", "krylov", "brentq")
 MIN_METHODS = ("BFGS", "Nelder-Mead", "Powell", "L-BFGS-B", "TNC", "SLSQP", "trust-constr", "COBYLA")
 WITH_BOUNDS = ("Nelder-Mead", "Powell", "L-BFGS-B", "TNC", "SLSQP", "trust-constr", "COBYLA")
 WITH_CONSTRAINTS = ("SLSQP", "trust-constr", "COBYLA")
-KEYS = {"root": ("equation", "bounds", "method", "tol", "maxiter", "timeout", "autorun"),
-        "minimize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun"),
-        "maximize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun")}
+KEYS = {"root": ("equation", "bounds", "method", "tol", "maxiter", "timeout", "autorun", "status"),
+        "minimize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun", "status"),
+        "maximize": ("objective", "constraint", "bounds", "method", "tol", "maxiter", "timeout", "autorun", "status")}
 # What the editor shows next to each option and method in its suggestions (see vocab.py).
 KEY_NOTES = {
     "equation": "lhs = rhs, or one expression that is zero",
     "objective": "the expression to minimize or maximize",
     "constraint": "lhs <= rhs, >= or =",
     "bounds": "low .. high on an unknown; either end may be auto",
-    "method": "which scipy solver to use",
+    "method": "which scipy solver to use; or a name holding its number in the list (1 is the first)",
     "tol": "convergence tolerance passed to scipy",
     "maxiter": "iteration limit passed to scipy",
     "timeout": "seconds before a run is killed (default 300)",
     "autorun": "on: solve again after the inputs change",
+    "status": "a name that holds the block's state below it: 1 up to date, 0 out of date, -1 never run, -2 an error",
 }
 METHOD_NOTES = {
     "hybr": "Powell hybrid (MINPACK). Default",
@@ -69,7 +70,9 @@ METHOD_NOTES = {
     "trust-constr": "interior point; bounds and constraints, many unknowns",
     "COBYLA": "no gradients; bounds and <= / >= constraints",
 }
-NOT_PARAMETERS = ("timeout", "autorun")   # how a run is supervised, not what it computes
+NOT_PARAMETERS = ("timeout", "autorun", "status")   # how a run is supervised or reported, not what it computes
+# The values of a block's `status:` name: what a line below (a !pluginvar, say) can read of it.
+STATUS_VALUES = {"valid": 1, "stale": 0, "none": -1, "error": -2}
 DEFAULT_TIMEOUT = 300.0
 RECORD_VERSION = 1
 LOG_TRACE_LINES = 120                      # evaluations written to the log before it goes quiet
@@ -104,6 +107,8 @@ class Block:
     maxiter: int = None
     timeout: float = DEFAULT_TIMEOUT
     autorun: bool = False
+    status: str = None                          # the name its state is given to below it, if any
+    method_var: str = None                      # `method: name`: the name whose value numbers the method
     canon: list = field(default_factory=list)  # the lines that decide the answer, whitespace-normalised
     errors: dict = field(default_factory=dict)  # option line number -> message
     problem: str = ""                           # what is wrong with the block as a whole
@@ -282,7 +287,7 @@ def problem_rows(b, tex, name):
 
 
 def _apply_option(b, n, key, target, value, seen):
-    if key in ("objective", "method", "tol", "maxiter", "timeout", "autorun") and key in seen:
+    if key in ("objective", "method", "tol", "maxiter", "timeout", "autorun", "status") and key in seen:
         raise SolverError(f"{key} is given twice")
     seen.add(key)
     if key == "equation":
@@ -298,7 +303,11 @@ def _apply_option(b, n, key, target, value, seen):
         lo, hi = _bounds(value)
         b.bounds.append((n, target, lo, hi))
     elif key == "method":
-        b.method = _choice(value, ROOT_METHODS if b.kind == "root" else MIN_METHODS, "method")
+        options = ROOT_METHODS if b.kind == "root" else MIN_METHODS
+        if value.strip().lower() not in {o.lower() for o in options} and is_name(value.strip()):
+            b.method_var = value.strip()   # a name: its value, when the block is run, numbers the method
+        else:
+            b.method = _choice(value, options, "method")
     elif key == "tol":
         b.tol = _number(value, "tol")
     elif key == "maxiter":
@@ -310,6 +319,11 @@ def _apply_option(b, n, key, target, value, seen):
         if w not in ("on", "off"):
             raise SolverError("autorun is on or off")
         b.autorun = w == "on"
+    elif key == "status":
+        name = value.strip()
+        if not is_name(name) or name in b.unknowns:
+            raise SolverError("status is a name of its own, not one of the unknowns: say `status: solved`")
+        b.status = name
 
 
 def _split_top(s):
@@ -373,6 +387,8 @@ def digest(block, ev, unknowns):
     parts = {"v": RECORD_VERSION, "kind": block.kind, "unknowns": block.unknowns, "angle": ev.mode.angle,
              "lines": block.canon, "start": [_qdigest(ev.vars[u.key]) for u in unknowns],
              "vars": deps, "funcs": funcs, "units": units}
+    if block.method_var:   # the method its name picks: the line alone does not say which
+        parts["method"] = block.method
     if ev.mode.freq != "si":   # !freq changes what -> gives; left out by default so stored results stay valid
         parts["freq"] = ev.mode.freq
     blob = json.dumps(parts, sort_keys=True, separators=(",", ":")).encode()
@@ -405,11 +421,14 @@ class Problem:
         self.kind = block.kind
         self.unknowns, self.eqs, self.cons, self.obj = [], [], [], None
         self.nfev = 0
+        self._fast = None   # the compiled equations once checked (numeric.py): None not tried, False not usable
         self._quiet = False
         self._probed = False
         self.log = lambda msg: None
         self._resolve()
         self._bounds()
+        if block.method_var:
+            block.method = method_of(block, ev)
         self.method = self._choose_method()
         b = block
         self.eqs = [Eval(r) for r in b.equations]
@@ -562,22 +581,79 @@ class Problem:
                 return
             self.log(f"  eval {self.nfev:>4}  {what} = {value:.6e}   at {self.where(x)}")
 
-    def residual(self, x):
+    # -- the fast path: the equations compiled to plain numbers once their units are checked (numeric.py)
+    def _compile(self, x):
+        """Compile every expression and check each against the usual evaluation at `x` (just done, so
+        each knows its units). False when any cannot be compiled or does not give the same numbers."""
+        from . import numeric
+        from .evaluator import _offset
+        try:
+            scale = {}
+            for u in self.unknowns:
+                one = self.ev.Q(1.0, u.units)
+                if _offset(one, self.ev.ureg):
+                    return False
+                scale[u.key] = float(one.to_base_units().magnitude)
+            fns = {}
+            for e in self.eqs + self.cons + ([self.obj] if self.obj is not None else []):
+                one = self.ev.Q(1.0, e.units)
+                if e.units is None or _offset(one, self.ev.ureg):
+                    return False
+                fns[id(e)] = (numeric.compile(e.rel.node, self.ev, [u.key for u in self.unknowns]), float(one.to_base_units().magnitude))
+            self._scale = scale
+            self._fns = fns
+            for e in self.eqs + self.cons + ([self.obj] if self.obj is not None else []):
+                want = self._vec(e, x)   # the usual way (the unknowns are already at x)
+                got = self._fast_vec(e, x)
+                if got is None or got.shape != want.shape or not np.allclose(got, want, rtol=1e-9, atol=1e-12 * max(1.0, float(np.max(np.abs(want))) if want.size else 1.0)):
+                    return False
+            return True
+        except Exception:
+            return False
+
+    def _fast_vec(self, e, x):
+        """e at x on the fast path, in e's units; None when it fails there (the usual way then says why)."""
+        env = {}
+        for u in self.unknowns:
+            seg = np.asarray(x[u.off:u.off + u.size], dtype=float) * self._scale[u.key]
+            env[u.key] = float(seg[0]) if u.shape == () else seg.reshape(u.shape)
+        fn, sc = self._fns[id(e)]
+        try:
+            with np.errstate(all="ignore"):
+                v = np.asarray(fn(env), dtype=float).ravel() / sc
+        except Exception:
+            return None
+        return v if np.all(np.isfinite(v)) else None
+
+    def _values(self, e, x):
+        """e at x: on the fast path once it has been checked, else (and wherever it fails) the usual way."""
+        if self._fast is None:
+            self.set_x(x)
+            v = self._vec(e, x)
+            if all(q.units is not None for q in self.eqs + self.cons + ([self.obj] if self.obj is not None else [])):
+                self._fast = self._compile(x)
+                self.set_x(x)
+            return v
+        if self._fast:
+            v = self._fast_vec(e, x)
+            if v is not None:
+                return v
         self.set_x(x)
-        f = np.concatenate([self._vec(e, x) for e in self.eqs])
+        return self._vec(e, x)
+
+    def residual(self, x):
+        f = np.concatenate([self._values(e, x) for e in self.eqs])
         self._trace("max|F|", float(np.max(np.abs(f))) if f.size else 0.0, x)
         return f
 
     def objective(self, x):
-        self.set_x(x)
-        v = float(self._vec(self.obj, x)[0])
+        v = float(self._values(self.obj, x)[0])
         self._trace("objective", v, x)
         return v
 
     def constraint_fun(self, e):
         def g(x):
-            self.set_x(x)
-            return self._vec(e, x)
+            return self._values(e, x)
         return g
 
     def violation(self, x):
@@ -742,6 +818,24 @@ class Problem:
             return self.ev.Q(float(o["mag"]), self.ev.ureg.parse_units(o["unit"]))
         except Exception:
             return None
+
+
+def method_of(block, ev):
+    """The method a `method: name` line picks: the value of `name`, a whole number, numbering the block's
+    methods from 1 in the order METHOD_NOTES lists them (a plugin can write the number; LENS has no text values)."""
+    options = ROOT_METHODS if block.kind == "root" else MIN_METHODS
+    listing = ", ".join(f"{i} {m}" for i, m in enumerate(options, 1))
+    key = ev.vkey(block.method_var)
+    if key not in ev.vars:
+        raise SolverError(f"method: {block.method_var} is not defined above the block. It numbers the method: {listing}")
+    q = ev.vars[key]
+    try:
+        x = float(q.to("dimensionless").magnitude) if hasattr(q, "to") else float(q)
+    except Exception:
+        raise SolverError(f"method: {block.method_var} is a number, the method's: {listing}") from None
+    if x != int(x) or not 1 <= x <= len(options):
+        raise SolverError(f"method: {block.method_var} is {x:g}, not one of the methods: {listing}")
+    return options[int(x) - 1]
 
 
 def prepare(block, ev, describe):

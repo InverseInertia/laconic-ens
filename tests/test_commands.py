@@ -74,6 +74,9 @@ CASES = {
     "slider": ("!slider x = 2'm\n  range: 0'm .. 10'm\ny = 2*x", 1, None,
                lambda rs: rs[0].kind == "slider" and rs[2].text == "y = 4 m"),
     "loop": ("S = 0\n!loop i = 1 .. 3\n  S = S + i", 2, None, lambda rs: rs[1].kind == "loop" and rs[1].text.startswith("S = 6")),
+    "plugin": ("!plugin pipenet\n  x = 2", 1, None, lambda rs: rs[0].kind == "plugin" and rs[1].text == "x = 2"),
+    "pluginvar": ("x = 2\n!pluginvar x", 2, None,
+                  lambda rs: rs[1].kind == "pluginvar" and rs[1].pluginvar.values[0]["mag"] == 2),
 }
 
 # A bad line for each argument rule, and what its error says.

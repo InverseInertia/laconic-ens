@@ -12,7 +12,8 @@ M_max = w * L^2 / 8 -> 'kN * 'm      # 30.38 kN·m
 
 Units carry an apostrophe (`'kN`), so a bare name is always a variable. The same engine drives the web
 page, the LaTeX export and the command line. It also does matrices, fluid properties (CoolProp),
-plots, equation solving and optimization (scipy), and symbolic math (sympy).
+plots, equation solving and optimization (scipy), and symbolic math (sympy), and opens plugins such as a
+pipe network designer that writes its layout into the sheet.
 
 ## Download and install
 
@@ -49,7 +50,7 @@ The [wiki](https://github.com/inverseinertia/laconic-ens/wiki) is the reference:
 | [Getting Started](https://github.com/inverseinertia/laconic-ens/wiki/Getting-Started) | install, run, command line |
 | [Worksheet Syntax](https://github.com/inverseinertia/laconic-ens/wiki/Worksheet-Syntax) | names, operators, functions, commands |
 | [Units](https://github.com/inverseinertia/laconic-ens/wiki/Units) | SI display, custom and global units |
-| [Matrices](https://github.com/inverseinertia/laconic-ens/wiki/Matrices) · [Material Properties](https://github.com/inverseinertia/laconic-ens/wiki/Material-Properties) · [Plots](https://github.com/inverseinertia/laconic-ens/wiki/Plots) · [Solving and Optimizing](https://github.com/inverseinertia/laconic-ens/wiki/Solving-and-Optimizing) | the feature pages |
+| [Matrices](https://github.com/inverseinertia/laconic-ens/wiki/Matrices) · [Material Properties](https://github.com/inverseinertia/laconic-ens/wiki/Material-Properties) · [Plots](https://github.com/inverseinertia/laconic-ens/wiki/Plots) · [Solving and Optimizing](https://github.com/inverseinertia/laconic-ens/wiki/Solving-and-Optimizing) · [Plugins](https://github.com/inverseinertia/laconic-ens/wiki/Plugins) | the feature pages |
 | [Output and Export](https://github.com/inverseinertia/laconic-ens/wiki/Output-and-Export) · [Editor Shortcuts](https://github.com/inverseinertia/laconic-ens/wiki/Editor-Shortcuts) · [Settings](https://github.com/inverseinertia/laconic-ens/wiki/Settings) | using the app |
 | [Architecture](https://github.com/inverseinertia/laconic-ens/wiki/Architecture) · [Development](https://github.com/inverseinertia/laconic-ens/wiki/Development) · [Releases and Packaging](https://github.com/inverseinertia/laconic-ens/wiki/Releases-and-Packaging) · [Roadmap](https://github.com/inverseinertia/laconic-ens/wiki/Roadmap) | contributing |
 
